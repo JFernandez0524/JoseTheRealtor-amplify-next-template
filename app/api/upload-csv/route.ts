@@ -1,97 +1,41 @@
 // app/api/upload-csv/route.ts
 
 import { NextRequest, NextResponse } from 'next/server';
-import formidable, { File, Files, IncomingForm } from 'formidable';
 import { parse } from 'csv-parse';
 import fs from 'fs';
 
-export const config = {
-  api: {
-    bodyParser: false, // disable Next.js built-in body parsing
-  },
-};
-
-interface CsvRow {
-  [columnName: string]: string;
-}
-
-// Helper: parse the incoming form with formidable
-function parseForm(
-  req: NextRequest
-): Promise<{ fields: Record<string, any>; files: Files }> {
-  const form = new IncomingForm({
-    keepExtensions: true,
-    maxFiles: 1,
-    // you can customize uploadDir, maxFileSize, etc here
-  });
-
-  return new Promise((resolve, reject) => {
-    // Note: we need to pass the Node.js request object (not NextRequest)
-    form.parse(req as any, (err, fields, files) => {
-      if (err) return reject(err);
-      resolve({ fields, files });
-    });
-  });
-}
-
 export async function POST(req: NextRequest) {
-  let fields: Record<string, any>, files: Files;
   try {
-    ({ fields, files } = await parseForm(req));
-  } catch (err: any) {
-    console.error('Error parsing form:', err);
-    return NextResponse.json(
-      { error: 'Error parsing form data' },
-      { status: 400 }
-    );
-  }
+    const formData = await req.formData();
+    const file = formData.get('file') as File;
 
-  // Ensure file was provided
-  const fileKey = 'file';
-  const maybeFile = files[fileKey];
+    if (!file || file.type !== 'text/csv') {
+      return NextResponse.json({ error: 'Invalid file type' }, { status: 400 });
+    }
 
-  if (!maybeFile) {
-    return NextResponse.json(
-      { error: 'No file uploaded under key "file"' },
-      { status: 400 }
-    );
-  }
+    const text = await file.text();
+    const records: any[] = [];
 
-  // types: maybeFile can be File or File[]
-  const file: File = Array.isArray(maybeFile) ? maybeFile[0] : maybeFile;
-
-  if (!file.filepath) {
-    return NextResponse.json(
-      { error: 'Uploaded file path not found' },
-      { status: 400 }
-    );
-  }
-
-  const records: CsvRow[] = [];
-
-  // Create a readable stream and parse CSV
-  const parser = fs
-    .createReadStream(file.filepath)
-    .pipe(parse({ columns: true, skip_empty_lines: true }))
-    .on('data', (row: CsvRow) => {
-      records.push(row);
+    await new Promise((resolve, reject) => {
+      parse(text, { columns: true, trim: true })
+        .on('data', (row) => records.push(row))
+        .on('end', resolve)
+        .on('error', reject);
     });
 
-  try {
-    await new Promise<void>((resolve, reject) => {
-      parser.on('end', resolve);
-      parser.on('error', reject);
+    // Limit preview to first 5 records
+    const preview = records.slice(0, 5);
+    console.log('Parsed records:', records);
+
+    return NextResponse.json({
+      message: 'File uploaded and parsed successfully',
+      preview,
     });
-  } catch (err) {
-    console.error('CSV parse error:', err);
+  } catch (error) {
+    console.error('Error processing file:', error);
     return NextResponse.json(
-      { error: 'Error parsing CSV file' },
+      { error: 'Error processing file' },
       { status: 500 }
     );
   }
-
-  return NextResponse.json({
-    message: `Parsed ${records.length} rows`,
-    preview: records.slice(0, 5),
-  });
 }
