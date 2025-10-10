@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import './app.css';
 // app/layout.tsx
-import './amplifyConfig'; // Import at the top
+import '../src/lib/amplifyConfig'; // Import at the top
 // ... rest of layout
 
 const inter = Inter({ subsets: ['latin'] });
