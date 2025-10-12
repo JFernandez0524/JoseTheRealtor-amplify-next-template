@@ -2,7 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { parse } from 'csv-parse/sync';
 import { verifyAddress } from '@/src/lib/batchData';
-import { client } from '@/src/lib/amplifyClient';
+import { client } from '@/src/lib/amplifyClient.server';
 import {
   ProbateLeadSchema,
   PreforeclosureLeadSchema,
@@ -109,9 +109,8 @@ export async function POST(req: NextRequest) {
         }
 
         // 4) Store in Amplify Data
-        const { data: createdLead, errors } = await client.models.Lead.create(
-          payload
-        );
+        const { data: createdLead, errors } =
+          await client.models.Lead.create(payload);
 
         if (errors?.length) {
           rejected.push({

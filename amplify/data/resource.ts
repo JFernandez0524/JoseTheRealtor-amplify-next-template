@@ -90,7 +90,10 @@ const schema = a.schema({
 
       createdAt: a.datetime(),
     })
-    .authorization((allow) => [allow.publicApiKey()]),
+    .authorization((allow) => [
+      allow.owner(), // 👈 Each user only sees their own leads
+      allow.groups(['ADMINS']), // Admins can see everyone’s leads
+    ]),
 
   Contact: a
     .model({
@@ -135,7 +138,6 @@ export type Schema = ClientSchema<typeof schema>;
 export const data = defineData({
   schema,
   authorizationModes: {
-    defaultAuthorizationMode: 'apiKey',
-    apiKeyAuthorizationMode: { expiresInDays: 30 },
+    defaultAuthorizationMode: 'iam',
   },
 });

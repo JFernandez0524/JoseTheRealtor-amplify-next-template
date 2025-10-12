@@ -1,5 +1,5 @@
 import type { Handler } from 'aws-lambda';
-import { client } from '../../../../src/lib/amplifyClient';
+import { client } from '../../../../src/lib/amplifyClient.server';
 import { syncToKVCore } from './intergrations/kvcore';
 import { syncToGoHighLevel } from './intergrations/gohighlevel';
 import { sendNotification } from './intergrations/notifications';

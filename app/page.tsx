@@ -1,22 +1,29 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-
-import './../app/app.css';
-import { Amplify } from 'aws-amplify';
-import outputs from '@/amplify_outputs.json';
 import '@aws-amplify/ui-react/styles.css';
+import Link from 'next/link';
 
-export default function App() {
+export default function HomePage() {
   return (
-    <main>
+    <main className='flex flex-col items-center justify-center min-h-screen bg-gray-50 px-6 py-12'>
       <div>
-        🥳 App successfully hosted. Try creating a new todo.
-        <br />
-        <a href='https://docs.amplify.aws/nextjs/start/quickstart/nextjs-app-router-client-components/'>
-          Review next steps of this tutorial.
-        </a>
+        <h1 className='text-4xl font-bold text-gray-900 mb-4'>
+          🏡 JoseTheRealtor Lead Platform
+        </h1>
+        <p className='mx-auto text-lg text-gray-600 mb-6 max-w-2xl text-center'>
+          Upload your Probate or Pre-Foreclosure CSVs, validate addresses with
+          BatchData, and manage your leads in one dashboard. Perfect for real
+          estate professionals.
+        </p>
+        <div className='bg-blue-500 text-white p-4 rounded shadow text-center'>
+          <Link href='/login' className='font-semibold '>
+            Login to get started!
+          </Link>
+        </div>
       </div>
+      <footer className='mt-12 text-sm text-gray-500'>
+        © {new Date().getFullYear()} JoseTheRealtor.com
+      </footer>
     </main>
   );
 }
