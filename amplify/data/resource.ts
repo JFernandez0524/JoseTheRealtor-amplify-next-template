@@ -58,6 +58,7 @@ Fetch records from the database and use them in your frontend component.
 // amplify/data/resource.ts
 
 import { type ClientSchema, a, defineData } from '@aws-amplify/backend';
+import { addUserToGroup } from './add-user-to-group/resource';
 
 // Core models
 const schema = a.schema({
@@ -107,7 +108,10 @@ const schema = a.schema({
       mailingAddress: a.json().required(), // {street, city, state, zip, county}
       createdAt: a.datetime(),
     })
-    .authorization((allow) => [allow.publicApiKey()]),
+    .authorization((allow) => [
+      allow.owner(), // 👈 Each user only sees their own leads
+      allow.groups(['ADMINS']), // Admins can see everyone’s leads
+    ]),
 
   Enrichment: a
     .model({
@@ -118,7 +122,10 @@ const schema = a.schema({
       payload: a.json(), // full raw response or normalized fragment
       createdAt: a.datetime(),
     })
-    .authorization((allow) => [allow.publicApiKey()]),
+    .authorization((allow) => [
+      allow.owner(), // 👈 Each user only sees their own leads
+      allow.groups(['ADMINS']), // Admins can see everyone’s leads
+    ]),
 
   Activity: a
     .model({
@@ -130,7 +137,20 @@ const schema = a.schema({
       meta: a.json(), // e.g., agent, templateId, recordingUrl
       createdAt: a.datetime(),
     })
-    .authorization((allow) => [allow.publicApiKey()]),
+    .authorization((allow) => [
+      allow.owner(), // 👈 Each user only sees their own leads
+      allow.groups(['ADMINS']), // Admins can see everyone’s leads
+    ]),
+
+  addUserToGroup: a
+    .mutation()
+    .arguments({
+      userId: a.string().required(),
+      groupName: a.string().required(),
+    })
+    .authorization((allow) => [allow.group('ADMINS')])
+    .handler(a.handler.function(addUserToGroup))
+    .returns(a.json()),
 });
 
 export type Schema = ClientSchema<typeof schema>;

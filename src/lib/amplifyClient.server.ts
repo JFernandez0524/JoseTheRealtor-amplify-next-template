@@ -12,5 +12,10 @@ import type { Schema } from '../../amplify/data/resource';
 
 // ✅ Create Amplify Data client
 export const client = generateClient<Schema>({
-  authMode: 'apiKey', // Use your default mode (matches resource.ts)
+  // authMode: 'apiKey', // Use your default mode (matches resource.ts)
+});
+
+await client.mutations.addUserToGroup({
+  groupName: 'ADMINS',
+  userId: '5468d468-4061-70ed-8870-45c766d26225',
 });

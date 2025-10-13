@@ -1,9 +1,9 @@
 import type { Handler } from 'aws-lambda';
-import { client } from '../../../../src/lib/amplifyClient.server';
-import { syncToKVCore } from './intergrations/kvcore';
-import { syncToGoHighLevel } from './intergrations/gohighlevel';
-import { sendNotification } from './intergrations/notifications';
-import { logAuditEvent } from './intergrations/auditLogs';
+import { client } from '../../../src/lib/amplifyClient.server';
+import { syncToKVCore } from './src/intergrations/kvcore';
+import { syncToGoHighLevel } from './src/intergrations/gohighlevel';
+import { sendNotification } from './src/intergrations/notifications';
+import { logAuditEvent } from './src/intergrations/auditLogs';
 
 export const handler: Handler = async (event, context) => {
   try {
