@@ -1,29 +1,13 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import { getCurrentUser, signOut } from 'aws-amplify/auth';
-import { useEffect, useState } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
+import { useAuthenticator } from '@aws-amplify/ui-react';
 
 export default function Navbar() {
   const pathname = usePathname();
-  const [user, setUser] = useState<{
-    username?: string;
-    userId?: string;
-  } | null>(null);
-
-  // ✅ Load current user after render
-  useEffect(() => {
-    async function fetchUser() {
-      try {
-        const currentUser = await getCurrentUser();
-        setUser(currentUser);
-      } catch {
-        setUser(null); // not signed in
-      }
-    }
-    fetchUser();
-  }, []);
+  const router = useRouter();
+  const { user, signOut } = useAuthenticator((context) => [context.user]);
 
   const linkClass = (path: string) =>
     `px-4 py-2 rounded-md text-sm font-medium transition ${
@@ -43,14 +27,13 @@ export default function Navbar() {
           <Link href='/' className={linkClass('/')}>
             Home
           </Link>
-          {/* if user don't show login link  */}
+
           {!user && (
-            <Link href='/login' className={linkClass('/login')}>
+            <Link href='/auth/login' className={linkClass('/auth/login')}>
               Login
             </Link>
           )}
 
-          {/* ✅ Show private links only if signed in */}
           {user && (
             <>
               <Link href='/dashboard' className={linkClass('/dashboard')}>
@@ -59,13 +42,11 @@ export default function Navbar() {
               <Link href='/upload' className={linkClass('/upload')}>
                 Upload Leads
               </Link>
-              <Link href='/settings' className={linkClass('/settings')}>
-                Settings
-              </Link>
+
               <button
-                onClick={async () => {
-                  await signOut();
-                  window.location.href = '/login';
+                onClick={() => {
+                  signOut();
+                  router.push('/auth/login');
                 }}
                 className='ml-3 px-3 py-1 bg-red-500 text-white rounded-md text-sm hover:bg-red-600'
               >

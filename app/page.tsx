@@ -11,12 +11,12 @@ export default function HomePage() {
           🏡 JoseTheRealtor Lead Platform
         </h1>
         <p className='mx-auto text-lg text-gray-600 mb-6 max-w-2xl text-center'>
-          Upload your Probate or Pre-Foreclosure CSVs, validate addresses with
-          BatchData, and manage your leads in one dashboard. Perfect for real
-          estate professionals.
+          Upload your Probate or Pre-Foreclosure CSVs, validate addresses and
+          manage your leads in one dashboard. Perfect for real estate
+          professionals.
         </p>
         <div className='bg-blue-500 text-white p-4 rounded shadow text-center'>
-          <Link href='/login' className='font-semibold '>
+          <Link href='/auth/login' className='font-semibold '>
             Login to get started!
           </Link>
         </div>

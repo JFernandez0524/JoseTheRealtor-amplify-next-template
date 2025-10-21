@@ -5,6 +5,7 @@ import Navbar from './components/Navbar';
 import './globals.css';
 import '@/src/lib/amplifyClient.browser';
 import '@aws-amplify/ui-react/styles.css';
+import { Providers } from './providers';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -21,8 +22,10 @@ export default function RootLayout({
   return (
     <html lang='en'>
       <body className={inter.className}>
-        <Navbar />
-        <main className='pt-16'>{children}</main>
+        <Providers>
+          <Navbar />
+          <main className='pt-16'>{children}</main>
+        </Providers>
       </body>
     </html>
   );
