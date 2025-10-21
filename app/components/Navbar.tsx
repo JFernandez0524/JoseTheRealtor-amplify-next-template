@@ -43,9 +43,12 @@ export default function Navbar() {
           <Link href='/' className={linkClass('/')}>
             Home
           </Link>
-          <Link href='/login' className={linkClass('/login')}>
-            Login
-          </Link>
+          {/* if user don't show login link  */}
+          {!user && (
+            <Link href='/login' className={linkClass('/login')}>
+              Login
+            </Link>
+          )}
 
           {/* ✅ Show private links only if signed in */}
           {user && (

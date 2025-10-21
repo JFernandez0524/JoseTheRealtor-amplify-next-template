@@ -3,7 +3,8 @@ import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import Navbar from './components/Navbar';
 import './globals.css';
-import '../src/lib/amplifyConfig'; // Import at the top
+import '@/src/lib/amplifyClient.browser';
+import '@aws-amplify/ui-react/styles.css';
 
 const inter = Inter({ subsets: ['latin'] });
 

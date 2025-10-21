@@ -1,8 +1,10 @@
 // app/api/v1/upload-csv/route.ts
+export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
+
 import { parse } from 'csv-parse/sync';
 import { verifyAddress } from '@/src/lib/batchData';
-import { client } from '@/src/lib/amplifyClient.server';
+import { getServerClient } from '@/src/lib/amplifyClient.server';
 import {
   ProbateLeadSchema,
   PreforeclosureLeadSchema,
@@ -17,6 +19,8 @@ export async function POST(req: NextRequest) {
   try {
     const formData = await req.formData();
     const file = formData.get('file') as File;
+    //get handle on server client
+    const client = getServerClient();
 
     if (!file || file.type !== 'text/csv') {
       return NextResponse.json(

@@ -1,6 +1,5 @@
 // amplify/auth/resource.ts
 import { defineAuth, secret } from '@aws-amplify/backend';
-import { addUserToGroup } from '../data/add-user-to-group/resource';
 
 export const auth = defineAuth({
   loginWith: {
@@ -13,6 +12,11 @@ export const auth = defineAuth({
 
         attributeMapping: {
           email: 'email',
+          familyName: 'lastName',
+          givenName: 'firstName',
+          preferredUsername: 'username',
+          nickname: 'nickname',
+          profilePicture: 'picture',
         },
       },
       callbackUrls: [
@@ -25,6 +29,4 @@ export const auth = defineAuth({
       ],
     },
   },
-  groups: ['ADMINS'],
-  access: (allow) => [allow.resource(addUserToGroup).to(['addUserToGroup'])],
 });

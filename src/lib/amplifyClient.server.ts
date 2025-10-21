@@ -1,21 +1,17 @@
-//src/lib/amplifyClient.ts
+// src/lib/amplifyClient.server.ts
+import { Amplify } from 'aws-amplify';
 import { generateClient } from 'aws-amplify/data';
 import type { Schema } from '../../amplify/data/resource';
+import outputs from '../../amplify_outputs.json';
 
-/**
- * Shared Amplify Data client for server-side code (Next.js routes, Lambdas, etc.)
- *
- * Usage:
- *   import { client } from '@/src/lib/amplifyClient';
- *   const { data } = await client.models.Lead.create({...});
- */
+if (!(Amplify as any)._configured) {
+  Amplify.configure(outputs, { ssr: true });
+  (Amplify as any)._configured = true;
+}
 
-// ✅ Create Amplify Data client
-export const client = generateClient<Schema>({
-  // authMode: 'apiKey', // Use your default mode (matches resource.ts)
-});
+export const getServerClient = () => generateClient<Schema>();
 
-await client.mutations.addUserToGroup({
-  groupName: 'ADMINS',
-  userId: '5468d468-4061-70ed-8870-45c766d26225',
-});
+// await client.mutations.addUserToGroup({
+//   groupName: 'ADMINS',
+//   userId: '5468d468-4061-70ed-8870-45c766d26225',
+// });

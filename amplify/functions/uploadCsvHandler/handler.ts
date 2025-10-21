@@ -1,11 +1,14 @@
 import type { Handler } from 'aws-lambda';
-import { client } from '../../../src/lib/amplifyClient.server';
+import { getServerClient } from '../../../src/lib/amplifyClient.server';
 import { syncToKVCore } from './src/intergrations/kvcore';
 import { syncToGoHighLevel } from './src/intergrations/gohighlevel';
 import { sendNotification } from './src/intergrations/notifications';
 import { logAuditEvent } from './src/intergrations/auditLogs';
 
 export const handler: Handler = async (event, context) => {
+  // Call client for server
+  const client = getServerClient();
+
   try {
     const { leads } = JSON.parse(event.body || '{}');
     if (!Array.isArray(leads) || leads.length === 0) {
