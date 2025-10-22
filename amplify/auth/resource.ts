@@ -24,10 +24,12 @@ export const auth = defineAuth({
         'http://localhost:3000/auth',
         'https://main.d127hbsjypuuhr.amplifyapp.com/profile',
         'https://main.d127hbsjypuuhr.amplifyapp.com/auth',
+        'https://main.d127hbsjypuuhr.amplifyapp.com/',
       ],
       logoutUrls: [
         'http://localhost:3000/',
         'https://main.d127hbsjypuuhr.amplifyapp.com/',
+        'https://main.d127hbsjypuuhr.amplifyapp.com/auth/logout',
       ],
     },
   },
