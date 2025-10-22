@@ -12,7 +12,7 @@ export const auth = defineAuth({
           'profile',
           'email',
           'openid',
-          'aws.cognito.signin.user.admin',
+          'aws.cognito.sign.user.admin',
           'phone',
         ],
 
