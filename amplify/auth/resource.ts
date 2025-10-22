@@ -8,7 +8,13 @@ export const auth = defineAuth({
       google: {
         clientId: secret('GOOGLE_CLIENT_ID'), // ✅ fixed
         clientSecret: secret('GOOGLE_CLIENT_SECRET'),
-        scopes: ['profile', 'email', 'openid', 'aws.cognito.sigin.user.admin'],
+        scopes: [
+          'profile',
+          'email',
+          'openid',
+          'aws.cognito.signin.user.admin',
+          'phone',
+        ],
 
         attributeMapping: {
           email: 'email',
