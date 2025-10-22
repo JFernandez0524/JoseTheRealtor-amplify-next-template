@@ -2,6 +2,7 @@
 
 import '@aws-amplify/ui-react/styles.css';
 import Link from 'next/link';
+import { LeadCreateForm } from '../ui-components';
 
 export default function HomePage() {
   return (
@@ -20,6 +21,14 @@ export default function HomePage() {
             Login to get started!
           </Link>
         </div>
+      </div>
+      <div>
+        <LeadCreateForm />
+        <p className='text-center text-sm text-gray-500 mt-4'>
+          <Link href='/auth/login' className='text-blue-500'>
+            Already have an account? Login here.
+          </Link>
+        </p>
       </div>
       <footer className='mt-12 text-sm text-gray-500'>
         © {new Date().getFullYear()} JoseTheRealtor.com
