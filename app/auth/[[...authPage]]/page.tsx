@@ -39,6 +39,7 @@ export default function AuthPage() {
               ? 'forgotPassword'
               : 'signIn'
         }
+        socialProviders={['google']}
       />
     </div>
   );
