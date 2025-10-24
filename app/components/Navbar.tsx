@@ -2,17 +2,15 @@
 
 import Link from 'next/link';
 import { useState, useRef, useEffect } from 'react';
-import Logout from '../components/Logout';
+import Logout from './Logout';
+import SignInWithGoogleButton from './SignInWithGoogle';
+import useCurrentUser from '../../src/hooks/useCurrentUser';
 
-interface NavbarProps {
-  user?: {
-    username?: string;
-  } | null;
-}
-
-export default function Navbar({ user }: NavbarProps) {
+export default function Navbar() {
+  const { user, loading } = useCurrentUser();
   const [menuOpen, setMenuOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  console.log(user);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -27,10 +25,13 @@ export default function Navbar({ user }: NavbarProps) {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  if (loading) return null; // don’t flicker
+
   const displayName = user?.username ?? 'Guest';
-  const profilePic = `https://ui-avatars.com/api/?name=${encodeURIComponent(
-    displayName
-  )}&background=0D8ABC&color=fff`;
+  const profilePic =
+    `https://ui-avatars.com/api/?name=${encodeURIComponent(
+      displayName
+    )}&background=0D8ABC&color=fff` || user?.picture;
 
   return (
     <nav className='w-full bg-white shadow-sm border-b border-gray-200'>
@@ -44,14 +45,7 @@ export default function Navbar({ user }: NavbarProps) {
             Home
           </Link>
 
-          {!user && (
-            <Link
-              href='/api/auth/sign-in?provider=Google'
-              className='px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700'
-            >
-              Login
-            </Link>
-          )}
+          {!user && <SignInWithGoogleButton text='Sign in' />}
 
           {user && (
             <>
@@ -92,7 +86,6 @@ export default function Navbar({ user }: NavbarProps) {
                     >
                       Profile
                     </Link>
-
                     <Logout />
                   </div>
                 )}

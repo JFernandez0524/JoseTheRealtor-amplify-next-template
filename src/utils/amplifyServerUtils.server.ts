@@ -11,7 +11,7 @@ export const { runWithAmplifyServerContext, createAuthRouteHandlers } =
     config: outputs,
     runtimeOptions: {
       cookies: {
-        domain: 'localhost', // making cookies available to all subdomains
+        domain: 'leads.josetherealtor.com', // making cookies available to all subdomains
         sameSite: 'strict',
         maxAge: 60 * 60 * 24 * 7, // 7 days
       },

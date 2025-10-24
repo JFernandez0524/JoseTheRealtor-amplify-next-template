@@ -7,6 +7,8 @@ const schema = a.schema({
     .model({
       type: a.string().required(), // "probate" | "preforeclosure"
       address: a.string().required(),
+      firstName: a.string(),
+      lastName: a.string(),
       city: a.string().required(),
       state: a.string().required(),
       zip: a.string().required(),

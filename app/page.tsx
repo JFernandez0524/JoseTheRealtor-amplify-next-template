@@ -15,7 +15,7 @@ export default function HomePage() {
           professionals.
         </p>
         <div className='bg-blue-500 text-white p-4 rounded shadow text-center'>
-          <SignInWithGoogleButton />
+          <SignInWithGoogleButton text='Sign in with Google' />
         </div>
       </div>
 
