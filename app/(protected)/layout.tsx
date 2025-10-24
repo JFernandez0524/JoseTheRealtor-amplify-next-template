@@ -18,12 +18,10 @@ export default async function ProtectedLayout({
   }
 
   return (
-    <html lang='en'>
-      <body>
-        <ConfigureAmplifyClientSide />
-        <Navbar user={user} />
-        <main>{children}</main>
-      </body>
-    </html>
+    <>
+      <ConfigureAmplifyClientSide />
+      <Navbar user={user} />
+      <main>{children}</main>
+    </>
   );
 }
