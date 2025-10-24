@@ -1,26 +1,16 @@
-'use client';
+// app/(protected)/dashboard/page.tsx
+import { cookiesClient } from '@/src/utils/amplifyServerUtils.server';
 
-import { generateClient } from 'aws-amplify/data';
-import type { Schema } from '@/amplify/data/resource';
-import { useState, useEffect } from 'react';
+export const dynamic = 'force-dynamic';
 
-const client = generateClient<Schema>();
-
-export default function DashboardPage() {
-  const [leads, setLeads] = useState<Schema['Lead']['type'][]>([]);
-
-  useEffect(() => {
-    async function loadLeads() {
-      const { data } = await client.models.Lead.list();
-      setLeads(data);
-    }
-    loadLeads();
-  }, []);
+export default async function DashboardPage() {
+  const { data: leads } = await cookiesClient.models.Lead.list();
 
   return (
     <main>
       <h1 className='text-2xl font-semibold mb-4'>Your Leads</h1>
-      {leads.length === 0 ? (
+
+      {!leads || leads.length === 0 ? (
         <p className='text-gray-500'>No leads found.</p>
       ) : (
         <table className='border-collapse w-full'>

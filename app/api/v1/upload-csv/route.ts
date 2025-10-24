@@ -1,37 +1,45 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerClient } from '../../../../src/lib/amplifyClient.server';
+import { runWithAmplifyServerContext } from '../../../../src/utils/amplifyServerUtils.server';
+import { fetchAuthSession } from 'aws-amplify/auth/server';
+import { cookies } from 'next/headers';
 import { processCsvFile } from '../../../../src/lib/processCsv';
-import { parseJwt } from '../../../../src/lib/parserJwt'; // simple helper
-
+import { cookiesClient } from '@/src/utils/amplifyServerUtils.server';
 export const dynamic = 'force-dynamic';
 
 export async function POST(req: NextRequest) {
   try {
-    const authHeader = req.headers.get('authorization');
-    if (!authHeader)
-      return NextResponse.json(
-        { error: 'Missing auth token' },
-        { status: 401 }
-      );
+    // 1️⃣ Get authenticated user from SSR cookies
+    const session = await runWithAmplifyServerContext({
+      nextServerContext: { cookies },
+      operation: async (ctx) => fetchAuthSession(ctx),
+    });
 
-    const token = authHeader.replace('Bearer ', '');
-    const claims = parseJwt(token);
-    if (!claims?.sub)
-      return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
+    if (!session?.tokens?.idToken) {
+      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+    }
 
+    const userSub = session.tokens.idToken.payload.sub;
+
+    if (!userSub) {
+      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+    }
+
+    // 2️⃣ Get form data
     const formData = await req.formData();
     const file = formData.get('file') as File;
-    if (!file)
+    if (!file) {
       return NextResponse.json({ error: 'Missing file' }, { status: 400 });
+    }
 
-    // ✅ Use your new lib function
+    // 3️⃣ Process CSV (already implemented)
     const { validLeads, rejected, leadType } = await processCsvFile(
       file,
-      claims.sub
+      userSub
     );
 
-    // ✅ Save to Amplify Data
-    const client = getServerClient();
+    // 4️⃣ Save to Amplify Data
+
+    const client = cookiesClient;
     for (const lead of validLeads) {
       await client.models.Lead.create(lead);
     }
@@ -44,9 +52,6 @@ export async function POST(req: NextRequest) {
     });
   } catch (error) {
     console.error('CSV upload error:', error);
-    return NextResponse.json(
-      { error: (error as Error).message || 'Internal server error' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Server error' }, { status: 500 });
   }
 }

@@ -1,80 +1,62 @@
-'use client';
-import { useAuthenticator } from '@aws-amplify/ui-react';
-import { fetchUserAttributes } from 'aws-amplify/auth';
-import type { CognitoUserAttributes } from '@/src/types/auth';
-import { useEffect, useState } from 'react';
+// app/(protected)/profile/page.tsx
+import { redirect } from 'next/navigation';
+import { AuthGetCurrentUserServer } from '@/src/utils/amplifyServerUtils.server';
+import { runWithAmplifyServerContext } from '@/src/utils/amplifyServerUtils.server';
+import { fetchUserAttributes } from 'aws-amplify/auth/server';
+import { cookies } from 'next/headers';
+import SignOutButton from '@/app/components/Logout';
 
-export default function ProfilePage() {
-  const [attributes, setAttributes] = useState<CognitoUserAttributes | null>(
-    null
-  );
-  const [loading, setLoading] = useState(true);
+export const dynamic = 'force-dynamic';
 
-  const { user } = useAuthenticator((context) => [context.user]);
-  console.log(user);
-  if (!user) return;
-  useEffect(() => {
-    async function fetchAttributes() {
-      try {
-        const attrs = await fetchUserAttributes();
-        setAttributes(attrs as CognitoUserAttributes);
-        console.log(attrs);
-      } catch (error) {
-        console.error('Error fetching user attributes:', error);
-      } finally {
-        setLoading(false);
-      }
-    }
-    fetchAttributes();
-  }, []);
+export default async function ProfilePage() {
+  // 1️⃣ Get current user from SSR cookies
+  const user = await AuthGetCurrentUserServer();
 
-  if (loading) {
-    return (
-      <div className='flex justify-center items-center h-screen text-gray-500'>
-        Loading profile...
-      </div>
-    );
+  if (!user) {
+    redirect('/login'); // Server-side redirect if unauthenticated
   }
 
-  if (!attributes) {
-    return (
-      <div className='flex justify-center items-center h-screen text-red-600'>
-        Unable to load profile information.
-      </div>
-    );
-  }
+  // 2️⃣ Fetch additional user attributes (optional)
+  const attributes = await runWithAmplifyServerContext({
+    nextServerContext: { cookies },
+    operation: (ctx) => fetchUserAttributes(ctx),
+  });
 
-  const profileImage =
-    attributes.picture ||
-    `https://ui-avatars.com/api/?name=${encodeURIComponent(
-      attributes.fullname || attributes.email || 'User'
-    )}&background=0D8ABC&color=fff`;
-
+  // 3️⃣ Render profile details (SSR-rendered)
   return (
-    <div className='p-6 flex justify-center'>
-      <div className='bg-white shadow-lg rounded-lg p-6 w-full max-w-md'>
-        <div className='flex flex-col items-center'>
-          <img
-            src={profileImage}
-            alt='Profile'
-            className='w-20 h-20 rounded-full border mb-4'
-          />
-          <h1 className='text-2xl font-semibold mb-2'>My Profile</h1>
+    <main className='max-w-2xl mx-auto py-10 px-6'>
+      <h1 className='text-3xl font-bold mb-6'>My Profile</h1>
 
-          <div className='text-gray-700 text-sm space-y-2 w-full text-center'>
-            <p>
-              <strong>Name:</strong> {attributes.fullname || '—'}
-            </p>
-            <p>
-              <strong>Email:</strong> {attributes.email || '—'}
-            </p>
-            <p>
-              <strong>Username:</strong>{' '}
-              {attributes.preferredUsername || attributes.sub || '—'}
-            </p>
-          </div>
+      <div className='bg-gray-50 border rounded-lg p-6 space-y-4 shadow-sm'>
+        <div>
+          <span className='font-semibold'>Username:</span>{' '}
+          <span>{user.username}</span>
         </div>
+        <div>
+          <span className='font-semibold'>User ID (sub):</span>{' '}
+          <span>{user.userId}</span>
+        </div>
+        {attributes && (
+          <>
+            {attributes.email && (
+              <div>
+                <span className='font-semibold'>Email:</span>{' '}
+                <span>{attributes.email}</span>
+              </div>
+            )}
+            {attributes.name && (
+              <div>
+                <span className='font-semibold'>Name:</span>{' '}
+                <span>{attributes.name}</span>
+              </div>
+            )}
+          </>
+        )}
       </div>
-    </div>
+
+      <div className='mt-8'>
+        <SignOutButton />
+      </div>
+    </main>
   );
 }

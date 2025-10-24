@@ -1,8 +1,6 @@
-'use client';
-
 import '@aws-amplify/ui-react/styles.css';
 import Link from 'next/link';
-import { LeadCreateForm } from '../ui-components';
+import SignInWithGoogleButton from '@/app/components/SignInWithGoogle';
 
 export default function HomePage() {
   return (
@@ -17,19 +15,10 @@ export default function HomePage() {
           professionals.
         </p>
         <div className='bg-blue-500 text-white p-4 rounded shadow text-center'>
-          <Link href='/auth/login' className='font-semibold '>
-            Login to get started!
-          </Link>
+          <SignInWithGoogleButton />
         </div>
       </div>
-      <div>
-        <LeadCreateForm />
-        <p className='text-center text-sm text-gray-500 mt-4'>
-          <Link href='/auth/login' className='text-blue-500'>
-            Already have an account? Login here.
-          </Link>
-        </p>
-      </div>
+
       <footer className='mt-12 text-sm text-gray-500'>
         © {new Date().getFullYear()} JoseTheRealtor.com
       </footer>

@@ -1,5 +1,5 @@
 import type { Handler } from 'aws-lambda';
-import { getServerClient } from '../../../src/lib/amplifyClient.server';
+import { cookiesClient } from '../../../src/utils/amplifyServerUtils.server';
 import { syncToKVCore } from './src/intergrations/kvcore';
 import { syncToGoHighLevel } from './src/intergrations/gohighlevel';
 import { sendNotification } from './src/intergrations/notifications';
@@ -7,7 +7,7 @@ import { logAuditEvent } from './src/intergrations/auditLogs';
 
 export const handler: Handler = async (event, context) => {
   // Call client for server
-  const client = getServerClient();
+  const client = cookiesClient;
 
   try {
     const { leads } = JSON.parse(event.body || '{}');
