@@ -1,6 +1,6 @@
 // app/(protected)/profile/page.tsx
 import { redirect } from 'next/navigation';
-import { AuthGetCurrentUserServer } from '@/src/utils/amplifyServerUtils.server';
+import { getCurrentUser } from 'aws-amplify/auth/server';
 import { runWithAmplifyServerContext } from '@/src/utils/amplifyServerUtils.server';
 import { fetchUserAttributes } from 'aws-amplify/auth/server';
 import { cookies } from 'next/headers';
@@ -10,7 +10,18 @@ export const dynamic = 'force-dynamic';
 
 export default async function ProfilePage() {
   // 1️⃣ Get current user from SSR cookies
-  const user = await AuthGetCurrentUserServer();
+  // ✅ SSR-safe: get current user from Amplify server context
+  const { user } = await runWithAmplifyServerContext({
+    nextServerContext: { cookies },
+    operation: async (ctx) => {
+      try {
+        const user = await getCurrentUser(ctx);
+        return { user };
+      } catch {
+        return { user: null };
+      }
+    },
+  });
 
   if (!user) {
     redirect('/login'); // Server-side redirect if unauthenticated
@@ -30,7 +41,7 @@ export default async function ProfilePage() {
       <div className='bg-gray-50 border rounded-lg p-6 space-y-4 shadow-sm'>
         <div>
           <span className='font-semibold'>Username:</span>{' '}
-          <span>{user.username}</span>
+          <span>{attributes.name}</span>
         </div>
         <div>
           <span className='font-semibold'>User ID (sub):</span>{' '}

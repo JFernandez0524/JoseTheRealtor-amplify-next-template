@@ -17,6 +17,12 @@ export const auth = defineAuth({
           preferredUsername: 'username',
           nickname: 'nickname',
           profilePicture: 'picture',
+          phoneNumber: 'phone_number',
+          birthdate: 'birthdate',
+          fullname: 'name',
+          locale: 'locale',
+          address: 'address',
+          profilePage: 'profile',
         },
       },
       callbackUrls: [

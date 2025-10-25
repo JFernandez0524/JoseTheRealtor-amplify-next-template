@@ -32,7 +32,13 @@ applications:
 
         build:
           commands:
-            - echo "🛠️ Building Next.js application..."
+            - echo "🛠️ Writing environment variables to .env..."
+              # 👇 Write Amplify env vars into a .env file so Next.js can access them
+            - echo "AMPLIFY_APP_ORIGIN=$AMPLIFY_APP_ORIGIN" >> .env
+
+            - echo "✅ Environment variables written to .env"
+
+            - echo "🚀 Building Next.js application..."
             - npm run build
 
       artifacts:

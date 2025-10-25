@@ -84,6 +84,14 @@ const schema = a.schema({
       allow.owner(), // 👈 Each user only sees their own leads
       allow.groups(['ADMINS']), // Admins can see everyone’s leads
     ]),
+
+  //Conversation Route AI setup
+  chat: a
+    .conversation({
+      aiModel: a.ai.model('Claude 3.5 Haiku'),
+      systemPrompt: 'You are a helpful assistant',
+    })
+    .authorization((allow) => allow.owner()),
 });
 
 export type Schema = ClientSchema<typeof schema>;
