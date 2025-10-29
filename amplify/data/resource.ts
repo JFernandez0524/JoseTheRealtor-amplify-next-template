@@ -85,11 +85,12 @@ const schema = a.schema({
       allow.groups(['ADMINS']), // Admins can see everyone’s leads
     ]),
 
-  //Conversation Route AI setup
+  // 🔹 Conversation route (chat-based AI)
   chat: a
     .conversation({
       aiModel: a.ai.model('Claude 3.5 Haiku'),
-      systemPrompt: 'You are a helpful assistant',
+      systemPrompt:
+        'You are a helpful real estate assistant who answers property and market questions clearly.',
     })
     .authorization((allow) => allow.owner()),
 });
@@ -99,6 +100,6 @@ export type Schema = ClientSchema<typeof schema>;
 export const data = defineData({
   schema,
   authorizationModes: {
-    defaultAuthorizationMode: 'iam',
+    defaultAuthorizationMode: 'userPool',
   },
 });

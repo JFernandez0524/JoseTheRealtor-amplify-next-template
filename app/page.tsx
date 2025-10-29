@@ -1,5 +1,4 @@
 import '@aws-amplify/ui-react/styles.css';
-import Link from 'next/link';
 import SignInWithGoogleButton from '@/app/components/SignInWithGoogle';
 
 export default function HomePage() {
