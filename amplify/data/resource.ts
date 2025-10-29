@@ -36,7 +36,6 @@ const schema = a.schema({
     })
     .authorization((allow) => [
       allow.owner(), // 👈 Each user only sees their own leads
-      allow.groups(['ADMINS']), // Admins can see everyone’s leads
     ]),
 
   Contact: a
@@ -53,7 +52,6 @@ const schema = a.schema({
     })
     .authorization((allow) => [
       allow.owner(), // 👈 Each user only sees their own leads
-      allow.groups(['ADMINS']), // Admins can see everyone’s leads
     ]),
 
   Enrichment: a
@@ -67,7 +65,6 @@ const schema = a.schema({
     })
     .authorization((allow) => [
       allow.owner(), // 👈 Each user only sees their own leads
-      allow.groups(['ADMINS']), // Admins can see everyone’s leads
     ]),
 
   Activity: a
@@ -82,7 +79,6 @@ const schema = a.schema({
     })
     .authorization((allow) => [
       allow.owner(), // 👈 Each user only sees their own leads
-      allow.groups(['ADMINS']), // Admins can see everyone’s leads
     ]),
 
   // 🔹 Conversation route (chat-based AI)
