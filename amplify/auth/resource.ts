@@ -34,9 +34,9 @@ export const auth = defineAuth({
         // 'https://main.d127hbsjypuuhr.amplifyapp.com/',
         // 'https://1bfcf095620e088da6cd.auth.us-east-1.amazoncognito.com/'
         //
-        'https://leads.josetherealtor.com/api/auth/sign-in-callback',
+        'https://leads.josetherealtor.com/api/login',
 
-        'http://localhost:3000/api/auth/sign-in-callback',
+        'http://localhost:3000/login',
       ],
       logoutUrls: [
         // 'http://localhost:3000/',
@@ -44,8 +44,8 @@ export const auth = defineAuth({
         // 'https://main.d127hbsjypuuhr.amplifyapp.com/auth/',
         // 'https://1bfcf095620e088da6cd.auth.us-east-1.amazoncognito.com',
         // 'https://1bfcf095620e088da6cd.auth.us-east-1.amazoncognito.com/auth',
-        'https://leads.josetherealtor.com/api/auth/sign-out-callback',
-        'http://localhost:3000/api/auth/sign-out-callback',
+        'https://leads.josetherealtor.com/api/auth/logout',
+        'http://localhost:3000/logout',
       ],
     },
   },

@@ -1,7 +1,7 @@
 import '@aws-amplify/ui-react/styles.css';
 import './globals.css';
 import { Inter } from 'next/font/google';
-import ConfigureAmplifyClientSide from '../src/lib/amplifyClient.browser';
+import ConfigureAmplifyClientSide from '../app/components/ConfigureAmplify';
 
 import Navbar from '@/app/components/Navbar';
 

@@ -1,16 +1,33 @@
+//components/Navbar
 'use client';
 
 import Link from 'next/link';
 import { useState, useRef, useEffect } from 'react';
 import Logout from './Logout';
-import SignInWithGoogleButton from './SignInWithGoogle';
-import useCurrentUser from '../../src/hooks/useCurrentUser';
+import { getCurrentUser, fetchUserAttributes } from 'aws-amplify/auth';
+import type { UserAttributeKey } from 'aws-amplify/auth';
 
-export default function Navbar() {
-  const { user, loading } = useCurrentUser();
+import { useRouter } from 'next/navigation';
+
+const Navbar = () => {
+  const [user, setuser] = useState<{ username: string } | null>(null);
+  const [userAttributes, setUserAttributes] = useState<Partial<
+    Record<UserAttributeKey, string>
+  > | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const router = useRouter();
   console.log(user);
+
+  useEffect(() => {
+    async function fetchUser() {
+      const user = await getCurrentUser();
+      const attributes = await fetchUserAttributes();
+      setuser(user);
+      setUserAttributes(attributes);
+    }
+    fetchUser();
+  }, []);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -25,13 +42,11 @@ export default function Navbar() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  if (loading) return null; // don’t flicker
-
-  const displayName = user?.username ?? 'Guest';
+  const displayName = user ? user?.username : 'Guest';
   const profilePic =
     `https://ui-avatars.com/api/?name=${encodeURIComponent(
       displayName
-    )}&background=0D8ABC&color=fff` || user?.picture;
+    )}&background=0D8ABC&color=fff` || userAttributes?.picture;
 
   return (
     <nav className='w-full bg-white shadow-sm border-b border-gray-200'>
@@ -45,7 +60,7 @@ export default function Navbar() {
             Home
           </Link>
 
-          {!user && <SignInWithGoogleButton text='Sign in' />}
+          {/* {!user && router.push('/login')} */}
 
           {user && (
             <>
@@ -96,4 +111,6 @@ export default function Navbar() {
       </div>
     </nav>
   );
-}
+};
+
+export default Navbar;

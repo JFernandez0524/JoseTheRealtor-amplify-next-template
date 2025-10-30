@@ -1,9 +1,9 @@
 // app/(protected)/layout.tsx
 
-export default async function ProtectedLayout({
+import Navbar from '@/app/components/Navbar';
+
+export default function ProtectedLayout({
   children,
 }: {
   children: React.ReactNode;
-}) {
-  return <>{children}</>;
-}
+}) {}

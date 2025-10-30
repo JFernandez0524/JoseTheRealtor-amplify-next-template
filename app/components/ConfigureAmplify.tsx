@@ -1,4 +1,3 @@
-// src/lib/amplifyClient.browser.ts
 'use client';
 
 import { Amplify } from 'aws-amplify';

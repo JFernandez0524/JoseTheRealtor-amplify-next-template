@@ -9,13 +9,6 @@ import outputs from '../../amplify_outputs.json';
 export const { runWithAmplifyServerContext, createAuthRouteHandlers } =
   createServerRunner({
     config: outputs,
-    runtimeOptions: {
-      cookies: {
-        domain: new URL(origin).hostname, // making cookies available to all subdomains
-        sameSite: 'strict',
-        maxAge: 60 * 60 * 24 * 7, // 7 days
-      },
-    },
   });
 
 export const cookiesClient = generateServerClientUsingCookies<Schema>({
