@@ -1,42 +1,48 @@
 version: 1
-applications:
-  - appRoot: .
-    backend:
-      phases:
-        preBuild:
-          commands:
-            - echo "🧩 Installing backend dependencies..."
-            - npm ci --cache .npm --prefer-offline
-        build:
-          commands:
-            - echo "🚀 Pushing backend to ensure latest Auth + secrets..."
-            # Push backend with OAuth + secrets so amplify_outputs.json is correct
-            - npx ampx push --yes --app-id $AWS_APP_ID --branch $AWS_BRANCH
 
-            - echo "🧾 Generating Amplify outputs..."
-            - npx ampx generate outputs --app-id $AWS_APP_ID --branch $AWS_BRANCH
-    frontend:
-      phases:
-        preBuild:
-          commands:
-            - echo "🧩 Installing frontend dependencies..."
-            - npm ci --cache .npm --prefer-offline
-        build:
-          commands:
-            - echo "⚙️ Writing environment variables to .env for Next.js"
+backend:
+  phases:
+    preBuild:
+      commands:
+        - echo "🧩 Installing backend dependencies..."
+        - npm ci --cache .npm --prefer-offline
+    build:
+      commands:
+        - echo "🚀 Pushing backend to ensure latest Auth + secrets..."
+        - npx ampx push --yes --app-id $AWS_APP_ID --branch $AWS_BRANCH
 
-            - echo "GOOGLE_CLIENT_ID=$GOOGLE_CLIENT_ID" >> .env
-            - echo "GOOGLE_CLIENT_SECRET=$GOOGLE_CLIENT_SECRET" >> .env
-            - echo "✅ Environment variables written"
+        - echo "🧾 Generating Amplify outputs..."
+        - npx ampx generate outputs --app-id $AWS_APP_ID --branch $AWS_BRANCH
+  artifacts:
+    baseDirectory: .amplify/artifacts
+    files:
+      - '**/*'
+  cache:
+    paths:
+      - .npm/**/*
+      - node_modules/**/*
 
-            - echo "🏗️ Building Next.js application..."
-            - npm run build
-    artifacts:
-      baseDirectory: .next
-      files:
-        - '**/*'
-    cache:
-      paths:
-        - .next/cache/**/*
-        - .npm/**/*
-        - node_modules/**/*
+frontend:
+  phases:
+    preBuild:
+      commands:
+        - echo "🧩 Installing frontend dependencies..."
+        - npm ci --cache .npm --prefer-offline
+    build:
+      commands:
+        - echo "⚙️ Writing environment variables to .env..."
+        - echo "GOOGLE_CLIENT_ID=$GOOGLE_CLIENT_ID" >> .env
+        - echo "GOOGLE_CLIENT_SECRET=$GOOGLE_CLIENT_SECRET" >> .env
+        - echo "✅ Environment variables written"
+
+        - echo "🏗️ Building Next.js application..."
+        - npm run build
+  artifacts:
+    baseDirectory: .next
+    files:
+      - '**/*'
+  cache:
+    paths:
+      - .next/cache/**/*
+      - .npm/**/*
+      - node_modules/**/*
