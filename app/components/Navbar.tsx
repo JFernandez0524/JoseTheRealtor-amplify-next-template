@@ -4,30 +4,30 @@
 import Link from 'next/link';
 import { useState, useRef, useEffect } from 'react';
 import Logout from './Logout';
-import { getCurrentUser, fetchUserAttributes } from 'aws-amplify/auth';
-import type { UserAttributeKey } from 'aws-amplify/auth';
+// import { getCurrentUser, fetchUserAttributes } from 'aws-amplify/auth';
+// import type { UserAttributeKey } from 'aws-amplify/auth';
 
 import { useRouter } from 'next/navigation';
 
 const Navbar = () => {
   const [user, setuser] = useState<{ username: string } | null>(null);
-  const [userAttributes, setUserAttributes] = useState<Partial<
-    Record<UserAttributeKey, string>
-  > | null>(null);
+  // const [userAttributes, setUserAttributes] = useState<Partial<
+  //   Record<UserAttributeKey, string>
+  // > | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
   console.log(user);
 
-  useEffect(() => {
-    async function fetchUser() {
-      const user = await getCurrentUser();
-      const attributes = await fetchUserAttributes();
-      setuser(user);
-      setUserAttributes(attributes);
-    }
-    fetchUser();
-  }, []);
+  // useEffect(() => {
+  //   async function fetchUser() {
+  //     const user = await getCurrentUser();
+  //     const attributes = await fetchUserAttributes();
+  //     setuser(user);
+  //     setUserAttributes(attributes);
+  //   }
+  //   fetchUser();
+  // }, []);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -43,10 +43,10 @@ const Navbar = () => {
   }, []);
 
   const displayName = user ? user?.username : 'Guest';
-  const profilePic =
-    `https://ui-avatars.com/api/?name=${encodeURIComponent(
-      displayName
-    )}&background=0D8ABC&color=fff` || userAttributes?.picture;
+  // const profilePic =
+  //   `https://ui-avatars.com/api/?name=${encodeURIComponent(
+  //     displayName
+  //   )}&background=0D8ABC&color=fff` || userAttributes?.picture;
 
   return (
     <nav className='w-full bg-white shadow-sm border-b border-gray-200'>
@@ -81,13 +81,7 @@ const Navbar = () => {
                 <button
                   onClick={() => setMenuOpen((prev) => !prev)}
                   className='flex items-center space-x-2 focus:outline-none'
-                >
-                  <img
-                    src={profilePic}
-                    alt={displayName}
-                    className='w-8 h-8 rounded-full border border-gray-300'
-                  />
-                </button>
+                ></button>
 
                 {menuOpen && (
                   <div className='absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg border border-gray-100 z-50'>
