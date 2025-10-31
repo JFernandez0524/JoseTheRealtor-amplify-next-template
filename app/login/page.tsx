@@ -32,7 +32,7 @@ function CustomAuthenticator() {
     }
   }, [user]);
 
-  return <Authenticator components={components} />;
+  return <Authenticator socialProviders={['google']} components={components} />;
 }
 
 export default function Login() {
