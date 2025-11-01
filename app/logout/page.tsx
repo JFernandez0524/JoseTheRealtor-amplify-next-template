@@ -16,7 +16,7 @@ export default function LogoutPage() {
       } catch (error) {
         console.log(error);
       } finally {
-        router.push('/login');
+        router.push('/');
       }
     }
     getUser();

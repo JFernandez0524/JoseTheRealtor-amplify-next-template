@@ -12,8 +12,12 @@ export default function Logout() {
     <button
       className='px-2 bg-red-500 text-white rounded-md'
       onClick={async () => {
-        await signOut();
-        router.push('/login');
+        try {
+          await signOut();
+          router.push('/');
+        } catch (error) {
+          console.log('error signing out: ', error);
+        }
       }}
     >
       Sign out
