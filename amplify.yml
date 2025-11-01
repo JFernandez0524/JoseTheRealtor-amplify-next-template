@@ -9,7 +9,7 @@ backend:
     build:
       commands:
         - echo "🚀 Pushing backend to ensure latest Auth + secrets..."
-        - npx ampx pipeline-deploy --yes --app-id $AWS_APP_ID --branch $AWS_BRANCH
+        - npx ampx pipeline-deploy --app-id $AWS_APP_ID --branch $AWS_BRANCH
 
         - echo "🧾 Generating Amplify outputs..."
         - npx ampx generate outputs --app-id $AWS_APP_ID --branch $AWS_BRANCH
