@@ -3,18 +3,50 @@ import { cookies } from 'next/headers';
 import { createServerRunner } from '@aws-amplify/adapter-nextjs';
 import { generateServerClientUsingCookies } from '@aws-amplify/adapter-nextjs/api';
 import { getCurrentUser } from 'aws-amplify/auth/server';
-import { type Schema } from '../../amplify/data/resource';
-import outputs from '../../amplify_outputs.json';
+
+// -----------------------------
+// ✅ Safe imports for Amplify outputs and schema
+// -----------------------------
+
+let outputs: any;
+try {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  outputs = require('../../amplify_outputs.json');
+} catch {
+  console.warn('⚠️ amplify_outputs.json not found yet. Using empty config.');
+  outputs = {};
+}
+
+let Schema: any;
+try {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  Schema = require('../../amplify/data/resource').Schema;
+} catch {
+  console.warn('⚠️ Amplify data schema not found yet. Using fallback.');
+  Schema = {};
+}
+
+// -----------------------------
+// ✅ Server configuration
+// -----------------------------
 
 export const { runWithAmplifyServerContext, createAuthRouteHandlers } =
   createServerRunner({
     config: outputs,
   });
 
-export const cookiesClient = generateServerClientUsingCookies<Schema>({
+// -----------------------------
+// ✅ Cookies client setup
+// -----------------------------
+
+export const cookiesClient = generateServerClientUsingCookies<typeof Schema>({
   config: outputs,
   cookies,
 });
+
+// -----------------------------
+// ✅ Auth SSR helper
+// -----------------------------
 
 export async function AuthGetCurrentUserServer() {
   try {
