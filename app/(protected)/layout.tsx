@@ -1,4 +1,4 @@
-import { AuthGetCurrentUserServer } from '@/src/utils/amplifyServerUtils.server';
+import { AuthGetCurrentUserServer } from '@/app/src/utils/amplifyServerUtils.server';
 
 export default async function ProtectedLayout({
   children,

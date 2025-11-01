@@ -2,10 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import {
   runWithAmplifyServerContext,
   cookiesClient,
-} from '@/src/utils/amplifyServerUtils.server';
+} from '@/app/src/utils/amplifyServerUtils.server';
 import { fetchAuthSession } from 'aws-amplify/auth/server';
 import { cookies } from 'next/headers';
-import { processCsvFile } from '@/src/lib/processCsv';
+import { processCsvFile } from '@/app/src/lib/processCsv';
 
 export const dynamic = 'force-dynamic';
 

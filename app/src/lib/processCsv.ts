@@ -5,7 +5,7 @@ import {
   ProbateLeadSchema,
   PreforeclosureLeadSchema,
   LeadInput,
-} from '@/src/types/leads';
+} from '@/app/src/types/leads';
 import type { Schema } from '@/amplify/data/resource';
 
 type LeadModel = Schema['Lead']['type'];
