@@ -44,5 +44,5 @@
     "app/postcss.config.mjs",
     "amplify_outputs.json"
   ],
-  "exclude": ["node_modules"]
+  "exclude": ["node_modules", "amplify"]
 }
