@@ -1,15 +1,9 @@
 'use client';
 
 import '@aws-amplify/ui-react/styles.css';
-import { Link } from '@aws-amplify/ui-react';
-
-import { signInWithRedirect } from 'aws-amplify/auth';
+import Link from 'next/link';
 
 export default function HomePage() {
-  function handleGoogleSignin() {
-    signInWithRedirect({ provider: 'Google' });
-  }
-
   return (
     <main className='flex flex-col items-center justify-center min-h-screen bg-gray-50 px-6 py-12'>
       <div>
@@ -22,8 +16,8 @@ export default function HomePage() {
           professionals.
         </p>
         <div className='bg-blue-500 text-white p-4 rounded shadow text-center'>
-          <button onClick={handleGoogleSignin} className='text-white'>
-            Sign In with Google
+          <button className='text-white'>
+            <Link href='/login'>Log In </Link>
           </button>{' '}
         </div>
       </div>
