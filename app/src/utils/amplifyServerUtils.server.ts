@@ -11,7 +11,7 @@ import { getCurrentUser } from 'aws-amplify/auth/server';
 let outputs: any;
 try {
   // eslint-disable-next-line @typescript-eslint/no-var-requires
-  outputs = require('../../amplify_outputs.json');
+  outputs = require('../../../amplify_outputs.json');
 } catch {
   console.warn('⚠️ amplify_outputs.json not found yet. Using empty config.');
   outputs = {};

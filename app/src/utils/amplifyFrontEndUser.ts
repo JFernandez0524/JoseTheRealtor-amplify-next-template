@@ -1,3 +1,5 @@
+'use client';
+
 import { getCurrentUser, fetchUserAttributes } from 'aws-amplify/auth';
 
 export async function getFrontEndUser() {
