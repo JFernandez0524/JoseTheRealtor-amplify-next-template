@@ -1,10 +1,11 @@
 import '@aws-amplify/ui-react/styles.css';
 import './globals.css';
 import { Inter } from 'next/font/google';
-import ConfigureAmplifyClientSide from '../app/components/ConfigureAmplify';
+// import ConfigureAmplifyClientSide from '../app/components/ConfigureAmplify';
 
 import AuthProvider from './components/AuthProvider';
 import Navbar from './components/Navbar';
+
 const inter = Inter({ subsets: ['latin'] });
 
 export default async function RootLayout({
@@ -15,7 +16,7 @@ export default async function RootLayout({
   return (
     <html lang='en'>
       <body className={inter.className}>
-        <ConfigureAmplifyClientSide />
+        {/* <ConfigureAmplifyClientSide /> */}
         <AuthProvider>
           <Navbar />
         </AuthProvider>

@@ -1,10 +1,20 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useAuthenticator } from '@aws-amplify/ui-react';
-import { withAuthenticator } from '@aws-amplify/ui-react';
 
 function HeroSection() {
-  const { authStatus } = useAuthenticator((context) => [context.authStatus]);
+  async function fetchUser() {
+    const { getFrontEndUser } = await import('../utils/amplifyFrontEndUser');
+    const user = await getFrontEndUser();
+    return user;
+  }
+
+  const [user, setUser] = useState<null | Record<string, any>>(null);
+  useEffect(() => {
+    fetchUser().then((user) => {
+      setUser(user);
+    });
+  }, []);
+
   return (
     <main className='flex flex-col items-center justify-center min-h-screen bg-gray-50 px-6 py-12'>
       <div>
@@ -17,7 +27,7 @@ function HeroSection() {
           professionals.
         </p>
 
-        {authStatus !== 'authenticated' ? (
+        {user === null ? (
           <div className='bg-blue-500 text-white p-4 rounded shadow text-center'>
             <button className='text-white'>
               <Link href='/login'>Log In </Link>
@@ -39,4 +49,4 @@ function HeroSection() {
   );
 }
 
-export default withAuthenticator(HeroSection);
+export default HeroSection;

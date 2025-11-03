@@ -3,30 +3,43 @@
 import Link from 'next/link';
 import { useState, useRef, useEffect } from 'react';
 import Logout from './Logout';
-import { useAuthenticator } from '@aws-amplify/ui-react';
-import { useRouter } from 'next/navigation';
-import { AuthUser } from 'aws-amplify/auth';
-import { Loader } from '@aws-amplify/ui-react';
-import { getFrontEndUser } from '../src/utils/amplifyFrontEndUser';
+import { useAuthenticator, Loader } from '@aws-amplify/ui-react';
+import { getFrontEndUserAttributes } from '@/app/utils/amplifyFrontEndUser'; // Ensure this path is correct
+import { UserAttributeKey } from 'aws-amplify/auth';
+// 1. Import usePathname
+import { usePathname } from 'next/navigation';
 
 const Navbar = () => {
   const [menuOpen, setMenuOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
-  const router = useRouter();
+  const [attributes, setAttributes] = useState<Partial<
+    Record<UserAttributeKey, string>
+  > | null>(null);
 
-  const { user, authStatus, route } = useAuthenticator((context) => [
+  // 2. Get the current path
+  const pathname = usePathname();
+
+  const { user, authStatus } = useAuthenticator((context) => [
     context.user,
     context.authStatus,
-    context.route,
   ]);
 
-  if (authStatus === 'unauthenticated') {
-    console.log('Not authenticated');
-  } else if (authStatus === 'authenticated') {
-    console.log(user);
-  }
+  useEffect(() => {
+    if (authStatus === 'authenticated') {
+      async function fetchAttributes() {
+        try {
+          const attrs = await getFrontEndUserAttributes();
+          setAttributes(attrs);
+        } catch (e) {
+          console.error('Navbar: Error fetching user attributes', e);
+        }
+      }
+      fetchAttributes();
+    } else {
+      setAttributes(null);
+    }
+  }, [authStatus]);
 
-  // 2. Handle clicks outside the dropdown to close it
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
       if (
@@ -40,47 +53,68 @@ const Navbar = () => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // 3. Define user display info
-  const displayName = user ? user.username : 'Guest';
-  const profilePic = `https://ui-avatars.com/api/?name=${encodeURIComponent(
-    displayName
-  )}&background=0D8ABC&color=fff&rounded=true`;
+  const displayName = attributes?.name || user?.username || 'Guest';
+  const profilePic =
+    attributes?.picture ||
+    `https://ui-avatars.com/api/?name=${encodeURIComponent(
+      displayName
+    )}&background=0D8ABC&color=fff&rounded=true`;
 
-  // 4. Main return statement
+  // 3. Define our link styles
+  const baseLinkClass = 'text-gray-700 hover:text-blue-600';
+  const activeLinkClass = 'nav-link-active'; // The class from globals.css
+
   return (
     <nav className='bg-white border-b border-gray-200'>
       <div className='max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex justify-between h-16 items-center'>
-        {/* Left Side: Home Link */}
         <Link href='/' className='text-gray-700 hover:text-blue-600 font-bold'>
           LeadManager
         </Link>
 
-        {/* Right Side: Auth Links */}
         <div className='flex items-center space-x-4 relative'>
-          {/* Show loading state until we've checked for a user.
-            This prevents a "flash" of the wrong content.
-          */}
-          {authStatus !== 'authenticated' ? (
+          {/* --- Public Links (Always Show) --- */}
+          {/* 4. Apply conditional classes */}
+          <Link
+            href='/services'
+            className={
+              pathname === '/services' ? activeLinkClass : baseLinkClass
+            }
+          >
+            Services
+          </Link>
+          <Link
+            href='/about'
+            className={pathname === '/about' ? activeLinkClass : baseLinkClass}
+          >
+            About
+          </Link>
+
+          {/* --- Auth-Conditional Links --- */}
+          {authStatus === 'configuring' ? (
             <div className='text-sm text-gray-500'>
               <Loader size='large' />
             </div>
-          ) : authStatus ? (
-            // User is LOGGED IN: Show dashboard and profile dropdown
+          ) : authStatus === 'authenticated' ? (
             <>
+              {/* --- Protected Links --- */}
               <Link
                 href='/dashboard'
-                className='text-gray-700 hover:text-blue-600'
+                className={
+                  pathname === '/dashboard' ? activeLinkClass : baseLinkClass
+                }
               >
                 Dashboard
               </Link>
               <Link
                 href='/upload'
-                className='text-gray-700 hover:text-blue-600'
+                className={
+                  pathname === '/upload' ? activeLinkClass : baseLinkClass
+                }
               >
                 Upload Leads
               </Link>
 
-              {/* Profile Dropdown */}
+              {/* --- Profile Dropdown --- */}
               <div ref={dropdownRef} className='relative'>
                 <button
                   onClick={() => setMenuOpen((prev) => !prev)}
@@ -94,7 +128,6 @@ const Navbar = () => {
                   <span className='text-gray-700 hidden sm:block'>
                     {displayName}
                   </span>
-                  {/* Chevron Icon */}
                   <svg
                     className='w-4 h-4 text-gray-500'
                     fill='none'
@@ -121,7 +154,9 @@ const Navbar = () => {
                     </div>
                     <Link
                       href='/profile'
-                      className='block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100'
+                      className={`block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 ${
+                        pathname === '/profile' ? 'bg-gray-100' : ''
+                      }`}
                       onClick={() => setMenuOpen(false)}
                     >
                       Profile
@@ -132,8 +167,13 @@ const Navbar = () => {
               </div>
             </>
           ) : (
-            // User is LOGGED OUT: Show Login link
-            <Link href='/login' className='text-gray-700 hover:text-blue-600'>
+            /* C: LOGGED-OUT (UNAUTHENTICATED) STATE */
+            <Link
+              href='/login'
+              className={
+                pathname === '/login' ? activeLinkClass : baseLinkClass
+              }
+            >
               Sign In
             </Link>
           )}

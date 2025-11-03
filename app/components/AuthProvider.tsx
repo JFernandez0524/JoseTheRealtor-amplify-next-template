@@ -13,6 +13,15 @@ Amplify.configure(outputs, { ssr: true });
 //   return null;
 // }
 
+// 1. Configure Amplify ONCE for the browser.
+//    { ssr: true } = "use the secure auth cookies from the Next.js adapter"
+Amplify.configure(outputs, { ssr: true });
+
+// 4. Tiny component injected at the top of <body /> in layout
+export function ConfigureAmplifyClientSide() {
+  return null;
+}
+
 export default function AuthProvider({
   children,
 }: {
@@ -20,6 +29,7 @@ export default function AuthProvider({
 }) {
   return (
     <Authenticator.Provider>
+      <ConfigureAmplifyClientSide />
       <>{children}</>
     </Authenticator.Provider>
   );

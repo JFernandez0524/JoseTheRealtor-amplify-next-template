@@ -1,12 +1,10 @@
 // app/(protected)/dashboard/page.tsx
-import { cookiesClient } from '@/app/src/utils/amplifyServerUtils.server';
+import { cookiesClient } from '@/app/utils/amplifyServerUtils.server';
 
 export const dynamic = 'force-dynamic';
 
 export default async function DashboardPage() {
-  const { data: leads, errors } = await cookiesClient.models.Lead.list({
-    authmode: 'userPool',
-  });
+  const { data: leads, errors } = await cookiesClient.models.Lead.list();
   if (errors) {
     console.error('Error fetching leads:', errors);
     return <div>Error fetching leads</div>;
