@@ -9,8 +9,8 @@ import {
   fetchAuthSession,
 } from 'aws-amplify/auth/server';
 
-import { type Schema } from '@/amplify/data/resource';
-import outputs from '@/amplify_outputs.json';
+import { type Schema } from '../../amplify/data/resource';
+import outputs from '../../amplify_outputs.json';
 
 // -----------------------------
 // ✅ Server configuration
