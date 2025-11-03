@@ -42,7 +42,8 @@
     "**/*.tsx",
     ".next/types/**/*.ts",
     "app/postcss.config.mjs",
-    "amplify_outputs.json"
+    "amplify_outputs.json",
+    "amplify/**/*.ts"
   ],
-  "exclude": ["node_modules", "amplify"]
+  "exclude": ["node_modules"]
 }
