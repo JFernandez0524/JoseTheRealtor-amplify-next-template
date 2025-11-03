@@ -23,7 +23,7 @@
 
     // ✅ Performance and tooling
     "incremental": true,
-
+    "baseUrl": ".",
     // ✅ Path alias support
     "paths": {
       "@/*": ["./*"]
