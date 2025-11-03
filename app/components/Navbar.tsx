@@ -6,17 +6,54 @@ import Logout from './Logout';
 import { useAuthenticator, Loader } from '@aws-amplify/ui-react';
 import { getFrontEndUserAttributes } from '@/app/utils/amplifyFrontEndUser'; // Ensure this path is correct
 import { UserAttributeKey } from 'aws-amplify/auth';
-// 1. Import usePathname
 import { usePathname } from 'next/navigation';
 
+// --- Icon Helper Components ---
+
+const HamburgerIcon = () => (
+  <svg
+    className='w-6 h-6'
+    fill='none'
+    stroke='currentColor'
+    viewBox='0 0 24 24'
+    xmlns='http://www.w3.org/2000/svg'
+  >
+    <path
+      strokeLinecap='round'
+      strokeLinejoin='round'
+      strokeWidth={2}
+      d='M4 6h16M4 12h16m-7 6h7'
+    />
+  </svg>
+);
+
+const CloseIcon = () => (
+  <svg
+    className='w-6 h-6'
+    fill='none'
+    stroke='currentColor'
+    viewBox='0 0 24 24'
+    xmlns='http://www.w3.org/2000/svg'
+  >
+    <path
+      strokeLinecap='round'
+      strokeLinejoin='round'
+      strokeWidth={2}
+      d='M6 18L18 6M6 6l12 12'
+    />
+  </svg>
+);
+
+// --- Navbar Component ---
+
 const Navbar = () => {
-  const [menuOpen, setMenuOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false); // For desktop profile dropdown
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false); // For mobile overlay
   const dropdownRef = useRef<HTMLDivElement>(null);
   const [attributes, setAttributes] = useState<Partial<
     Record<UserAttributeKey, string>
   > | null>(null);
 
-  // 2. Get the current path
   const pathname = usePathname();
 
   const { user, authStatus } = useAuthenticator((context) => [
@@ -24,6 +61,7 @@ const Navbar = () => {
     context.authStatus,
   ]);
 
+  // Fetch attributes when authenticated
   useEffect(() => {
     if (authStatus === 'authenticated') {
       async function fetchAttributes() {
@@ -40,6 +78,7 @@ const Navbar = () => {
     }
   }, [authStatus]);
 
+  // Close desktop dropdown on click outside
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
       if (
@@ -53,6 +92,7 @@ const Navbar = () => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  // Define user display info
   const displayName = attributes?.name || user?.username || 'Guest';
   const profilePic =
     attributes?.picture ||
@@ -60,20 +100,27 @@ const Navbar = () => {
       displayName
     )}&background=0D8ABC&color=fff&rounded=true`;
 
-  // 3. Define our link styles
+  // Define link styles
   const baseLinkClass = 'text-gray-700 hover:text-blue-600';
-  const activeLinkClass = 'nav-link-active'; // The class from globals.css
+  const activeLinkClass = 'nav-link-active font-semibold text-blue-600'; // Added 'nav-link-active' for your CSS
+
+  // Helper to close menus on link click
+  const handleLinkClick = () => {
+    setMenuOpen(false);
+    setIsMobileMenuOpen(false);
+  };
 
   return (
     <nav className='bg-white border-b border-gray-200'>
       <div className='max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex justify-between h-16 items-center'>
+        {/* Left Side: Home Link (Always visible) */}
         <Link href='/' className='text-gray-700 hover:text-blue-600 font-bold'>
           LeadManager
         </Link>
 
-        <div className='flex items-center space-x-4 relative'>
-          {/* --- Public Links (Always Show) --- */}
-          {/* 4. Apply conditional classes */}
+        {/* --- 1. DESKTOP MENU (Hidden on mobile) --- */}
+        <div className='hidden md:flex items-center space-x-4 relative'>
+          {/* Public Links */}
           <Link
             href='/services'
             className={
@@ -89,14 +136,12 @@ const Navbar = () => {
             About
           </Link>
 
-          {/* --- Auth-Conditional Links --- */}
+          {/* Auth-Conditional Links */}
           {authStatus === 'configuring' ? (
-            <div className='text-sm text-gray-500'>
-              <Loader size='large' />
-            </div>
+            <Loader size='large' />
           ) : authStatus === 'authenticated' ? (
             <>
-              {/* --- Protected Links --- */}
+              {/* Protected Links */}
               <Link
                 href='/dashboard'
                 className={
@@ -114,7 +159,7 @@ const Navbar = () => {
                 Upload Leads
               </Link>
 
-              {/* --- Profile Dropdown --- */}
+              {/* Profile Dropdown */}
               <div ref={dropdownRef} className='relative'>
                 <button
                   onClick={() => setMenuOpen((prev) => !prev)}
@@ -128,23 +173,9 @@ const Navbar = () => {
                   <span className='text-gray-700 hidden sm:block'>
                     {displayName}
                   </span>
-                  <svg
-                    className='w-4 h-4 text-gray-500'
-                    fill='none'
-                    stroke='currentColor'
-                    viewBox='0 0 24 24'
-                    xmlns='http://www.w3.org/2000/svg'
-                  >
-                    <path
-                      strokeLinecap='round'
-                      strokeLinejoin='round'
-                      strokeWidth={2}
-                      d='M19 9l-7 7-7-7'
-                    ></path>
-                  </svg>
+                  {/* ... (chevron) ... */}
                 </button>
 
-                {/* Dropdown Menu */}
                 {menuOpen && (
                   <div className='absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg border border-gray-100 z-50'>
                     <div className='px-4 py-2 text-sm font-medium text-gray-700 border-b'>
@@ -157,7 +188,7 @@ const Navbar = () => {
                       className={`block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 ${
                         pathname === '/profile' ? 'bg-gray-100' : ''
                       }`}
-                      onClick={() => setMenuOpen(false)}
+                      onClick={handleLinkClick} // Close on click
                     >
                       Profile
                     </Link>
@@ -167,7 +198,7 @@ const Navbar = () => {
               </div>
             </>
           ) : (
-            /* C: LOGGED-OUT (UNAUTHENTICATED) STATE */
+            /* C: LOGGED-OUT STATE */
             <Link
               href='/login'
               className={
@@ -178,7 +209,109 @@ const Navbar = () => {
             </Link>
           )}
         </div>
+
+        {/* --- 2. MOBILE MENU BUTTON (Hidden on desktop) --- */}
+        <div className='md:hidden flex items-center space-x-2'>
+          {/* Show profile pic next to hamburger when logged in */}
+          {authStatus === 'authenticated' && (
+            <img
+              src={profilePic}
+              alt='Profile'
+              className='w-8 h-8 rounded-full'
+            />
+          )}
+          <button
+            onClick={() => setIsMobileMenuOpen(true)}
+            className='text-gray-700 focus:outline-none'
+            aria-label='Open menu'
+          >
+            <HamburgerIcon />
+          </button>
+        </div>
       </div>
+
+      {/* --- 3. MOBILE MENU OVERLAY --- */}
+      {isMobileMenuOpen && (
+        <div className='fixed inset-0 z-50 bg-white flex flex-col md:hidden'>
+          {/* Mobile Menu Header */}
+          <div className='flex justify-between items-center h-16 px-4 border-b border-gray-200'>
+            <span className='text-gray-700 font-bold text-lg'>Menu</span>
+            <button
+              onClick={() => setIsMobileMenuOpen(false)}
+              className='text-gray-700 focus:outline-none'
+              aria-label='Close menu'
+            >
+              <CloseIcon />
+            </button>
+          </div>
+
+          {/* Mobile Menu Links */}
+          <div className='flex flex-col p-4 space-y-4'>
+            {/* --- Public Links --- */}
+            <Link
+              href='/'
+              className={`text-lg ${pathname === '/' ? activeLinkClass : baseLinkClass}`}
+              onClick={handleLinkClick}
+            >
+              Home
+            </Link>
+            <Link
+              href='/services'
+              className={`text-lg ${pathname === '/services' ? activeLinkClass : baseLinkClass}`}
+              onClick={handleLinkClick}
+            >
+              Services
+            </Link>
+            <Link
+              href='/about'
+              className={`text-lg ${pathname === '/about' ? activeLinkClass : baseLinkClass}`}
+              onClick={handleLinkClick}
+            >
+              About
+            </Link>
+
+            <hr />
+
+            {/* --- Auth-Conditional Links --- */}
+            {authStatus === 'authenticated' ? (
+              <>
+                <Link
+                  href='/dashboard'
+                  className={`text-lg ${pathname === '/dashboard' ? activeLinkClass : baseLinkClass}`}
+                  onClick={handleLinkClick}
+                >
+                  Dashboard
+                </Link>
+                <Link
+                  href='/upload'
+                  className={`text-lg ${pathname === '/upload' ? activeLinkClass : baseLinkClass}`}
+                  onClick={handleLinkClick}
+                >
+                  Upload Leads
+                </Link>
+                <Link
+                  href='/profile'
+                  className={`text-lg ${pathname === '/profile' ? activeLinkClass : baseLinkClass}`}
+                  onClick={handleLinkClick}
+                >
+                  Profile
+                </Link>
+                <div className='pt-4'>
+                  <Logout />
+                </div>
+              </>
+            ) : (
+              <Link
+                href='/login'
+                className={`text-lg ${pathname === '/login' ? activeLinkClass : baseLinkClass}`}
+                onClick={handleLinkClick}
+              >
+                Sign In
+              </Link>
+            )}
+          </div>
+        </div>
+      )}
     </nav>
   );
 };
