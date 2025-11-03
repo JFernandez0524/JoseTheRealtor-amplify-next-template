@@ -1,6 +1,6 @@
 'use client';
 import { Loader } from '@aws-amplify/ui-react';
 
-export const DefaultLoaderExample = () => {
+export default function DefaultLoaderExample() {
   return <Loader />;
-};
+}
