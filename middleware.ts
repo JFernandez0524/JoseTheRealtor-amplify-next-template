@@ -54,8 +54,8 @@ export const config = {
      */
     // '/((?!_next/static|_next/image|favicon.ico|login).*)',
     // '/((?!_next/static|_next/image|favicon.ico|login|/$).*)',
-    // 1. Protect all API routes
-    '/api/:path*',
+    // 1. Protect all API routes EXCEPT '/api/analyze-property'
+    '/api/((?!v1/analyze-property).*)',
 
     // 2. Protect your private pages
     '/dashboard/:path*',
