@@ -36,10 +36,12 @@ frontend:
     build:
       commands:
         - echo "⚙️ Writing environment variables to .env..."
-        - echo "GOOGLE_CLIENT_ID=$GOOGLE_CLIENT_ID" >> .env
-        - echo "GOOGLE_CLIENT_SECRET=$GOOGLE_CLIENT_SECRET" >> .env
+        - echo "GOOGLE_CLIENT_ID=$GOOGLE_CLIENT_ID" >> .env.production
+        - echo "GOOGLE_CLIENT_SECRET=$GOOGLE_CLIENT_SECRET" >> .env.production
+        - echo "BRIDGE_API_KEY=$BRIDGE_API_KEY" >> .env.production
+        - echo "GOOGLE_MAPS_API_KEY=$GOOGLE_MAPS_API_KEY" >> .env.production
+        - echo "NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=$NEXT_PUBLIC_GOOGLE_MAPS_API_KEY" >> .env.production
         - echo "✅ Environment variables written"
-
         - echo "🏗️ Building Next.js application..."
         - npm run build
   artifacts:
