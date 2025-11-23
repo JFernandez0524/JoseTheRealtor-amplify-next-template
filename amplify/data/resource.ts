@@ -1,43 +1,56 @@
 // amplify/data/resource.ts
 import { type ClientSchema, a, defineData } from '@aws-amplify/backend';
+import { testFunction } from '../functions/testFunction/resource';
 
 // Core models
 const schema = a.schema({
   Lead: a
     .model({
       type: a.string().required(), // "probate" | "preforeclosure"
-      address: a.string().required(),
-      firstName: a.string(),
-      lastName: a.string(),
-      city: a.string().required(),
-      state: a.string().required(),
-      zip: a.string().required(),
-      standardizedAddress: a.json(), // full BatchData standardized address result
+      ownerFirstName: a.string(),
+      ownerLastName: a.string(),
+      ownerAddress: a.string().required(),
+      ownerCity: a.string().required(),
+      ownerState: a.string().required(),
+      ownerZip: a.string().required(),
+      adminFirstName: a.string(),
+      adminLastName: a.string(),
+      adminAddress: a.string(),
+      adminCity: a.string(),
+      adminState: a.string(),
+      adminZip: a.string(),
+      standardizedAddress: a.json(), // From Google or BatchData
+      // 👇 --- ADD THIS --- 👇
+      skipTraceStatus: a.enum([
+        'PENDING', // Not yet processed
+        'COMPLETED', // Skip trace was successful
+        'FAILED', // Skip trace failed
+      ]),
+      latitude: a.float(),
+      longitude: a.float(),
 
-      // probate-specific
-      executorFirstName: a.string(),
-      executorLastName: a.string(),
-      mailingAddress: a.string(),
-      mailingCity: a.string(),
-      mailingState: a.string(),
-      mailingZip: a.string(),
+      // --- Pre-Foreclosure Data ---
+      preforeclosureNoticeDate: a.date(), // 👈 NEW
+      preforeclosureAuctionDate: a.date(), // 👈 NEW
 
-      // preforeclosure-specific
-      borrowerFirstName: a.string(),
-      borrowerLastName: a.string(),
-      caseNumber: a.string(),
+      // --- Assessment/Value Data ---
+      estimatedValue: a.float(), // 👈 NEW (from marketTotalValue)
+      estimatedValueYear: a.integer(), // 👈 NEW (from taxYear)
 
-      // relationships
+      // --- Basic Building Data ---
+      yearBuilt: a.integer(), // 👈 NEW
+      squareFeet: a.integer(), // 👈 NEW
+      bedrooms: a.integer(), // 👈 NEW
+      baths: a.float(), // 👈 NEW
+
+      // --- Relationships ---
       contacts: a.hasMany('Contact', 'leadId'),
       enrichments: a.hasMany('Enrichment', 'leadId'),
       activities: a.hasMany('Activity', 'leadId'),
 
       createdAt: a.datetime(),
     })
-    .authorization((allow) => [
-      allow.owner(), // 👈 Each user only sees their own leads
-    ]),
-
+    .authorization((allow) => [allow.owner()]),
   Contact: a
     .model({
       leadId: a.id(), // belongs-to FK
@@ -45,8 +58,8 @@ const schema = a.schema({
       role: a.string(), // "executor" | "owner" | "other"
       firstName: a.string(),
       lastName: a.string(),
-      emails: a.json(), // string[]
-      phones: a.json(), // {number, type, tested, reachable, score}[]
+      emails: a.json().array(), // string[]
+      phones: a.json().array(), // {number, type, tested, reachable, score}[]
       mailingAddress: a.json().required(), // {street, city, state, zip, county}
       createdAt: a.datetime(),
     })
@@ -56,7 +69,7 @@ const schema = a.schema({
 
   Enrichment: a
     .model({
-      leadId: a.id(),
+      leadId: a.id(), // belongs-to FK
       lead: a.belongsTo('Lead', 'leadId'),
       source: a.string(), // "batchdata:address-verify" | "batchdata:lookup" | "batchdata:skiptrace"
       statusText: a.string(),
@@ -69,7 +82,7 @@ const schema = a.schema({
 
   Activity: a
     .model({
-      leadId: a.id(),
+      leadId: a.id(), // belongs-to FK
       lead: a.belongsTo('Lead', 'leadId'),
       type: a.string(), // "call" | "email" | "letter" | "sms" | "note"
       channel: a.string(),
@@ -84,11 +97,30 @@ const schema = a.schema({
   // 🔹 Conversation route (chat-based AI)
   chat: a
     .conversation({
-      aiModel: a.ai.model('Claude 3.5 Haiku'),
+      aiModel: a.ai.model('Claude 3.5 Sonnet'),
       systemPrompt:
-        'You are a helpful real estate assistant who answers property and market questions clearly.',
+        'You are a helpful real estate assistant. ' +
+        'Your answers must be concise, professional, and easy to read. ' +
+        'Use bullet points (using * or -) and newlines to format your response. ' +
+        'Keep answers to 3-4 sentences unless asked for more.',
+
+      inferenceConfiguration: {
+        temperature: 0.2,
+        topP: 0.2,
+        maxTokens: 200,
+      },
     })
     .authorization((allow) => allow.owner()),
+
+  //custom functions
+  testFunction: a
+    .query()
+    .arguments({
+      message: a.string(),
+    })
+    .returns(a.string())
+    .handler(a.handler.function(testFunction))
+    .authorization((allow) => [allow.authenticated()]),
 });
 
 export type Schema = ClientSchema<typeof schema>;

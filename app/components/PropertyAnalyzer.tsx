@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { LoadScript } from '@react-google-maps/api';
 import { AnalysisResult } from '@/app/types/analysis';
-import { getFrontEndAuthSession } from '@/app/utils/amplifyFrontEndUser';
+import { getFrontEndAuthSession } from '@/app/utils/aws/auth/amplifyFrontEndUser';
 import { useFormFocus } from '@/app/context/FormFocusContext';
 
 // Import our new components

@@ -1,140 +1,79 @@
 import { NextRequest, NextResponse } from 'next/server';
-import {
-  runWithAmplifyServerContext,
-  cookiesClient,
-} from '@/app/utils/amplifyServerUtils.server';
-import { fetchAuthSession } from 'aws-amplify/auth/server';
-import { cookies } from 'next/headers';
-import { processCsvFile } from '@/app/lib/processCsv';
+import { AuthIsUserAuthenticatedServer } from '@/app/utils/aws/auth/amplifyServerUtils.server';
+import { validateAddressWithGoogle } from '@/app/utils/google.server';
+import { createLead } from '@/app/utils/aws/data/lead.server';
+import { type Schema } from '@/amplify/data/resource';
 
 export const dynamic = 'force-dynamic';
 
+type Lead = Schema['Lead']['type'];
+
 export async function POST(req: NextRequest) {
-  try {
-    // 1️⃣ Authenticate user
-    const session = await runWithAmplifyServerContext({
-      nextServerContext: { cookies },
-      operation: async (ctx) => fetchAuthSession(ctx),
-    });
+  const authenticated = await AuthIsUserAuthenticatedServer();
+  if (!authenticated) {
+    return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+  }
 
-    const userSub = session?.tokens?.idToken?.payload?.sub;
-    if (!userSub) {
-      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
-    }
+  const contentType = req.headers.get('content-type') || '';
 
-    const contentType = req.headers.get('content-type') || '';
-    const client = cookiesClient;
+  // --- WORKFLOW 1: Validate Address ---
+  if (contentType.includes('application/json')) {
+    try {
+      let lead: Lead = await req.json();
 
-    // 2️⃣ Handle CSV upload
-    if (contentType.includes('multipart/form-data')) {
-      const formData = await req.formData();
-      const file = formData.get('file') as File;
-      if (!file) {
-        return NextResponse.json({ error: 'Missing file' }, { status: 400 });
+      let googleValidationPayload: any = null;
+
+      // 1. Validate the address
+      const fullAddress = `${lead.ownerAddress}, ${lead.ownerCity}, ${lead.ownerState} ${lead.ownerZip}`;
+      const validation = await validateAddressWithGoogle(fullAddress);
+      googleValidationPayload = validation;
+      if (!validation.success || validation.isPartialMatch) {
+        throw new Error('Google address validation failed.');
       }
 
-      const { validLeads, rejected, leadType } = await processCsvFile(
-        file,
-        userSub
-      );
-
-      for (const lead of validLeads) {
-        await client.models.Lead.create(lead);
-      }
-
-      return NextResponse.json({
-        message: `✅ Processed ${validLeads.length} ${leadType} leads`,
-        stored: validLeads.length,
-        rejected: rejected.length,
-      });
-    }
-
-    // 3️⃣ Handle manual JSON lead
-    if (contentType.includes('application/json')) {
-      const data = await req.json();
-
-      const {
-        type,
-        address,
-        city,
-        state,
-        zip,
-        firstName,
-        lastName,
-        executorFirstName,
-        executorLastName,
-        mailingAddress,
-        mailingCity,
-        mailingState,
-        mailingZip,
-        borrowerFirstName,
-        borrowerLastName,
-        caseNumber,
-      } = data;
-
-      // ✅ Validate required fields
-      const required = { type, address, city, state, zip };
-      const missing = Object.entries(required)
-        .filter(([_, value]) => !value)
-        .map(([key]) => key);
-
-      if (missing.length > 0) {
-        return NextResponse.json(
-          { error: `Missing required fields: ${missing.join(', ')}` },
-          { status: 400 }
-        );
-      }
-
-      // ✅ Build Lead object according to model
-      const newLead: any = {
-        type,
-        address,
-        city,
-        state,
-        zip,
-        firstName: firstName || '',
-        lastName: lastName || '',
-        createdAt: new Date().toISOString(),
-        userSub,
-        standardizedAddress: null,
+      lead = {
+        ...lead,
+        ownerAddress: validation.components.street,
+        ownerCity: validation.components.city,
+        ownerState: validation.components.state,
+        ownerZip: validation.components.zip,
+        latitude: validation.location.lat,
+        longitude: validation.location.lng,
+        skipTraceStatus: 'PENDING',
       };
 
-      // Conditional fields for probate
-      if (type === 'probate') {
-        Object.assign(newLead, {
-          executorFirstName: executorFirstName || '',
-          executorLastName: executorLastName || '',
-          mailingAddress: mailingAddress || '',
-          mailingCity: mailingCity || '',
-          mailingState: mailingState || '',
-          mailingZip: mailingZip || '',
-        });
-      }
+      // Update lead with standardized address components
 
-      // Conditional fields for preforeclosure
-      if (type === 'preforeclosure') {
-        Object.assign(newLead, {
-          borrowerFirstName: borrowerFirstName || '',
-          borrowerLastName: borrowerLastName || '',
-          caseNumber: caseNumber || '',
-        });
-      }
-
-      const savedLead = await client.models.Lead.create(newLead);
-
+      // 2. Create the base Lead record
+      const newLead = await createLead(lead);
       return NextResponse.json({
-        message: '✅ Lead added successfully',
-        lead: savedLead,
+        message: '✅ Lead added and processed successfully',
+        lead: newLead,
       });
+    } catch (error: any) {
+      console.error('Manual lead error:', error);
+      return NextResponse.json({ error: error.message }, { status: 500 });
     }
+  }
 
-    // 4️⃣ Invalid content type
+  // --- WORKFLOW 2: CSV FORM-DATA UPLOAD ---
+  // This is the *wrong* pattern and will time out.
+  // We will return an error and you must update your frontend.
+  if (contentType.includes('multipart/form-data')) {
+    console.error(
+      'CSV upload to API route is not supported. Use S3 direct upload.'
+    );
     return NextResponse.json(
-      { error: 'Unsupported content type' },
+      {
+        error:
+          'CSV upload via this API is not supported and will time out. Please update client to use S3 direct upload.',
+      },
       { status: 400 }
     );
-  } catch (error) {
-    console.error('Lead upload error:', error);
-    return NextResponse.json({ error: 'Server error' }, { status: 500 });
   }
+
+  return NextResponse.json(
+    { error: 'Unsupported content type' },
+    { status: 400 }
+  );
 }

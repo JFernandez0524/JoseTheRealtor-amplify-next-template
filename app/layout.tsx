@@ -5,6 +5,7 @@ import { Inter } from 'next/font/google';
 
 import AuthProvider from './components/AuthProvider';
 import Navbar from './components/Navbar';
+import { ConversationsProvider } from './context/ConversationsContext';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -18,9 +19,11 @@ export default async function RootLayout({
       <body className={inter.className}>
         {/* <ConfigureAmplifyClientSide /> */}
         <AuthProvider>
-          <Navbar />
+          <ConversationsProvider>
+            <Navbar />
+            {children}
+          </ConversationsProvider>
         </AuthProvider>
-        {children}
       </body>
     </html>
   );

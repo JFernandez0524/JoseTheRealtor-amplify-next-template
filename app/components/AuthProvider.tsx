@@ -1,6 +1,7 @@
 'use client';
 
 import { Authenticator } from '@aws-amplify/ui-react';
+
 import { Amplify } from 'aws-amplify';
 import outputs from '../../amplify_outputs.json';
 
@@ -8,19 +9,9 @@ import outputs from '../../amplify_outputs.json';
 //    { ssr: true } = "use the secure auth cookies from the Next.js adapter"
 Amplify.configure(outputs, { ssr: true });
 
-// 4. Tiny component injected at the top of <body /> in layout
-// export function ConfigureAmplifyClientSide() {
-//   return null;
-// }
-
-// 1. Configure Amplify ONCE for the browser.
-//    { ssr: true } = "use the secure auth cookies from the Next.js adapter"
-Amplify.configure(outputs, { ssr: true });
-
-// 4. Tiny component injected at the top of <body /> in layout
-export function ConfigureAmplifyClientSide() {
+export const ConfigureAmplify = () => {
   return null;
-}
+};
 
 export default function AuthProvider({
   children,
@@ -29,8 +20,8 @@ export default function AuthProvider({
 }) {
   return (
     <Authenticator.Provider>
-      <ConfigureAmplifyClientSide />
-      <>{children}</>
+      <ConfigureAmplify />
+      {children}
     </Authenticator.Provider>
   );
 }

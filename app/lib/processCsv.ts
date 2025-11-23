@@ -1,99 +1,172 @@
-import { parse } from 'csv-parse/sync';
-import { verifyAddress } from './batchData';
-import { detectLeadType } from './detectLeadType';
+import { parse } from 'csv-parse';
+import { cookiesClient } from '@/app/utils/aws/auth/amplifyServerUtils.server';
+import { validateAddressWithGoogle } from '@/app/utils/google.server';
 import {
-  ProbateLeadSchema,
-  PreforeclosureLeadSchema,
-  LeadInput,
-} from '@/app/types/leads';
-import type { Schema } from '@/amplify/data/resource';
+  skipTraceProbateLead,
+  skipTracePreForeClosureLead,
+} from '@/app/utils/batchData.server';
+import { type Schema } from '@/amplify/data/resource';
+import { type LeadToSkip } from '@/app/types/batchdata/leadToSkip';
+import { detectLeadType } from '@/app/lib/detectLeadType'; // Your client-side util is fine to use here
 
-type LeadModel = Schema['Lead']['type'];
-
-export interface CsvProcessResult {
-  validLeads: LeadModel[];
-  rejected: Array<{
-    rowNumber: number;
-    reason: string;
-    message?: string;
-  }>;
-  leadType: string;
-}
+// Define the two types of CSV rows (matches your files)
+type ProbateLeadRow = {
+  ownerFirstName: string;
+  ownerLastName: string;
+  ownerAddress: string;
+  ownerCity: string;
+  ownerState: string;
+  ownerZip: string;
+  adminFirstName?: string;
+  adminLastName?: string;
+  adminAddress?: string;
+  adminCity?: string;
+  adminState?: string;
+  adminZip?: string;
+  caseNumber?: string;
+};
+type PreForeclosureLeadRow = {
+  ownerFirstName: string;
+  ownerLastName: string;
+  ownerAddress: string;
+  ownerCity: string;
+  ownerState: string;
+  ownerZip: string;
+  caseNumber?: string;
+};
+type LeadRow = ProbateLeadRow | PreForeclosureLeadRow;
 
 /**
- * Parses, validates, and enriches CSV content for Lead imports.
- * Returns both valid leads (ready to store) and rejected ones.
+ * Processes an uploaded CSV file as a stream.
+ * This function runs in the background.
  */
-export async function processCsvFile(
-  file: File,
-  userId: string
-): Promise<CsvProcessResult> {
-  const text = await file.text();
-  const rows = parse<Record<string, any>>(text, { columns: true, trim: true });
+export async function processCsvOnServer(file: File, userId: string) {
+  console.log(`Starting CSV processing for user: ${userId}`);
 
-  if (rows.length === 0) {
-    throw new Error('CSV file is empty.');
-  }
+  // 1. Create the parser stream
+  // We pipe the file's web stream into the CSV parser
+  const parser = (file.stream() as any)
+    .pipeThrough(new TextDecoderStream())
+    .pipe(
+      parse({
+        columns: true, // Use headers
+        trim: true,
+        skip_empty_lines: true,
+      })
+    );
 
-  const leadType = detectLeadType(rows[0]);
-  if (leadType === 'unknown') {
-    throw new Error('Unable to determine lead type from CSV headers.');
-  }
+  let leadType: 'probate' | 'preforeclosure' | 'unknown' = 'unknown';
 
-  const schema =
-    leadType === 'probate' ? ProbateLeadSchema : PreforeclosureLeadSchema;
+  // 2. Use the Async Iterator to read row-by-row
+  for await (const row of parser) {
+    const lead = row as LeadRow;
+    let leadId: string | null = null;
+    let googleValidationPayload: any = null;
+    let batchDataPayload: any = null;
 
-  const validLeads: LeadModel[] = [];
-  const rejected: CsvProcessResult['rejected'] = [];
-
-  for (const [index, row] of rows.entries()) {
     try {
-      // 1️⃣ Validate row
-      const parsed = schema.safeParse(row);
-      if (!parsed.success) {
-        rejected.push({
-          rowNumber: index + 1,
-          reason: 'Validation failed',
-          message: JSON.stringify(parsed.error.errors),
-        });
-        continue;
+      // 3. Detect lead type from the *first* row
+      if (leadType === 'unknown') {
+        leadType = detectLeadType(row);
+        if (leadType === 'unknown') {
+          throw new Error('Could not detect lead type from CSV headers.');
+        }
       }
 
-      const leadData = parsed.data;
-
-      // 2️⃣ Verify address with BatchData
-      const verification = await verifyAddress({
-        address1: leadData.address,
-        city: leadData.city,
-        state: leadData.state,
-        zip: leadData.zip,
-      });
-      if (!verification?.is_valid) {
-        rejected.push({
-          rowNumber: index + 1,
-          reason: 'Address verification failed',
-        });
-        continue;
+      // 5. Validate the property address
+      const propertyAddress = `${lead.ownerAddress}, ${lead.ownerCity}, ${lead.ownerState} ${lead.ownerZip}`;
+      const validation = await validateAddressWithGoogle(propertyAddress);
+      googleValidationPayload = validation;
+      if (!validation.success || validation.isPartialMatch) {
+        throw new Error('Google address validation failed.');
       }
 
-      // 3️⃣ Build the final payload
-      const payload: LeadInput = {
-        ...(leadData as any),
-        type: leadType,
-        standardizedAddress: verification.standardized_address,
-        createdAt: new Date(),
-        owner: userId, // 👈 Add owner automatically
-      };
+      // 4. Create the base Lead record in the DB
+      const probateLead = lead as ProbateLeadRow;
+      const { data: newLead, errors: createErrors } =
+        await cookiesClient.models.Lead.create({
+          type: leadType,
+          ownerFirstName: lead.ownerFirstName,
+          ownerLastName: lead.ownerLastName,
+          ownerAddress: lead.ownerAddress,
+          ownerCity: lead.ownerCity,
+          ownerState: lead.ownerState,
+          ownerZip: lead.ownerZip,
+          adminFirstName: probateLead.adminFirstName,
+          adminLastName: probateLead.adminLastName,
+          adminAddress: probateLead.adminAddress,
+          adminCity: probateLead.adminCity,
+          adminState: probateLead.adminState,
+          adminZip: probateLead.adminZip,
+        });
 
-      validLeads.push(payload as any);
-    } catch (err) {
-      rejected.push({
-        rowNumber: index + 1,
-        reason: 'Unexpected error',
-        message: (err as Error).message,
-      });
+      if (createErrors) throw new Error(createErrors[0].message);
+
+      // 6. Run Skip Trace / Lookup
+      let result;
+      let leadsToSkip: LeadToSkip[] = [];
+
+      if (leadType === 'probate') {
+        if (!probateLead.adminAddress || !probateLead.adminFirstName) {
+          throw new Error('Missing Admin info for Probate lead.');
+        }
+        const leadToSkip = {
+          name: {
+            first: probateLead.adminFirstName!,
+            last: probateLead.adminLastName!,
+          },
+          propertyAddress: {
+            street: probateLead.adminAddress!,
+            city: probateLead.adminCity!,
+            state: probateLead.adminState!,
+            zip: probateLead.adminZip!,
+          },
+        };
+
+        leadsToSkip.push(leadToSkip);
+        result = await skipTraceProbateLead(leadsToSkip);
+      } else {
+        // ... (pre-foreclosure logic) ...
+        const leadToSkip = {
+          name: { first: lead.ownerFirstName, last: lead.ownerLastName },
+          propertyAddress: {
+            street: lead.ownerAddress,
+            city: lead.ownerCity,
+            state: lead.ownerState,
+            zip: lead.ownerZip,
+          },
+        };
+        leadsToSkip.push(leadToSkip);
+        result = await skipTracePreForeClosureLead(leadsToSkip);
+      }
+
+      if (!result) throw new Error('BatchData returned no data.');
+      batchDataPayload = result;
+
+      // 7. Update Lead, create Contact and Enrichment
+      // (This logic can be copied from the 'process-leads' route
+      // we built in the previous step)
+
+      console.log(`Successfully processed: ${lead.ownerAddress}`);
+    } catch (processError: any) {
+      console.error(
+        `Failed to process row for ${lead.ownerAddress}:`,
+        processError.message
+      );
+
+      // 8. Create enrichment record for the error
+      if (leadId) {
+        // Only if the lead was created
+        await cookiesClient.models.Enrichment.create({
+          leadId: leadId,
+          source: 'process:error',
+          statusText: 'FAILED',
+          payload: { error: processError.message },
+          owner: userId, // Manually set owner
+        });
+      }
     }
-  }
+  } // end for await...of
 
-  return { validLeads, rejected, leadType };
+  console.log(`Finished processing CSV for user: ${userId}`);
 }

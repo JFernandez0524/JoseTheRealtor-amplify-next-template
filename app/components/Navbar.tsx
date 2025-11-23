@@ -4,9 +4,8 @@ import Link from 'next/link';
 import { useState, useRef, useEffect } from 'react';
 import Logout from './Logout';
 import { useAuthenticator, Loader } from '@aws-amplify/ui-react';
-import { getFrontEndUserAttributes } from '@/app/utils/amplifyFrontEndUser'; // Ensure this path is correct
-import { UserAttributeKey } from 'aws-amplify/auth';
 import { usePathname } from 'next/navigation';
+import { useUserProfile } from '../hooks/useUserProfile';
 
 // --- Icon Helper Components ---
 
@@ -50,9 +49,6 @@ const Navbar = () => {
   const [menuOpen, setMenuOpen] = useState(false); // For desktop profile dropdown
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false); // For mobile overlay
   const dropdownRef = useRef<HTMLDivElement>(null);
-  const [attributes, setAttributes] = useState<Partial<
-    Record<UserAttributeKey, string>
-  > | null>(null);
 
   const pathname = usePathname();
 
@@ -61,22 +57,7 @@ const Navbar = () => {
     context.authStatus,
   ]);
 
-  // Fetch attributes when authenticated
-  useEffect(() => {
-    if (authStatus === 'authenticated') {
-      async function fetchAttributes() {
-        try {
-          const attrs = await getFrontEndUserAttributes();
-          setAttributes(attrs);
-        } catch (e) {
-          console.error('Navbar: Error fetching user attributes', e);
-        }
-      }
-      fetchAttributes();
-    } else {
-      setAttributes(null);
-    }
-  }, [authStatus]);
+  const attributes = useUserProfile();
 
   // Close desktop dropdown on click outside
   useEffect(() => {

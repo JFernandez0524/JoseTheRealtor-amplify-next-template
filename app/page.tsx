@@ -3,7 +3,7 @@ import PropertyAnalyzer from './components/PropertyAnalyzer';
 import '@aws-amplify/ui-react/styles.css';
 
 // 1. Import your server-side auth function
-import { AuthGetCurrentUserServer } from '@/app/utils/amplifyServerUtils.server'; // Adjust path if needed
+import { AuthGetCurrentUserServer } from '@/app/utils/aws/auth/amplifyServerUtils.server'; // Adjust path if needed
 // 2. Import the new Provider
 import { FormFocusProvider } from '@/app/context/FormFocusContext'; // Adjust path if needed
 

@@ -9,12 +9,14 @@ import {
   fetchAuthSession,
 } from 'aws-amplify/auth/server';
 
-import { type Schema } from '../../amplify/data/resource';
-import outputs from '../../amplify_outputs.json';
+import { type Schema } from '../../../../amplify/data/resource';
+import outputs from '../../../../amplify_outputs.json';
 
 // -----------------------------
 // ✅ Server configuration
 // -----------------------------
+
+type Lead = Schema['Lead']['type'];
 
 export const { runWithAmplifyServerContext, createAuthRouteHandlers } =
   createServerRunner({
@@ -77,4 +79,13 @@ export async function AuthIsUserAuthenticatedServer(): Promise<boolean> {
     },
   });
   return authenticated;
+}
+
+export async function createLeadInDatabase(lead: Lead) {
+  try {
+    const { data } = await cookiesClient.models.Lead.create(lead);
+    return data;
+  } catch (error: any) {
+    console.error('❌ createLeadInDatabase error:', error.message);
+  }
 }

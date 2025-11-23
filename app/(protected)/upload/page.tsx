@@ -6,25 +6,26 @@ export default function UploadLeadsPage() {
   const [mode, setMode] = useState<'csv' | 'manual'>('manual');
   const [file, setFile] = useState<File | null>(null);
   const [lead, setLead] = useState({
+    //probate and preforeclosure fields
     type: '',
-    address: '',
-    firstName: '',
-    lastName: '',
-    city: '',
-    state: '',
-    zip: '',
-    executorFirstName: '',
-    executorLastName: '',
-    mailingAddress: '',
-    mailingCity: '',
-    mailingState: '',
-    mailingZip: '',
-    borrowerFirstName: '',
-    borrowerLastName: '',
-    caseNumber: '',
+    ownerAddress: '',
+    ownerFirstName: '',
+    ownerLastName: '',
+    ownerCity: '',
+    ownerState: '',
+    ownerZip: '',
+    //probate only fields
+    adminFirstName: '',
+    adminLastName: '',
+    adminAddress: '',
+    adminCity: '',
+    adminState: '',
+    adminZip: '',
   });
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
+
+  // Ref for the Autocomplete component
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
@@ -53,8 +54,8 @@ export default function UploadLeadsPage() {
           body: formData,
         });
       } else {
-        const { type, address, city, state, zip } = lead;
-        if (!type || !address || !city || !state || !zip) {
+        const { type, ownerAddress, ownerCity, ownerState, ownerZip } = lead;
+        if (!type || !ownerAddress || !ownerCity || !ownerState || !ownerZip) {
           alert('Missing required fields (type, address, city, state, zip)');
           setLoading(false);
           return;
@@ -74,21 +75,19 @@ export default function UploadLeadsPage() {
       // Reset
       setLead({
         type: '',
-        address: '',
-        firstName: '',
-        lastName: '',
-        city: '',
-        state: '',
-        zip: '',
-        executorFirstName: '',
-        executorLastName: '',
-        mailingAddress: '',
-        mailingCity: '',
-        mailingState: '',
-        mailingZip: '',
-        borrowerFirstName: '',
-        borrowerLastName: '',
-        caseNumber: '',
+        ownerAddress: '',
+        ownerFirstName: '',
+        ownerLastName: '',
+        ownerCity: '',
+        ownerState: '',
+        ownerZip: '',
+        //probate only fields
+        adminFirstName: '',
+        adminLastName: '',
+        adminAddress: '',
+        adminCity: '',
+        adminState: '',
+        adminZip: '',
       });
       setFile(null);
     } catch (err) {
@@ -199,34 +198,34 @@ export default function UploadLeadsPage() {
           </select>
 
           <input
-            name='address'
+            name='ownerAddress'
             placeholder='Property Address *'
-            value={lead.address}
+            value={lead.ownerAddress}
             onChange={handleChange}
             className='border border-gray-300 rounded-md p-2 w-full'
             required
           />
           <div className='grid grid-cols-3 gap-2'>
             <input
-              name='city'
+              name='ownerCity'
               placeholder='City *'
-              value={lead.city}
+              value={lead.ownerCity}
               onChange={handleChange}
               className='border border-gray-300 rounded-md p-2'
               required
             />
             <input
-              name='state'
+              name='ownerState'
               placeholder='State *'
-              value={lead.state}
+              value={lead.ownerState}
               onChange={handleChange}
               className='border border-gray-300 rounded-md p-2'
               required
             />
             <input
-              name='zip'
+              name='ownerZip'
               placeholder='ZIP *'
-              value={lead.zip}
+              value={lead.ownerZip}
               onChange={handleChange}
               className='border border-gray-300 rounded-md p-2'
               required
@@ -241,50 +240,47 @@ export default function UploadLeadsPage() {
               </h2>
               <div className='grid grid-cols-2 gap-2'>
                 <input
-                  name='executorFirstName'
+                  name='adminFirstName'
                   placeholder='Executor First Name'
-                  value={lead.executorFirstName}
+                  value={lead.adminFirstName}
                   onChange={handleChange}
                   className='border border-gray-300 rounded-md p-2'
                 />
                 <input
-                  name='executorLastName'
+                  name='adminLastName'
                   placeholder='Executor Last Name'
-                  value={lead.executorLastName}
+                  value={lead.adminLastName}
                   onChange={handleChange}
                   className='border border-gray-300 rounded-md p-2'
                 />
               </div>
 
-              <h2 className='text-gray-700 font-medium mt-4'>
-                Mailing Address
-              </h2>
               <input
-                name='mailingAddress'
+                name='adminAddress'
                 placeholder='Mailing Address'
-                value={lead.mailingAddress}
+                value={lead.adminAddress}
                 onChange={handleChange}
                 className='border border-gray-300 rounded-md p-2 w-full'
               />
               <div className='grid grid-cols-3 gap-2'>
                 <input
-                  name='mailingCity'
+                  name='adminCity'
                   placeholder='City'
-                  value={lead.mailingCity}
+                  value={lead.adminCity}
                   onChange={handleChange}
                   className='border border-gray-300 rounded-md p-2'
                 />
                 <input
-                  name='mailingState'
+                  name='adminState'
                   placeholder='State'
-                  value={lead.mailingState}
+                  value={lead.adminState}
                   onChange={handleChange}
                   className='border border-gray-300 rounded-md p-2'
                 />
                 <input
-                  name='mailingZip'
+                  name='adminZip'
                   placeholder='ZIP'
-                  value={lead.mailingZip}
+                  value={lead.adminZip}
                   onChange={handleChange}
                   className='border border-gray-300 rounded-md p-2'
                 />
@@ -299,28 +295,20 @@ export default function UploadLeadsPage() {
               </h2>
               <div className='grid grid-cols-2 gap-2'>
                 <input
-                  name='borrowerFirstName'
+                  name='ownerFirstName'
                   placeholder='Borrower First Name'
-                  value={lead.borrowerFirstName}
+                  value={lead.ownerFirstName}
                   onChange={handleChange}
                   className='border border-gray-300 rounded-md p-2'
                 />
                 <input
-                  name='borrowerLastName'
+                  name='ownerLastName'
                   placeholder='Borrower Last Name'
-                  value={lead.borrowerLastName}
+                  value={lead.ownerLastName}
                   onChange={handleChange}
                   className='border border-gray-300 rounded-md p-2'
                 />
               </div>
-
-              <input
-                name='caseNumber'
-                placeholder='Case Number'
-                value={lead.caseNumber}
-                onChange={handleChange}
-                className='border border-gray-300 rounded-md p-2 w-full'
-              />
             </>
           )}
 

@@ -1,14 +1,14 @@
 // app/(protected)/profile/page.tsx
 import { redirect } from 'next/navigation';
 
-import { runWithAmplifyServerContext } from '@/app/utils/amplifyServerUtils.server';
+import { runWithAmplifyServerContext } from '@/app/utils/aws/auth/amplifyServerUtils.server';
 import { fetchUserAttributes } from 'aws-amplify/auth/server';
 import { cookies } from 'next/headers';
 import SignOutButton from '@/app/components/Logout';
 import {
   AuthGetCurrentUserServer,
   AuthGetUserAttributesServer,
-} from '@/app/utils/amplifyServerUtils.server';
+} from '@/app/utils/aws/auth/amplifyServerUtils.server';
 import { a } from '@aws-amplify/backend';
 
 export const dynamic = 'force-dynamic';
