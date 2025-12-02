@@ -1,12 +1,14 @@
 'use client';
-
+import { Schema } from '@/amplify/data/resource';
 import { useState } from 'react';
+import { Alert } from '@aws-amplify/ui-react';
+
+type LeadState = Partial<Schema['Lead']['type']>;
 
 export default function UploadLeadsPage() {
   const [mode, setMode] = useState<'csv' | 'manual'>('manual');
   const [file, setFile] = useState<File | null>(null);
-  const [lead, setLead] = useState({
-    //probate and preforeclosure fields
+  const [lead, setLead] = useState<LeadState>({
     type: '',
     ownerAddress: '',
     ownerFirstName: '',
@@ -46,7 +48,10 @@ export default function UploadLeadsPage() {
     try {
       let res;
       if (mode === 'csv') {
-        if (!file) return alert('Please select a CSV file first.');
+        if (!file)
+          return (
+            <Alert variation='error'>Please select a CSV file first.</Alert>
+          );
         const formData = new FormData();
         formData.append('file', file);
         res = await fetch('/api/v1/upload-csv', {
@@ -54,6 +59,11 @@ export default function UploadLeadsPage() {
           body: formData,
         });
       } else {
+        // Manual entry
+        if (!lead)
+          return (
+            <Alert variation='error'>Please fill out the form first!</Alert>
+          );
         const { type, ownerAddress, ownerCity, ownerState, ownerZip } = lead;
         if (!type || !ownerAddress || !ownerCity || !ownerState || !ownerZip) {
           alert('Missing required fields (type, address, city, state, zip)');
@@ -137,7 +147,7 @@ export default function UploadLeadsPage() {
           </label>
           <select
             name='leadType'
-            value={lead.type}
+            value={lead?.type}
             onChange={handleChange}
             required
             className='border border-gray-300 rounded-md p-2 w-full'
@@ -242,14 +252,14 @@ export default function UploadLeadsPage() {
                 <input
                   name='adminFirstName'
                   placeholder='Executor First Name'
-                  value={lead.adminFirstName}
+                  value={lead.adminFirstName || ''}
                   onChange={handleChange}
                   className='border border-gray-300 rounded-md p-2'
                 />
                 <input
                   name='adminLastName'
                   placeholder='Executor Last Name'
-                  value={lead.adminLastName}
+                  value={lead.adminLastName || ''}
                   onChange={handleChange}
                   className='border border-gray-300 rounded-md p-2'
                 />
@@ -258,7 +268,7 @@ export default function UploadLeadsPage() {
               <input
                 name='adminAddress'
                 placeholder='Mailing Address'
-                value={lead.adminAddress}
+                value={lead.adminAddress || ''}
                 onChange={handleChange}
                 className='border border-gray-300 rounded-md p-2 w-full'
               />
@@ -266,21 +276,21 @@ export default function UploadLeadsPage() {
                 <input
                   name='adminCity'
                   placeholder='City'
-                  value={lead.adminCity}
+                  value={lead.adminCity || ''}
                   onChange={handleChange}
                   className='border border-gray-300 rounded-md p-2'
                 />
                 <input
                   name='adminState'
                   placeholder='State'
-                  value={lead.adminState}
+                  value={lead.adminState || ''}
                   onChange={handleChange}
                   className='border border-gray-300 rounded-md p-2'
                 />
                 <input
                   name='adminZip'
                   placeholder='ZIP'
-                  value={lead.adminZip}
+                  value={lead.adminZip || ''}
                   onChange={handleChange}
                   className='border border-gray-300 rounded-md p-2'
                 />
@@ -297,14 +307,14 @@ export default function UploadLeadsPage() {
                 <input
                   name='ownerFirstName'
                   placeholder='Borrower First Name'
-                  value={lead.ownerFirstName}
+                  value={lead.ownerFirstName || ''}
                   onChange={handleChange}
                   className='border border-gray-300 rounded-md p-2'
                 />
                 <input
                   name='ownerLastName'
                   placeholder='Borrower Last Name'
-                  value={lead.ownerLastName}
+                  value={lead.ownerLastName || ''}
                   onChange={handleChange}
                   className='border border-gray-300 rounded-md p-2'
                 />

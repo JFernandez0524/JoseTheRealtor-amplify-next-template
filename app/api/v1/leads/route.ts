@@ -1,8 +1,5 @@
 import { NextResponse } from 'next/server';
-import {
-  AuthIsUserAuthenticatedServer,
-  cookiesClient,
-} from '@/app/utils/aws/auth/amplifyServerUtils.server';
+import { AuthIsUserAuthenticatedServer } from '@/app/utils/aws/auth/amplifyServerUtils.server';
 import { listLeads } from '@/app/utils/aws/data/lead.server';
 /**
  * GET: Fetches all leads owned by the authenticated user

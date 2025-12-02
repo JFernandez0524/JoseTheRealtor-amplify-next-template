@@ -5,15 +5,10 @@ import { type Schema } from '@/amplify/data/resource'; // Adjust path if needed
 
 // This type represents the data needed to CREATE a new lead
 // It omits fields that are auto-generated or are relationships
-type CreateLeadInput = Omit<
+export type CreateLeadInput = Omit<
   Schema['Lead']['type'],
-  | 'id'
-  | 'contacts'
-  | 'enrichments'
-  | 'activities'
-  | 'createdAt'
-  | 'updatedAt'
-  | 'owner'
+  'id' | 'contacts' | 'enrichments' | 'activities' | 'createdAt' | 'updatedAt'
+  // | 'owner'
 >;
 
 // This type represents the data needed to UPDATE a lead

@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { AuthIsUserAuthenticatedServer } from '@/app/utils/aws/auth/amplifyServerUtils.server';
 import { validateAddressWithGoogle } from '@/app/utils/google.server';
 import { createLead } from '@/app/utils/aws/data/lead.server';
-import { type Schema } from '@/amplify/data/resource';
+
+import { Schema } from '@/amplify/data/resource';
 
 export const dynamic = 'force-dynamic';
 
