@@ -49,6 +49,7 @@ const schema = a.schema({
       activities: a.hasMany('Activity', 'leadId'),
 
       createdAt: a.datetime(),
+      updatedAt: a.datetime(),
     })
     .authorization((allow) => [allow.owner()]),
   Contact: a
