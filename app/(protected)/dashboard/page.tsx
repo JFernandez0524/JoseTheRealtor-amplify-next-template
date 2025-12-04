@@ -2,14 +2,17 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { type Schema } from '@/amplify/data/resource'; // Adjust path
+import { type Schema } from '@/amplify/data/resource';
 import { useRouter } from 'next/navigation';
 import axios from 'axios';
 
-// Define the shape of a Lead
-type Lead = Schema['Lead']['type'];
+// Define the shape of a Lead based on your Schema
+// We extend it slightly to ensure TypeScript doesn't complain about internal fields like 'owner'
+type Lead = Schema['Lead']['type'] & {
+  owner?: string;
+  __typename?: string;
+};
 
-// 1. 👇 DEFINE THE SHAPE OF YOUR API RESPONSE
 type LeadsApiResponse = {
   success: boolean;
   leads: Lead[];
@@ -20,7 +23,7 @@ const axiosInstance = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
-  timeout: 10000, // 10 seconds
+  timeout: 10000,
 });
 
 export default function DashboardPage() {
@@ -28,227 +31,261 @@ export default function DashboardPage() {
   const [selectedLeads, setSelectedLeads] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [status, setStatus] = useState<'idle' | 'processing'>('idle');
   const router = useRouter();
 
-  // 1. Fetch all leads on page load
   useEffect(() => {
     fetchLeads();
   }, []);
 
-  // 3. 👇 UPDATED fetchLeads FUNCTION
   const fetchLeads = async () => {
     setIsLoading(true);
     try {
-      // Use the correct response type
       const response = await axiosInstance.get<LeadsApiResponse>('/leads');
-      const data = response.data; // data is { success: true, leads: [...] }
-
-      // Check for success and set the leads array
-      if (data.success && data.leads) {
-        setLeads(data.leads);
-      } else {
-        setLeads([]);
-      }
+      setLeads(response.data.leads || []);
+      setError(null);
     } catch (err: any) {
-      // Axios automatically throws for 4xx/5xx errors
-      setError(err.message);
+      console.error('Error fetching leads:', err);
+      setError('Failed to load leads. Please try again.');
     } finally {
       setIsLoading(false);
     }
   };
 
-  // 2. Handle checkbox selection
-  const handleSelect = (leadId: string) => {
-    setSelectedLeads((prev) =>
-      prev.includes(leadId)
-        ? prev.filter((id) => id !== leadId)
-        : [...prev, leadId]
-    );
-  };
-
-  const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.checked) {
-      setSelectedLeads(leads.map((lead) => lead.id));
+  const toggleSelectAll = () => {
+    if (selectedLeads.length === leads.length) {
+      setSelectedLeads([]);
     } else {
-      setSelectedLeads([]);
+      setSelectedLeads(leads.map((l) => l.id));
     }
   };
 
-  // 3. Handle the "Skip Trace" button click
-  const handleSkipTrace = async () => {
-    if (selectedLeads.length === 0) {
-      alert('Please select at least one lead to skip trace.');
-      return;
+  const toggleSelectLead = (id: string) => {
+    if (selectedLeads.includes(id)) {
+      setSelectedLeads(selectedLeads.filter((l) => l !== id));
+    } else {
+      setSelectedLeads([...selectedLeads, id]);
     }
+  };
 
-    // 1. Get the full lead objects for the selected IDs
-    const leadsToTrace = leads.filter((lead) =>
-      selectedLeads.includes(lead.id)
-    );
-
-    // 2. Check the type of the *first* selected lead
-    // (We assume a batch is all one type)
-    const leadType = leadsToTrace[0].type;
-    const leadIdsToTrace = leadsToTrace.map((l) => l.id);
-
-    setStatus('processing');
-    setError(null);
-
-    try {
-      // 3. Call the *one* correct API route based on the lead type
-      if (leadType === 'probate') {
-        await axiosInstance.post('/skiptrace-leads/probate', {
-          leadIds: leadIdsToTrace,
-        });
-      } else if (leadType === 'preforeclosure') {
-        await axiosInstance.post('/skiptrace-leads/preforeclosure', {
-          leadIds: leadIdsToTrace,
-        });
-      } else {
-        throw new Error('Unknown lead type in batch.');
-      }
-
-      // 4. Refresh the data
-      alert('Skip trace complete!');
-      await fetchLeads(); // This now calls your axios-based function
-      setSelectedLeads([]);
-      setStatus('idle');
-    } catch (err: any) {
-      setError(err.message);
-      setStatus('idle');
-    }
+  const formatDate = (dateStr?: string | null) => {
+    if (!dateStr) return 'N/A';
+    return new Date(dateStr).toLocaleString();
   };
 
   return (
-    <main className='max-w-6xl mx-auto py-10 px-6'>
+    <main className='p-6 max-w-[95%] mx-auto'>
+      {/* HEADER */}
       <div className='flex justify-between items-center mb-6'>
-        <h1 className='text-3xl font-bold'>My Leads</h1>
-        <Link
-          href='/(protected)/upload' // Link to your upload page
-          className='bg-blue-600 text-white py-2 px-4 rounded-md shadow-sm hover:bg-blue-700'
-        >
-          + Add/Upload Leads
-        </Link>
+        <h1 className='text-3xl font-bold text-gray-800'>All Leads Data</h1>
+        <div className='space-x-2'>
+          <button
+            onClick={() => router.push('/upload')}
+            className='bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition shadow-sm'
+          >
+            Upload CSV
+          </button>
+          {selectedLeads.length > 0 && (
+            <button className='bg-red-500 text-white px-4 py-2 rounded-md hover:bg-red-600 transition shadow-sm'>
+              Delete ({selectedLeads.length})
+            </button>
+          )}
+        </div>
       </div>
 
       {error && (
-        <div className='p-3 bg-red-100 text-red-700 rounded-md mb-4'>
-          <strong>Error:</strong> {error}
+        <div className='bg-red-50 text-red-600 p-3 rounded-md mb-4 border border-red-200'>
+          {error}
         </div>
       )}
 
-      {/* Action Bar */}
-      <div className='mb-4'>
-        <button
-          onClick={handleSkipTrace}
-          disabled={selectedLeads.length === 0 || status === 'processing'}
-          className='bg-green-600 text-white py-2 px-4 rounded-md shadow-sm disabled:bg-gray-400'
-        >
-          {status === 'processing'
-            ? 'Processing...'
-            : `Skip Trace (${selectedLeads.length}) Selected`}
-        </button>
-      </div>
-
-      {/* Leads Table */}
-      <div className='bg-white shadow border rounded-lg overflow-hidden'>
-        <table className='min-w-full divide-y divide-gray-200'>
-          <thead className='bg-gray-50'>
-            <tr>
-              <th className='px-6 py-3 w-12'>
-                <input type='checkbox' onChange={handleSelectAll} />
-              </th>
-              <th className='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>
-                Name
-              </th>
-              <th className='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>
-                Property Address
-              </th>
-              <th className='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>
-                Type
-              </th>
-              <th className='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>
-                Skiptrace Status
-              </th>
-            </tr>
-          </thead>
-          <tbody className='bg-white divide-y divide-gray-200'>
-            {isLoading ? (
+      {/* --- SCROLLABLE TABLE CONTAINER --- */}
+      <div className='bg-white shadow-lg rounded-lg overflow-hidden border border-gray-200'>
+        <div className='overflow-x-auto'>
+          {' '}
+          {/* 👈 Enables Horizontal Scroll */}
+          <table className='min-w-full divide-y divide-gray-200'>
+            <thead className='bg-gray-50'>
               <tr>
-                <td colSpan={5} className='text-center p-4'>
-                  Loading...
-                </td>
-              </tr>
-            ) : leads.length === 0 ? (
-              <tr>
-                <td colSpan={5} className='text-center p-4'>
-                  No leads found. Add or upload leads to get started.
-                </td>
-              </tr>
-            ) : (
-              leads.map((lead) => (
-                <tr
-                  key={lead.id}
-                  className={
-                    selectedLeads.includes(lead.id) ? 'bg-blue-50' : ''
-                  }
-                >
-                  <td className='px-6 py-4'>
-                    <input
-                      type='checkbox'
-                      checked={selectedLeads.includes(lead.id)}
-                      onChange={() => handleSelect(lead.id)}
-                    />
-                  </td>
-                  <td className='px-6 py-4 whitespace-nowrap text-sm font-medium'>
-                    <Link
-                      href={`/lead/${lead.id}`}
-                      className='text-blue-600 hover:text-blue-800'
-                    >
-                      {lead.ownerFirstName} {lead.ownerLastName}
-                    </Link>
-                  </td>
+                <th scope='col' className='px-4 py-3 text-left w-10'>
+                  <input
+                    type='checkbox'
+                    className='rounded border-gray-300 text-blue-600 focus:ring-blue-500 h-4 w-4'
+                    checked={
+                      leads.length > 0 && selectedLeads.length === leads.length
+                    }
+                    onChange={toggleSelectAll}
+                  />
+                </th>
+                {/* 19 Columns requested */}
+                <th className='px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider whitespace-nowrap'>
+                  ID
+                </th>
+                <th className='px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider whitespace-nowrap'>
+                  Type Name
+                </th>
+                <th className='px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider whitespace-nowrap'>
+                  Type
+                </th>
+                <th className='px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider whitespace-nowrap'>
+                  Status
+                </th>
 
-                  <td className='px-6 py-4 whitespace-nowrap text-sm'>
-                    <Link
-                      href={`/lead/${lead.id}`}
-                      className='text-blue-600 hover:text-blue-800'
-                    >
-                      {lead.ownerAddress}, {lead.ownerCity}, {lead.ownerState}
-                    </Link>
-                  </td>
-                  <td className='px-6 py-4 whitespace-nowrap text-sm'>
-                    <span
-                      className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                        lead.type === 'probate'
-                          ? 'bg-purple-100 text-purple-800'
-                          : 'bg-orange-100 text-orange-800'
-                      }`}
-                    >
-                      {lead.type}
-                    </span>
-                  </td>
-                  <td className='px-6 py-4 whitespace-nowrap text-sm'>
-                    {lead.skipTraceStatus === 'COMPLETED' ? (
-                      <span className='px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800'>
-                        Completed
-                      </span>
-                    ) : lead.skipTraceStatus === 'FAILED' ? (
-                      <span className='px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800'>
-                        Failed
-                      </span>
-                    ) : (
-                      <span className='px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800'>
-                        Pending
-                      </span>
-                    )}
+                {/* Owner Info */}
+                <th className='px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider whitespace-nowrap bg-blue-50'>
+                  Owner First
+                </th>
+                <th className='px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider whitespace-nowrap bg-blue-50'>
+                  Owner Last
+                </th>
+                <th className='px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider whitespace-nowrap bg-blue-50'>
+                  Owner Address
+                </th>
+                <th className='px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider whitespace-nowrap bg-blue-50'>
+                  Owner City
+                </th>
+                <th className='px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider whitespace-nowrap bg-blue-50'>
+                  Owner State
+                </th>
+                <th className='px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider whitespace-nowrap bg-blue-50'>
+                  Owner Zip
+                </th>
+
+                {/* Admin Info */}
+                <th className='px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider whitespace-nowrap bg-purple-50'>
+                  Admin First
+                </th>
+                <th className='px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider whitespace-nowrap bg-purple-50'>
+                  Admin Last
+                </th>
+                <th className='px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider whitespace-nowrap bg-purple-50'>
+                  Admin Address
+                </th>
+                <th className='px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider whitespace-nowrap bg-purple-50'>
+                  Admin City
+                </th>
+                <th className='px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider whitespace-nowrap bg-purple-50'>
+                  Admin State
+                </th>
+                <th className='px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider whitespace-nowrap bg-purple-50'>
+                  Admin Zip
+                </th>
+
+                {/* Meta Data */}
+                <th className='px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider whitespace-nowrap'>
+                  Created At
+                </th>
+                <th className='px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider whitespace-nowrap'>
+                  Updated At
+                </th>
+                <th className='px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider whitespace-nowrap'>
+                  Record Owner (ID)
+                </th>
+              </tr>
+            </thead>
+            <tbody className='bg-white divide-y divide-gray-200'>
+              {isLoading ? (
+                <tr>
+                  <td
+                    colSpan={20}
+                    className='px-6 py-10 text-center text-gray-500'
+                  >
+                    Loading data...
                   </td>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+              ) : leads.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={20}
+                    className='px-6 py-10 text-center text-gray-500'
+                  >
+                    No leads found.
+                  </td>
+                </tr>
+              ) : (
+                leads.map((lead) => (
+                  <tr key={lead.id} className='hover:bg-gray-50 transition'>
+                    <td className='px-4 py-4 whitespace-nowrap'>
+                      <input
+                        type='checkbox'
+                        className='rounded border-gray-300 text-blue-600 focus:ring-blue-500 h-4 w-4'
+                        checked={selectedLeads.includes(lead.id)}
+                        onChange={() => toggleSelectLead(lead.id)}
+                      />
+                    </td>
+
+                    <td className='px-4 py-4 whitespace-nowrap text-sm text-gray-500 font-mono'>
+                      {lead.id.substring(0, 8)}...
+                    </td>
+                    <td className='px-4 py-4 whitespace-nowrap text-sm text-gray-500'>
+                      {lead.__typename || 'Lead'}
+                    </td>
+
+                    <td className='px-4 py-4 whitespace-nowrap text-sm'>
+                      <span className='px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800'>
+                        {lead.type}
+                      </span>
+                    </td>
+
+                    <td className='px-4 py-4 whitespace-nowrap text-sm text-gray-500'>
+                      {lead.skipTraceStatus}
+                    </td>
+
+                    {/* Owner Fields */}
+                    <td className='px-4 py-4 whitespace-nowrap text-sm text-gray-900 bg-blue-50/30'>
+                      {lead.ownerFirstName || '-'}
+                    </td>
+                    <td className='px-4 py-4 whitespace-nowrap text-sm text-gray-900 bg-blue-50/30'>
+                      {lead.ownerLastName || '-'}
+                    </td>
+                    <td className='px-4 py-4 whitespace-nowrap text-sm text-gray-900 bg-blue-50/30'>
+                      {lead.ownerAddress || '-'}
+                    </td>
+                    <td className='px-4 py-4 whitespace-nowrap text-sm text-gray-900 bg-blue-50/30'>
+                      {lead.ownerCity || '-'}
+                    </td>
+                    <td className='px-4 py-4 whitespace-nowrap text-sm text-gray-900 bg-blue-50/30'>
+                      {lead.ownerState || '-'}
+                    </td>
+                    <td className='px-4 py-4 whitespace-nowrap text-sm text-gray-900 bg-blue-50/30'>
+                      {lead.ownerZip || '-'}
+                    </td>
+
+                    {/* Admin Fields */}
+                    <td className='px-4 py-4 whitespace-nowrap text-sm text-gray-900 bg-purple-50/30'>
+                      {lead.adminFirstName || '-'}
+                    </td>
+                    <td className='px-4 py-4 whitespace-nowrap text-sm text-gray-900 bg-purple-50/30'>
+                      {lead.adminLastName || '-'}
+                    </td>
+                    <td className='px-4 py-4 whitespace-nowrap text-sm text-gray-900 bg-purple-50/30'>
+                      {lead.adminAddress || '-'}
+                    </td>
+                    <td className='px-4 py-4 whitespace-nowrap text-sm text-gray-900 bg-purple-50/30'>
+                      {lead.adminCity || '-'}
+                    </td>
+                    <td className='px-4 py-4 whitespace-nowrap text-sm text-gray-900 bg-purple-50/30'>
+                      {lead.adminState || '-'}
+                    </td>
+                    <td className='px-4 py-4 whitespace-nowrap text-sm text-gray-900 bg-purple-50/30'>
+                      {lead.adminZip || '-'}
+                    </td>
+
+                    {/* Meta Fields */}
+                    <td className='px-4 py-4 whitespace-nowrap text-sm text-gray-500'>
+                      {formatDate(lead.createdAt)}
+                    </td>
+                    <td className='px-4 py-4 whitespace-nowrap text-sm text-gray-500'>
+                      {formatDate(lead.updatedAt)}
+                    </td>
+                    <td className='px-4 py-4 whitespace-nowrap text-sm text-gray-400 font-mono text-xs'>
+                      {lead.owner || 'Unknown'}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
     </main>
   );

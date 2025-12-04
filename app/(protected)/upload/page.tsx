@@ -6,6 +6,7 @@ import { LoadScript, Autocomplete } from '@react-google-maps/api';
 import { useRouter } from 'next/navigation';
 import { type Schema } from '@/amplify/data/resource';
 import { uploadData } from 'aws-amplify/storage';
+import { getCurrentUser } from 'aws-amplify/auth';
 
 type LeadState = Partial<Schema['Lead']['type']>;
 type GoogleAutocomplete = google.maps.places.Autocomplete;
@@ -156,6 +157,8 @@ export default function UploadLeadsPage() {
           return setMessage('❌ Please select a Lead Type.');
         }
 
+        const user = await getCurrentUser();
+
         // Direct Upload to S3
         const result = await uploadData({
           path: ({ identityId }) => `leadFiles/${identityId}/${file.name}`,
@@ -163,6 +166,7 @@ export default function UploadLeadsPage() {
           options: {
             metadata: {
               leadtype: lead.type!, // Pass type for Lambda to read
+              owner_sub: user.userId,
             },
           },
         }).result;
