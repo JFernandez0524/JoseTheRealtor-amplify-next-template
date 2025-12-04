@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getLeadById } from '@/app/utils/aws/data/lead.server';
+import { getLead } from '@/app/utils/aws/data/lead.server';
 import { AuthIsUserAuthenticatedServer } from '@/app/utils/aws/auth/amplifyServerUtils.server';
 
 export async function GET(
@@ -15,7 +15,7 @@ export async function GET(
     if (!id) {
       return NextResponse.json({ error: 'Missing id' }, { status: 400 });
     }
-    const lead = await getLeadById(id);
+    const lead = await getLead(id);
     return NextResponse.json({ success: true, lead });
   } catch (error: any) {
     console.error(`Error fetching lead ${params.id}:`, error);
