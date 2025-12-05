@@ -2,12 +2,9 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { generateClient } from 'aws-amplify/data';
+import { client } from '../../../app/utils/aws/data/frontEndClient';
 import { getCurrentUser } from 'aws-amplify/auth';
 import { type Schema } from '@/amplify/data/resource';
-
-// Generate the Amplify Data client
-const client = generateClient<Schema>();
 
 // Define the shape of a Lead
 type Lead = Schema['Lead']['type'] & {
