@@ -34,7 +34,7 @@ storageBucket.addEventNotification(
 // Give the function the Table Name and Google API Key
 backend.uploadCsvHandler.addEnvironment(
   'AMPLIFY_DATA_LEAD_TABLE_NAME',
-  leadTable.tableName
+  'Lead-fdzdnhgj7zgy3aldzozygstzda-NONE'
 );
 // Ensure this matches the name in your .env file or Parameter Store
 backend.uploadCsvHandler.addEnvironment(
