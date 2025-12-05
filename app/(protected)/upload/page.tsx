@@ -1,15 +1,25 @@
 'use client';
 
-import { useState, useRef } from 'react';
-import { Loader, Alert } from '@aws-amplify/ui-react';
-import { LoadScript, Autocomplete } from '@react-google-maps/api';
+import { useState, useRef, useEffect } from 'react';
+import { LoadScript } from '@react-google-maps/api';
 import { useRouter } from 'next/navigation';
 import { type Schema } from '@/amplify/data/resource';
 import { uploadData } from 'aws-amplify/storage';
 import { getCurrentUser } from 'aws-amplify/auth';
 
+// Declare the custom element for TypeScript
+declare global {
+  namespace JSX {
+    interface IntrinsicElements {
+      'gmp-place-autocomplete': React.DetailedHTMLProps<
+        React.HTMLAttributes<HTMLElement>,
+        HTMLElement
+      >;
+    }
+  }
+}
+
 type LeadState = Partial<Schema['Lead']['type']>;
-type GoogleAutocomplete = google.maps.places.Autocomplete;
 const libraries: 'places'[] = ['places'];
 
 // --- CSV TEMPLATES ---
@@ -45,24 +55,11 @@ export default function UploadLeadsPage() {
   const [message, setMessage] = useState('');
   const router = useRouter();
 
-  // --- Autocomplete Refs ---
-  const addressRef = useRef<GoogleAutocomplete | null>(null);
-  const adminAddressRef = useRef<GoogleAutocomplete | null>(null);
+  // --- Web Component Refs ---
+  const ownerRef = useRef<any>(null);
+  const adminRef = useRef<any>(null);
 
-  // --- Handlers ---
-
-  const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
-  ) => {
-    const { name, value } = e.target;
-    setLead((prev) => ({ ...prev, [name]: value }));
-  };
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files?.length) setFile(e.target.files[0]);
-  };
-
-  // Helper to parse Google address components
+  // --- Helper to parse Google address components ---
   const parseGoogleAddress = (place: google.maps.places.PlaceResult) => {
     const components: { [key: string]: string } = {};
     place.address_components?.forEach((comp) => {
@@ -78,44 +75,73 @@ export default function UploadLeadsPage() {
     };
   };
 
-  // Property Address Handlers
-  const onAddressLoad = (autocomplete: GoogleAutocomplete) => {
-    addressRef.current = autocomplete;
-  };
-  const onAddressChanged = () => {
-    if (addressRef.current) {
-      const place = addressRef.current.getPlace();
+  // --- Attach Event Listeners for Google Maps ---
+  // We use useEffect because we need to attach 'gmp-places-select' listeners
+  // to the web components manually.
+  useEffect(() => {
+    // Only run if in manual mode
+    if (mode !== 'manual') return;
+
+    const ownerEl = ownerRef.current;
+    const adminEl = adminRef.current;
+
+    // Handler for Property Address
+    const handleOwnerSelect = (e: any) => {
+      const place = e.detail.place;
       if (place && place.address_components) {
         const parsed = parseGoogleAddress(place);
         setLead((prev) => ({
           ...prev,
-          address: parsed.street,
-          city: parsed.city,
-          state: parsed.state,
-          zip: parsed.zip,
+          // Use formatted address if available, otherwise constructed street
+          ownerAddress: place.formatted_address || parsed.street,
+          ownerCity: parsed.city,
+          ownerState: parsed.state,
+          ownerZip: parsed.zip,
         }));
       }
-    }
-  };
+    };
 
-  // Mailing Address Handlers
-  const onadminAddressLoad = (autocomplete: GoogleAutocomplete) => {
-    adminAddressRef.current = autocomplete;
-  };
-  const onadminAddressChanged = () => {
-    if (adminAddressRef.current) {
-      const place = adminAddressRef.current.getPlace();
+    // Handler for Admin Address
+    const handleAdminSelect = (e: any) => {
+      const place = e.detail.place;
       if (place && place.address_components) {
         const parsed = parseGoogleAddress(place);
         setLead((prev) => ({
           ...prev,
-          adminAddress: parsed.street,
+          adminAddress: place.formatted_address || parsed.street,
           adminCity: parsed.city,
           adminState: parsed.state,
           adminZip: parsed.zip,
         }));
       }
-    }
+    };
+
+    // Attach Listeners
+    if (ownerEl)
+      ownerEl.addEventListener('gmp-places-select', handleOwnerSelect);
+    if (adminEl)
+      adminEl.addEventListener('gmp-places-select', handleAdminSelect);
+
+    // Cleanup Listeners on Unmount or Mode Change
+    return () => {
+      if (ownerEl)
+        ownerEl.removeEventListener('gmp-places-select', handleOwnerSelect);
+      if (adminEl)
+        adminEl.removeEventListener('gmp-places-select', handleAdminSelect);
+    };
+  }, [mode, lead.type]); // Re-run when mode or lead type changes
+
+  // --- Handlers ---
+
+  const handleChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
+  ) => {
+    const { name, value } = e.target;
+    setLead((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files?.length) setFile(e.target.files[0]);
   };
 
   // Template Download Handler
@@ -157,22 +183,22 @@ export default function UploadLeadsPage() {
           return setMessage('❌ Please select a Lead Type.');
         }
 
+        // 1. Get current user
         const user = await getCurrentUser();
 
-        // Direct Upload to S3
+        // 2. Upload with Metadata
         console.log('🔍 Upload Debug:', {
           userId: user.userId,
-          willUploadTo: `leadFiles/${user.userId}/${file.name}`,
           metadataOwner: user.userId,
         });
+
         const result = await uploadData({
           path: `leadFiles/${user.userId}/${file.name}`,
-          // path: ({ identityId }) => `leadFiles/${identityId}/${file.name}`,
           data: file,
           options: {
             metadata: {
               leadtype: lead.type!,
-              owner_sub: user.userId,
+              owner_sub: user.userId, // 👈 Ensures backend saves with correct owner
             },
           },
         }).result;
@@ -223,6 +249,9 @@ export default function UploadLeadsPage() {
           adminState: '',
           adminZip: '',
         });
+        // Clear web component inputs
+        if (ownerRef.current) ownerRef.current.value = '';
+        if (adminRef.current) adminRef.current.value = '';
       }
     } catch (err: any) {
       console.error(err);
@@ -236,6 +265,7 @@ export default function UploadLeadsPage() {
     <LoadScript
       googleMapsApiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY!}
       libraries={libraries}
+      loadingElement={<div>Loading Maps...</div>}
     >
       <main className='max-w-3xl mx-auto mt-10 p-6 bg-white rounded-lg shadow-md'>
         <h1 className='text-2xl font-semibold text-blue-600 mb-4'>
@@ -278,7 +308,6 @@ export default function UploadLeadsPage() {
               </select>
             </div>
 
-            {/* Download Template */}
             <div className='p-4 bg-gray-50 border border-gray-200 rounded-md'>
               <p className='text-sm text-gray-600 mb-2'>
                 Need the correct file format?
@@ -344,19 +373,21 @@ export default function UploadLeadsPage() {
 
             {/* Property Address */}
             <h2 className='text-gray-700 font-medium mt-4'>Property Address</h2>
-            <Autocomplete
-              onLoad={onAddressLoad}
-              onPlaceChanged={onAddressChanged}
-            >
-              <input
-                name='ownerAddress'
-                placeholder='Owner Address *'
-                value={lead.ownerAddress || ''}
-                onChange={handleChange}
-                className='border border-gray-300 rounded-md p-2 w-full'
-                required
-              />
-            </Autocomplete>
+
+            {/* 👇 UPDATED: Use gmp-place-autocomplete */}
+            <div className='w-full'>
+              <gmp-place-autocomplete ref={ownerRef}>
+                <input
+                  slot='input'
+                  name='ownerAddress'
+                  placeholder='Owner Address *'
+                  onChange={handleChange}
+                  className='border border-gray-300 rounded-md p-2 w-full'
+                  required
+                />
+              </gmp-place-autocomplete>
+            </div>
+
             <div className='grid grid-cols-3 gap-2'>
               <input
                 name='ownerCity'
@@ -408,19 +439,19 @@ export default function UploadLeadsPage() {
                 </div>
 
                 <h2 className='text-gray-700 font-medium mt-4'>
-                  admin Information
+                  Admin Information
                 </h2>
                 <div className='grid grid-cols-2 gap-2'>
                   <input
                     name='adminFirstName'
-                    placeholder='admin First Name'
+                    placeholder='Admin First Name'
                     value={lead.adminFirstName || ''}
                     onChange={handleChange}
                     className='border border-gray-300 rounded-md p-2'
                   />
                   <input
                     name='adminLastName'
-                    placeholder='admin Last Name'
+                    placeholder='Admin Last Name'
                     value={lead.adminLastName || ''}
                     onChange={handleChange}
                     className='border border-gray-300 rounded-md p-2'
@@ -428,20 +459,22 @@ export default function UploadLeadsPage() {
                 </div>
 
                 <h2 className='text-gray-700 font-medium mt-4'>
-                  admin Mailing Address
+                  Admin Mailing Address
                 </h2>
-                <Autocomplete
-                  onLoad={onadminAddressLoad}
-                  onPlaceChanged={onadminAddressChanged}
-                >
-                  <input
-                    name='adminAddress'
-                    placeholder='Mailing Address'
-                    value={lead.adminAddress || ''}
-                    onChange={handleChange}
-                    className='border border-gray-300 rounded-md p-2 w-full'
-                  />
-                </Autocomplete>
+
+                {/* 👇 UPDATED: Use gmp-place-autocomplete */}
+                <div className='w-full'>
+                  <gmp-place-autocomplete ref={adminRef}>
+                    <input
+                      slot='input'
+                      name='adminAddress'
+                      placeholder='Mailing Address'
+                      onChange={handleChange}
+                      className='border border-gray-300 rounded-md p-2 w-full'
+                    />
+                  </gmp-place-autocomplete>
+                </div>
+
                 <div className='grid grid-cols-3 gap-2'>
                   <input
                     name='adminCity'
