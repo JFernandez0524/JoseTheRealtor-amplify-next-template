@@ -160,12 +160,18 @@ export default function UploadLeadsPage() {
         const user = await getCurrentUser();
 
         // Direct Upload to S3
+        console.log('🔍 Upload Debug:', {
+          userId: user.userId,
+          willUploadTo: `leadFiles/${user.userId}/${file.name}`,
+          metadataOwner: user.userId,
+        });
         const result = await uploadData({
-          path: ({ identityId }) => `leadFiles/${identityId}/${file.name}`,
+          path: `leadFiles/${user.userId}/${file.name}`,
+          // path: ({ identityId }) => `leadFiles/${identityId}/${file.name}`,
           data: file,
           options: {
             metadata: {
-              leadtype: lead.type!, // Pass type for Lambda to read
+              leadtype: lead.type!,
               owner_sub: user.userId,
             },
           },
