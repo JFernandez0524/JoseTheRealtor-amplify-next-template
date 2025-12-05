@@ -6,7 +6,7 @@ import { uploadCsvHandler } from './functions/uploadCsvHandler/resource.js';
 import { testFunction } from './functions/testFunction/resource.js';
 import { EventType } from 'aws-cdk-lib/aws-s3';
 import { LambdaDestination } from 'aws-cdk-lib/aws-s3-notifications';
-import { PolicyStatement } from 'aws-cdk-lib/aws-iam';
+import { PolicyStatement, Effect, ServicePrincipal } from 'aws-cdk-lib/aws-iam';
 
 const backend = defineBackend({
   auth,
@@ -34,7 +34,7 @@ storageBucket.addEventNotification(
 // Give the function the Table Name and Google API Key
 backend.uploadCsvHandler.addEnvironment(
   'AMPLIFY_DATA_LEAD_TABLE_NAME',
-  'Lead-fdzdnhgj7zgy3aldzozygstzda-NONE'
+  leadTable.tableName
 );
 // Ensure this matches the name in your .env file or Parameter Store
 backend.uploadCsvHandler.addEnvironment(
@@ -47,23 +47,34 @@ backend.uploadCsvHandler.addEnvironment(
 // Fix 1: Allow Listing the Bucket (Solves your AccessDenied error)
 backend.uploadCsvHandler.resources.lambda.addToRolePolicy(
   new PolicyStatement({
-    actions: ['s3:ListBucket'],
-    resources: [storageBucket.bucketArn], // 👈 Note: No "/*" at the end
-  })
-);
-
-// Fix 2: Allow Reading Files (Existing)
-backend.uploadCsvHandler.resources.lambda.addToRolePolicy(
-  new PolicyStatement({
-    actions: ['s3:GetObject'],
-    resources: [`${storageBucket.bucketArn}/*`], // 👈 Note: "/*" is required here
+    actions: [
+      's3:ListBucket',
+      's3:GetObject',
+      's3:HeadObject', // 👈 ADD THIS - Your code uses HeadObjectCommand
+      's3:GetObjectAttributes', // 👈 ADD THIS for good measure
+    ],
+    resources: [storageBucket.bucketArn, `${storageBucket.bucketArn}/*`], // 👈 Note: No "/*" at the end
   })
 );
 
 // Fix 3: Allow Writing to DynamoDB (Existing)
 backend.uploadCsvHandler.resources.lambda.addToRolePolicy(
   new PolicyStatement({
-    actions: ['dynamodb:PutItem'],
+    actions: [
+      'dynamodb:PutItem',
+      'dynamodb:BatchWriteItem',
+      'dynamodb:Query',
+      'dynamodb:GetItem',
+    ],
     resources: [leadTable.tableArn],
+  })
+);
+
+backend.uploadCsvHandler.resources.lambda.addToRolePolicy(
+  new PolicyStatement({
+    effect: Effect.ALLOW,
+    actions: ['lambda:InvokeFunction'],
+    resources: [backend.uploadCsvHandler.resources.lambda.functionArn],
+    principals: [new ServicePrincipal('s3.amazonaws.com')],
   })
 );
