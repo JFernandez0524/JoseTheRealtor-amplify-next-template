@@ -4,16 +4,13 @@ import { useEffect, useRef } from 'react';
 import { Loader } from '@aws-amplify/ui-react';
 import { useFormFocus } from '@/app/context/FormFocusContext';
 
-// Define the props this component needs
 type AnalyzerFormProps = {
   address: string;
   setAddress: (value: string) => void;
   handleSubmit: (e: React.FormEvent) => void;
   isLoading: boolean;
-  // onLoad and onPlaceChanged are no longer needed
 };
 
-// Declare the custom element namespace for TypeScript
 declare global {
   namespace JSX {
     interface IntrinsicElements {
@@ -34,14 +31,12 @@ export default function AnalyzerForm({
   const { setIsFormFocused } = useFormFocus();
   const autocompleteRef = useRef<any>(null);
 
-  // Sync 'address' state with the Web Component value
   useEffect(() => {
     if (autocompleteRef.current && address !== autocompleteRef.current.value) {
       autocompleteRef.current.value = address;
     }
   }, [address]);
 
-  // Listen for the 'gmp-places-select' event (The new way)
   useEffect(() => {
     const el = autocompleteRef.current;
     if (!el) return;
@@ -53,10 +48,7 @@ export default function AnalyzerForm({
       }
     };
 
-    // Attach event listener
     el.addEventListener('gmp-places-select', handleSelect);
-
-    // Cleanup
     return () => {
       el.removeEventListener('gmp-places-select', handleSelect);
     };

@@ -1,13 +1,12 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { useJsApiLoader } from '@react-google-maps/api'; // 👈 Switched to hook
+import { useJsApiLoader } from '@react-google-maps/api';
 import { useRouter } from 'next/navigation';
 import { type Schema } from '@/amplify/data/resource';
 import { uploadData } from 'aws-amplify/storage';
 import { getCurrentUser } from 'aws-amplify/auth';
 
-// Declare the custom element for TypeScript
 declare global {
   namespace JSX {
     interface IntrinsicElements {
@@ -20,9 +19,8 @@ declare global {
 }
 
 type LeadState = Partial<Schema['Lead']['type']>;
-const libraries: 'places'[] = ['places']; // Must be outside component to prevent loop
+const libraries: 'places'[] = ['places'];
 
-// --- CSV TEMPLATES ---
 const PROBATE_TEMPLATE = [
   'ownerFirstName,ownerLastName,ownerAddress,ownerCity,ownerState,ownerZip,adminFirstName,adminLastName,adminAddress,adminCity,adminState,adminZip',
 ];
@@ -31,7 +29,6 @@ const PREFORECLOSURE_TEMPLATE = [
 ];
 
 export default function UploadLeadsPage() {
-  // 1. 👇 Load Google Maps API via Hook
   const { isLoaded } = useJsApiLoader({
     id: 'google-map-script',
     googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY!,
@@ -41,7 +38,6 @@ export default function UploadLeadsPage() {
   const [mode, setMode] = useState<'csv' | 'manual'>('manual');
   const [file, setFile] = useState<File | null>(null);
 
-  // State matches schema fields
   const [lead, setLead] = useState<LeadState>({
     type: '',
     ownerFirstName: '',
@@ -62,11 +58,9 @@ export default function UploadLeadsPage() {
   const [message, setMessage] = useState('');
   const router = useRouter();
 
-  // --- Web Component Refs ---
   const ownerRef = useRef<any>(null);
   const adminRef = useRef<any>(null);
 
-  // --- Helper to parse Google address components ---
   const parseGoogleAddress = (place: google.maps.places.PlaceResult) => {
     const components: { [key: string]: string } = {};
     place.address_components?.forEach((comp) => {
@@ -82,7 +76,6 @@ export default function UploadLeadsPage() {
     };
   };
 
-  // --- Attach Event Listeners ---
   useEffect(() => {
     if (!isLoaded || mode !== 'manual') return;
 
@@ -130,7 +123,6 @@ export default function UploadLeadsPage() {
     };
   }, [isLoaded, mode, lead.type]);
 
-  // --- Handlers ---
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
   ) => {
@@ -196,7 +188,6 @@ export default function UploadLeadsPage() {
         setFile(null);
         setTimeout(() => router.push('/dashboard'), 2000);
       } else {
-        // Manual Workflow
         const { type, ownerAddress, ownerCity, ownerState, ownerZip } = lead;
         if (!type || !ownerAddress || !ownerCity || !ownerState || !ownerZip) {
           setLoading(false);
@@ -242,7 +233,6 @@ export default function UploadLeadsPage() {
     }
   };
 
-  // 2. 👇 Conditional Rendering based on isLoaded
   if (!isLoaded) {
     return <div className='p-10 text-center'>Loading Maps...</div>;
   }
@@ -270,7 +260,6 @@ export default function UploadLeadsPage() {
 
       {mode === 'csv' && (
         <div className='space-y-4'>
-          {/* CSV Form Content (Same as before) */}
           <div>
             <label className='block text-sm font-medium text-gray-700 mb-1'>
               Step 1: Select Lead Type

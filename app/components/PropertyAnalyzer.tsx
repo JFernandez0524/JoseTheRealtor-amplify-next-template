@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useJsApiLoader } from '@react-google-maps/api'; // 👈 Hook, not component
+import { useJsApiLoader } from '@react-google-maps/api';
 import { AnalysisResult } from '@/app/types/analysis';
 import { getFrontEndAuthSession } from '@/app/utils/aws/auth/amplifyFrontEndUser';
 import { useFormFocus } from '@/app/context/FormFocusContext';
@@ -12,8 +12,6 @@ import AnalyzerResults from './AnalyzerResults';
 const libraries: 'places'[] = ['places'];
 
 export default function PropertyAnalyzer() {
-  // 1. 👇 Load Google Maps API via Hook
-  // This prevents the "google api is already presented" crash
   const { isLoaded } = useJsApiLoader({
     id: 'google-map-script',
     googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY!,
@@ -64,7 +62,6 @@ export default function PropertyAnalyzer() {
     }
   };
 
-  // 2. Conditional Render based on isLoaded
   if (!isLoaded) {
     return (
       <div className='p-4 bg-white rounded-lg shadow-md mt-8 text-center'>
