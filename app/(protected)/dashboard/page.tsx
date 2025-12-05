@@ -8,7 +8,6 @@ import { type Schema } from '@/amplify/data/resource';
 
 // Define the shape of a Lead
 type Lead = Schema['Lead']['type'] & {
-  owner?: string | null;
   __typename?: string | null;
 };
 
