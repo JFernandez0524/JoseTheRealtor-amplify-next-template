@@ -10,6 +10,10 @@ import { parse } from 'csv-parse';
 import { Readable } from 'stream';
 import { randomUUID } from 'crypto';
 
+// 👇 Import your centralized Google Validator
+// (Relative path assumes: amplify/functions/uploadCsvHandler/handler.ts)
+import { validateAddressWithGoogle } from '../../../app/utils/google.server';
+
 // Integrations
 import { syncToKVCore } from './src/intergrations/kvcore';
 import { syncToGoHighLevel } from './src/intergrations/gohighlevel';
@@ -21,70 +25,43 @@ const ddbDocClient = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const TABLE_NAME = process.env.AMPLIFY_DATA_LEAD_TABLE_NAME;
 
 export const handler: S3Handler = async (event) => {
-  console.log('🚀 Lambda triggered!', JSON.stringify(event, null, 2));
-  console.log('📊 Environment check:', {
-    tableName: TABLE_NAME,
-    hasS3Client: !!s3,
-    hasDBClient: !!ddbDocClient,
-  });
-
-  if (!TABLE_NAME) {
-    console.error('❌ FATAL: TABLE_NAME environment variable is not set!');
-    throw new Error('TABLE_NAME is not configured');
-  }
-  console.log(`✅ Table Name: ${TABLE_NAME}`);
-
   for (const record of event.Records) {
     try {
-      // 1. Decode the key
+      // 1. Decode Key
       const rawKey = record.s3.object.key;
       const decodedKey = decodeURIComponent(rawKey).replace(/\+/g, ' ');
       console.log(`📂 Processing file: ${decodedKey}`);
-      console.log(`🪣 Bucket: ${record.s3.bucket.name}`);
 
-      // 2. 👇 FETCH METADATA (This is the fix)
-      // We need the 'owner_sub' (User ID) that the frontend sent
-      console.log('🔍 Fetching metadata...');
+      // 2. Fetch Metadata (User ID)
       const headObject = await s3.send(
         new HeadObjectCommand({
           Bucket: record.s3.bucket.name,
           Key: decodedKey,
         })
       );
-      console.log('✅ Metadata fetched:', headObject.Metadata);
 
-      // S3 lowercases metadata keys automatically
       const ownerId = headObject.Metadata?.['owner_sub'];
-      console.log(`👤 Owner from metadata: ${ownerId}`);
+      const leadType = headObject.Metadata?.['leadtype'] || 'PREFORECLOSURE'; // Default or from metadata
 
       if (!ownerId) {
         console.warn(
-          '⚠️ No owner_sub found in metadata. Falling back to path ID (might cause visibility issues).'
+          '⚠️ No owner_sub found in metadata. Skipping file to prevent ghost data.'
         );
-        // Fallback to the old way if metadata is missing (just in case)
-        // But this usually means the dashboard won't see it.
-      } else {
-        console.log(`👤 Owner Identified from Metadata: ${ownerId}`);
+        continue;
       }
 
-      // Use the metadata ID if available, otherwise fall back to path
-      const finalOwnerId = ownerId || decodedKey.split('/')[1];
-      console.log(`👤 Final Owner ID: ${finalOwnerId}`);
+      console.log(`👤 Owner Identified: ${ownerId}`);
 
       // 3. Download CSV
-      console.log('📥 Downloading CSV...');
       const response = await s3.send(
         new GetObjectCommand({
           Bucket: record.s3.bucket.name,
           Key: decodedKey,
         })
       );
-      console.log('✅ CSV downloaded, starting parse & save...');
-
       const stream = response.Body as Readable;
 
-      // 4. Parse & Save
-      console.log('🔄 Starting CSV parse...');
+      // 4. Parse CSV
       const parser = stream.pipe(
         parse({
           columns: true,
@@ -97,34 +74,74 @@ export const handler: S3Handler = async (event) => {
       let count = 0;
       for await (const row of parser) {
         count++;
-        console.log(`📝 Processing row ${count}:`, row);
+
+        // Map CSV headers to variables
+        const rawAddress =
+          row['ownerAddress'] || row['Property Address'] || row['Address'];
+        const rawCity = row['ownerCity'] || row['City'];
+        const rawState = row['ownerState'] || row['State'];
+        const rawZip = row['ownerZip'] || row['Zip'];
+
+        // Construct search string
+        const fullSearchAddress = `${rawAddress}, ${rawCity}, ${rawState} ${rawZip}`;
+
+        let validationResult = null;
+
+        // 5. 👇 Validate with Google (Using Shared Utility)
+        try {
+          if (rawAddress) {
+            validationResult =
+              await validateAddressWithGoogle(fullSearchAddress);
+          }
+        } catch (error) {
+          console.warn(
+            `⚠️ Google Validation Failed for row ${count}: ${fullSearchAddress}`
+          );
+          // We continue processing, just without validation data
+        }
+
         const leadItem = {
           id: randomUUID(),
-          owner: finalOwnerId, // 👈 Using the correct User ID
+          owner: ownerId,
           __typename: 'Lead',
-          type: 'PREFORECLOSURE',
+          type: leadType,
 
           ownerFirstName: row['First Name'] || row['ownerFirstName'],
           ownerLastName: row['Last Name'] || row['ownerLastName'],
-          ownerAddress: row['Property Address'] || row['ownerAddress'],
-          ownerCity: row['City'] || row['ownerCity'],
-          ownerState: row['State'] || row['ownerState'],
-          ownerZip: row['Zip'] || row['ownerZip'],
+
+          // Use Validated Data if available, otherwise raw CSV data
+          ownerAddress: validationResult?.components.street || rawAddress,
+          ownerCity: validationResult?.components.city || rawCity,
+          ownerState: validationResult?.components.state || rawState,
+          ownerZip: validationResult?.components.zip || rawZip,
+
+          // Save the standardized object
+          standardizedAddress: validationResult?.components || null,
+          latitude: validationResult?.location.lat || null,
+          longitude: validationResult?.location.lng || null,
 
           skipTraceStatus: 'PENDING',
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
-        };
-        console.log(`💾 Saving lead to DynamoDB:`, leadItem);
 
+          // Admin fields mapping (if present in CSV)
+          adminFirstName: row['adminFirstName'],
+          adminLastName: row['adminLastName'],
+          adminAddress: row['adminAddress'],
+          adminCity: row['adminCity'],
+          adminState: row['adminState'],
+          adminZip: row['adminZip'],
+        };
+
+        // 6. Save to DynamoDB
         await ddbDocClient.send(
           new PutCommand({
             TableName: TABLE_NAME,
             Item: leadItem,
           })
         );
-        console.log(`✅ Lead ${count} saved successfully`);
-        // Integrations...
+
+        // 7. Integrations
         await Promise.all([
           syncToKVCore(leadItem).catch((e) => console.error('KVCore Fail:', e)),
           syncToGoHighLevel(leadItem).catch((e) =>
@@ -138,9 +155,7 @@ export const handler: S3Handler = async (event) => {
           ),
         ]);
       }
-      console.log(
-        `✅ Success! Processed ${count} leads for owner: ${finalOwnerId}`
-      );
+      console.log(`✅ Success! Processed ${count} leads for owner: ${ownerId}`);
     } catch (err) {
       console.error('❌ Error processing file:', err);
     }
