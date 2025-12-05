@@ -6,6 +6,9 @@ import { testFunction } from '../functions/testFunction/resource';
 const schema = a.schema({
   Lead: a
     .model({
+      // 👇 CRITICAL: Owner field with read-only authorization
+      owner: a.string().authorization((allow) => [allow.owner().to(['read'])]),
+
       type: a.string().required(), // "probate" | "preforeclosure"
       ownerFirstName: a.string(),
       ownerLastName: a.string(),
@@ -20,7 +23,7 @@ const schema = a.schema({
       adminState: a.string(),
       adminZip: a.string(),
       standardizedAddress: a.json(), // From Google or BatchData
-      // 👇 --- ADD THIS --- 👇
+
       skipTraceStatus: a.enum([
         'PENDING', // Not yet processed
         'COMPLETED', // Skip trace was successful
@@ -30,18 +33,18 @@ const schema = a.schema({
       longitude: a.float(),
 
       // --- Pre-Foreclosure Data ---
-      preforeclosureNoticeDate: a.date(), // 👈 NEW
-      preforeclosureAuctionDate: a.date(), // 👈 NEW
+      preforeclosureNoticeDate: a.date(),
+      preforeclosureAuctionDate: a.date(),
 
       // --- Assessment/Value Data ---
-      estimatedValue: a.float(), // 👈 NEW (from marketTotalValue)
-      estimatedValueYear: a.integer(), // 👈 NEW (from taxYear)
+      estimatedValue: a.float(),
+      estimatedValueYear: a.integer(),
 
       // --- Basic Building Data ---
-      yearBuilt: a.integer(), // 👈 NEW
-      squareFeet: a.integer(), // 👈 NEW
-      bedrooms: a.integer(), // 👈 NEW
-      baths: a.float(), // 👈 NEW
+      yearBuilt: a.integer(),
+      squareFeet: a.integer(),
+      bedrooms: a.integer(),
+      baths: a.float(),
 
       // --- Relationships ---
       contacts: a.hasMany('Contact', 'leadId'),
@@ -51,9 +54,15 @@ const schema = a.schema({
       createdAt: a.datetime(),
       updatedAt: a.datetime(),
     })
-    .authorization((allow) => [allow.owner()]),
+    .authorization((allow) => [
+      allow.owner(), // Owner can read, create, update, delete their own leads
+    ]),
+
   Contact: a
     .model({
+      // 👇 Owner field with read-only authorization
+      owner: a.string().authorization((allow) => [allow.owner().to(['read'])]),
+
       leadId: a.id(), // belongs-to FK
       lead: a.belongsTo('Lead', 'leadId'),
       role: a.string(), // "executor" | "owner" | "other"
@@ -64,12 +73,13 @@ const schema = a.schema({
       mailingAddress: a.json().required(), // {street, city, state, zip, county}
       createdAt: a.datetime(),
     })
-    .authorization((allow) => [
-      allow.owner(), // 👈 Each user only sees their own leads
-    ]),
+    .authorization((allow) => [allow.owner()]),
 
   Enrichment: a
     .model({
+      // 👇 Owner field with read-only authorization
+      owner: a.string().authorization((allow) => [allow.owner().to(['read'])]),
+
       leadId: a.id(), // belongs-to FK
       lead: a.belongsTo('Lead', 'leadId'),
       source: a.string(), // "batchdata:address-verify" | "batchdata:lookup" | "batchdata:skiptrace"
@@ -77,12 +87,13 @@ const schema = a.schema({
       payload: a.json(), // full raw response or normalized fragment
       createdAt: a.datetime(),
     })
-    .authorization((allow) => [
-      allow.owner(), // 👈 Each user only sees their own leads
-    ]),
+    .authorization((allow) => [allow.owner()]),
 
   Activity: a
     .model({
+      // 👇 Owner field with read-only authorization
+      owner: a.string().authorization((allow) => [allow.owner().to(['read'])]),
+
       leadId: a.id(), // belongs-to FK
       lead: a.belongsTo('Lead', 'leadId'),
       type: a.string(), // "call" | "email" | "letter" | "sms" | "note"
@@ -91,9 +102,7 @@ const schema = a.schema({
       meta: a.json(), // e.g., agent, templateId, recordingUrl
       createdAt: a.datetime(),
     })
-    .authorization((allow) => [
-      allow.owner(), // 👈 Each user only sees their own leads
-    ]),
+    .authorization((allow) => [allow.owner()]),
 
   // 🔹 Conversation route (chat-based AI)
   chat: a
