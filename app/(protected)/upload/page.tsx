@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { LoadScript } from '@react-google-maps/api';
+import { useJsApiLoader } from '@react-google-maps/api'; // 👈 Switched to hook
 import { useRouter } from 'next/navigation';
 import { type Schema } from '@/amplify/data/resource';
 import { uploadData } from 'aws-amplify/storage';
@@ -20,7 +20,7 @@ declare global {
 }
 
 type LeadState = Partial<Schema['Lead']['type']>;
-const libraries: 'places'[] = ['places'];
+const libraries: 'places'[] = ['places']; // Must be outside component to prevent loop
 
 // --- CSV TEMPLATES ---
 const PROBATE_TEMPLATE = [
@@ -31,6 +31,13 @@ const PREFORECLOSURE_TEMPLATE = [
 ];
 
 export default function UploadLeadsPage() {
+  // 1. 👇 Load Google Maps API via Hook
+  const { isLoaded } = useJsApiLoader({
+    id: 'google-map-script',
+    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY!,
+    libraries: libraries,
+  });
+
   const [mode, setMode] = useState<'csv' | 'manual'>('manual');
   const [file, setFile] = useState<File | null>(null);
 
@@ -75,24 +82,19 @@ export default function UploadLeadsPage() {
     };
   };
 
-  // --- Attach Event Listeners for Google Maps ---
-  // We use useEffect because we need to attach 'gmp-places-select' listeners
-  // to the web components manually.
+  // --- Attach Event Listeners ---
   useEffect(() => {
-    // Only run if in manual mode
-    if (mode !== 'manual') return;
+    if (!isLoaded || mode !== 'manual') return;
 
     const ownerEl = ownerRef.current;
     const adminEl = adminRef.current;
 
-    // Handler for Property Address
     const handleOwnerSelect = (e: any) => {
       const place = e.detail.place;
       if (place && place.address_components) {
         const parsed = parseGoogleAddress(place);
         setLead((prev) => ({
           ...prev,
-          // Use formatted address if available, otherwise constructed street
           ownerAddress: place.formatted_address || parsed.street,
           ownerCity: parsed.city,
           ownerState: parsed.state,
@@ -101,7 +103,6 @@ export default function UploadLeadsPage() {
       }
     };
 
-    // Handler for Admin Address
     const handleAdminSelect = (e: any) => {
       const place = e.detail.place;
       if (place && place.address_components) {
@@ -116,23 +117,20 @@ export default function UploadLeadsPage() {
       }
     };
 
-    // Attach Listeners
     if (ownerEl)
       ownerEl.addEventListener('gmp-places-select', handleOwnerSelect);
     if (adminEl)
       adminEl.addEventListener('gmp-places-select', handleAdminSelect);
 
-    // Cleanup Listeners on Unmount or Mode Change
     return () => {
       if (ownerEl)
         ownerEl.removeEventListener('gmp-places-select', handleOwnerSelect);
       if (adminEl)
         adminEl.removeEventListener('gmp-places-select', handleAdminSelect);
     };
-  }, [mode, lead.type]); // Re-run when mode or lead type changes
+  }, [isLoaded, mode, lead.type]);
 
   // --- Handlers ---
-
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
   ) => {
@@ -144,7 +142,6 @@ export default function UploadLeadsPage() {
     if (e.target.files?.length) setFile(e.target.files[0]);
   };
 
-  // Template Download Handler
   const downloadTemplate = () => {
     if (!lead.type) {
       alert(
@@ -165,14 +162,12 @@ export default function UploadLeadsPage() {
     window.URL.revokeObjectURL(url);
   };
 
-  // Main Submit Handler
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setMessage('');
 
     try {
-      // --- CSV WORKFLOW ---
       if (mode === 'csv') {
         if (!file) {
           setLoading(false);
@@ -183,14 +178,7 @@ export default function UploadLeadsPage() {
           return setMessage('❌ Please select a Lead Type.');
         }
 
-        // 1. Get current user
         const user = await getCurrentUser();
-
-        // 2. Upload with Metadata
-        console.log('🔍 Upload Debug:', {
-          userId: user.userId,
-          metadataOwner: user.userId,
-        });
 
         const result = await uploadData({
           path: `leadFiles/${user.userId}/${file.name}`,
@@ -198,7 +186,7 @@ export default function UploadLeadsPage() {
           options: {
             metadata: {
               leadtype: lead.type!,
-              owner_sub: user.userId, // 👈 Ensures backend saves with correct owner
+              owner_sub: user.userId,
             },
           },
         }).result;
@@ -206,17 +194,13 @@ export default function UploadLeadsPage() {
         console.log('S3 Upload Success:', result);
         setMessage('✅ File uploaded! Processing started in the background.');
         setFile(null);
-
         setTimeout(() => router.push('/dashboard'), 2000);
-
-        // --- MANUAL WORKFLOW ---
       } else {
+        // Manual Workflow
         const { type, ownerAddress, ownerCity, ownerState, ownerZip } = lead;
         if (!type || !ownerAddress || !ownerCity || !ownerState || !ownerZip) {
           setLoading(false);
-          return alert(
-            'Missing required fields (type, address, city, state, zip)'
-          );
+          return alert('Missing required fields');
         }
 
         const res = await fetch('/api/v1/upload-csv', {
@@ -232,8 +216,6 @@ export default function UploadLeadsPage() {
 
         const data = await res.json();
         setMessage(`✅ ${data.message}`);
-
-        // Reset form
         setLead({
           type: '',
           ownerAddress: '',
@@ -249,7 +231,6 @@ export default function UploadLeadsPage() {
           adminState: '',
           adminZip: '',
         });
-        // Clear web component inputs
         if (ownerRef.current) ownerRef.current.value = '';
         if (adminRef.current) adminRef.current.value = '';
       }
@@ -261,104 +242,39 @@ export default function UploadLeadsPage() {
     }
   };
 
+  // 2. 👇 Conditional Rendering based on isLoaded
+  if (!isLoaded) {
+    return <div className='p-10 text-center'>Loading Maps...</div>;
+  }
+
   return (
-    <LoadScript
-      googleMapsApiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY!}
-      libraries={libraries}
-      loadingElement={<div>Loading Maps...</div>}
-    >
-      <main className='max-w-3xl mx-auto mt-10 p-6 bg-white rounded-lg shadow-md'>
-        <h1 className='text-2xl font-semibold text-blue-600 mb-4'>
-          Upload or Add Lead
-        </h1>
+    <main className='max-w-3xl mx-auto mt-10 p-6 bg-white rounded-lg shadow-md'>
+      <h1 className='text-2xl font-semibold text-blue-600 mb-4'>
+        Upload or Add Lead
+      </h1>
 
-        {/* Mode Toggle */}
-        <div className='flex space-x-2 mb-6'>
-          <button
-            onClick={() => setMode('csv')}
-            className={`px-4 py-2 rounded ${mode === 'csv' ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700'}`}
-          >
-            Upload CSV
-          </button>
-          <button
-            onClick={() => setMode('manual')}
-            className={`px-4 py-2 rounded ${mode === 'manual' ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700'}`}
-          >
-            Add Manually
-          </button>
-        </div>
+      <div className='flex space-x-2 mb-6'>
+        <button
+          onClick={() => setMode('csv')}
+          className={`px-4 py-2 rounded ${mode === 'csv' ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700'}`}
+        >
+          Upload CSV
+        </button>
+        <button
+          onClick={() => setMode('manual')}
+          className={`px-4 py-2 rounded ${mode === 'manual' ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700'}`}
+        >
+          Add Manually
+        </button>
+      </div>
 
-        {/* --- CSV Form --- */}
-        {mode === 'csv' && (
-          <div className='space-y-4'>
-            <div>
-              <label className='block text-sm font-medium text-gray-700 mb-1'>
-                Step 1: Select Lead Type
-              </label>
-              <select
-                name='type'
-                value={lead.type || ''}
-                onChange={handleChange}
-                required
-                className='border border-gray-300 rounded-md p-2 w-full'
-              >
-                <option value=''>Select Type</option>
-                <option value='probate'>Probate</option>
-                <option value='preforeclosure'>Pre-Foreclosure</option>
-              </select>
-            </div>
-
-            <div className='p-4 bg-gray-50 border border-gray-200 rounded-md'>
-              <p className='text-sm text-gray-600 mb-2'>
-                Need the correct file format?
-              </p>
-              <button
-                onClick={downloadTemplate}
-                type='button'
-                className='text-sm text-blue-600 hover:text-blue-800 font-medium flex items-center'
-              >
-                <svg
-                  className='w-4 h-4 mr-1'
-                  fill='none'
-                  stroke='currentColor'
-                  viewBox='0 0 24 24'
-                >
-                  <path
-                    strokeLinecap='round'
-                    strokeLinejoin='round'
-                    strokeWidth={2}
-                    d='M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4'
-                  />
-                </svg>
-                Download {lead.type ? lead.type : 'CSV'} Template
-              </button>
-            </div>
-
-            <div>
-              <label className='block text-sm font-medium text-gray-700 mb-1'>
-                Step 2: Upload Filled CSV
-              </label>
-              <input
-                type='file'
-                accept='.csv'
-                onChange={handleFileChange}
-                className='border border-gray-300 rounded-md p-2 w-full'
-              />
-            </div>
-
-            <button
-              onClick={handleSubmit}
-              disabled={loading || !file || !lead.type}
-              className='w-full mt-2 bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:opacity-50'
-            >
-              {loading ? 'Uploading...' : 'Upload and Process'}
-            </button>
-          </div>
-        )}
-
-        {/* --- Manual Form --- */}
-        {mode === 'manual' && (
-          <form onSubmit={handleSubmit} className='space-y-4'>
+      {mode === 'csv' && (
+        <div className='space-y-4'>
+          {/* CSV Form Content (Same as before) */}
+          <div>
+            <label className='block text-sm font-medium text-gray-700 mb-1'>
+              Step 1: Select Lead Type
+            </label>
             <select
               name='type'
               value={lead.type || ''}
@@ -366,179 +282,216 @@ export default function UploadLeadsPage() {
               required
               className='border border-gray-300 rounded-md p-2 w-full'
             >
-              <option value=''>Select Lead Type *</option>
+              <option value=''>Select Type</option>
               <option value='probate'>Probate</option>
-              <option value='preforeclosure'>Preforeclosure</option>
+              <option value='preforeclosure'>Pre-Foreclosure</option>
             </select>
-
-            {/* Property Address */}
-            <h2 className='text-gray-700 font-medium mt-4'>Property Address</h2>
-
-            {/* 👇 UPDATED: Use gmp-place-autocomplete */}
-            <div className='w-full'>
-              <gmp-place-autocomplete ref={ownerRef}>
-                <input
-                  slot='input'
-                  name='ownerAddress'
-                  placeholder='Owner Address *'
-                  onChange={handleChange}
-                  className='border border-gray-300 rounded-md p-2 w-full'
-                  required
-                />
-              </gmp-place-autocomplete>
-            </div>
-
-            <div className='grid grid-cols-3 gap-2'>
-              <input
-                name='ownerCity'
-                placeholder='Owner City *'
-                value={lead.ownerCity || ''}
-                onChange={handleChange}
-                className='border border-gray-300 rounded-md p-2'
-                required
-              />
-              <input
-                name='ownerState'
-                placeholder='Owner State *'
-                value={lead.ownerState || ''}
-                onChange={handleChange}
-                className='border border-gray-300 rounded-md p-2'
-                required
-              />
-              <input
-                name='ownerZip'
-                placeholder='Owner ZIP *'
-                value={lead.ownerZip || ''}
-                onChange={handleChange}
-                className='border border-gray-300 rounded-md p-2'
-                required
-              />
-            </div>
-
-            {/* Conditional Fields */}
-            {lead.type === 'probate' && (
-              <>
-                <h2 className='text-gray-700 font-medium mt-4'>
-                  Owner Information
-                </h2>
-                <div className='grid grid-cols-2 gap-2'>
-                  <input
-                    name='ownerFirstName'
-                    placeholder='Owner First Name'
-                    value={lead.ownerFirstName || ''}
-                    onChange={handleChange}
-                    className='border border-gray-300 rounded-md p-2'
-                  />
-                  <input
-                    name='ownerLastName'
-                    placeholder='Owner Last Name'
-                    value={lead.ownerLastName || ''}
-                    onChange={handleChange}
-                    className='border border-gray-300 rounded-md p-2'
-                  />
-                </div>
-
-                <h2 className='text-gray-700 font-medium mt-4'>
-                  Admin Information
-                </h2>
-                <div className='grid grid-cols-2 gap-2'>
-                  <input
-                    name='adminFirstName'
-                    placeholder='Admin First Name'
-                    value={lead.adminFirstName || ''}
-                    onChange={handleChange}
-                    className='border border-gray-300 rounded-md p-2'
-                  />
-                  <input
-                    name='adminLastName'
-                    placeholder='Admin Last Name'
-                    value={lead.adminLastName || ''}
-                    onChange={handleChange}
-                    className='border border-gray-300 rounded-md p-2'
-                  />
-                </div>
-
-                <h2 className='text-gray-700 font-medium mt-4'>
-                  Admin Mailing Address
-                </h2>
-
-                {/* 👇 UPDATED: Use gmp-place-autocomplete */}
-                <div className='w-full'>
-                  <gmp-place-autocomplete ref={adminRef}>
-                    <input
-                      slot='input'
-                      name='adminAddress'
-                      placeholder='Mailing Address'
-                      onChange={handleChange}
-                      className='border border-gray-300 rounded-md p-2 w-full'
-                    />
-                  </gmp-place-autocomplete>
-                </div>
-
-                <div className='grid grid-cols-3 gap-2'>
-                  <input
-                    name='adminCity'
-                    placeholder='City'
-                    value={lead.adminCity || ''}
-                    onChange={handleChange}
-                    className='border border-gray-300 rounded-md p-2'
-                  />
-                  <input
-                    name='adminState'
-                    placeholder='State'
-                    value={lead.adminState || ''}
-                    onChange={handleChange}
-                    className='border border-gray-300 rounded-md p-2'
-                  />
-                  <input
-                    name='adminZip'
-                    placeholder='ZIP'
-                    value={lead.adminZip || ''}
-                    onChange={handleChange}
-                    className='border border-gray-300 rounded-md p-2'
-                  />
-                </div>
-              </>
-            )}
-
-            {lead.type === 'preforeclosure' && (
-              <>
-                <h2 className='text-gray-700 font-medium mt-4'>
-                  Borrower Information
-                </h2>
-                <div className='grid grid-cols-2 gap-2'>
-                  <input
-                    name='ownerFirstName'
-                    placeholder='Borrower First Name'
-                    value={lead.ownerFirstName || ''}
-                    onChange={handleChange}
-                    className='border border-gray-300 rounded-md p-2'
-                  />
-                  <input
-                    name='ownerLastName'
-                    placeholder='Borrower Last Name'
-                    value={lead.ownerLastName || ''}
-                    onChange={handleChange}
-                    className='border border-gray-300 rounded-md p-2'
-                  />
-                </div>
-              </>
-            )}
-
+          </div>
+          <div className='p-4 bg-gray-50 border border-gray-200 rounded-md'>
+            <p className='text-sm text-gray-600 mb-2'>
+              Need the correct file format?
+            </p>
             <button
-              type='submit'
-              disabled={loading}
-              className='mt-4 bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 disabled:opacity-50'
+              onClick={downloadTemplate}
+              type='button'
+              className='text-sm text-blue-600 hover:text-blue-800 font-medium flex items-center'
             >
-              {loading ? 'Saving...' : 'Add Lead'}
+              Download Template
             </button>
-          </form>
-        )}
+          </div>
+          <div>
+            <label className='block text-sm font-medium text-gray-700 mb-1'>
+              Step 2: Upload Filled CSV
+            </label>
+            <input
+              type='file'
+              accept='.csv'
+              onChange={handleFileChange}
+              className='border border-gray-300 rounded-md p-2 w-full'
+            />
+          </div>
+          <button
+            onClick={handleSubmit}
+            disabled={loading || !file || !lead.type}
+            className='w-full mt-2 bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:opacity-50'
+          >
+            {loading ? 'Uploading...' : 'Upload and Process'}
+          </button>
+        </div>
+      )}
 
-        {message && (
-          <p className='mt-4 text-sm font-medium text-center'>{message}</p>
-        )}
-      </main>
-    </LoadScript>
+      {mode === 'manual' && (
+        <form onSubmit={handleSubmit} className='space-y-4'>
+          <select
+            name='type'
+            value={lead.type || ''}
+            onChange={handleChange}
+            required
+            className='border border-gray-300 rounded-md p-2 w-full'
+          >
+            <option value=''>Select Lead Type *</option>
+            <option value='probate'>Probate</option>
+            <option value='preforeclosure'>Preforeclosure</option>
+          </select>
+
+          <h2 className='text-gray-700 font-medium mt-4'>Property Address</h2>
+          <div className='w-full'>
+            <gmp-place-autocomplete ref={ownerRef}>
+              <input
+                slot='input'
+                name='ownerAddress'
+                placeholder='Owner Address *'
+                onChange={handleChange}
+                className='border border-gray-300 rounded-md p-2 w-full'
+                required
+              />
+            </gmp-place-autocomplete>
+          </div>
+
+          <div className='grid grid-cols-3 gap-2'>
+            <input
+              name='ownerCity'
+              placeholder='Owner City *'
+              value={lead.ownerCity || ''}
+              onChange={handleChange}
+              className='border border-gray-300 rounded-md p-2'
+              required
+            />
+            <input
+              name='ownerState'
+              placeholder='Owner State *'
+              value={lead.ownerState || ''}
+              onChange={handleChange}
+              className='border border-gray-300 rounded-md p-2'
+              required
+            />
+            <input
+              name='ownerZip'
+              placeholder='Owner ZIP *'
+              value={lead.ownerZip || ''}
+              onChange={handleChange}
+              className='border border-gray-300 rounded-md p-2'
+              required
+            />
+          </div>
+
+          {lead.type === 'probate' && (
+            <>
+              <h2 className='text-gray-700 font-medium mt-4'>
+                Owner Information
+              </h2>
+              <div className='grid grid-cols-2 gap-2'>
+                <input
+                  name='ownerFirstName'
+                  placeholder='Owner First Name'
+                  value={lead.ownerFirstName || ''}
+                  onChange={handleChange}
+                  className='border border-gray-300 rounded-md p-2'
+                />
+                <input
+                  name='ownerLastName'
+                  placeholder='Owner Last Name'
+                  value={lead.ownerLastName || ''}
+                  onChange={handleChange}
+                  className='border border-gray-300 rounded-md p-2'
+                />
+              </div>
+              <h2 className='text-gray-700 font-medium mt-4'>
+                Admin Information
+              </h2>
+              <div className='grid grid-cols-2 gap-2'>
+                <input
+                  name='adminFirstName'
+                  placeholder='Admin First Name'
+                  value={lead.adminFirstName || ''}
+                  onChange={handleChange}
+                  className='border border-gray-300 rounded-md p-2'
+                />
+                <input
+                  name='adminLastName'
+                  placeholder='Admin Last Name'
+                  value={lead.adminLastName || ''}
+                  onChange={handleChange}
+                  className='border border-gray-300 rounded-md p-2'
+                />
+              </div>
+              <h2 className='text-gray-700 font-medium mt-4'>
+                Admin Mailing Address
+              </h2>
+              <div className='w-full'>
+                <gmp-place-autocomplete ref={adminRef}>
+                  <input
+                    slot='input'
+                    name='adminAddress'
+                    placeholder='Mailing Address'
+                    onChange={handleChange}
+                    className='border border-gray-300 rounded-md p-2 w-full'
+                  />
+                </gmp-place-autocomplete>
+              </div>
+              <div className='grid grid-cols-3 gap-2'>
+                <input
+                  name='adminCity'
+                  placeholder='City'
+                  value={lead.adminCity || ''}
+                  onChange={handleChange}
+                  className='border border-gray-300 rounded-md p-2'
+                />
+                <input
+                  name='adminState'
+                  placeholder='State'
+                  value={lead.adminState || ''}
+                  onChange={handleChange}
+                  className='border border-gray-300 rounded-md p-2'
+                />
+                <input
+                  name='adminZip'
+                  placeholder='ZIP'
+                  value={lead.adminZip || ''}
+                  onChange={handleChange}
+                  className='border border-gray-300 rounded-md p-2'
+                />
+              </div>
+            </>
+          )}
+
+          {lead.type === 'preforeclosure' && (
+            <>
+              <h2 className='text-gray-700 font-medium mt-4'>
+                Borrower Information
+              </h2>
+              <div className='grid grid-cols-2 gap-2'>
+                <input
+                  name='ownerFirstName'
+                  placeholder='Borrower First Name'
+                  value={lead.ownerFirstName || ''}
+                  onChange={handleChange}
+                  className='border border-gray-300 rounded-md p-2'
+                />
+                <input
+                  name='ownerLastName'
+                  placeholder='Borrower Last Name'
+                  value={lead.ownerLastName || ''}
+                  onChange={handleChange}
+                  className='border border-gray-300 rounded-md p-2'
+                />
+              </div>
+            </>
+          )}
+
+          <button
+            type='submit'
+            disabled={loading}
+            className='mt-4 bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 disabled:opacity-50'
+          >
+            {loading ? 'Saving...' : 'Add Lead'}
+          </button>
+        </form>
+      )}
+
+      {message && (
+        <p className='mt-4 text-sm font-medium text-center'>{message}</p>
+      )}
+    </main>
   );
 }
