@@ -21,24 +21,41 @@ const ddbDocClient = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const TABLE_NAME = process.env.AMPLIFY_DATA_LEAD_TABLE_NAME;
 
 export const handler: S3Handler = async (event) => {
+  console.log('🚀 Lambda triggered!', JSON.stringify(event, null, 2));
+  console.log('📊 Environment check:', {
+    tableName: TABLE_NAME,
+    hasS3Client: !!s3,
+    hasDBClient: !!ddbDocClient,
+  });
+
+  if (!TABLE_NAME) {
+    console.error('❌ FATAL: TABLE_NAME environment variable is not set!');
+    throw new Error('TABLE_NAME is not configured');
+  }
+  console.log(`✅ Table Name: ${TABLE_NAME}`);
+
   for (const record of event.Records) {
     try {
       // 1. Decode the key
       const rawKey = record.s3.object.key;
       const decodedKey = decodeURIComponent(rawKey).replace(/\+/g, ' ');
       console.log(`📂 Processing file: ${decodedKey}`);
+      console.log(`🪣 Bucket: ${record.s3.bucket.name}`);
 
       // 2. 👇 FETCH METADATA (This is the fix)
       // We need the 'owner_sub' (User ID) that the frontend sent
+      console.log('🔍 Fetching metadata...');
       const headObject = await s3.send(
         new HeadObjectCommand({
           Bucket: record.s3.bucket.name,
           Key: decodedKey,
         })
       );
+      console.log('✅ Metadata fetched:', headObject.Metadata);
 
       // S3 lowercases metadata keys automatically
       const ownerId = headObject.Metadata?.['owner_sub'];
+      console.log(`👤 Owner from metadata: ${ownerId}`);
 
       if (!ownerId) {
         console.warn(
@@ -52,17 +69,22 @@ export const handler: S3Handler = async (event) => {
 
       // Use the metadata ID if available, otherwise fall back to path
       const finalOwnerId = ownerId || decodedKey.split('/')[1];
+      console.log(`👤 Final Owner ID: ${finalOwnerId}`);
 
       // 3. Download CSV
+      console.log('📥 Downloading CSV...');
       const response = await s3.send(
         new GetObjectCommand({
           Bucket: record.s3.bucket.name,
           Key: decodedKey,
         })
       );
+      console.log('✅ CSV downloaded, starting parse & save...');
+
       const stream = response.Body as Readable;
 
       // 4. Parse & Save
+      console.log('🔄 Starting CSV parse...');
       const parser = stream.pipe(
         parse({
           columns: true,
@@ -75,7 +97,7 @@ export const handler: S3Handler = async (event) => {
       let count = 0;
       for await (const row of parser) {
         count++;
-
+        console.log(`📝 Processing row ${count}:`, row);
         const leadItem = {
           id: randomUUID(),
           owner: finalOwnerId, // 👈 Using the correct User ID
@@ -93,6 +115,7 @@ export const handler: S3Handler = async (event) => {
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
         };
+        console.log(`💾 Saving lead to DynamoDB:`, leadItem);
 
         await ddbDocClient.send(
           new PutCommand({
@@ -100,7 +123,7 @@ export const handler: S3Handler = async (event) => {
             Item: leadItem,
           })
         );
-
+        console.log(`✅ Lead ${count} saved successfully`);
         // Integrations...
         await Promise.all([
           syncToKVCore(leadItem).catch((e) => console.error('KVCore Fail:', e)),
