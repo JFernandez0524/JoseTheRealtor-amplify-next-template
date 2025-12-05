@@ -9,15 +9,15 @@ export async function syncToKVCore(lead: any) {
 
   try {
     const payload = {
-      firstName: lead.executorFirstName || lead.borrowerFirstName,
-      lastName: lead.executorLastName || lead.borrowerLastName,
+      firstName: lead.adminFirstName || lead.ownerFirstName,
+      lastName: lead.adminLastName || lead.ownerLastName,
       email: lead.email,
       phone: lead.phone,
       address: `${lead.address}, ${lead.city}, ${lead.state} ${lead.zip}`,
     };
 
     const res = await axios.post(
-      'https://api.insiderealestate.com/v1/contacts',
+      'https://api.kvcore.com/v2/public/contacts',
       payload,
       {
         headers: {
