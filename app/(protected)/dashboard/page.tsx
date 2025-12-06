@@ -107,7 +107,7 @@ export default function DashboardPage() {
   const handleRowClick = (leadId: string) => {
     // Update this path to match your actual folder structure
     // e.g., if your page is at app/dashboard/[id]/page.tsx, use `/dashboard/${leadId}`
-    router.push(`/leads/${leadId}`);
+    router.push(`/lead/${leadId}`);
   };
 
   return (
