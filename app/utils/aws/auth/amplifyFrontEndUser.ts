@@ -23,16 +23,19 @@ export async function getFrontEndUser(): Promise<AuthUser | null> {
   }
 }
 
-export async function getFrontEndUserAttributes(): Promise<Partial<
-  Record<UserAttributeKey, string>
-> | null> {
+export async function getFrontEndUserAttributes() {
   try {
     const attributes = await fetchUserAttributes();
     return attributes;
   } catch (error: any) {
-    if (error.name !== 'UserUnauthenticatedException') {
-      console.error('User not authenticated', error);
+    // 🛑 FIX: Silence the error for guests
+    if (
+      error.name === 'UserUnAuthenticatedException' ||
+      error.name === 'UserNotAuthenticatedException'
+    ) {
+      return null;
     }
+    console.warn('Error fetching user attributes:', error);
     return null;
   }
 }

@@ -38,17 +38,24 @@ export const cookiesClient = generateServerClientUsingCookies<Schema>({
 
 export async function AuthGetCurrentUserServer() {
   try {
-    const currentUser = await runWithAmplifyServerContext({
+    const user = await runWithAmplifyServerContext({
       nextServerContext: { cookies },
       operation: (contextSpec) => getCurrentUser(contextSpec),
     });
-    return currentUser;
-  } catch (error) {
-    console.error('Auth SSR error:', error);
+    return user;
+  } catch (error: any) {
+    // 🛑 FIX: Silence the error if the user is simply not logged in
+    if (
+      error.name === 'UserUnAuthenticatedException' ||
+      error.code === 'UserUnAuthenticatedException'
+    ) {
+      return null;
+    }
+    // Only log real errors (like network issues)
+    console.error('AuthGetCurrentUserServer Error:', error);
     return null;
   }
 }
-
 export async function AuthGetUserAttributesServer() {
   try {
     const attributes = await runWithAmplifyServerContext({
