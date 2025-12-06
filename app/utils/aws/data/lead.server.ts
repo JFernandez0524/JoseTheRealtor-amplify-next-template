@@ -3,7 +3,7 @@ import { type Schema } from '@/amplify/data/resource';
 
 // --- Reusable Types ---
 export type CreateLeadInput = Omit<
-  Schema['Lead']['type'],
+  Schema['PropertyLead']['type'],
   'id' | 'contacts' | 'enrichments' | 'activities' | 'createdAt' | 'updatedAt'
 >;
 
@@ -20,10 +20,11 @@ export async function listLeads() {
   try {
     // 1. Fetch leads explicitly using User Pool auth
     // We removed the filter to ensure you see ALL your data
-    const { data: leads, errors } = await cookiesClient.models.Lead.list({
-      authMode: 'userPool',
-      limit: 1000,
-    });
+    const { data: leads, errors } =
+      await cookiesClient.models.PropertyLead.list({
+        authMode: 'userPool',
+        limit: 1000,
+      });
 
     if (errors) {
       console.error('❌ listLeads errors:', errors);
@@ -48,7 +49,7 @@ export async function listLeads() {
 export async function createLead(leadData: CreateLeadInput) {
   try {
     const { data: newLead, errors } =
-      await cookiesClient.models.Lead.create(leadData);
+      await cookiesClient.models.PropertyLead.create(leadData);
     if (errors) {
       throw new Error(errors.map((e: any) => e.message).join(', '));
     }
@@ -64,7 +65,9 @@ export async function createLead(leadData: CreateLeadInput) {
  */
 export async function getLead(id: string) {
   try {
-    const { data: lead, errors } = await cookiesClient.models.Lead.get({ id });
+    const { data: lead, errors } = await cookiesClient.models.PropertyLead.get({
+      id,
+    });
     if (errors) {
       throw new Error(errors.map((e: any) => e.message).join(', '));
     }
@@ -81,7 +84,7 @@ export async function getLead(id: string) {
 export async function updateLead(leadData: UpdateLeadInput) {
   try {
     const { data: updatedLead, errors } =
-      await cookiesClient.models.Lead.update(leadData);
+      await cookiesClient.models.PropertyLead.update(leadData);
     if (errors) {
       throw new Error(errors.map((e: any) => e.message).join(', '));
     }
@@ -98,7 +101,7 @@ export async function updateLead(leadData: UpdateLeadInput) {
 export async function deleteLead(id: string) {
   try {
     const { data: deletedLead, errors } =
-      await cookiesClient.models.Lead.delete({ id });
+      await cookiesClient.models.PropertyLead.delete({ id });
     if (errors) {
       throw new Error(errors.map((e: any) => e.message).join(', '));
     }

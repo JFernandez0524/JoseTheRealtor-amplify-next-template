@@ -11,7 +11,7 @@ export const dynamic = 'force-dynamic';
 
 // Define the type for the JSON body from your manual form
 // This matches the state in your upload/page.tsx
-type ManualLeadInput = Schema['Lead']['type'];
+type ManualLeadInput = Schema['PropertyLead']['type'];
 
 export async function POST(req: NextRequest) {
   // 1. Authenticate user

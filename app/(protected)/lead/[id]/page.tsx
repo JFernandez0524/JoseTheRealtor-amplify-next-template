@@ -5,10 +5,10 @@ import { useParams } from 'next/navigation';
 import { type Schema } from '@/amplify/data/resource'; // Adjust path
 import { Loader } from '@aws-amplify/ui-react';
 import axios from 'axios';
-import { LoadScript, GoogleMap, Marker } from '@react-google-maps/api';
+import { GoogleMap, Marker } from '@react-google-maps/api';
 
 // Define our complete Lead type, including relations
-type LeadWithDetails = Schema['Lead']['type'] & {
+type LeadWithDetails = Schema['PropertyLead']['type'] & {
   contacts: Schema['Contact']['type'][];
   enrichments: Schema['Enrichment']['type'][];
   activities: Schema['Activity']['type'][];

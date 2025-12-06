@@ -17,7 +17,7 @@ const backend = defineBackend({
 });
 
 // --- 1. CONFIGURATION ---
-const leadTable = backend.data.resources.tables['Lead'];
+const leadTable = backend.data.resources.tables['PropertyLead'];
 const storageBucket = backend.storage.resources.bucket;
 
 // --- 2. TRIGGER CONNECTION ---

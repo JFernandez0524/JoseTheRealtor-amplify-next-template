@@ -4,7 +4,7 @@ import { testFunction } from '../functions/testFunction/resource';
 
 // Core models
 const schema = a.schema({
-  Lead: a
+  PropertyLead: a
     .model({
       // 👇 CRITICAL: Owner field with read-only authorization
       owner: a.string().authorization((allow) => [allow.owner().to(['read'])]),
@@ -64,7 +64,7 @@ const schema = a.schema({
       owner: a.string().authorization((allow) => [allow.owner().to(['read'])]),
 
       leadId: a.id(), // belongs-to FK
-      lead: a.belongsTo('Lead', 'leadId'),
+      lead: a.belongsTo('PropertyLead', 'leadId'),
       role: a.string(), // "executor" | "owner" | "other"
       firstName: a.string(),
       lastName: a.string(),
@@ -81,7 +81,7 @@ const schema = a.schema({
       owner: a.string().authorization((allow) => [allow.owner().to(['read'])]),
 
       leadId: a.id(), // belongs-to FK
-      lead: a.belongsTo('Lead', 'leadId'),
+      lead: a.belongsTo('PropertyLead', 'leadId'),
       source: a.string(), // "batchdata:address-verify" | "batchdata:lookup" | "batchdata:skiptrace"
       statusText: a.string(),
       payload: a.json(), // full raw response or normalized fragment
@@ -95,7 +95,7 @@ const schema = a.schema({
       owner: a.string().authorization((allow) => [allow.owner().to(['read'])]),
 
       leadId: a.id(), // belongs-to FK
-      lead: a.belongsTo('Lead', 'leadId'),
+      lead: a.belongsTo('PropertyLead', 'leadId'),
       type: a.string(), // "call" | "email" | "letter" | "sms" | "note"
       channel: a.string(),
       outcome: a.string(),

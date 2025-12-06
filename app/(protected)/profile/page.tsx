@@ -1,34 +1,15 @@
 // app/(protected)/profile/page.tsx
 import { redirect } from 'next/navigation';
 
-import { runWithAmplifyServerContext } from '@/app/utils/aws/auth/amplifyServerUtils.server';
-import { fetchUserAttributes } from 'aws-amplify/auth/server';
-import { cookies } from 'next/headers';
 import SignOutButton from '@/app/components/Logout';
 import {
   AuthGetCurrentUserServer,
   AuthGetUserAttributesServer,
 } from '@/app/utils/aws/auth/amplifyServerUtils.server';
-import { a } from '@aws-amplify/backend';
 
 export const dynamic = 'force-dynamic';
 
 export default async function ProfilePage() {
-  // 1️⃣ Get current user from SSR cookies
-  // ✅ SSR-safe: get current user from Amplify server context
-  // const { user } = await runWithAmplifyServerContext({
-  //   nextServerContext: { cookies },
-  //   operation: async (ctx) => {
-  //     try {
-  //       const user = await getCurrentUser(ctx);
-  //       console.log('Current user', user);
-
-  //       return { user };
-  //     } catch {
-  //       return { user: null };
-  //     }
-  //   },
-  // });
   const user = await AuthGetCurrentUserServer();
 
   if (!user) {

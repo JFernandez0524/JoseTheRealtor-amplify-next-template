@@ -18,7 +18,7 @@ declare global {
   }
 }
 
-type LeadState = Partial<Schema['Lead']['type']>;
+type LeadState = Partial<Schema['PropertyLead']['type']>;
 const libraries: 'places'[] = ['places'];
 
 const PROBATE_TEMPLATE = [

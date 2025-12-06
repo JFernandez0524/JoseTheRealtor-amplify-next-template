@@ -7,7 +7,7 @@ import { getCurrentUser } from 'aws-amplify/auth';
 import { type Schema } from '@/amplify/data/resource';
 
 // Define the shape of a Lead
-type Lead = Schema['Lead']['type'] & {
+type Lead = Schema['PropertyLead']['type'] & {
   __typename?: string | null;
 };
 
@@ -34,7 +34,7 @@ export default function DashboardPage() {
       console.log('🔍 Current User ID:', user.userId);
 
       // 2. Fetch Leads (Amplify automatically applies the "Owner" filter)
-      const { data, errors } = await client.models.Lead.list();
+      const { data, errors } = await client.models.PropertyLead.list();
 
       if (errors && errors.length > 0) {
         console.error('❌ GraphQL Errors:', errors);
@@ -90,7 +90,7 @@ export default function DashboardPage() {
 
     try {
       await Promise.all(
-        selectedLeads.map((id) => client.models.Lead.delete({ id }))
+        selectedLeads.map((id) => client.models.PropertyLead.delete({ id }))
       );
 
       setSelectedLeads([]);
