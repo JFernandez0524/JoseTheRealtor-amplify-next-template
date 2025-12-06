@@ -1,11 +1,10 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { type Schema } from '@/amplify/data/resource';
 import { Loader } from '@aws-amplify/ui-react';
 import axios from 'axios';
-// 👇 IMPORT LOADING HOOK AND MARKER-F
 import {
   GoogleMap,
   MarkerF,
@@ -68,7 +67,6 @@ const formatCurrency = (value?: number | string | null) => {
 };
 
 export default function LeadDetailPage() {
-  // 👇 LOAD GOOGLE MAPS SCRIPT
   const { isLoaded: isMapLoaded } = useJsApiLoader({
     id: 'google-map-script',
     googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY!,
@@ -77,7 +75,6 @@ export default function LeadDetailPage() {
 
   const [lead, setLead] = useState<LeadWithDetails | null>(null);
   const [marketData, setMarketData] = useState<BridgeData | null>(null);
-
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const params = useParams();
@@ -140,7 +137,6 @@ export default function LeadDetailPage() {
 
   return (
     <main className='max-w-6xl mx-auto py-10 px-6'>
-      {/* --- Header --- */}
       <div className='mb-8'>
         <h1 className='text-3xl font-bold'>
           {lead.ownerFirstName} {lead.ownerLastName}
@@ -151,9 +147,8 @@ export default function LeadDetailPage() {
       </div>
 
       <div className='grid grid-cols-1 lg:grid-cols-3 gap-8'>
-        {/* --- Left Column (2/3 width) --- */}
         <div className='lg:col-span-2 space-y-6'>
-          {/* Lead Details Card */}
+          {/* Property Details */}
           <div className='bg-white shadow border rounded-lg p-6'>
             <h2 className='text-xl font-semibold mb-4'>Property Details</h2>
             <div className='grid grid-cols-2 gap-4'>
@@ -225,10 +220,11 @@ export default function LeadDetailPage() {
           {/* Contacts Card */}
           <div className='bg-white shadow border rounded-lg p-6'>
             <h2 className='text-xl font-semibold mb-4'>Contacts</h2>
-            {lead.contacts?.length === 0 ? (
+            {/* 🛑 FIX: Use optional chaining (?.) on contacts.map to prevent crashes */}
+            {!lead.contacts || lead.contacts.length === 0 ? (
               <p className='text-gray-500'>No skip-trace contacts found.</p>
             ) : (
-              lead.contacts.map((contact) => (
+              lead.contacts?.map((contact) => (
                 <div key={contact.id} className='border-b py-2 last:border-0'>
                   <p className='font-medium'>
                     {contact.firstName} {contact.lastName}
@@ -247,7 +243,7 @@ export default function LeadDetailPage() {
           {/* Activity Card */}
           <div className='bg-white shadow border rounded-lg p-6'>
             <h2 className='text-xl font-semibold mb-4'>Activity</h2>
-            {lead.activities?.length === 0 ? (
+            {!lead.activities || lead.activities.length === 0 ? (
               <p className='text-gray-500'>No activities logged.</p>
             ) : (
               lead.activities?.map((activity) => (
@@ -265,9 +261,9 @@ export default function LeadDetailPage() {
           </div>
         </div>
 
-        {/* --- Right Column (1/3 width) --- */}
+        {/* --- Right Column --- */}
         <div className='lg:col-span-1 space-y-6'>
-          {/* Market Intel Card */}
+          {/* Market Intel */}
           <div className='bg-white shadow border rounded-lg p-6 border-l-4 border-l-blue-500'>
             <h2 className='text-xl font-semibold mb-4'>Market Intel</h2>
             {marketData ? (
@@ -317,18 +313,13 @@ export default function LeadDetailPage() {
           {/* Map Card */}
           <div className='bg-white shadow border rounded-lg p-6'>
             <h2 className='text-xl font-semibold mb-4'>Map</h2>
-            {/* 👇 CRITICAL FIX: Only render map when API is loaded */}
             {isMapLoaded && mapCenter ? (
               <GoogleMap
                 mapContainerStyle={mapContainerStyle}
                 center={mapCenter}
                 zoom={16}
-                options={{
-                  disableDefaultUI: true, // Optional: Makes map cleaner
-                  zoomControl: true,
-                }}
+                options={{ disableDefaultUI: true, zoomControl: true }}
               >
-                {/* 👇 Use MarkerF for Functional Components */}
                 <MarkerF position={mapCenter} />
               </GoogleMap>
             ) : (
@@ -344,7 +335,7 @@ export default function LeadDetailPage() {
           {/* Enrichments Log */}
           <div className='bg-white shadow border rounded-lg p-6'>
             <h2 className='text-xl font-semibold mb-4'>Data Log</h2>
-            {lead.enrichments?.length === 0 ? (
+            {!lead.enrichments || lead.enrichments.length === 0 ? (
               <p className='text-gray-500'>No enrichments found.</p>
             ) : (
               <div className='space-y-2'>
