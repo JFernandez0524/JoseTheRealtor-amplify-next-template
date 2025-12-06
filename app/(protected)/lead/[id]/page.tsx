@@ -12,6 +12,11 @@ type LeadWithDetails = Schema['PropertyLead']['type'] & {
   contacts: Schema['Contact']['type'][];
   enrichments: Schema['Enrichment']['type'][];
   activities: Schema['Activity']['type'][];
+  // 👇 Add these optional fields for the transient Zillow data
+  yearBuilt?: number | string | null;
+  squareFeet?: number | string | null;
+  bedrooms?: number | string | null;
+  baths?: number | string | null;
 };
 
 // 2. Define the API response type
@@ -180,7 +185,7 @@ export default function LeadDetailPage() {
           lead.contacts.map((contact) => (
             <div key={contact.id} className='border-b py-2'>
               <p className='font-medium'>
-                {contact.firstName} {contact.lastName} ({contact.role})
+                {contact.firstName} {contact.lastName}
               </p>
               <p className='text-sm text-gray-600'>
                 Phones: {contact.phones?.length || 0}
