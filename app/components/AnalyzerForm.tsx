@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useState, useRef } from 'react';
 import { Loader } from '@aws-amplify/ui-react';
+import { Autocomplete } from '@react-google-maps/api'; // 👈 Using the React library wrapper
 import { useFormFocus } from '@/app/context/FormFocusContext';
 
 type AnalyzerFormProps = {
@@ -11,17 +12,6 @@ type AnalyzerFormProps = {
   isLoading: boolean;
 };
 
-declare global {
-  namespace JSX {
-    interface IntrinsicElements {
-      'gmp-place-autocomplete': React.DetailedHTMLProps<
-        React.HTMLAttributes<HTMLElement>,
-        HTMLElement
-      >;
-    }
-  }
-}
-
 export default function AnalyzerForm({
   address,
   setAddress,
@@ -29,30 +19,36 @@ export default function AnalyzerForm({
   isLoading,
 }: AnalyzerFormProps) {
   const { setIsFormFocused } = useFormFocus();
-  const autocompleteRef = useRef<any>(null);
 
-  useEffect(() => {
-    if (autocompleteRef.current && address !== autocompleteRef.current.value) {
-      autocompleteRef.current.value = address;
-    }
-  }, [address]);
+  // We store the Google Autocomplete instance here when it loads
+  const [autocomplete, setAutocomplete] =
+    useState<google.maps.places.Autocomplete | null>(null);
 
-  useEffect(() => {
-    const el = autocompleteRef.current;
-    if (!el) return;
+  // 1. When the component loads, capture the instance
+  const onConstantsLoad = (
+    autocompleteInstance: google.maps.places.Autocomplete
+  ) => {
+    setAutocomplete(autocompleteInstance);
+  };
 
-    const handleSelect = (e: any) => {
-      const place = e.detail.place;
-      if (place && place.formatted_address) {
-        setAddress(place.formatted_address);
+  // 2. When a user selects a place from the dropdown
+  const onPlaceChanged = () => {
+    if (autocomplete) {
+      const place = autocomplete.getPlace();
+
+      // Get the clean address or fallback to name
+      const formattedAddress = place.formatted_address || place.name;
+
+      if (formattedAddress) {
+        setAddress(formattedAddress);
       }
-    };
+    }
+  };
 
-    el.addEventListener('gmp-places-select', handleSelect);
-    return () => {
-      el.removeEventListener('gmp-places-select', handleSelect);
-    };
-  }, [setAddress]);
+  // 3. Handle manual typing (standard React way)
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setAddress(e.target.value);
+  };
 
   return (
     <form
@@ -60,26 +56,36 @@ export default function AnalyzerForm({
       className='flex flex-col sm:flex-row gap-2 w-full'
     >
       <div className='flex-grow'>
-        <gmp-place-autocomplete ref={autocompleteRef}>
+        {/* This Component wraps the input and handles the Google integration for us.
+          It ensures React events and Google events don't conflict.
+        */}
+        <Autocomplete onLoad={onConstantsLoad} onPlaceChanged={onPlaceChanged}>
           <input
-            slot='input'
             type='text'
+            name='address'
             value={address}
-            onChange={(e) => setAddress(e.target.value)}
+            onChange={handleInputChange}
             placeholder='Enter a property address'
             className='w-full px-4 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500'
-            required
             onFocus={() => setIsFormFocused(true)}
             onBlur={() => setIsFormFocused(false)}
+            // Standard Inputs don't crash the browser validation, so we can use required if we want,
+            // but your disabled button logic handles it better.
           />
-        </gmp-place-autocomplete>
+        </Autocomplete>
       </div>
+
       <button
         type='submit'
-        className='bg-blue-600 text-white px-6 py-2 rounded-md shadow-sm hover:bg-blue-700 disabled:bg-gray-400 h-[42px] mt-[1px]'
-        disabled={isLoading}
+        className={`px-6 py-2 rounded-md shadow-sm h-[42px] mt-[1px] font-medium transition-colors
+          ${
+            !isLoading && address.trim().length > 0
+              ? 'bg-blue-600 text-white hover:bg-blue-700'
+              : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+          }`}
+        disabled={isLoading || address.trim().length === 0}
       >
-        {isLoading ? <Loader /> : 'Analyze'}
+        {isLoading ? <Loader size='small' /> : 'Analyze'}
       </button>
     </form>
   );
