@@ -1,17 +1,21 @@
 import { S3Handler } from 'aws-lambda';
+// 👇 Added DeleteObjectCommand
 import {
   S3Client,
   GetObjectCommand,
   HeadObjectCommand,
+  DeleteObjectCommand,
 } from '@aws-sdk/client-s3';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, PutCommand } from '@aws-sdk/lib-dynamodb';
+// 👇 Added QueryCommand
+import {
+  DynamoDBDocumentClient,
+  PutCommand,
+  QueryCommand,
+} from '@aws-sdk/lib-dynamodb';
 import { parse } from 'csv-parse';
 import { Readable } from 'stream';
 import { randomUUID } from 'crypto';
-
-// 👇 Import your centralized Google Validator
-// (Relative path assumes: amplify/functions/uploadCsvHandler/handler.ts)
 import { validateAddressWithGoogle } from '../../../app/utils/google.server';
 
 // Integrations
@@ -26,42 +30,41 @@ const TABLE_NAME = process.env.AMPLIFY_DATA_LEAD_TABLE_NAME;
 
 export const handler: S3Handler = async (event) => {
   for (const record of event.Records) {
+    let bucketName = '';
+    let decodedKey = '';
+
     try {
-      // 1. Decode Key
       const rawKey = record.s3.object.key;
-      const decodedKey = decodeURIComponent(rawKey).replace(/\+/g, ' ');
+      decodedKey = decodeURIComponent(rawKey).replace(/\+/g, ' ');
+      bucketName = record.s3.bucket.name;
+
       console.log(`📂 Processing file: ${decodedKey}`);
 
-      // 2. Fetch Metadata (User ID)
+      // 1. Get Metadata
       const headObject = await s3.send(
         new HeadObjectCommand({
-          Bucket: record.s3.bucket.name,
+          Bucket: bucketName,
           Key: decodedKey,
         })
       );
 
       const ownerId = headObject.Metadata?.['owner_sub'];
-      const leadType = headObject.Metadata?.['leadtype'] || 'PREFORECLOSURE'; // Default or from metadata
+      const leadType = headObject.Metadata?.['leadtype'] || 'PREFORECLOSURE';
 
       if (!ownerId) {
-        console.warn(
-          '⚠️ No owner_sub found in metadata. Skipping file to prevent ghost data.'
-        );
+        console.warn('⚠️ No owner_sub found. Skipping.');
         continue;
       }
 
-      console.log(`👤 Owner Identified: ${ownerId}`);
-
-      // 3. Download CSV
+      // 2. Download CSV
       const response = await s3.send(
         new GetObjectCommand({
-          Bucket: record.s3.bucket.name,
+          Bucket: bucketName,
           Key: decodedKey,
         })
       );
       const stream = response.Body as Readable;
 
-      // 4. Parse CSV
       const parser = stream.pipe(
         parse({
           columns: true,
@@ -72,50 +75,72 @@ export const handler: S3Handler = async (event) => {
       );
 
       let count = 0;
-      for await (const row of parser) {
-        count++;
+      let skippedCount = 0;
 
-        // Map CSV headers to variables
+      for await (const row of parser) {
         const rawAddress =
           row['ownerAddress'] || row['Property Address'] || row['Address'];
         const rawCity = row['ownerCity'] || row['City'];
         const rawState = row['ownerState'] || row['State'];
         const rawZip = row['ownerZip'] || row['Zip'];
-
-        // Construct search string
         const fullSearchAddress = `${rawAddress}, ${rawCity}, ${rawState} ${rawZip}`;
 
         let validationResult = null;
-
-        // 5. 👇 Validate with Google (Using Shared Utility)
         try {
           if (rawAddress) {
             validationResult =
               await validateAddressWithGoogle(fullSearchAddress);
           }
         } catch (error) {
-          console.warn(
-            `⚠️ Google Validation Failed for row ${count}: ${fullSearchAddress}`
-          );
-          // We continue processing, just without validation data
+          console.warn(`⚠️ Validation Failed: ${fullSearchAddress}`);
         }
 
+        // Use standardized address (critical for duplicate detection)
+        const finalAddress = validationResult?.components.street || rawAddress;
+
+        if (!finalAddress) continue;
+
+        // 🛑 DUPLICATE CHECK 🛑
+        // "Does this user already have this exact address?"
+        const existingCheck = await ddbDocClient.send(
+          new QueryCommand({
+            TableName: TABLE_NAME,
+            IndexName: 'leadsByOwnerAddress', // Using our new index
+            KeyConditionExpression: '#owner = :owner AND #addr = :addr',
+            ExpressionAttributeNames: {
+              '#owner': 'owner',
+              '#addr': 'ownerAddress',
+            },
+            ExpressionAttributeValues: {
+              ':owner': ownerId,
+              ':addr': finalAddress,
+            },
+            Limit: 1, // We only need to find one to know it's a dupe
+          })
+        );
+
+        if (existingCheck.Items && existingCheck.Items.length > 0) {
+          console.log(`⏭️ Skipping duplicate: ${finalAddress}`);
+          skippedCount++;
+          continue; // Skip to next row
+        }
+
+        // Not a duplicate? Save it!
+        count++;
         const leadItem = {
           id: randomUUID(),
           owner: ownerId,
-          __typename: 'Lead',
+          __typename: 'PropertyLead',
           type: leadType,
 
           ownerFirstName: row['First Name'] || row['ownerFirstName'],
           ownerLastName: row['Last Name'] || row['ownerLastName'],
 
-          // Use Validated Data if available, otherwise raw CSV data
-          ownerAddress: validationResult?.components.street || rawAddress,
+          ownerAddress: finalAddress,
           ownerCity: validationResult?.components.city || rawCity,
           ownerState: validationResult?.components.state || rawState,
           ownerZip: validationResult?.components.zip || rawZip,
 
-          // Save the standardized object
           standardizedAddress: validationResult?.components || null,
           latitude: validationResult?.location.lat || null,
           longitude: validationResult?.location.lng || null,
@@ -124,7 +149,6 @@ export const handler: S3Handler = async (event) => {
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
 
-          // Admin fields mapping (if present in CSV)
           adminFirstName: row['adminFirstName'],
           adminLastName: row['adminLastName'],
           adminAddress: row['adminAddress'],
@@ -133,7 +157,6 @@ export const handler: S3Handler = async (event) => {
           adminZip: row['adminZip'],
         };
 
-        // 6. Save to DynamoDB
         await ddbDocClient.send(
           new PutCommand({
             TableName: TABLE_NAME,
@@ -141,8 +164,8 @@ export const handler: S3Handler = async (event) => {
           })
         );
 
-        // 7. Integrations
-        await Promise.all([
+        // Integrations (Run in background)
+        Promise.all([
           syncToKVCore(leadItem).catch((e) => console.error('KVCore Fail:', e)),
           syncToGoHighLevel(leadItem).catch((e) =>
             console.error('GHL Fail:', e)
@@ -153,9 +176,21 @@ export const handler: S3Handler = async (event) => {
           logAuditEvent(leadItem, 'CSV_IMPORT').catch((e) =>
             console.error('Audit Fail:', e)
           ),
-        ]);
+        ]).catch((e) => console.error('Integration Error:', e));
       }
-      console.log(`✅ Success! Processed ${count} leads for owner: ${ownerId}`);
+
+      console.log(
+        `✅ Done. Saved: ${count}, Duplicates Skipped: ${skippedCount}`
+      );
+
+      // 🗑️ DELETE FILE FROM S3
+      await s3.send(
+        new DeleteObjectCommand({
+          Bucket: bucketName,
+          Key: decodedKey,
+        })
+      );
+      console.log(`🗑️ Cleaned up S3 file: ${decodedKey}`);
     } catch (err) {
       console.error('❌ Error processing file:', err);
     }

@@ -1,15 +1,11 @@
-// amplify/data/resource.ts
 import { type ClientSchema, a, defineData } from '@aws-amplify/backend';
 import { testFunction } from '../functions/testFunction/resource';
 
-// Core models
 const schema = a.schema({
   PropertyLead: a
     .model({
-      // 👇 CRITICAL: Owner field with read-only authorization
       owner: a.string().authorization((allow) => [allow.owner().to(['read'])]),
-
-      type: a.string().required(), // "probate" | "preforeclosure"
+      type: a.string().required(),
       ownerFirstName: a.string(),
       ownerLastName: a.string(),
       ownerAddress: a.string().required(),
@@ -22,112 +18,78 @@ const schema = a.schema({
       adminCity: a.string(),
       adminState: a.string(),
       adminZip: a.string(),
-      standardizedAddress: a.json(), // From Google or BatchData
-
-      skipTraceStatus: a.enum([
-        'PENDING', // Not yet processed
-        'COMPLETED', // Skip trace was successful
-        'FAILED', // Skip trace failed
-      ]),
+      standardizedAddress: a.json(),
+      skipTraceStatus: a.enum(['PENDING', 'COMPLETED', 'FAILED']),
       latitude: a.float(),
       longitude: a.float(),
+      phone: a.phone(),
+      email: a.email(),
+      createdAt: a.datetime(),
+      updatedAt: a.datetime(),
 
-      // --- Pre-Foreclosure Data ---
-      preforeclosureNoticeDate: a.date(),
-      preforeclosureAuctionDate: a.date(),
-
-      // --- Assessment/Value Data ---
-      estimatedValue: a.float(),
-      estimatedValueYear: a.integer(),
-
-      // --- Basic Building Data ---
-      yearBuilt: a.integer(),
-      squareFeet: a.integer(),
-      bedrooms: a.integer(),
-      baths: a.float(),
-
-      // --- Relationships ---
+      // Relations
       contacts: a.hasMany('Contact', 'leadId'),
       enrichments: a.hasMany('Enrichment', 'leadId'),
       activities: a.hasMany('Activity', 'leadId'),
-
-      createdAt: a.datetime(),
-      updatedAt: a.datetime(),
     })
-    .authorization((allow) => [
-      allow.owner(), // Owner can read, create, update, delete their own leads
+    .authorization((allow) => [allow.owner()])
+    // 👇 NEW INDEX: Allows fast lookup by Owner + Address
+    .secondaryIndexes((index) => [
+      index('owner')
+        .sortKeys(['ownerAddress'])
+        .queryField('leadsByOwnerAddress'),
     ]),
 
   Contact: a
     .model({
-      // 👇 Owner field with read-only authorization
       owner: a.string().authorization((allow) => [allow.owner().to(['read'])]),
-
-      leadId: a.id(), // belongs-to FK
+      leadId: a.id(),
       lead: a.belongsTo('PropertyLead', 'leadId'),
-      role: a.string(), // "executor" | "owner" | "other"
       firstName: a.string(),
       lastName: a.string(),
-      emails: a.json().array(), // string[]
-      phones: a.json().array(), // {number, type, tested, reachable, score}[]
-      mailingAddress: a.json().required(), // {street, city, state, zip, county}
+      emails: a.json().array(),
+      phones: a.json().array(),
+      mailingAddress: a.json().required(),
       createdAt: a.datetime(),
     })
     .authorization((allow) => [allow.owner()]),
 
   Enrichment: a
     .model({
-      // 👇 Owner field with read-only authorization
       owner: a.string().authorization((allow) => [allow.owner().to(['read'])]),
-
-      leadId: a.id(), // belongs-to FK
+      leadId: a.id(),
       lead: a.belongsTo('PropertyLead', 'leadId'),
-      source: a.string(), // "batchdata:address-verify" | "batchdata:lookup" | "batchdata:skiptrace"
+      source: a.string(),
       statusText: a.string(),
-      payload: a.json(), // full raw response or normalized fragment
+      payload: a.json(),
       createdAt: a.datetime(),
     })
     .authorization((allow) => [allow.owner()]),
 
   Activity: a
     .model({
-      // 👇 Owner field with read-only authorization
       owner: a.string().authorization((allow) => [allow.owner().to(['read'])]),
-
-      leadId: a.id(), // belongs-to FK
+      leadId: a.id(),
       lead: a.belongsTo('PropertyLead', 'leadId'),
-      type: a.string(), // "call" | "email" | "letter" | "sms" | "note"
+      type: a.string(),
       channel: a.string(),
       outcome: a.string(),
-      meta: a.json(), // e.g., agent, templateId, recordingUrl
+      meta: a.json(),
       createdAt: a.datetime(),
     })
     .authorization((allow) => [allow.owner()]),
 
-  // 🔹 Conversation route (chat-based AI)
   chat: a
     .conversation({
       aiModel: a.ai.model('Claude 3.5 Sonnet'),
-      systemPrompt:
-        'You are a helpful real estate assistant. ' +
-        'Your answers must be concise, professional, and easy to read. ' +
-        'Use bullet points (using * or -) and newlines to format your response. ' +
-        'Keep answers to 3-4 sentences unless asked for more.',
-
-      inferenceConfiguration: {
-        temperature: 0.2,
-        topP: 0.2,
-        maxTokens: 200,
-      },
+      systemPrompt: 'You are a helpful real estate assistant.',
+      inferenceConfiguration: { temperature: 0.2, topP: 0.2, maxTokens: 200 },
     })
     .authorization((allow) => allow.owner()),
 
-  //custom functions
   testFunction: a
     .query()
-    .arguments({
-      message: a.string(),
-    })
+    .arguments({ message: a.string() })
     .returns(a.string())
     .handler(a.handler.function(testFunction))
     .authorization((allow) => [allow.authenticated()]),
@@ -137,7 +99,5 @@ export type Schema = ClientSchema<typeof schema>;
 
 export const data = defineData({
   schema,
-  authorizationModes: {
-    defaultAuthorizationMode: 'userPool',
-  },
+  authorizationModes: { defaultAuthorizationMode: 'userPool' },
 });
