@@ -1,16 +1,19 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useParams } from 'next/navigation';
 import { type Schema } from '@/amplify/data/resource';
 import { Loader } from '@aws-amplify/ui-react';
 import axios from 'axios';
-import { GoogleMap, Marker } from '@react-google-maps/api';
+// 👇 IMPORT LOADING HOOK AND MARKER-F
+import {
+  GoogleMap,
+  MarkerF,
+  useJsApiLoader,
+  Libraries,
+} from '@react-google-maps/api';
 
 // --- Types ---
-
-// 1. Define the Bridge/Market Data Type
-// (Adjust these fields based on exactly what your Bridge API returns)
 type BridgeData = {
   zestimate?: number;
   rentZestimate?: number;
@@ -18,10 +21,9 @@ type BridgeData = {
   taxYear?: number;
   taxAssessment?: number;
   yearBuilt?: number;
-  [key: string]: any; // Flexible for other fields
+  [key: string]: any;
 };
 
-// Define our complete Lead type
 type LeadWithDetails = Schema['PropertyLead']['type'] & {
   contacts: Schema['Contact']['type'][];
   enrichments: Schema['Enrichment']['type'][];
@@ -32,11 +34,10 @@ type LeadWithDetails = Schema['PropertyLead']['type'] & {
   baths?: number | string | null;
 };
 
-// 2. Update the API response type to include marketAnalysis
 type LeadApiResponse = {
   success: boolean;
   lead: LeadWithDetails;
-  marketAnalysis: BridgeData | null; // 👇 Added this
+  marketAnalysis: BridgeData | null;
 };
 
 const axiosInstance = axios.create({
@@ -54,7 +55,9 @@ const mapContainerStyle = {
   marginTop: '1.5rem',
 };
 
-// Helper to format currency
+// Define libraries array outside component to prevent re-renders
+const libraries: Libraries = ['places'];
+
 const formatCurrency = (value?: number | string | null) => {
   if (!value) return 'N/A';
   return new Intl.NumberFormat('en-US', {
@@ -65,8 +68,14 @@ const formatCurrency = (value?: number | string | null) => {
 };
 
 export default function LeadDetailPage() {
+  // 👇 LOAD GOOGLE MAPS SCRIPT
+  const { isLoaded: isMapLoaded } = useJsApiLoader({
+    id: 'google-map-script',
+    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY!,
+    libraries: libraries,
+  });
+
   const [lead, setLead] = useState<LeadWithDetails | null>(null);
-  // 👇 New state for Market Data
   const [marketData, setMarketData] = useState<BridgeData | null>(null);
 
   const [isLoading, setIsLoading] = useState(true);
@@ -91,7 +100,6 @@ export default function LeadDetailPage() {
       }
 
       setLead(data.lead);
-      // 👇 Set the market analysis data
       setMarketData(data.marketAnalysis);
     } catch (err: any) {
       setError(err.message);
@@ -142,7 +150,6 @@ export default function LeadDetailPage() {
         </p>
       </div>
 
-      {/* Grid Layout: Left (Details) & Right (Analysis/Map) */}
       <div className='grid grid-cols-1 lg:grid-cols-3 gap-8'>
         {/* --- Left Column (2/3 width) --- */}
         <div className='lg:col-span-2 space-y-6'>
@@ -260,7 +267,7 @@ export default function LeadDetailPage() {
 
         {/* --- Right Column (1/3 width) --- */}
         <div className='lg:col-span-1 space-y-6'>
-          {/* 👇 NEW: Market Intelligence Card 👇 */}
+          {/* Market Intel Card */}
           <div className='bg-white shadow border rounded-lg p-6 border-l-4 border-l-blue-500'>
             <h2 className='text-xl font-semibold mb-4'>Market Intel</h2>
             {marketData ? (
@@ -310,16 +317,27 @@ export default function LeadDetailPage() {
           {/* Map Card */}
           <div className='bg-white shadow border rounded-lg p-6'>
             <h2 className='text-xl font-semibold mb-4'>Map</h2>
-            {mapCenter ? (
+            {/* 👇 CRITICAL FIX: Only render map when API is loaded */}
+            {isMapLoaded && mapCenter ? (
               <GoogleMap
                 mapContainerStyle={mapContainerStyle}
                 center={mapCenter}
                 zoom={16}
+                options={{
+                  disableDefaultUI: true, // Optional: Makes map cleaner
+                  zoomControl: true,
+                }}
               >
-                <Marker position={mapCenter} />
+                {/* 👇 Use MarkerF for Functional Components */}
+                <MarkerF position={mapCenter} />
               </GoogleMap>
             ) : (
-              <p className='text-gray-500'>Address not geocoded.</p>
+              <div
+                className='flex items-center justify-center bg-gray-100 rounded text-gray-500'
+                style={{ height: '300px' }}
+              >
+                {!isMapLoaded ? 'Loading Map...' : 'Address not geocoded.'}
+              </div>
             )}
           </div>
 
