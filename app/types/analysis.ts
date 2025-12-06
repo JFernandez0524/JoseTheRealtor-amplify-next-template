@@ -1,32 +1,22 @@
 // This type definition is now globally reusable
-export type AnalysisResult = {
-  success: boolean;
+// app/types/analysis.ts
+
+export interface AnalysisResult {
   address: string;
-  city: string;
-  state: string;
-  zipcode: string;
-  zestimate: number;
-  lastSoldPrice: number;
-  rentZestimate: number;
-  fixAndFlipAnalysis: string;
-  buyAndHoldAnalysis: string;
-  building: {
-    yearBuilt: number | null;
-    bedrooms: number | null;
-    baths: number | null;
-    stories: number | null;
-    quality: string | null;
-    condition: string | null;
-    squareFeet: number | null;
-  };
-  marketReport: {
-    region: string | null;
-    dataValue: number | null;
-    metricType: string | null;
-  };
   location: {
     lat: number;
     lng: number;
   };
+  zestimate: number | null;
+  rentZestimate: number | null;
+  lastSoldPrice: number | null;
+  // The "Teaser" calculation we will do in the backend
   cashOffer: number | null;
-};
+  building: {
+    yearBuilt: number | null;
+    squareFeet: number | null;
+    bedrooms: number | null;
+    baths: number | null;
+    description?: string;
+  };
+}

@@ -13,6 +13,36 @@ const bridgeClient = axios.create({
   headers: { Authorization: `Bearer ${BRIDGE_API_KEY}` },
 });
 
+// --- HELPER: Logic to pick the "Main House" vs "Apartment Units" ---
+type ZestimateRecord = {
+  zestimate: number;
+  rentalZestimate: number;
+  timestamp: string;
+  unitNumber: string | null;
+  address: string;
+  [key: string]: any;
+};
+
+const getBestZestimate = (bundle: ZestimateRecord[]) => {
+  if (!bundle || bundle.length === 0) return null;
+
+  // Sort: Priority 1 = No Unit Number (Main House), Priority 2 = Newest Date
+  const sortedBundle = bundle.sort((a, b) => {
+    const aIsMain = !a.unitNumber; // true if null/undefined/empty
+    const bIsMain = !b.unitNumber;
+
+    if (aIsMain && !bIsMain) return -1; // a comes first
+    if (!aIsMain && bIsMain) return 1; // b comes first
+
+    // If both are main (or both are units), pick newest
+    const dateA = new Date(a.timestamp).getTime();
+    const dateB = new Date(b.timestamp).getTime();
+    return dateB - dateA;
+  });
+
+  return sortedBundle[0];
+};
+
 /**
  * Enriches Lead Data using ONLY Latitude and Longitude.
  * Uses the 'near' parameter (Long,Lat) to find the closest property.
@@ -24,9 +54,10 @@ export async function analyzeBridgeProperty(lat: number, lng: number) {
   const radius = '0.05mi';
 
   // --- 1. Fetch Zestimates & Assessments (Parallel) ---
+  // NOTE: We request limit: 5 for Zestimates to handle the "Multiple Units" issue
   const [zestimateResp, assessmentResp] = await Promise.all([
     bridgeClient.get('/zestimates_v2/zestimates', {
-      params: { near: nearParam, radius: radius, limit: 1 },
+      params: { near: nearParam, radius: radius, limit: 5 },
     }),
     bridgeClient.get('/pub/assessments', {
       params: {
@@ -42,7 +73,10 @@ export async function analyzeBridgeProperty(lat: number, lng: number) {
     return [{ data: { bundle: [] } }, { data: { bundle: [] } }];
   });
 
-  const zestimateData = zestimateResp.data.bundle?.[0];
+  // Apply our Logic to pick the best Zestimate from the bundle
+  const rawZestimateBundle = zestimateResp.data.bundle || [];
+  const zestimateData = getBestZestimate(rawZestimateBundle);
+
   const assessmentData = assessmentResp.data.bundle?.[0];
 
   // --- 2. Fetch Transactions (Requires Parcel ID from Assessment) ---
