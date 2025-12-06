@@ -16,7 +16,7 @@ import outputs from '../../../../amplify_outputs.json';
 // ✅ Server configuration
 // -----------------------------
 
-type Lead = Schema['Lead']['type'];
+type Lead = Schema['PropertyLead']['type'];
 
 export const { runWithAmplifyServerContext, createAuthRouteHandlers } =
   createServerRunner({
@@ -83,7 +83,7 @@ export async function AuthIsUserAuthenticatedServer(): Promise<boolean> {
 
 export async function createLeadInDatabase(lead: Lead) {
   try {
-    const { data } = await cookiesClient.models.Lead.create(lead);
+    const { data } = await cookiesClient.models.PropertyLead.create(lead);
     return data;
   } catch (error: any) {
     console.error('❌ createLeadInDatabase error:', error.message);
