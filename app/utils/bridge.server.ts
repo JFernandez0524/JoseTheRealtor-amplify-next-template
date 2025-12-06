@@ -1,7 +1,5 @@
 // app/utils/bridge.server.ts
-
-import { NextResponse } from 'next/server';
-import { validateAddressWithGoogle } from './google.server';
+import axios from 'axios';
 
 const BRIDGE_API_KEY = process.env.BRIDGE_API_KEY;
 const BRIDGE_BASE_URL = 'https://api.bridgedataoutput.com/api/v2';
@@ -10,115 +8,109 @@ if (!BRIDGE_API_KEY) {
   throw new Error('BRIDGE_API_KEY is not set in .env.local');
 }
 
+const bridgeClient = axios.create({
+  baseURL: BRIDGE_BASE_URL,
+  headers: { Authorization: `Bearer ${BRIDGE_API_KEY}` },
+});
+
 /**
- * A generic helper function to make authenticated requests to the Bridge API
+ * Enriches Lead Data using ONLY Latitude and Longitude.
+ * Uses the 'near' parameter (Long,Lat) to find the closest property.
  */
-async function fetchFromBridge(endpoint: string) {
-  // ... (This function is unchanged)
-  const url = `${BRIDGE_BASE_URL}/${endpoint}`;
-  console.log(`Fetching from Bridge: ${url}`);
-  const response = await fetch(url, {
-    method: 'GET',
-    headers: { Authorization: `Bearer ${BRIDGE_API_KEY}` },
+export async function analyzeBridgeProperty(lat: number, lng: number) {
+  // Bridge API format for 'near' is "longitude,latitude"
+  const nearParam = `${lng},${lat}`;
+  // We use a very small radius (0.05 miles) to ensure we get the specific house
+  const radius = '0.05mi';
+
+  // --- 1. Fetch Zestimates & Assessments (Parallel) ---
+  const [zestimateResp, assessmentResp] = await Promise.all([
+    bridgeClient.get('/zestimates_v2/zestimates', {
+      params: { near: nearParam, radius: radius, limit: 1 },
+    }),
+    bridgeClient.get('/pub/assessments', {
+      params: {
+        near: nearParam,
+        radius: radius,
+        limit: 1,
+        sortBy: 'year',
+        order: 'desc',
+      },
+    }),
+  ]).catch((err) => {
+    console.error('Bridge Initial Fetch Error:', err.message);
+    return [{ data: { bundle: [] } }, { data: { bundle: [] } }];
   });
-  if (!response.ok) {
-    const errorBody = await response.text();
-    console.error(`Bridge API error for ${endpoint}:`, errorBody);
-    throw new Error(
-      `Failed to fetch data from ${endpoint}. Response: ${errorBody}`
-    );
-  }
-  return response.json();
-}
 
-/**
- * Fetches and analyzes property data from Google and Bridge.
- */
-export async function analyzeBridgeProperty(address: string) {
-  // --- 1. Validate Address & Get Coords (Google) ---
-  const validation = await validateAddressWithGoogle(address);
-  if (!validation.success) {
-    throw new Error('Address validation failed.');
-  }
+  const zestimateData = zestimateResp.data.bundle?.[0];
+  const assessmentData = assessmentResp.data.bundle?.[0];
 
-  // --- 2. Format Coordinates for Bridge API ---
-  const { lat, lng } = validation.location;
-  const nearCoordinates = `${lng},${lat}`;
+  // --- 2. Fetch Transactions (Requires Parcel ID from Assessment) ---
+  // Even though we search by coords, getting the Parcel ID allows us to get the EXACT sales history
+  let lastTransaction = null;
+  const parcelId = assessmentData?.parcelId || assessmentData?.id;
 
-  // --- 3. Make API Calls in Parallel (Bridge) ---
-  const [zestimateData, transactionData, assessmentData] = await Promise.all([
-    fetchFromBridge(
-      `zestimates_v2/zestimates?near=${nearCoordinates}&radius=0.1mi`
-    ),
-    fetchFromBridge(
-      `pub/transactions?near=${nearCoordinates}&radius=0.1mi&sortBy=recordingDate&order=desc&limit=1&category=deed`
-    ),
-    fetchFromBridge(`pub/assessments?near=${nearCoordinates}&radius=0.1mi`),
-  ]);
-
-  // --- 4. Extract Core Data ---
-  const property = zestimateData.bundle?.[0];
-  const lastTransaction = transactionData.bundle?.[0];
-  const assessment = assessmentData.bundle?.[0];
-
-  if (!property || !assessment) {
-    throw new Error(
-      'Property not found in Zestimates or Assessments. Check the address.'
-    );
+  if (parcelId) {
+    try {
+      const transactionResp = await bridgeClient.get(
+        `/pub/parcels/${parcelId}/transactions`,
+        {
+          params: { limit: 1, sortBy: 'recordingDate', order: 'desc' },
+        }
+      );
+      lastTransaction = transactionResp.data.bundle?.[0];
+    } catch (error: any) {
+      console.warn('Failed to fetch transactions:', error.message);
+    }
   }
 
-  const zestimate = property.zestimate;
-  const rentZestimate = property.rentalZestimate;
-  const lastSoldPrice = lastTransaction?.salesPrice;
-  const fipsCode = assessment.fips;
-  const building = assessment.building?.[0];
-  const area = assessment.areas?.find(
-    (a: any) => a.type === 'Living Building Area'
-  );
-  const buildingData = {
-    /* ... (building data) ... */
-  };
+  // --- 3. Parse Data ---
+  const zestimate = zestimateData?.zestimate || 0;
+  const rentZestimate = zestimateData?.rentalZestimate || 0;
+  const lastSoldPrice =
+    lastTransaction?.document?.amount || lastTransaction?.salesPrice || 0;
 
-  // --- 5. Get Market Report (Bridge, using FIPS code) ---
-  let marketReport = null;
-  if (fipsCode) {
-    /* ... (try/catch for market report) ... */
-  }
+  // Building/Assessment Data
+  const building = assessmentData?.building?.[0] || {};
+  const yearBuilt = assessmentData?.yearBuilt || building.yearBuilt;
+  const sqFt = assessmentData?.livingArea || building.finishedLivingArea;
 
-  // --- 6. Perform "Biz Logic" Analysis ---
-  let fixAndFlipAnalysis = 'N/A: Zestimate or Last Sold Price missing.';
-  if (zestimate && lastSoldPrice) {
+  // --- 4. Biz Logic ---
+  let fixAndFlipAnalysis = 'N/A: Missing Zestimate or Sold Price';
+  if (zestimate > 0 && lastSoldPrice > 0) {
     const estimatedEquity = zestimate - lastSoldPrice;
-    fixAndFlipAnalysis = `Potential gross equity of $${estimatedEquity.toLocaleString()}.`;
-  }
-  let buyAndHoldAnalysis = 'N/A: Zestimate or Rent Zestimate missing.';
-  if (rentZestimate && zestimate && zestimate > 0) {
-    const rentToPriceRatio = (rentZestimate / zestimate) * 100;
-    buyAndHoldAnalysis = `Rent/Price ratio: ${rentToPriceRatio.toFixed(2)}%.`;
+    fixAndFlipAnalysis = `Potential Gross Equity: $${estimatedEquity.toLocaleString()}`;
   }
 
-  // --- 7. ⭐ NEW: Calculate Cash Offer ---
+  let buyAndHoldAnalysis = 'N/A: Missing Rent or Price data';
+  if (rentZestimate > 0 && zestimate > 0) {
+    const rentToPriceRatio = (rentZestimate / zestimate) * 100;
+    buyAndHoldAnalysis = `Rent/Price Ratio: ${rentToPriceRatio.toFixed(2)}%`;
+  }
+
   let cashOffer = null;
-  if (zestimate && zestimate > 0) {
+  if (zestimate > 0) {
     cashOffer = zestimate * 0.75;
   }
 
-  // --- 8. Return Combined Results ---
   return {
-    address: validation.formattedAddress || address,
-    city: property.city || 'N/A',
-    state: property.state || 'N/A',
-    zipcode: property.postalCode || 'N/A',
+    location: { lat, lng },
     zestimate,
-    lastSoldPrice,
     rentZestimate,
+    lastSoldPrice,
+    lastSoldDate: lastTransaction?.recordingDate || null,
+    details: {
+      yearBuilt,
+      sqFt,
+      bedrooms: assessmentData?.bedrooms,
+      bathrooms: assessmentData?.bathrooms,
+      taxAmount: assessmentData?.taxAmount,
+      taxYear: assessmentData?.year,
+    },
     fixAndFlipAnalysis,
     buyAndHoldAnalysis,
-    building: buildingData,
-    marketReport: {
-      /* ... */
-    },
-    location: validation.location,
-    cashOffer: cashOffer, // ⭐ ADDED THIS
+    cashOffer,
+    // Return raw address from Bridge in case you want to verify it matches your DB
+    bridgeAddress: assessmentData?.address?.full || zestimateData?.address,
   };
 }

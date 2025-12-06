@@ -2,30 +2,43 @@
 
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
-import { type Schema } from '@/amplify/data/resource'; // Adjust path
+import { type Schema } from '@/amplify/data/resource';
 import { Loader } from '@aws-amplify/ui-react';
 import axios from 'axios';
 import { GoogleMap, Marker } from '@react-google-maps/api';
 
-// Define our complete Lead type, including relations
+// --- Types ---
+
+// 1. Define the Bridge/Market Data Type
+// (Adjust these fields based on exactly what your Bridge API returns)
+type BridgeData = {
+  zestimate?: number;
+  rentZestimate?: number;
+  zillowUrl?: string;
+  taxYear?: number;
+  taxAssessment?: number;
+  yearBuilt?: number;
+  [key: string]: any; // Flexible for other fields
+};
+
+// Define our complete Lead type
 type LeadWithDetails = Schema['PropertyLead']['type'] & {
   contacts: Schema['Contact']['type'][];
   enrichments: Schema['Enrichment']['type'][];
   activities: Schema['Activity']['type'][];
-  // 👇 Add these optional fields for the transient Zillow data
   yearBuilt?: number | string | null;
   squareFeet?: number | string | null;
   bedrooms?: number | string | null;
   baths?: number | string | null;
 };
 
-// 2. Define the API response type
+// 2. Update the API response type to include marketAnalysis
 type LeadApiResponse = {
   success: boolean;
   lead: LeadWithDetails;
+  marketAnalysis: BridgeData | null; // 👇 Added this
 };
 
-// 3. Create an axios instance
 const axiosInstance = axios.create({
   baseURL: '/api/v1',
   headers: {
@@ -34,10 +47,6 @@ const axiosInstance = axios.create({
   timeout: 10000,
 });
 
-// Define Google Maps libraries
-const libraries: 'places'[] = ['places'];
-
-// Define the map container style
 const mapContainerStyle = {
   width: '100%',
   height: '300px',
@@ -45,8 +54,21 @@ const mapContainerStyle = {
   marginTop: '1.5rem',
 };
 
+// Helper to format currency
+const formatCurrency = (value?: number | string | null) => {
+  if (!value) return 'N/A';
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    maximumFractionDigits: 0,
+  }).format(Number(value));
+};
+
 export default function LeadDetailPage() {
   const [lead, setLead] = useState<LeadWithDetails | null>(null);
+  // 👇 New state for Market Data
+  const [marketData, setMarketData] = useState<BridgeData | null>(null);
+
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const params = useParams();
@@ -61,14 +83,16 @@ export default function LeadDetailPage() {
   const fetchLead = async (id: string) => {
     setIsLoading(true);
     try {
-      // Use axiosInstance and the correct response type
       const response = await axiosInstance.get<LeadApiResponse>(`/leads/${id}`);
-      const data = response.data; // axios puts the JSON in 'response.data'
+      const data = response.data;
 
       if (!data.success) {
         throw new Error('Failed to fetch lead data.');
       }
+
       setLead(data.lead);
+      // 👇 Set the market analysis data
+      setMarketData(data.marketAnalysis);
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -101,162 +125,232 @@ export default function LeadDetailPage() {
     );
   }
 
-  // Define the map center using the fields from the lead object
   const mapCenter =
     lead.latitude && lead.longitude
       ? { lat: lead.latitude, lng: lead.longitude }
       : null;
 
   return (
-    <main className='max-w-4xl mx-auto py-10 px-6'>
+    <main className='max-w-6xl mx-auto py-10 px-6'>
       {/* --- Header --- */}
-      <h1 className='text-3xl font-bold'>
-        {lead.ownerFirstName} {lead.ownerLastName}
-      </h1>
-      <p className='text-lg text-gray-600'>
-        {lead.ownerAddress}, {lead.ownerCity}, {lead.ownerState}
-      </p>
+      <div className='mb-8'>
+        <h1 className='text-3xl font-bold'>
+          {lead.ownerFirstName} {lead.ownerLastName}
+        </h1>
+        <p className='text-lg text-gray-600'>
+          {lead.ownerAddress}, {lead.ownerCity}, {lead.ownerState}
+        </p>
+      </div>
 
-      {/* --- Lead Details Card --- */}
-      <div className='mt-6 bg-white shadow border rounded-lg p-6'>
-        <h2 className='text-xl font-semibold mb-4'>Property Details</h2>
-        <div className='grid grid-cols-2 gap-4'>
-          <div>
-            <label className='text-sm font-medium text-gray-500'>Type</label>
-            <p className='text-base'>{lead.type}</p>
-          </div>
-          <div>
-            <label className='text-sm font-medium text-gray-500'>Status</label>
-            <p className='text-base'>{lead.skipTraceStatus}</p>
-          </div>
-          <div>
-            <label className='text-sm font-medium text-gray-500'>
-              Year Built
-            </label>
-            <p className='text-base'>{lead.yearBuilt || 'N/A'}</p>
-          </div>
-          <div>
-            <label className='text-sm font-medium text-gray-500'>Sq. Ft.</label>
-            <p className='text-base'>{lead.squareFeet || 'N/A'}</p>
-          </div>
-          <div>
-            <label className='text-sm font-medium text-gray-500'>
-              Bedrooms
-            </label>
-            <p className='text-base'>{lead.bedrooms || 'N/A'}</p>
-          </div>
-          <div>
-            <label className='text-sm font-medium text-gray-500'>
-              Bathrooms
-            </label>
-            <p className='text-base'>{lead.baths || 'N/A'}</p>
-          </div>
-        </div>
-
-        {lead.type === 'probate' && (
-          <>
-            <h3 className='text-lg font-semibold mt-6 mb-2'>Executor Info</h3>
+      {/* Grid Layout: Left (Details) & Right (Analysis/Map) */}
+      <div className='grid grid-cols-1 lg:grid-cols-3 gap-8'>
+        {/* --- Left Column (2/3 width) --- */}
+        <div className='lg:col-span-2 space-y-6'>
+          {/* Lead Details Card */}
+          <div className='bg-white shadow border rounded-lg p-6'>
+            <h2 className='text-xl font-semibold mb-4'>Property Details</h2>
             <div className='grid grid-cols-2 gap-4'>
               <div>
                 <label className='text-sm font-medium text-gray-500'>
-                  Name
+                  Type
+                </label>
+                <p className='text-base capitalize'>{lead.type}</p>
+              </div>
+              <div>
+                <label className='text-sm font-medium text-gray-500'>
+                  Status
+                </label>
+                <p className='text-base'>{lead.skipTraceStatus}</p>
+              </div>
+              <div>
+                <label className='text-sm font-medium text-gray-500'>
+                  Year Built
                 </label>
                 <p className='text-base'>
-                  {lead.adminFirstName} {lead.adminLastName}
+                  {lead.yearBuilt || marketData?.yearBuilt || 'N/A'}
                 </p>
               </div>
               <div>
                 <label className='text-sm font-medium text-gray-500'>
-                  Mailing Address
+                  Sq. Ft.
                 </label>
-                <p className='text-base'>{lead.adminAddress || 'N/A'}</p>
+                <p className='text-base'>{lead.squareFeet || 'N/A'}</p>
+              </div>
+              <div>
+                <label className='text-sm font-medium text-gray-500'>
+                  Bedrooms
+                </label>
+                <p className='text-base'>{lead.bedrooms || 'N/A'}</p>
+              </div>
+              <div>
+                <label className='text-sm font-medium text-gray-500'>
+                  Bathrooms
+                </label>
+                <p className='text-base'>{lead.baths || 'N/A'}</p>
               </div>
             </div>
-          </>
-        )}
-      </div>
 
-      {/* --- Contacts Card --- */}
-      <div className='mt-6 bg-white shadow border rounded-lg p-6'>
-        <h2 className='text-xl font-semibold mb-4'>Contacts</h2>
-        {lead.contacts?.length === 0 ? (
-          <p className='text-gray-500'>No skip-trace contacts found.</p>
-        ) : (
-          lead.contacts.map((contact) => (
-            <div key={contact.id} className='border-b py-2'>
-              <p className='font-medium'>
-                {contact.firstName} {contact.lastName}
-              </p>
-              <p className='text-sm text-gray-600'>
-                Phones: {contact.phones?.length || 0}
-              </p>
-              <p className='text-sm text-gray-600'>
-                Emails: {contact.emails?.length || 0}
-              </p>
-            </div>
-          ))
-        )}
-      </div>
+            {lead.type === 'probate' && (
+              <>
+                <h3 className='text-lg font-semibold mt-6 mb-2'>
+                  Executor Info
+                </h3>
+                <div className='grid grid-cols-2 gap-4'>
+                  <div>
+                    <label className='text-sm font-medium text-gray-500'>
+                      Name
+                    </label>
+                    <p className='text-base'>
+                      {lead.adminFirstName} {lead.adminLastName}
+                    </p>
+                  </div>
+                  <div>
+                    <label className='text-sm font-medium text-gray-500'>
+                      Mailing Address
+                    </label>
+                    <p className='text-base'>{lead.adminAddress || 'N/A'}</p>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
 
-      {/* --- 👇 NEW: Activities Card 👇 --- */}
-      <div className='bg-white shadow border rounded-lg p-6'>
-        <h2 className='text-xl font-semibold mb-4'>Activity</h2>
-        {lead.activities?.length === 0 ? (
-          <p className='text-gray-500'>No activities logged.</p>
-        ) : (
-          lead.activities?.map((activity) => (
-            <div key={activity.id} className='border-b py-2'>
-              <p className='font-medium capitalize'>{activity.type}</p>
-              <p className='text-sm text-gray-600'>
-                Outcome: {activity.outcome}
-              </p>
-              <p className='text-sm text-gray-400'>
-                {new Date(Number(activity.createdAt)).toLocaleString()}
-              </p>
-            </div>
-          ))
-        )}
-      </div>
-
-      {/* --- Right Column (Map & Enrichments) --- */}
-      <div className='space-y-6'>
-        {/* --- 👇 NEW: Map Card 👇 --- */}
-        <div className='bg-white shadow border rounded-lg p-6'>
-          <h2 className='text-xl font-semibold mb-4'>Map</h2>
-          {mapCenter ? (
-            <GoogleMap
-              mapContainerStyle={mapContainerStyle}
-              center={mapCenter}
-              zoom={16}
-            >
-              <Marker position={mapCenter} />
-            </GoogleMap>
-          ) : (
-            <p className='text-gray-500'>Address not geocoded.</p>
-          )}
-        </div>
-
-        {/* --- 👇 NEW: Enrichments Card 👇 --- */}
-        <div className='bg-white shadow border rounded-lg p-6'>
-          <h2 className='text-xl font-semibold mb-4'>Data Log</h2>
-          {lead.enrichments?.length === 0 ? (
-            <p className='text-gray-500'>No enrichments found.</p>
-          ) : (
-            <div className='space-y-2'>
-              {lead.enrichments?.map((enrichment) => (
-                <div key={enrichment.id} className='text-xs'>
-                  <p className='font-medium'>{enrichment.source}</p>
-                  <p className='text-gray-500'>
-                    Status: {enrichment.statusText}
+          {/* Contacts Card */}
+          <div className='bg-white shadow border rounded-lg p-6'>
+            <h2 className='text-xl font-semibold mb-4'>Contacts</h2>
+            {lead.contacts?.length === 0 ? (
+              <p className='text-gray-500'>No skip-trace contacts found.</p>
+            ) : (
+              lead.contacts.map((contact) => (
+                <div key={contact.id} className='border-b py-2 last:border-0'>
+                  <p className='font-medium'>
+                    {contact.firstName} {contact.lastName}
+                  </p>
+                  <p className='text-sm text-gray-600'>
+                    Phones: {contact.phones?.length || 0}
+                  </p>
+                  <p className='text-sm text-gray-600'>
+                    Emails: {contact.emails?.length || 0}
                   </p>
                 </div>
-              ))}
-            </div>
-          )}
+              ))
+            )}
+          </div>
+
+          {/* Activity Card */}
+          <div className='bg-white shadow border rounded-lg p-6'>
+            <h2 className='text-xl font-semibold mb-4'>Activity</h2>
+            {lead.activities?.length === 0 ? (
+              <p className='text-gray-500'>No activities logged.</p>
+            ) : (
+              lead.activities?.map((activity) => (
+                <div key={activity.id} className='border-b py-2 last:border-0'>
+                  <p className='font-medium capitalize'>{activity.type}</p>
+                  <p className='text-sm text-gray-600'>
+                    Outcome: {activity.outcome}
+                  </p>
+                  <p className='text-sm text-gray-400'>
+                    {new Date(Number(activity.createdAt)).toLocaleString()}
+                  </p>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+
+        {/* --- Right Column (1/3 width) --- */}
+        <div className='lg:col-span-1 space-y-6'>
+          {/* 👇 NEW: Market Intelligence Card 👇 */}
+          <div className='bg-white shadow border rounded-lg p-6 border-l-4 border-l-blue-500'>
+            <h2 className='text-xl font-semibold mb-4'>Market Intel</h2>
+            {marketData ? (
+              <div className='space-y-4'>
+                <div>
+                  <label className='text-xs uppercase font-bold text-gray-400'>
+                    Est. Value (Zestimate)
+                  </label>
+                  <p className='text-2xl font-bold text-gray-800'>
+                    {formatCurrency(marketData.zestimate)}
+                  </p>
+                </div>
+                <div>
+                  <label className='text-xs uppercase font-bold text-gray-400'>
+                    Est. Rent
+                  </label>
+                  <p className='text-xl font-semibold text-gray-700'>
+                    {formatCurrency(marketData.rentZestimate)} /mo
+                  </p>
+                </div>
+                {marketData.taxAssessment && (
+                  <div>
+                    <label className='text-xs uppercase font-bold text-gray-400'>
+                      Tax Assessment
+                    </label>
+                    <p className='text-lg text-gray-600'>
+                      {formatCurrency(marketData.taxAssessment)}
+                    </p>
+                  </div>
+                )}
+                <div className='pt-2'>
+                  <span className='inline-block bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded'>
+                    Source: Bridge/Zillow
+                  </span>
+                </div>
+              </div>
+            ) : (
+              <div className='text-center py-4 text-gray-500'>
+                <p>No market data available.</p>
+                <p className='text-xs mt-1'>
+                  Check if latitude/longitude are valid.
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* Map Card */}
+          <div className='bg-white shadow border rounded-lg p-6'>
+            <h2 className='text-xl font-semibold mb-4'>Map</h2>
+            {mapCenter ? (
+              <GoogleMap
+                mapContainerStyle={mapContainerStyle}
+                center={mapCenter}
+                zoom={16}
+              >
+                <Marker position={mapCenter} />
+              </GoogleMap>
+            ) : (
+              <p className='text-gray-500'>Address not geocoded.</p>
+            )}
+          </div>
+
+          {/* Enrichments Log */}
+          <div className='bg-white shadow border rounded-lg p-6'>
+            <h2 className='text-xl font-semibold mb-4'>Data Log</h2>
+            {lead.enrichments?.length === 0 ? (
+              <p className='text-gray-500'>No enrichments found.</p>
+            ) : (
+              <div className='space-y-2'>
+                {lead.enrichments?.map((enrichment) => (
+                  <div
+                    key={enrichment.id}
+                    className='text-xs border-b pb-2 last:border-0'
+                  >
+                    <p className='font-medium'>{enrichment.source}</p>
+                    <p className='text-gray-500'>
+                      Status: {enrichment.statusText}
+                    </p>
+                    <p className='text-gray-400'>
+                      {new Date(
+                        Number(enrichment.createdAt)
+                      ).toLocaleDateString()}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </div>
-
-      {/* --- Future Edit/Action Buttons Here --- */}
     </main>
   );
 }

@@ -28,12 +28,10 @@ export default function DashboardPage() {
     setError(null);
 
     try {
-      // 1. Get User (Mostly for your own debugging display)
       const user = await getCurrentUser();
       setCurrentUserId(user.userId);
       console.log('🔍 Current User ID:', user.userId);
 
-      // 2. Fetch Leads (Amplify automatically applies the "Owner" filter)
       const { data, errors } = await client.models.PropertyLead.list();
 
       if (errors && errors.length > 0) {
@@ -47,7 +45,6 @@ export default function DashboardPage() {
         throw new Error('No data returned from GraphQL');
       }
 
-      // 👇 FIX: Handle null/undefined dates safely
       const sortedLeads = data.sort((a, b) => {
         const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
         const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
@@ -104,6 +101,13 @@ export default function DashboardPage() {
   const formatDate = (dateStr?: string | null) => {
     if (!dateStr) return 'N/A';
     return new Date(dateStr).toLocaleString();
+  };
+
+  // 👇 Handler for navigating to the lead detail page
+  const handleRowClick = (leadId: string) => {
+    // Update this path to match your actual folder structure
+    // e.g., if your page is at app/dashboard/[id]/page.tsx, use `/dashboard/${leadId}`
+    router.push(`/leads/${leadId}`);
   };
 
   return (
@@ -190,9 +194,7 @@ export default function DashboardPage() {
                     onChange={toggleSelectAll}
                   />
                 </th>
-                <th className='px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider whitespace-nowrap'>
-                  ID
-                </th>
+                {/* ❌ REMOVED ID HEADER HERE */}
                 <th className='px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider whitespace-nowrap'>
                   Type
                 </th>
@@ -228,7 +230,7 @@ export default function DashboardPage() {
               {isLoading ? (
                 <tr>
                   <td
-                    colSpan={10}
+                    colSpan={9} // Reduced colspan due to removed column
                     className='px-6 py-10 text-center text-gray-500'
                   >
                     <div className='flex flex-col items-center'>
@@ -240,7 +242,7 @@ export default function DashboardPage() {
               ) : leads.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={10}
+                    colSpan={9} // Reduced colspan due to removed column
                     className='px-6 py-10 text-center text-gray-500'
                   >
                     <div className='text-lg mb-2'>📭 No leads found</div>
@@ -251,19 +253,24 @@ export default function DashboardPage() {
                 </tr>
               ) : (
                 leads.map((lead) => (
-                  <tr key={lead.id} className='hover:bg-gray-50 transition'>
+                  <tr
+                    key={lead.id}
+                    // 👇 CLICK HANDLER ADDED TO ROW
+                    onClick={() => handleRowClick(lead.id)}
+                    className='hover:bg-gray-50 transition cursor-pointer'
+                  >
                     <td className='px-4 py-4 whitespace-nowrap'>
                       <input
                         type='checkbox'
                         className='rounded border-gray-300 text-blue-600 focus:ring-blue-500 h-4 w-4'
                         checked={selectedLeads.includes(lead.id)}
+                        // 👇 PREVENT ROW CLICK WHEN CHECKING BOX
+                        onClick={(e) => e.stopPropagation()}
                         onChange={() => toggleSelectLead(lead.id)}
                       />
                     </td>
 
-                    <td className='px-4 py-4 whitespace-nowrap text-sm text-gray-500 font-mono'>
-                      {lead.id.substring(0, 8)}...
-                    </td>
+                    {/* ❌ REMOVED ID DATA CELL HERE */}
 
                     <td className='px-4 py-4 whitespace-nowrap text-sm'>
                       <span className='px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800'>
