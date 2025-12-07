@@ -1,29 +1,59 @@
-//app/utils/batchData.server.ts
 import axios from 'axios';
 
-import type { LeadToSkip } from '../types/batchdata/leadToSkip';
+// Define the shape of the request expected by BatchData
+export type LeadToSkip = {
+  propertyAddress: {
+    street: string;
+    city: string;
+    state: string;
+    zip: string;
+  };
+  name?: {
+    first: string;
+    last: string;
+  };
+};
 
 /**
  * Create a shared Axios instance for BatchData API
  */
 const batchClient = axios.create({
-  //production URL
-  // baseURL: 'https://api.batchdata.com/api/v1',
-  //mock URL
-  baseURL: 'https://stoplight.io/mocks/batchdata/batchdata/20349728',
+  // 🛑 UPDATED: Using the specific Mock Server ID you provided
+  baseURL: 'https://stoplight.io/mocks/batchdata/batchdata/1354513859',
   headers: {
     'Content-Type': 'application/json',
-    //Production Token
-    // Authorization: `Bearer ${process.env.BATCH_DATA_SERVER_TOKEN}`,
-    //Mock Token
-    Authorization: `Bearer ${process.env.BATCH_DATA_MOCK_TOKEN}`,
+    Accept: 'application/json',
+    // Mock Token (can be anything for Stoplight, or your env var)
+    Authorization: `Bearer ${process.env.BATCH_DATA_MOCK_TOKEN || 'mock-token'}`,
   },
-  timeout: 10000, // 10 seconds
+  timeout: 15000, // 15 seconds
 });
 
 /**
- * ✅ Verify an address with BatchData API
- * Docs: https://developer.batchdata.com/docs/batchdata/batchdata-v1/operations/create-a-address-verify
+ * ✅ Shared Skip Trace Logic
+ * Handles calling the /property/skip-trace endpoint for any lead type
+ */
+async function skipTraceProperty(leadToSkip: LeadToSkip) {
+  try {
+    // The API expects an array of requests
+    const payload = {
+      requests: [leadToSkip],
+    };
+
+    console.log('🔍 BatchData Mock Request:', JSON.stringify(payload, null, 2));
+
+    // Calls: https://stoplight.io/mocks/batchdata/batchdata/1354513859/property/skip-trace
+    const { data } = await batchClient.post('/property/skip-trace', payload);
+    return data;
+  } catch (error: any) {
+    console.error('❌ BatchData skipTrace error:', error.message);
+    if (error.response?.data) console.error(error.response.data);
+    return null;
+  }
+}
+
+/**
+ * ✅ Verify Address
  */
 export async function verifyAddress(address: {
   address1: string;
@@ -36,56 +66,29 @@ export async function verifyAddress(address: {
     return data;
   } catch (error: any) {
     console.error('❌ BatchData verifyAddress error:', error.message);
-    if (error.response?.data) console.error(error.response.data);
     return null;
   }
 }
 
 /**
- * ✅ Property Lookup (for pre-foreclosure enrichment)
- * Docs: https://developer.batchdata.com/docs/batchdata/batchdata-v1/operations/create-a-property-lookup-async
+ * ✅ Wrapper for Pre-foreclosure (Targets Owner Address)
+ * REFACTORED: Now uses skip-trace to get contacts, not just property details
  */
 export async function skipTracePreForeClosureSingleLead(
   leadToSkip: LeadToSkip
 ) {
-  const request: LeadToSkip[] = [];
-  request.push(leadToSkip);
-  if (!leadToSkip) throw new Error('leadToSkip is required');
-  try {
-    const { data } = await batchClient.post('/property/lookup/all-attributes', {
-      request,
-    });
-    return data;
-  } catch (error: any) {
-    console.error('❌ BatchData propertyLookup error:', error.message);
-    if (error.response?.data) console.error(error.response.data);
-    return null;
-  }
+  return skipTraceProperty(leadToSkip);
 }
 
 /**
- * ✅ Skip Trace (for probate leads)
- * Docs: https://developer.batchdata.com/docs/batchdata/batchdata-v1/operations/create-a-property-skip-trace
+ * ✅ Wrapper for Probate (Targets Executor/Admin Address)
  */
 export async function skipTraceProbateSingleLead(leadToSkip: LeadToSkip) {
-  if (!leadToSkip) throw new Error('requests is required');
-  const requests: LeadToSkip[] = [];
-  requests.push(leadToSkip);
-  try {
-    const { data } = await batchClient.post('/property/skip-trace', {
-      requests,
-    });
-    return data;
-  } catch (error: any) {
-    console.error('❌ BatchData skipTrace error:', error.message);
-    if (error.response?.data) console.error(error.response.data);
-    return null;
-  }
+  return skipTraceProperty(leadToSkip);
 }
 
 /**
- * ✅ Normalize results into your app’s structure
- * Optional utility to clean up BatchData responses
+ * ✅ Normalize results (Optional Helper)
  */
 export function normalizeAddressResult(result: any) {
   if (!result?.standardized_address) return null;

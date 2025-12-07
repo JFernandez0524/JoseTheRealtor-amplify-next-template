@@ -1,33 +1,49 @@
-//api/v1/skiptrace-leads/probate
-import { NextRequest, NextResponse } from 'next/server';
-import { AuthIsUserAuthenticatedServer } from '@/app/utils/aws/auth/amplifyServerUtils.server';
+import { NextResponse } from 'next/server';
 import { skipTraceProbateSingleLead } from '@/app/utils/batchData.server';
-import { type LeadToSkip } from '@/app/types/batchdata/leadToSkip';
-export const dynamic = 'force-dynamic';
 
-export async function POST(req: NextRequest) {
-  const authenticated = await AuthIsUserAuthenticatedServer();
-  if (!authenticated) {
-    return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
-  }
-  const lead: LeadToSkip = await req.json();
-  if (!lead) {
-    return NextResponse.json({ error: 'No lead provided' }, { status: 400 });
-  }
+export async function POST(request: Request) {
   try {
-    const response = await skipTraceProbateSingleLead(lead);
-    if (!response) {
+    // Note: The frontend sends the Admin's address here
+    const { address, city, state, zip } = await request.json();
+
+    if (!address || !city || !state || !zip) {
       return NextResponse.json(
-        { error: 'No response from BatchData' },
-        { status: 500 }
+        { success: false, error: 'Missing Executor/Admin address fields' },
+        { status: 400 }
       );
     }
-    console.log(JSON.stringify(response));
 
-    return NextResponse.json(response);
+    // 1. Call your Utility Function
+    const data = await skipTraceProbateSingleLead({
+      propertyAddress: { street: address, city, state, zip },
+    });
+
+    const resultData = data?.result?.data?.[0];
+
+    // 2. Handle Empty Results
+    if (!resultData || !resultData.persons || resultData.persons.length === 0) {
+      return NextResponse.json({ success: true, contacts: [] });
+    }
+
+    // 3. Format Data for Frontend
+    const contacts = resultData.persons.map((person: any, index: number) => ({
+      id: `pb-${Date.now()}-${index}`,
+      firstName: person.name?.first || 'Unknown',
+      lastName: person.name?.last || '',
+      phones:
+        person.phones?.filter((p: any) => p.number).map((p: any) => p.number) ||
+        [],
+      emails:
+        person.emails?.filter((e: any) => e.email).map((e: any) => e.email) ||
+        [],
+    }));
+
+    return NextResponse.json({ success: true, contacts });
   } catch (error: any) {
-    console.error('❌ BatchData skipTrace error:', error.message);
-    if (error.response?.data) console.error(error.response.data);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    console.error('Probate Route Error:', error.message);
+    return NextResponse.json(
+      { success: false, error: 'Internal Server Error' },
+      { status: 500 }
+    );
   }
 }

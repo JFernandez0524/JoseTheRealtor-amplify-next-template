@@ -1,14 +1,48 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
+import { skipTracePreForeClosureSingleLead } from '@/app/utils/batchData.server';
 
-export async function GET(request: NextRequest) {
-  return NextResponse.json({
-    result: 'ok',
-    status: 200,
-    message: 'This is a GET request to the API route.',
-    data: {
-      method: request.method,
-      url: request.url,
-      headers: Object.fromEntries(request.headers.entries()),
-    },
-  });
+export async function POST(request: Request) {
+  try {
+    const { address, city, state, zip } = await request.json();
+
+    if (!address || !city || !state || !zip) {
+      return NextResponse.json(
+        { success: false, error: 'Missing owner address fields' },
+        { status: 400 }
+      );
+    }
+
+    // 1. Call your Utility Function
+    const data = await skipTracePreForeClosureSingleLead({
+      propertyAddress: { street: address, city, state, zip },
+    });
+
+    const resultData = data?.result?.data?.[0];
+
+    // 2. Handle Empty Results
+    if (!resultData || !resultData.persons || resultData.persons.length === 0) {
+      return NextResponse.json({ success: true, contacts: [] });
+    }
+
+    // 3. Format Data for Frontend
+    const contacts = resultData.persons.map((person: any, index: number) => ({
+      id: `pf-${Date.now()}-${index}`,
+      firstName: person.name?.first || 'Unknown',
+      lastName: person.name?.last || '',
+      phones:
+        person.phones?.filter((p: any) => p.number).map((p: any) => p.number) ||
+        [],
+      emails:
+        person.emails?.filter((e: any) => e.email).map((e: any) => e.email) ||
+        [],
+    }));
+
+    return NextResponse.json({ success: true, contacts });
+  } catch (error: any) {
+    console.error('Pre-Foreclosure Route Error:', error.message);
+    return NextResponse.json(
+      { success: false, error: 'Internal Server Error' },
+      { status: 500 }
+    );
+  }
 }

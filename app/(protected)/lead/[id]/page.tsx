@@ -23,10 +23,16 @@ type BridgeData = {
   [key: string]: any;
 };
 
+// Extend schema type to include flexible contacts for the UI
+// I added the optional property fields here just in case you need them later
 type LeadWithDetails = Schema['PropertyLead']['type'] & {
-  contacts: Schema['Contact']['type'][];
+  contacts: any[];
   enrichments: Schema['Enrichment']['type'][];
   activities: Schema['Activity']['type'][];
+  propertyAddress?: string | null;
+  propertyCity?: string | null;
+  propertyState?: string | null;
+  propertyZip?: string | null;
   yearBuilt?: number | string | null;
   squareFeet?: number | string | null;
   bedrooms?: number | string | null;
@@ -44,7 +50,7 @@ const axiosInstance = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
-  timeout: 10000,
+  timeout: 15000, // 15 seconds for skip trace
 });
 
 const mapContainerStyle = {
@@ -67,6 +73,7 @@ const formatCurrency = (value?: number | string | null) => {
 };
 
 export default function LeadDetailPage() {
+  // Load Google Maps Script
   const { isLoaded: isMapLoaded } = useJsApiLoader({
     id: 'google-map-script',
     googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY!,
@@ -76,6 +83,7 @@ export default function LeadDetailPage() {
   const [lead, setLead] = useState<LeadWithDetails | null>(null);
   const [marketData, setMarketData] = useState<BridgeData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isSkipTracing, setIsSkipTracing] = useState(false); // 👈 New Loading State
   const [error, setError] = useState<string | null>(null);
   const params = useParams();
 
@@ -102,6 +110,84 @@ export default function LeadDetailPage() {
       setError(err.message);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // 👇 HANDLE SKIP TRACE BUTTON CLICK
+  const handleSkipTrace = async () => {
+    if (!lead) return;
+    setIsSkipTracing(true);
+
+    try {
+      let endpoint = '';
+      let payload = {};
+
+      // 1. Determine Endpoint based on Lead Type
+      if (lead.type === 'probate') {
+        endpoint = '/skiptrace-leads/probate';
+        // Probate: Target the Administrator/Executor address ONLY
+        payload = {
+          address: lead.adminAddress,
+          city: lead.adminCity,
+          state: lead.adminState,
+          zip: lead.adminZip,
+        };
+      } else {
+        // Pre-foreclosure (Default): Target the Owner address ONLY
+        endpoint = '/skiptrace-leads/preforeclosure';
+        payload = {
+          address: lead.ownerAddress,
+          city: lead.ownerCity,
+          state: lead.ownerState,
+          zip: lead.ownerZip,
+        };
+      }
+
+      console.log(`🚀 Skip Tracing via ${endpoint}`, payload);
+
+      // 2. Call the API
+      const response = await axiosInstance.post(endpoint, payload);
+
+      if (response.data.success) {
+        const newContacts = response.data.contacts;
+
+        // 3. Update Local State Instantly
+        setLead((prev) => {
+          if (!prev) return null;
+
+          // Safe check: Ensure we handle LazyLoader objects vs Arrays correctly
+          // We treat the current contacts as 'any' to avoid the strict LazyLoader type check
+          const currentContacts = (prev.contacts as any) || [];
+          const safePrevContacts = Array.isArray(currentContacts)
+            ? currentContacts
+            : [];
+
+          const updatedLead = {
+            ...prev,
+            // Force the contacts into the array structure
+            contacts: [...safePrevContacts, ...newContacts] as any,
+            enrichments: [
+              ...((prev.enrichments as any) || []),
+              {
+                id: Date.now().toString(),
+                source: `BatchData (${lead.type})`,
+                statusText: `Found ${newContacts.length} contacts`,
+                createdAt: new Date().toISOString(),
+              } as any,
+            ] as any,
+          };
+
+          // Final cast to force the state update to be accepted
+          return updatedLead as unknown as typeof prev;
+        });
+      } else {
+        alert('No contacts found.');
+      }
+    } catch (err: any) {
+      console.error(err);
+      alert('Skip trace failed: ' + (err.response?.data?.error || err.message));
+    } finally {
+      setIsSkipTracing(false);
     }
   };
 
@@ -191,7 +277,6 @@ export default function LeadDetailPage() {
                 <p className='text-base'>{lead.baths || 'N/A'}</p>
               </div>
             </div>
-
             {lead.type === 'probate' && (
               <>
                 <h3 className='text-lg font-semibold mt-6 mb-2'>
@@ -217,26 +302,92 @@ export default function LeadDetailPage() {
             )}
           </div>
 
-          {/* Contacts Card */}
-          <div className='bg-white shadow border rounded-lg p-6'>
-            <h2 className='text-xl font-semibold mb-4'>Contacts</h2>
-            {/* 🛑 FIX: Use optional chaining (?.) on contacts.map to prevent crashes */}
+          {/* Contacts Card with Skip Trace Button */}
+          <div className='bg-white shadow border rounded-lg p-6 relative'>
+            <div className='flex justify-between items-center mb-4'>
+              <h2 className='text-xl font-semibold'>Contacts</h2>
+              {/* 👇 SKIP TRACE BUTTON */}
+              <button
+                onClick={handleSkipTrace}
+                disabled={isSkipTracing}
+                className='text-sm bg-blue-600 text-white px-3 py-1.5 rounded hover:bg-blue-700 disabled:bg-blue-300 transition-colors flex items-center gap-2'
+              >
+                {isSkipTracing && <Loader size='small' variation='linear' />}
+                {isSkipTracing ? 'Tracing...' : 'Skip Trace Owner'}
+              </button>
+            </div>
+
             {!lead.contacts || lead.contacts.length === 0 ? (
-              <p className='text-gray-500'>No skip-trace contacts found.</p>
+              <div className='text-center py-6 bg-gray-50 rounded border border-dashed'>
+                <p className='text-gray-500 mb-2'>No contact info available.</p>
+                <p className='text-xs text-gray-400'>
+                  Click "Skip Trace Owner" to find phone numbers.
+                </p>
+              </div>
             ) : (
-              lead.contacts?.map((contact) => (
-                <div key={contact.id} className='border-b py-2 last:border-0'>
-                  <p className='font-medium'>
-                    {contact.firstName} {contact.lastName}
-                  </p>
-                  <p className='text-sm text-gray-600'>
-                    Phones: {contact.phones?.length || 0}
-                  </p>
-                  <p className='text-sm text-gray-600'>
-                    Emails: {contact.emails?.length || 0}
-                  </p>
-                </div>
-              ))
+              <div className='space-y-4'>
+                {lead.contacts.map((contact, idx) => (
+                  <div
+                    key={contact.id || idx}
+                    className='border-b pb-4 last:border-0 last:pb-0'
+                  >
+                    <div className='flex items-baseline justify-between'>
+                      <p className='font-bold text-lg text-gray-800'>
+                        {contact.firstName} {contact.lastName}
+                      </p>
+                      <span className='text-xs bg-green-100 text-green-800 px-2 py-0.5 rounded-full'>
+                        Match Found
+                      </span>
+                    </div>
+
+                    {/* Phone Numbers */}
+                    <div className='mt-2'>
+                      <p className='text-xs font-semibold text-gray-500 uppercase'>
+                        Phone Numbers
+                      </p>
+                      {contact.phones && contact.phones.length > 0 ? (
+                        <div className='flex flex-wrap gap-2 mt-1'>
+                          {contact.phones.map((phone: string, pIdx: number) => (
+                            <span
+                              key={pIdx}
+                              className='text-sm bg-gray-100 px-2 py-1 rounded text-gray-700 font-mono'
+                            >
+                              {phone}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className='text-sm text-gray-400 italic'>
+                          None found
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Emails */}
+                    <div className='mt-2'>
+                      <p className='text-xs font-semibold text-gray-500 uppercase'>
+                        Emails
+                      </p>
+                      {contact.emails && contact.emails.length > 0 ? (
+                        <div className='flex flex-wrap gap-2 mt-1'>
+                          {contact.emails.map((email: string, eIdx: number) => (
+                            <span
+                              key={eIdx}
+                              className='text-sm text-blue-600 underline'
+                            >
+                              {email}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className='text-sm text-gray-400 italic'>
+                          None found
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
 
