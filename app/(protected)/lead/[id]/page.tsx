@@ -91,16 +91,22 @@ export default function LeadDetailPage() {
     }
   };
 
-  // 👇 HANDLE SKIP TRACE BUTTON CLICK
+  // 👇 HANDLE SKIP TRACE (With Status Check & Update)
   const handleSkipTrace = async () => {
     if (!lead) return;
+
+    // 🛑 1. PREVENT DUPLICATE SKIP TRACE
+    if (lead.skipTraceStatus === 'COMPLETED') {
+      alert('This lead has already been skip traced.');
+      return;
+    }
+
     setIsSkipTracing(true);
 
     try {
       let endpoint = '';
       let payload = {};
 
-      // 1. Determine Endpoint based on Lead Type
       if (lead.type === 'probate') {
         endpoint = '/skiptrace-leads/probate';
         payload = {
@@ -125,36 +131,44 @@ export default function LeadDetailPage() {
 
       console.log(`🚀 Requesting Skip Trace via ${endpoint}`, payload);
 
-      // 2. Call the API
+      // 2. Call the API (Mock or Prod)
       const response = await axiosInstance.post(endpoint, payload);
       console.log('🔍 API RESPONSE:', response.data);
 
       if (response.data.success) {
         const newContacts = response.data.contacts;
 
-        // 3. Save to Database (Amplify Data Client)
+        // 3. Save Contacts & Update Lead Status in Database
         try {
+          // A. Save Contacts
           const savePromises = newContacts.map((contact: any) =>
             client.models.Contact.create({
               leadId: lead.id,
               firstName: contact.firstName,
               lastName: contact.lastName,
               middleName: contact.middleName,
-
-              // Save detailed objects (JSON Arrays)
               phones: contact.phones,
               emails: contact.emails,
               addresses: contact.addresses,
-
               litigator: contact.litigator,
               deceased: contact.deceased,
             })
           );
 
-          await Promise.all(savePromises);
-          console.log('💾 Contacts successfully saved to Database');
+          // B. Update Lead Status to COMPLETED
+          const updateLeadStatus = client.models.PropertyLead.update({
+            id: lead.id,
+            skipTraceStatus: 'COMPLETED',
+          });
+
+          // Run both operations
+          await Promise.all([...savePromises, updateLeadStatus]);
+
+          console.log(
+            '💾 Database successfully updated (Contacts Saved + Status Completed)'
+          );
         } catch (dbError) {
-          console.error('❌ Failed to save contacts to DB:', dbError);
+          console.error('❌ Failed to save to DB:', dbError);
           alert(
             'Contacts found but failed to save to database. Check console.'
           );
@@ -164,7 +178,6 @@ export default function LeadDetailPage() {
         setLead((prev) => {
           if (!prev) return null;
 
-          // Fix LazyLoader vs Array conflict
           const currentContacts = (prev.contacts as any) || [];
           const safePrevContacts = Array.isArray(currentContacts)
             ? currentContacts
@@ -172,6 +185,7 @@ export default function LeadDetailPage() {
 
           const updatedLead = {
             ...prev,
+            skipTraceStatus: 'COMPLETED', // 👈 Update Status in UI immediately
             contacts: [...safePrevContacts, ...newContacts] as any,
             enrichments: [
               ...((prev.enrichments as any) || []),
@@ -196,7 +210,6 @@ export default function LeadDetailPage() {
       setIsSkipTracing(false);
     }
   };
-
   // --- RENDER ---
   if (isLoading) {
     return (
