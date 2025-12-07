@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { client } from '../../../app/utils/aws/data/frontEndClient';
-import { getCurrentUser } from 'aws-amplify/auth';
+import { getFrontEndUser } from '@/app/utils/aws/auth/amplifyFrontEndUser';
 import { type Schema } from '@/amplify/data/resource';
 
 // Define the shape of a Lead
@@ -28,11 +28,18 @@ export default function DashboardPage() {
     setError(null);
 
     try {
-      const user = await getCurrentUser();
+      const user = await getFrontEndUser();
+      if (!user) {
+        console.log('No user found, redirecting to login...');
+        router.push('/login');
+        return;
+      }
       setCurrentUserId(user.userId);
       console.log('🔍 Current User ID:', user.userId);
 
-      const { data, errors } = await client.models.PropertyLead.list();
+      const { data, errors } = await client.models.PropertyLead.list({
+        authMode: 'userPool',
+      });
 
       if (errors && errors.length > 0) {
         console.error('❌ GraphQL Errors:', errors);

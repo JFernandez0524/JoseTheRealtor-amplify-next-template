@@ -5,7 +5,6 @@ import {
   fetchUserAttributes,
   fetchAuthSession, // 1. Import the function
   AuthUser,
-  UserAttributeKey,
   AuthSession, // 2. Import the return type
 } from 'aws-amplify/auth';
 
