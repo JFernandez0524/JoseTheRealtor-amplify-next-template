@@ -31,10 +31,6 @@ backend.uploadCsvHandler.addEnvironment(
   'AMPLIFY_DATA_LEAD_TABLE_NAME',
   leadTable.tableName
 );
-backend.uploadCsvHandler.addEnvironment(
-  'GOOGLE_MAPS_API_KEY',
-  process.env.GOOGLE_MAPS_API_KEY || ''
-);
 
 // 3. Permissions
 // S3: Added 's3:DeleteObject'

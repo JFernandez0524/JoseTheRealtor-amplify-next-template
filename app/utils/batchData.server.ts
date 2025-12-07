@@ -1,6 +1,8 @@
 import axios from 'axios';
 
-// Define the shape of the request expected by BatchData
+// --- Types ---
+
+// 1. Request Type
 export type LeadToSkip = {
   propertyAddress: {
     street: string;
@@ -14,46 +16,149 @@ export type LeadToSkip = {
   };
 };
 
+// 2. Parsed Output Type (Matches your Schema)
+export type FormattedContact = {
+  firstName?: string;
+  lastName?: string;
+  middleName?: string;
+  phones: Array<{
+    number: string;
+    type: string;
+    carrier?: string;
+    dnc?: boolean;
+    tcpa?: boolean;
+  }>;
+  emails: Array<{ email: string; tested?: boolean }>;
+  addresses: Array<{
+    fullAddress: string;
+    street?: string;
+    city?: string;
+    state?: string;
+    zip?: string;
+    type: string;
+  }>;
+  litigator?: boolean;
+  deceased?: boolean;
+};
+
 /**
  * Create a shared Axios instance for BatchData API
  */
 const batchClient = axios.create({
-  // 🛑 UPDATED: Using the specific Mock Server ID you provided
+  // Using the Mock Server ID you provided
   baseURL: 'https://stoplight.io/mocks/batchdata/batchdata/1354513859',
   headers: {
     'Content-Type': 'application/json',
     Accept: 'application/json',
-    // Mock Token (can be anything for Stoplight, or your env var)
     Authorization: `Bearer ${process.env.BATCH_DATA_MOCK_TOKEN || 'mock-token'}`,
   },
-  timeout: 15000, // 15 seconds
+  timeout: 15000, // 15s timeout
 });
 
 /**
+ * ✅ HELPER: Parse the deep BatchData V3 response into clean contacts
+ */
+function parseBatchDataResponse(apiResponse: any): FormattedContact[] {
+  // 1. Safely access the first result (since we send 1 request at a time)
+  const resultData = apiResponse.result?.data?.[0];
+
+  if (!resultData || !resultData.persons) {
+    return [];
+  }
+
+  // 2. Map 'persons' to our clean format
+  return resultData.persons.map((person: any) => ({
+    firstName: person.name?.first,
+    lastName: person.name?.last,
+    middleName: person.name?.middle,
+
+    // Map Phones (Preserve metadata like Carrier/Type)
+    phones:
+      person.phones?.map((p: any) => ({
+        number: p.number,
+        type: p.type,
+        carrier: p.carrier,
+        dnc: p.dnc,
+        tcpa: p.tcpa,
+      })) || [],
+
+    // Map Emails
+    emails:
+      person.emails?.map((e: any) => ({
+        email: e.email,
+        tested: e.tested,
+      })) || [],
+
+    // Map Addresses (Capture all of them)
+    addresses:
+      person.addresses?.map((addr: any) => ({
+        fullAddress: addr.fullAddress,
+        street: addr.street,
+        city: addr.city,
+        state: addr.state,
+        zip: addr.zip,
+        type: addr.propertyMailingAddress ? 'Mailing' : 'Other',
+      })) || [],
+
+    // Flags
+    litigator: person.litigator || false,
+    deceased: person.deceased || false,
+  }));
+}
+
+/**
  * ✅ Shared Skip Trace Logic
- * Handles calling the /property/skip-trace endpoint for any lead type
+ * Handles calling the /property/skip-trace endpoint
  */
 async function skipTraceProperty(leadToSkip: LeadToSkip) {
   try {
-    // The API expects an array of requests
     const payload = {
       requests: [leadToSkip],
+      // 👇 IMPORTANT: Filter DNC/TCPA numbers here
+      options: {
+        includeTCPABlacklistedPhones: false,
+        prioritizeMobilePhones: true,
+        matchHighQualityOnly: true,
+      },
     };
 
-    console.log('🔍 BatchData Mock Request:', JSON.stringify(payload, null, 2));
+    console.log('🔍 BatchData Request:', JSON.stringify(payload, null, 2));
 
-    // Calls: https://stoplight.io/mocks/batchdata/batchdata/1354513859/property/skip-trace
     const { data } = await batchClient.post('/property/skip-trace', payload);
-    return data;
+
+    // 👇 Parse and return clean data
+    const contacts = parseBatchDataResponse(data);
+
+    return {
+      success: true,
+      contacts: contacts,
+      raw: data, // Keep raw data available just in case debugging is needed
+    };
   } catch (error: any) {
     console.error('❌ BatchData skipTrace error:', error.message);
     if (error.response?.data) console.error(error.response.data);
-    return null;
+    return { success: false, error: error.message };
   }
 }
 
 /**
- * ✅ Verify Address
+ * ✅ Wrapper for Pre-foreclosure (Targets Owner Address)
+ */
+export async function skipTracePreForeClosureSingleLead(
+  leadToSkip: LeadToSkip
+) {
+  return skipTraceProperty(leadToSkip);
+}
+
+/**
+ * ✅ Wrapper for Probate (Targets Executor/Admin Address)
+ */
+export async function skipTraceProbateSingleLead(leadToSkip: LeadToSkip) {
+  return skipTraceProperty(leadToSkip);
+}
+
+/**
+ * ✅ Verify Address (kept for reference)
  */
 export async function verifyAddress(address: {
   address1: string;
@@ -68,23 +173,6 @@ export async function verifyAddress(address: {
     console.error('❌ BatchData verifyAddress error:', error.message);
     return null;
   }
-}
-
-/**
- * ✅ Wrapper for Pre-foreclosure (Targets Owner Address)
- * REFACTORED: Now uses skip-trace to get contacts, not just property details
- */
-export async function skipTracePreForeClosureSingleLead(
-  leadToSkip: LeadToSkip
-) {
-  return skipTraceProperty(leadToSkip);
-}
-
-/**
- * ✅ Wrapper for Probate (Targets Executor/Admin Address)
- */
-export async function skipTraceProbateSingleLead(leadToSkip: LeadToSkip) {
-  return skipTraceProperty(leadToSkip);
 }
 
 /**

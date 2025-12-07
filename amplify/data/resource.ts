@@ -45,11 +45,23 @@ const schema = a.schema({
       owner: a.string().authorization((allow) => [allow.owner().to(['read'])]),
       leadId: a.id(),
       lead: a.belongsTo('PropertyLead', 'leadId'),
+
+      // Person Details
       firstName: a.string(),
       lastName: a.string(),
-      emails: a.json().array(),
+      middleName: a.string(), // Added
+
+      // Store full objects from API to keep metadata (rank, type, carrier)
       phones: a.json().array(),
-      mailingAddress: a.json().required(),
+      emails: a.json().array(),
+
+      // Changed from single required address to optional array of addresses
+      addresses: a.json().array(),
+
+      // Flags
+      litigator: a.boolean(),
+      deceased: a.boolean(),
+
       createdAt: a.datetime(),
     })
     .authorization((allow) => [allow.owner()]),
