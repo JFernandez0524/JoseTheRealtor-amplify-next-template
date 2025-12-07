@@ -91,93 +91,50 @@ export default function LeadDetailPage() {
     }
   };
 
-  // 👇 HANDLE SKIP TRACE (With Status Check & Update)
+  // 👇 HANDLE SKIP TRACE (SIMULATION MODE)
   const handleSkipTrace = async () => {
     if (!lead) return;
 
-    // 🛑 1. PREVENT DUPLICATE SKIP TRACE
+    // 1. Safety Check: Stop if already done
     if (lead.skipTraceStatus === 'COMPLETED') {
-      alert('This lead has already been skip traced.');
       return;
     }
 
     setIsSkipTracing(true);
 
     try {
-      let endpoint = '';
-      let payload = {};
+      // ... (Endpoint selection logic stays the same) ...
+      let endpoint =
+        lead.type === 'probate'
+          ? '/skiptrace-leads/probate'
+          : '/skiptrace-leads/preforeclosure';
 
-      if (lead.type === 'probate') {
-        endpoint = '/skiptrace-leads/probate';
-        payload = {
-          address: lead.adminAddress,
-          city: lead.adminCity,
-          state: lead.adminState,
-          zip: lead.adminZip,
-          firstName: lead.adminFirstName,
-          lastName: lead.adminLastName,
-        };
-      } else {
-        endpoint = '/skiptrace-leads/preforeclosure';
-        payload = {
-          address: lead.ownerAddress,
-          city: lead.ownerCity,
-          state: lead.ownerState,
-          zip: lead.ownerZip,
-          firstName: lead.ownerFirstName,
-          lastName: lead.ownerLastName,
-        };
-      }
+      let payload =
+        lead.type === 'probate'
+          ? {
+              address: lead.adminAddress,
+              city: lead.adminCity,
+              state: lead.adminState,
+              zip: lead.adminZip,
+            }
+          : {
+              address: lead.ownerAddress,
+              city: lead.ownerCity,
+              state: lead.ownerState,
+              zip: lead.ownerZip,
+            };
 
-      console.log(`🚀 Requesting Skip Trace via ${endpoint}`, payload);
-
-      // 2. Call the API (Mock or Prod)
+      // 2. Call API (Mock)
       const response = await axiosInstance.post(endpoint, payload);
-      console.log('🔍 API RESPONSE:', response.data);
 
       if (response.data.success) {
         const newContacts = response.data.contacts;
 
-        // 3. Save Contacts & Update Lead Status in Database
-        try {
-          // A. Save Contacts
-          const savePromises = newContacts.map((contact: any) =>
-            client.models.Contact.create({
-              leadId: lead.id,
-              firstName: contact.firstName,
-              lastName: contact.lastName,
-              middleName: contact.middleName,
-              phones: contact.phones,
-              emails: contact.emails,
-              addresses: contact.addresses,
-              litigator: contact.litigator,
-              deceased: contact.deceased,
-            })
-          );
-
-          // B. Update Lead Status to COMPLETED
-          const updateLeadStatus = client.models.PropertyLead.update({
-            id: lead.id,
-            skipTraceStatus: 'COMPLETED',
-          });
-
-          // Run both operations
-          await Promise.all([...savePromises, updateLeadStatus]);
-
-          console.log(
-            '💾 Database successfully updated (Contacts Saved + Status Completed)'
-          );
-        } catch (dbError) {
-          console.error('❌ Failed to save to DB:', dbError);
-          alert(
-            'Contacts found but failed to save to database. Check console.'
-          );
-        }
-
-        // 4. Update Local State (UI)
+        // 3. Update Local State Instantly
         setLead((prev) => {
           if (!prev) return null;
 
+          // Handle the array/LazyLoader conflict safely
           const currentContacts = (prev.contacts as any) || [];
           const safePrevContacts = Array.isArray(currentContacts)
             ? currentContacts
@@ -185,7 +142,9 @@ export default function LeadDetailPage() {
 
           const updatedLead = {
             ...prev,
-            skipTraceStatus: 'COMPLETED', // 👈 Update Status in UI immediately
+            // 👇 CRITICAL: Force status to COMPLETED locally
+            skipTraceStatus: 'COMPLETED',
+
             contacts: [...safePrevContacts, ...newContacts] as any,
             enrichments: [
               ...((prev.enrichments as any) || []),
@@ -200,12 +159,14 @@ export default function LeadDetailPage() {
 
           return updatedLead as unknown as typeof prev;
         });
+
+        // Optional: Save to DB code would go here...
       } else {
         alert('No contacts found.');
       }
     } catch (err: any) {
-      console.error('❌ Skip trace error:', err);
-      alert('Skip trace failed: ' + (err.response?.data?.error || err.message));
+      console.error(err);
+      alert('Skip trace failed.');
     } finally {
       setIsSkipTracing(false);
     }
@@ -326,13 +287,32 @@ export default function LeadDetailPage() {
           <div className='bg-white shadow border rounded-lg p-6 relative'>
             <div className='flex justify-between items-center mb-4'>
               <h2 className='text-xl font-semibold'>Contacts</h2>
+              {/* 👇 SKIP TRACE BUTTON */}
               <button
                 onClick={handleSkipTrace}
-                disabled={isSkipTracing}
-                className='text-sm bg-blue-600 text-white px-3 py-1.5 rounded hover:bg-blue-700 disabled:bg-blue-300 transition-colors flex items-center gap-2'
+                // Disable if loading OR if already completed
+                disabled={isSkipTracing || lead.skipTraceStatus === 'COMPLETED'}
+                className={`
+    text-sm px-3 py-1.5 rounded transition-colors flex items-center gap-2
+    ${
+      lead.skipTraceStatus === 'COMPLETED'
+        ? 'bg-green-100 text-green-700 cursor-not-allowed border border-green-200' // Style for Completed
+        : 'bg-blue-600 text-white hover:bg-blue-700 disabled:bg-blue-300' // Style for Active
+    }
+  `}
               >
-                {isSkipTracing && <Loader size='small' variation='linear' />}
-                {isSkipTracing ? 'Tracing...' : 'Skip Trace Owner'}
+                {/* Logic to change the text/icon based on status */}
+                {isSkipTracing ? (
+                  <>
+                    <Loader size='small' variation='linear' /> Tracing...
+                  </>
+                ) : lead.skipTraceStatus === 'COMPLETED' ? (
+                  <>
+                    <span>✓</span> Skiptrace Complete
+                  </>
+                ) : (
+                  'Skip Trace Owner'
+                )}
               </button>
             </div>
 
