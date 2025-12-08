@@ -40,6 +40,12 @@ export const handler: S3Handler = async (event) => {
 
       console.log(`📂 Processing file: ${decodedKey}`);
 
+      // Debugging the API Key
+      const key = process.env.GOOGLE_MAPS_API_KEY || '';
+      console.log(`🔑 Key Length: ${key.length}`);
+      console.log(`🔑 Key First 4: ${key.substring(0, 4)}`);
+      console.log(`🔑 Key Last 4: ${key.substring(key.length - 4)}`);
+
       // 1. Get Metadata
       const headObject = await s3.send(
         new HeadObjectCommand({
@@ -105,7 +111,7 @@ export const handler: S3Handler = async (event) => {
         const existingCheck = await ddbDocClient.send(
           new QueryCommand({
             TableName: TABLE_NAME,
-            IndexName: 'leadsByOwnerAddress', // Using our new index
+            IndexName: 'propertyLeadsByOwnerAndOwnerAddress', // Using our new index
             KeyConditionExpression: '#owner = :owner AND #addr = :addr',
             ExpressionAttributeNames: {
               '#owner': 'owner',

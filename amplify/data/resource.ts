@@ -37,7 +37,7 @@ const schema = a.schema({
     .secondaryIndexes((index) => [
       index('owner')
         .sortKeys(['ownerAddress'])
-        .queryField('leadsByOwnerAddress'),
+        .queryField('propertyLeadsByOwnerAndOwnerAddress'),
     ]),
 
   Contact: a
