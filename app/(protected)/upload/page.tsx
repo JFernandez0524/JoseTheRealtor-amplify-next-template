@@ -3,10 +3,14 @@
 import { useState, useRef, useEffect } from 'react';
 import { useJsApiLoader } from '@react-google-maps/api';
 import { useRouter } from 'next/navigation';
-import { type Schema } from '@/amplify/data/resource';
 import { uploadData } from 'aws-amplify/storage';
 import { getCurrentUser } from 'aws-amplify/auth';
 
+// 🟢 Use the Amplify Data Client
+import { client } from '@/app/utils/aws/data/frontEndClient';
+import { type Schema } from '@/amplify/data/resource';
+
+// Define types for Web Components
 declare global {
   namespace JSX {
     interface IntrinsicElements {
@@ -18,8 +22,13 @@ declare global {
   }
 }
 
-type LeadState = Partial<Schema['PropertyLead']['type']>;
 const libraries: 'places'[] = ['places'];
+
+// 🟢 Extended State to hold Geometry (Lat/Lng)
+type ExtendedLeadState = Partial<Schema['PropertyLead']['type']> & {
+  propLat?: number;
+  propLng?: number;
+};
 
 const PROBATE_TEMPLATE = [
   'ownerFirstName,ownerLastName,ownerAddress,ownerCity,ownerState,ownerZip,adminFirstName,adminLastName,adminAddress,adminCity,adminState,adminZip',
@@ -38,7 +47,7 @@ export default function UploadLeadsPage() {
   const [mode, setMode] = useState<'csv' | 'manual'>('manual');
   const [file, setFile] = useState<File | null>(null);
 
-  const [lead, setLead] = useState<LeadState>({
+  const [lead, setLead] = useState<ExtendedLeadState>({
     type: '',
     ownerFirstName: '',
     ownerLastName: '',
@@ -61,6 +70,7 @@ export default function UploadLeadsPage() {
   const ownerRef = useRef<any>(null);
   const adminRef = useRef<any>(null);
 
+  // Helper to parse Google Place components
   const parseGoogleAddress = (place: google.maps.places.PlaceResult) => {
     const components: { [key: string]: string } = {};
     place.address_components?.forEach((comp) => {
@@ -70,7 +80,11 @@ export default function UploadLeadsPage() {
     return {
       street:
         `${components.street_number || ''} ${components.route || ''}`.trim(),
-      city: components.locality || components.administrative_area_level_2 || '',
+      city:
+        components.locality ||
+        components.sublocality ||
+        components.administrative_area_level_2 ||
+        '',
       state: components.administrative_area_level_1 || '',
       zip: components.postal_code || '',
     };
@@ -82,6 +96,7 @@ export default function UploadLeadsPage() {
     const ownerEl = ownerRef.current;
     const adminEl = adminRef.current;
 
+    // 🟢 Handler for Property Address (Captures Lat/Lng)
     const handleOwnerSelect = (e: any) => {
       const place = e.detail.place;
       if (place && place.address_components) {
@@ -92,10 +107,14 @@ export default function UploadLeadsPage() {
           ownerCity: parsed.city,
           ownerState: parsed.state,
           ownerZip: parsed.zip,
+          // Capture Geometry for Map
+          propLat: place.geometry?.location?.lat(),
+          propLng: place.geometry?.location?.lng(),
         }));
       }
     };
 
+    // 🟢 Handler for Admin Address
     const handleAdminSelect = (e: any) => {
       const place = e.detail.place;
       if (place && place.address_components) {
@@ -134,13 +153,151 @@ export default function UploadLeadsPage() {
     if (e.target.files?.length) setFile(e.target.files[0]);
   };
 
-  const downloadTemplate = () => {
-    if (!lead.type) {
-      alert(
-        'Please select a Lead Type first to download the correct template.'
-      );
+  // --- CSV UPLOAD LOGIC (Unchanged - triggers Lambda) ---
+  const handleCsvSubmit = async () => {
+    if (!file || !lead.type) {
+      setMessage('❌ Please select a file and lead type.');
+      setLoading(false);
       return;
     }
+
+    const user = await getCurrentUser();
+
+    await uploadData({
+      path: `leadFiles/${user.userId}/${file.name}`,
+      data: file,
+      options: {
+        metadata: {
+          leadtype: lead.type!,
+          owner_sub: user.userId,
+        },
+      },
+    }).result;
+
+    setMessage('✅ File uploaded! Processing started in the background.');
+    setFile(null);
+    setTimeout(() => router.push('/dashboard'), 2000);
+  };
+
+  // --- 🟢 NEW: MANUAL SUBMIT LOGIC (Direct to DynamoDB) ---
+  const handleManualSubmit = async () => {
+    const { type, ownerAddress, ownerCity, ownerState, ownerZip } = lead;
+
+    // 1. Basic Validation
+    if (!type || !ownerAddress || !ownerCity || !ownerState || !ownerZip) {
+      setLoading(false);
+      return alert('Missing required property fields');
+    }
+
+    // 2. Determine Mailing Address Logic
+    // Initialize with Property Address (default for Pre-Foreclosure)
+    // We use `|| ''` to ensure they are strings, but our Schema allows nulls too.
+    let finalMailingAddr: string | null | undefined = lead.ownerAddress;
+    let finalMailingCity: string | null | undefined = lead.ownerCity;
+    let finalMailingState: string | null | undefined = lead.ownerState;
+    let finalMailingZip: string | null | undefined = lead.ownerZip;
+    let isAbsentee = false;
+
+    // If Probate, Override with Admin Address
+    if (type === 'probate') {
+      if (!lead.adminAddress) {
+        setLoading(false);
+        return alert('Probate leads require an Admin Address.');
+      }
+      finalMailingAddr = lead.adminAddress;
+      finalMailingCity = lead.adminCity;
+      finalMailingState = lead.adminState;
+      finalMailingZip = lead.adminZip;
+      isAbsentee = true; // Probate is effectively absentee
+    }
+
+    // 3. Save directly to Data Store
+    // We use `lead.ownerFirstName || ''` to ensure no undefined values break the create call if strict
+    const { errors, data: newLead } = await client.models.PropertyLead.create({
+      type: type.toUpperCase(), // 'PROBATE' or 'PREFORECLOSURE'
+
+      // Owner Info
+      ownerFirstName: lead.ownerFirstName || '',
+      ownerLastName: lead.ownerLastName || '',
+      ownerAddress: lead.ownerAddress || '',
+      ownerCity: lead.ownerCity || '',
+      ownerState: lead.ownerState || '',
+      ownerZip: lead.ownerZip || '',
+
+      // Admin Info
+      adminFirstName: lead.adminFirstName || '',
+      adminLastName: lead.adminLastName || '',
+      adminAddress: lead.adminAddress || '',
+      adminCity: lead.adminCity || '',
+      adminState: lead.adminState || '',
+      adminZip: lead.adminZip || '',
+
+      // Mailing Info (Calculated above)
+      // Ensure we pass null if undefined to satisfy strict types if needed, or just pass the value
+      mailingAddress: finalMailingAddr || null,
+      mailingCity: finalMailingCity || null,
+      mailingState: finalMailingState || null,
+      mailingZip: finalMailingZip || null,
+      isAbsenteeOwner: isAbsentee,
+
+      // System Fields
+      validationStatus: 'VALID', // It came from Google Autocomplete, so it is valid
+      skipTraceStatus: 'PENDING',
+      latitude: lead.propLat || null,
+      longitude: lead.propLng || null,
+
+      phones: [],
+      emails: [],
+    });
+
+    if (errors) {
+      throw new Error(errors[0].message);
+    }
+
+    setMessage(`✅ Lead added successfully!`);
+
+    // Clear form
+    setLead({
+      type: '',
+      ownerAddress: '',
+      ownerCity: '',
+      ownerState: '',
+      ownerZip: '',
+      adminAddress: '',
+      adminCity: '',
+      adminState: '',
+      adminZip: '',
+      ownerFirstName: '',
+      ownerLastName: '',
+      adminFirstName: '',
+      adminLastName: '',
+    });
+
+    if (ownerRef.current) ownerRef.current.value = '';
+    if (adminRef.current) adminRef.current.value = '';
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setMessage('');
+
+    try {
+      if (mode === 'csv') {
+        await handleCsvSubmit();
+      } else {
+        await handleManualSubmit();
+      }
+    } catch (err: any) {
+      console.error(err);
+      setMessage(`❌ Error: ${err.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const downloadTemplate = () => {
+    if (!lead.type) return alert('Please select a Lead Type first.');
     const csvContent =
       lead.type === 'probate'
         ? PROBATE_TEMPLATE[0]
@@ -152,85 +309,6 @@ export default function UploadLeadsPage() {
     a.download = `${lead.type}-lead-template.csv`;
     a.click();
     window.URL.revokeObjectURL(url);
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    setMessage('');
-
-    try {
-      if (mode === 'csv') {
-        if (!file) {
-          setLoading(false);
-          return setMessage('❌ Please select a CSV file.');
-        }
-        if (!lead.type) {
-          setLoading(false);
-          return setMessage('❌ Please select a Lead Type.');
-        }
-
-        const user = await getCurrentUser();
-
-        const result = await uploadData({
-          path: `leadFiles/${user.userId}/${file.name}`,
-          data: file,
-          options: {
-            metadata: {
-              leadtype: lead.type!,
-              owner_sub: user.userId,
-            },
-          },
-        }).result;
-
-        console.log('S3 Upload Success:', result);
-        setMessage('✅ File uploaded! Processing started in the background.');
-        setFile(null);
-        setTimeout(() => router.push('/dashboard'), 2000);
-      } else {
-        const { type, ownerAddress, ownerCity, ownerState, ownerZip } = lead;
-        if (!type || !ownerAddress || !ownerCity || !ownerState || !ownerZip) {
-          setLoading(false);
-          return alert('Missing required fields');
-        }
-
-        const res = await fetch('/api/v1/upload-csv', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(lead),
-        });
-
-        if (!res.ok) {
-          const errorData = await res.json();
-          throw new Error(errorData.error || 'Upload failed');
-        }
-
-        const data = await res.json();
-        setMessage(`✅ ${data.message}`);
-        setLead({
-          type: '',
-          ownerAddress: '',
-          ownerFirstName: '',
-          ownerLastName: '',
-          ownerCity: '',
-          ownerState: '',
-          ownerZip: '',
-          adminFirstName: '',
-          adminLastName: '',
-          adminAddress: '',
-          adminCity: '',
-          adminState: '',
-          adminZip: '',
-        });
-        if (ownerRef.current) ownerRef.current.value = '';
-        if (adminRef.current) adminRef.current.value = '';
-      }
-    } catch (err: any) {
-      console.error(err);
-      setMessage(`❌ Error: ${err.message}`);
-    } finally {
-      setLoading(false);
-    }
   };
 
   if (!isLoaded) {
@@ -283,7 +361,7 @@ export default function UploadLeadsPage() {
             <button
               onClick={downloadTemplate}
               type='button'
-              className='text-sm text-blue-600 hover:text-blue-800 font-medium flex items-center'
+              className='text-sm text-blue-600 hover:text-blue-800 font-medium'
             >
               Download Template
             </button>
@@ -340,26 +418,26 @@ export default function UploadLeadsPage() {
           <div className='grid grid-cols-3 gap-2'>
             <input
               name='ownerCity'
-              placeholder='Owner City *'
+              placeholder='City *'
               value={lead.ownerCity || ''}
               onChange={handleChange}
-              className='border border-gray-300 rounded-md p-2'
+              className='border p-2'
               required
             />
             <input
               name='ownerState'
-              placeholder='Owner State *'
+              placeholder='State *'
               value={lead.ownerState || ''}
               onChange={handleChange}
-              className='border border-gray-300 rounded-md p-2'
+              className='border p-2'
               required
             />
             <input
               name='ownerZip'
-              placeholder='Owner ZIP *'
+              placeholder='ZIP *'
               value={lead.ownerZip || ''}
               onChange={handleChange}
-              className='border border-gray-300 rounded-md p-2'
+              className='border p-2'
               required
             />
           </div>
@@ -367,43 +445,43 @@ export default function UploadLeadsPage() {
           {lead.type === 'probate' && (
             <>
               <h2 className='text-gray-700 font-medium mt-4'>
-                Owner Information
+                Owner Info (Deceased)
               </h2>
               <div className='grid grid-cols-2 gap-2'>
                 <input
                   name='ownerFirstName'
-                  placeholder='Owner First Name'
+                  placeholder='First Name'
                   value={lead.ownerFirstName || ''}
                   onChange={handleChange}
-                  className='border border-gray-300 rounded-md p-2'
+                  className='border p-2'
                 />
                 <input
                   name='ownerLastName'
-                  placeholder='Owner Last Name'
+                  placeholder='Last Name'
                   value={lead.ownerLastName || ''}
                   onChange={handleChange}
-                  className='border border-gray-300 rounded-md p-2'
+                  className='border p-2'
                 />
               </div>
-              <h2 className='text-gray-700 font-medium mt-4'>
-                Admin Information
-              </h2>
+
+              <h2 className='text-gray-700 font-medium mt-4'>Admin Info</h2>
               <div className='grid grid-cols-2 gap-2'>
                 <input
                   name='adminFirstName'
                   placeholder='Admin First Name'
                   value={lead.adminFirstName || ''}
                   onChange={handleChange}
-                  className='border border-gray-300 rounded-md p-2'
+                  className='border p-2'
                 />
                 <input
                   name='adminLastName'
                   placeholder='Admin Last Name'
                   value={lead.adminLastName || ''}
                   onChange={handleChange}
-                  className='border border-gray-300 rounded-md p-2'
+                  className='border p-2'
                 />
               </div>
+
               <h2 className='text-gray-700 font-medium mt-4'>
                 Admin Mailing Address
               </h2>
@@ -414,7 +492,7 @@ export default function UploadLeadsPage() {
                     name='adminAddress'
                     placeholder='Mailing Address'
                     onChange={handleChange}
-                    className='border border-gray-300 rounded-md p-2 w-full'
+                    className='border p-2 w-full'
                   />
                 </gmp-place-autocomplete>
               </div>
@@ -424,21 +502,21 @@ export default function UploadLeadsPage() {
                   placeholder='City'
                   value={lead.adminCity || ''}
                   onChange={handleChange}
-                  className='border border-gray-300 rounded-md p-2'
+                  className='border p-2'
                 />
                 <input
                   name='adminState'
                   placeholder='State'
                   value={lead.adminState || ''}
                   onChange={handleChange}
-                  className='border border-gray-300 rounded-md p-2'
+                  className='border p-2'
                 />
                 <input
                   name='adminZip'
                   placeholder='ZIP'
                   value={lead.adminZip || ''}
                   onChange={handleChange}
-                  className='border border-gray-300 rounded-md p-2'
+                  className='border p-2'
                 />
               </div>
             </>
@@ -452,17 +530,17 @@ export default function UploadLeadsPage() {
               <div className='grid grid-cols-2 gap-2'>
                 <input
                   name='ownerFirstName'
-                  placeholder='Borrower First Name'
+                  placeholder='First Name'
                   value={lead.ownerFirstName || ''}
                   onChange={handleChange}
-                  className='border border-gray-300 rounded-md p-2'
+                  className='border p-2'
                 />
                 <input
                   name='ownerLastName'
-                  placeholder='Borrower Last Name'
+                  placeholder='Last Name'
                   value={lead.ownerLastName || ''}
                   onChange={handleChange}
-                  className='border border-gray-300 rounded-md p-2'
+                  className='border p-2'
                 />
               </div>
             </>
@@ -471,7 +549,7 @@ export default function UploadLeadsPage() {
           <button
             type='submit'
             disabled={loading}
-            className='mt-4 bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 disabled:opacity-50'
+            className='mt-4 bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 disabled:opacity-50 w-full'
           >
             {loading ? 'Saving...' : 'Add Lead'}
           </button>
