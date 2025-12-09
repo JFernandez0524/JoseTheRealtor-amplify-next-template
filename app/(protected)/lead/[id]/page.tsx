@@ -13,23 +13,11 @@ import {
 
 // 👇 Import your frontend client
 import { client } from '@/app/utils/aws/data/frontEndClient';
+// 👇 Import the Schema type directly to ensure type safety
+import { type Schema } from '@/amplify/data/resource';
 
-// 👇 Import the types from your new file
-import {
-  type LeadWithDetails,
-  type BridgeData,
-  type LeadApiResponse,
-} from '@/app/types/leads';
-
-// ... (Rest of your imports) ...
-
-const axiosInstance = axios.create({
-  baseURL: '/api/v1',
-  headers: {
-    'Content-Type': 'application/json',
-  },
-  timeout: 15000,
-});
+// Define the shape of our Lead based on the Schema
+type Lead = Schema['PropertyLead']['type'];
 
 const mapContainerStyle = {
   width: '100%',
@@ -56,121 +44,80 @@ export default function LeadDetailPage() {
     libraries: libraries,
   });
 
-  // Now using the imported types
-  const [lead, setLead] = useState<LeadWithDetails | null>(null);
-  const [marketData, setMarketData] = useState<BridgeData | null>(null);
+  const [lead, setLead] = useState<Lead | null>(null);
+  const [marketData, setMarketData] = useState<any | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSkipTracing, setIsSkipTracing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
   const params = useParams();
 
   useEffect(() => {
     const id = params.id as string;
     if (id) {
-      fetchLead(id);
+      loadData(id);
     }
   }, [params.id]);
 
-  const fetchLead = async (id: string) => {
+  const loadData = async (id: string) => {
     setIsLoading(true);
     try {
-      // Fetch from your Next.js API route that aggregates Lead + Market Data
-      const response = await axiosInstance.get<LeadApiResponse>(`/leads/${id}`);
-      const data = response.data;
+      // 1. 🟢 FETCH LEAD DIRECTLY (Reliable)
+      // This uses the generated client so it handles the new Arrays correctly
+      const { data: leadData, errors } = await client.models.PropertyLead.get({
+        id: id,
+      });
 
-      if (!data.success) {
-        throw new Error('Failed to fetch lead data.');
+      if (errors || !leadData) {
+        throw new Error('Could not find lead in database.');
       }
 
-      setLead(data.lead);
-      setMarketData(data.marketAnalysis);
+      setLead(leadData);
+
+      // 2. 🟡 FETCH MARKET DATA (Best Effort)
+      // We try to hit your API, but if it fails, we don't break the whole page.
+      try {
+        const response = await axios.get(`/api/v1/leads/${id}`);
+        if (response.data && response.data.marketAnalysis) {
+          setMarketData(response.data.marketAnalysis);
+        }
+      } catch (marketError) {
+        console.warn(
+          'Market Data API failed (likely due to schema change), but Lead loaded.',
+          marketError
+        );
+        // We do NOT set the main error here, so the user can still see the lead.
+      }
     } catch (err: any) {
-      setError(err.message);
+      console.error(err);
+      setError(err.message || 'Failed to load lead.');
     } finally {
       setIsLoading(false);
     }
   };
 
-  // 👇 HANDLE SKIP TRACE (SIMULATION MODE)
   const handleSkipTrace = async () => {
     if (!lead) return;
-
-    // 1. Safety Check: Stop if already done
-    if (lead.skipTraceStatus === 'COMPLETED') {
-      return;
-    }
+    if (lead.skipTraceStatus === 'COMPLETED') return;
 
     setIsSkipTracing(true);
-
     try {
-      // ... (Endpoint selection logic stays the same) ...
-      let endpoint =
-        lead.type === 'probate'
-          ? '/skiptrace-leads/probate'
-          : '/skiptrace-leads/preforeclosure';
+      await client.mutations.skipTraceLeads({
+        leadIds: [lead.id],
+        targetCrm: 'NONE',
+      });
 
-      let payload =
-        lead.type === 'probate'
-          ? {
-              address: lead.adminAddress,
-              city: lead.adminCity,
-              state: lead.adminState,
-              zip: lead.adminZip,
-            }
-          : {
-              address: lead.ownerAddress,
-              city: lead.ownerCity,
-              state: lead.ownerState,
-              zip: lead.ownerZip,
-            };
-
-      // 2. Call API (Mock)
-      const response = await axiosInstance.post(endpoint, payload);
-
-      if (response.data.success) {
-        const newContacts = response.data.contacts;
-
-        // 3. Update Local State Instantly
-        setLead((prev) => {
-          if (!prev) return null;
-
-          // Handle the array/LazyLoader conflict safely
-          const currentContacts = (prev.contacts as any) || [];
-          const safePrevContacts = Array.isArray(currentContacts)
-            ? currentContacts
-            : [];
-
-          const updatedLead = {
-            ...prev,
-            // 👇 CRITICAL: Force status to COMPLETED locally
-            skipTraceStatus: 'COMPLETED',
-
-            contacts: [...safePrevContacts, ...newContacts] as any,
-            enrichments: [
-              ...((prev.enrichments as any) || []),
-              {
-                id: Date.now().toString(),
-                source: `BatchData (${lead.type})`,
-                statusText: `Found ${newContacts.length} contacts`,
-                createdAt: new Date().toISOString(),
-              } as any,
-            ] as any,
-          };
-
-          return updatedLead as unknown as typeof prev;
-        });
-
-        // Optional: Save to DB code would go here...
-      } else {
-        alert('No contacts found.');
-      }
+      // Refresh data
+      await loadData(lead.id);
+      alert('Skip Trace Complete!');
     } catch (err: any) {
-      console.error(err);
-      alert('Skip trace failed.');
+      console.error('Skip trace failed:', err);
+      alert('Skip trace failed. Please try again.');
     } finally {
       setIsSkipTracing(false);
     }
   };
+
   // --- RENDER ---
   if (isLoading) {
     return (
@@ -197,9 +144,10 @@ export default function LeadDetailPage() {
     );
   }
 
+  // 🟢 MAP LOGIC: Ensure we have numbers
   const mapCenter =
     lead.latitude && lead.longitude
-      ? { lat: lead.latitude, lng: lead.longitude }
+      ? { lat: Number(lead.latitude), lng: Number(lead.longitude) }
       : null;
 
   return (
@@ -229,33 +177,33 @@ export default function LeadDetailPage() {
                 <label className='text-sm font-medium text-gray-500'>
                   Status
                 </label>
-                <p className='text-base'>{lead.skipTraceStatus}</p>
-              </div>
-              <div>
-                <label className='text-sm font-medium text-gray-500'>
-                  Year Built
-                </label>
                 <p className='text-base'>
-                  {lead.yearBuilt || marketData?.yearBuilt || 'N/A'}
+                  <span
+                    className={`px-2 py-0.5 rounded text-xs font-bold ${
+                      lead.skipTraceStatus === 'COMPLETED'
+                        ? 'bg-green-100 text-green-800'
+                        : lead.skipTraceStatus === 'FAILED'
+                          ? 'bg-red-100 text-red-800'
+                          : lead.skipTraceStatus === 'NO_MATCH'
+                            ? 'bg-gray-100 text-gray-800'
+                            : 'bg-yellow-100 text-yellow-800'
+                    }`}
+                  >
+                    {lead.skipTraceStatus}
+                  </span>
                 </p>
               </div>
               <div>
                 <label className='text-sm font-medium text-gray-500'>
-                  Sq. Ft.
+                  Zip Code
                 </label>
-                <p className='text-base'>{lead.squareFeet || 'N/A'}</p>
+                <p className='text-base'>{lead.ownerZip}</p>
               </div>
               <div>
                 <label className='text-sm font-medium text-gray-500'>
-                  Bedrooms
+                  Source
                 </label>
-                <p className='text-base'>{lead.bedrooms || 'N/A'}</p>
-              </div>
-              <div>
-                <label className='text-sm font-medium text-gray-500'>
-                  Bathrooms
-                </label>
-                <p className='text-base'>{lead.baths || 'N/A'}</p>
+                <p className='text-base'>CSV Import</p>
               </div>
             </div>
             {lead.type === 'probate' && (
@@ -287,21 +235,18 @@ export default function LeadDetailPage() {
           <div className='bg-white shadow border rounded-lg p-6 relative'>
             <div className='flex justify-between items-center mb-4'>
               <h2 className='text-xl font-semibold'>Contacts</h2>
-              {/* 👇 SKIP TRACE BUTTON */}
               <button
                 onClick={handleSkipTrace}
-                // Disable if loading OR if already completed
                 disabled={isSkipTracing || lead.skipTraceStatus === 'COMPLETED'}
                 className={`
-    text-sm px-3 py-1.5 rounded transition-colors flex items-center gap-2
-    ${
-      lead.skipTraceStatus === 'COMPLETED'
-        ? 'bg-green-100 text-green-700 cursor-not-allowed border border-green-200' // Style for Completed
-        : 'bg-blue-600 text-white hover:bg-blue-700 disabled:bg-blue-300' // Style for Active
-    }
-  `}
+                  text-sm px-3 py-1.5 rounded transition-colors flex items-center gap-2
+                  ${
+                    lead.skipTraceStatus === 'COMPLETED'
+                      ? 'bg-green-100 text-green-700 cursor-not-allowed border border-green-200'
+                      : 'bg-indigo-600 text-white hover:bg-indigo-700 disabled:bg-indigo-300'
+                  }
+                `}
               >
-                {/* Logic to change the text/icon based on status */}
                 {isSkipTracing ? (
                   <>
                     <Loader size='small' variation='linear' /> Tracing...
@@ -310,154 +255,74 @@ export default function LeadDetailPage() {
                   <>
                     <span>✓</span> Skiptrace Complete
                   </>
+                ) : lead.skipTraceStatus === 'NO_MATCH' ? (
+                  'Retry Skip Trace'
                 ) : (
                   'Skip Trace Owner'
                 )}
               </button>
             </div>
 
-            {!lead.contacts || lead.contacts.length === 0 ? (
+            {(!lead.phones || lead.phones.length === 0) &&
+            (!lead.emails || lead.emails.length === 0) ? (
               <div className='text-center py-6 bg-gray-50 rounded border border-dashed'>
                 <p className='text-gray-500 mb-2'>No contact info available.</p>
                 <p className='text-xs text-gray-400'>
-                  Click "Skip Trace Owner" to find phone numbers.
+                  Click "Skip Trace Owner" to find numbers.
                 </p>
               </div>
             ) : (
-              <div className='space-y-6'>
-                {lead.contacts.map((contact, idx) => (
-                  <div
-                    key={contact.id || idx}
-                    className='border-b pb-4 last:border-0 last:pb-0'
-                  >
-                    {/* Header: Name + Badges */}
-                    <div className='flex items-baseline justify-between'>
-                      <div className='flex items-center gap-2 flex-wrap'>
-                        <p className='font-bold text-lg text-gray-800'>
-                          {contact.firstName} {contact.middleName}{' '}
-                          {contact.lastName}
-                        </p>
-                        {contact.deceased && (
-                          <span className='bg-red-100 text-red-800 text-[10px] px-2 py-0.5 rounded border border-red-200 uppercase font-semibold'>
-                            Deceased
-                          </span>
-                        )}
-                        {contact.litigator && (
-                          <span className='bg-orange-100 text-orange-800 text-[10px] px-2 py-0.5 rounded border border-orange-200 uppercase font-semibold'>
-                            Litigator
-                          </span>
-                        )}
-                      </div>
-                      <span className='text-xs bg-green-100 text-green-800 px-2 py-0.5 rounded-full whitespace-nowrap'>
-                        Match Found
-                      </span>
-                    </div>
-
-                    {/* Addresses */}
-                    <div className='mt-2'>
-                      <p className='text-xs font-semibold text-gray-500 uppercase'>
-                        Addresses
-                      </p>
-                      {contact.addresses && contact.addresses.length > 0 ? (
-                        <div className='mt-1 space-y-1'>
-                          {contact.addresses.map((addr: any, i: number) => (
-                            <p key={i} className='text-sm text-gray-700'>
-                              {addr.fullAddress}
-                              {addr.type === 'Mailing' && (
-                                <span className='text-xs text-blue-600 ml-2 font-medium bg-blue-50 px-1 rounded'>
-                                  (Mailing)
-                                </span>
-                              )}
-                            </p>
-                          ))}
+              <div className='space-y-4'>
+                <div>
+                  <h3 className='text-xs font-bold text-gray-500 uppercase mb-2'>
+                    Phone Numbers
+                  </h3>
+                  {lead.phones && lead.phones.length > 0 ? (
+                    <div className='flex flex-wrap gap-2'>
+                      {lead.phones.map((phone, i) => (
+                        <div
+                          key={i}
+                          className='bg-green-50 text-green-800 border border-green-200 px-3 py-1 rounded text-sm font-mono flex items-center gap-2'
+                        >
+                          📞 {phone}
                         </div>
-                      ) : (
-                        <p className='text-sm text-gray-400 italic'>
-                          No addresses found
-                        </p>
-                      )}
+                      ))}
                     </div>
-
-                    {/* Phone Numbers */}
-                    <div className='mt-3'>
-                      <p className='text-xs font-semibold text-gray-500 uppercase'>
-                        Phone Numbers
-                      </p>
-                      {contact.phones && contact.phones.length > 0 ? (
-                        <div className='flex flex-wrap gap-2 mt-1'>
-                          {contact.phones.map((phone: any, pIdx: number) => (
-                            <div
-                              key={pIdx}
-                              className='text-sm bg-gray-100 px-2 py-1 rounded text-gray-700 font-mono flex items-center gap-2 border border-gray-200'
-                            >
-                              <span>{phone.number}</span>
-                              {phone.type && (
-                                <span
-                                  className={`text-[10px] uppercase px-1 rounded ${
-                                    phone.type === 'Mobile'
-                                      ? 'bg-blue-100 text-blue-700 font-bold'
-                                      : 'bg-gray-200 text-gray-600'
-                                  }`}
-                                >
-                                  {phone.type}
-                                </span>
-                              )}
-                            </div>
-                          ))}
+                  ) : (
+                    <span className='text-sm text-gray-400 italic'>
+                      None found
+                    </span>
+                  )}
+                </div>
+                <div>
+                  <h3 className='text-xs font-bold text-gray-500 uppercase mb-2'>
+                    Emails
+                  </h3>
+                  {lead.emails && lead.emails.length > 0 ? (
+                    <div className='flex flex-wrap gap-2'>
+                      {lead.emails.map((email, i) => (
+                        <div
+                          key={i}
+                          className='bg-blue-50 text-blue-800 border border-blue-200 px-3 py-1 rounded text-sm flex items-center gap-2'
+                        >
+                          ✉️ {email}
                         </div>
-                      ) : (
-                        <p className='text-sm text-gray-400 italic'>
-                          None found
-                        </p>
-                      )}
+                      ))}
                     </div>
-
-                    {/* Emails */}
-                    <div className='mt-3'>
-                      <p className='text-xs font-semibold text-gray-500 uppercase'>
-                        Emails
-                      </p>
-                      {contact.emails && contact.emails.length > 0 ? (
-                        <div className='flex flex-wrap gap-2 mt-1'>
-                          {contact.emails.map((emailObj: any, eIdx: number) => (
-                            <span
-                              key={eIdx}
-                              className='text-sm text-blue-600 underline cursor-pointer hover:text-blue-800'
-                            >
-                              {emailObj.email}
-                            </span>
-                          ))}
-                        </div>
-                      ) : (
-                        <p className='text-sm text-gray-400 italic'>
-                          None found
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                ))}
+                  ) : (
+                    <span className='text-sm text-gray-400 italic'>
+                      None found
+                    </span>
+                  )}
+                </div>
               </div>
             )}
           </div>
 
-          {/* Activity Log */}
+          {/* Activity Log - (Kept simple for now) */}
           <div className='bg-white shadow border rounded-lg p-6'>
             <h2 className='text-xl font-semibold mb-4'>Activity</h2>
-            {!lead.activities || lead.activities.length === 0 ? (
-              <p className='text-gray-500'>No activities logged.</p>
-            ) : (
-              lead.activities?.map((activity) => (
-                <div key={activity.id} className='border-b py-2 last:border-0'>
-                  <p className='font-medium capitalize'>{activity.type}</p>
-                  <p className='text-sm text-gray-600'>
-                    Outcome: {activity.outcome}
-                  </p>
-                  <p className='text-sm text-gray-400'>
-                    {new Date(Number(activity.createdAt)).toLocaleString()}
-                  </p>
-                </div>
-              ))
-            )}
+            <p className='text-gray-500'>No activities logged.</p>
           </div>
         </div>
 
@@ -484,16 +349,6 @@ export default function LeadDetailPage() {
                     {formatCurrency(marketData.rentZestimate)} /mo
                   </p>
                 </div>
-                {marketData.taxAssessment && (
-                  <div>
-                    <label className='text-xs uppercase font-bold text-gray-400'>
-                      Tax Assessment
-                    </label>
-                    <p className='text-lg text-gray-600'>
-                      {formatCurrency(marketData.taxAssessment)}
-                    </p>
-                  </div>
-                )}
                 <div className='pt-2'>
                   <span className='inline-block bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded'>
                     Source: Bridge/Zillow
@@ -504,7 +359,8 @@ export default function LeadDetailPage() {
               <div className='text-center py-4 text-gray-500'>
                 <p>No market data available.</p>
                 <p className='text-xs mt-1'>
-                  Check if latitude/longitude are valid.
+                  (The API route for Market Intel might be outdated. We can fix
+                  this next.)
                 </p>
               </div>
             )}
@@ -528,33 +384,6 @@ export default function LeadDetailPage() {
                 style={{ height: '300px' }}
               >
                 {!isMapLoaded ? 'Loading Map...' : 'Address not geocoded.'}
-              </div>
-            )}
-          </div>
-
-          {/* Enrichments Log */}
-          <div className='bg-white shadow border rounded-lg p-6'>
-            <h2 className='text-xl font-semibold mb-4'>Data Log</h2>
-            {!lead.enrichments || lead.enrichments.length === 0 ? (
-              <p className='text-gray-500'>No enrichments found.</p>
-            ) : (
-              <div className='space-y-2'>
-                {lead.enrichments?.map((enrichment) => (
-                  <div
-                    key={enrichment.id}
-                    className='text-xs border-b pb-2 last:border-0'
-                  >
-                    <p className='font-medium'>{enrichment.source}</p>
-                    <p className='text-gray-500'>
-                      Status: {enrichment.statusText}
-                    </p>
-                    <p className='text-gray-400'>
-                      {new Date(
-                        Number(enrichment.createdAt)
-                      ).toLocaleDateString()}
-                    </p>
-                  </div>
-                ))}
               </div>
             )}
           </div>

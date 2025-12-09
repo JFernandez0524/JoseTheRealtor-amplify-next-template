@@ -1,5 +1,4 @@
 import { S3Handler } from 'aws-lambda';
-// 👇 Added DeleteObjectCommand
 import {
   S3Client,
   GetObjectCommand,
@@ -7,7 +6,6 @@ import {
   DeleteObjectCommand,
 } from '@aws-sdk/client-s3';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-// 👇 Added QueryCommand
 import {
   DynamoDBDocumentClient,
   PutCommand,
@@ -18,9 +16,8 @@ import { Readable } from 'stream';
 import { randomUUID } from 'crypto';
 import { validateAddressWithGoogle } from '../../../app/utils/google.server';
 
-// Integrations
-import { syncToKVCore } from './src/intergrations/kvcore';
-import { syncToGoHighLevel } from './src/intergrations/gohighlevel';
+// 🟢 CHANGED: Removed CRM Sync imports (KVCore/GHL)
+// We only keep notifications and auditing for now
 import { sendNotification } from './src/intergrations/notifications';
 import { logAuditEvent } from './src/intergrations/auditLogs';
 
@@ -39,12 +36,6 @@ export const handler: S3Handler = async (event) => {
       bucketName = record.s3.bucket.name;
 
       console.log(`📂 Processing file: ${decodedKey}`);
-
-      // Debugging the API Key
-      const key = process.env.GOOGLE_MAPS_API_KEY || '';
-      console.log(`🔑 Key Length: ${key.length}`);
-      console.log(`🔑 Key First 4: ${key.substring(0, 4)}`);
-      console.log(`🔑 Key Last 4: ${key.substring(key.length - 4)}`);
 
       // 1. Get Metadata
       const headObject = await s3.send(
@@ -84,34 +75,47 @@ export const handler: S3Handler = async (event) => {
       let skippedCount = 0;
 
       for await (const row of parser) {
+        // 1. Extract Raw Data
         const rawAddress =
           row['ownerAddress'] || row['Property Address'] || row['Address'];
         const rawCity = row['ownerCity'] || row['City'];
         const rawState = row['ownerState'] || row['State'];
         const rawZip = row['ownerZip'] || row['Zip'];
+
+        // Fallback for full search string
         const fullSearchAddress = `${rawAddress}, ${rawCity}, ${rawState} ${rawZip}`;
 
+        if (!rawAddress) continue; // Skip ONLY if there is no address at all
+
+        // 2. Attempt Google Validation
         let validationResult = null;
         try {
-          if (rawAddress) {
-            validationResult =
-              await validateAddressWithGoogle(fullSearchAddress);
-          }
+          validationResult = await validateAddressWithGoogle(fullSearchAddress);
         } catch (error) {
-          console.warn(`⚠️ Validation Failed: ${fullSearchAddress}`);
+          console.warn(`Validation crashed for ${fullSearchAddress}`);
         }
 
-        // Use standardized address (critical for duplicate detection)
-        const finalAddress = validationResult?.components.street || rawAddress;
+        // 3. Determine Status & Data Source
+        // If Google worked, use Google data. If not, use Raw CSV data.
+        const isAddressValid = !!validationResult;
 
-        if (!finalAddress) continue;
-
-        // 🛑 DUPLICATE CHECK 🛑
-        // "Does this user already have this exact address?"
+        const finalAddress = validationResult
+          ? validationResult.components.street
+          : rawAddress;
+        const finalCity = validationResult
+          ? validationResult.components.city
+          : rawCity;
+        const finalState = validationResult
+          ? validationResult.components.state
+          : rawState;
+        const finalZip = validationResult
+          ? validationResult.components.zip
+          : rawZip;
+        // 4. Duplicate Check (Logic remains the same)
         const existingCheck = await ddbDocClient.send(
           new QueryCommand({
             TableName: TABLE_NAME,
-            IndexName: 'propertyLeadsByOwnerAndOwnerAddress', // Using our new index
+            IndexName: 'propertyLeadsByOwnerAndOwnerAddress',
             KeyConditionExpression: '#owner = :owner AND #addr = :addr',
             ExpressionAttributeNames: {
               '#owner': 'owner',
@@ -121,18 +125,21 @@ export const handler: S3Handler = async (event) => {
               ':owner': ownerId,
               ':addr': finalAddress,
             },
-            Limit: 1, // We only need to find one to know it's a dupe
+            Limit: 1,
           })
         );
 
         if (existingCheck.Items && existingCheck.Items.length > 0) {
           console.log(`⏭️ Skipping duplicate: ${finalAddress}`);
           skippedCount++;
-          continue; // Skip to next row
+          continue;
         }
 
-        // Not a duplicate? Save it!
+        // 5. Prepare Item
         count++;
+        const emailArray = row['email'] ? [row['email']] : [];
+        const phoneArray = row['phone'] ? [row['phone']] : [];
+
         const leadItem = {
           id: randomUUID(),
           owner: ownerId,
@@ -142,15 +149,23 @@ export const handler: S3Handler = async (event) => {
           ownerFirstName: row['First Name'] || row['ownerFirstName'],
           ownerLastName: row['Last Name'] || row['ownerLastName'],
 
+          // 🟢 SAVE EITHER VALIDATED OR RAW ADDRESS
           ownerAddress: finalAddress,
-          ownerCity: validationResult?.components.city || rawCity,
-          ownerState: validationResult?.components.state || rawState,
-          ownerZip: validationResult?.components.zip || rawZip,
+          ownerCity: finalCity,
+          ownerState: finalState,
+          ownerZip: finalZip,
 
+          // 🟢 NEW STATUS FIELD
+          validationStatus: isAddressValid ? 'VALID' : 'INVALID',
+
+          // Save Coords only if valid
+          latitude: validationResult?.location?.lat || null,
+          longitude: validationResult?.location?.lng || null,
           standardizedAddress: validationResult?.components || null,
-          latitude: validationResult?.location.lat || null,
-          longitude: validationResult?.location.lng || null,
 
+          // Standard Fields
+          emails: emailArray,
+          phones: phoneArray,
           skipTraceStatus: 'PENDING',
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
@@ -170,12 +185,9 @@ export const handler: S3Handler = async (event) => {
           })
         );
 
-        // Integrations (Run in background)
+        // 🟢 CHANGED: Removed syncToKVCore and syncToGoHighLevel
+        // We only notify the user and log the audit event.
         Promise.all([
-          syncToKVCore(leadItem).catch((e) => console.error('KVCore Fail:', e)),
-          syncToGoHighLevel(leadItem).catch((e) =>
-            console.error('GHL Fail:', e)
-          ),
           sendNotification(leadItem, 'Lead Imported via CSV').catch((e) =>
             console.error('Notify Fail:', e)
           ),

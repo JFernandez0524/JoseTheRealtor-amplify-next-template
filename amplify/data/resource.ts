@@ -1,5 +1,5 @@
 import { type ClientSchema, a, defineData } from '@aws-amplify/backend';
-import { testFunction } from '../functions/testFunction/resource';
+import { skipTraceLeads } from '../functions/skiptraceLeads/resource';
 
 const schema = a.schema({
   PropertyLead: a
@@ -19,14 +19,15 @@ const schema = a.schema({
       adminState: a.string(),
       adminZip: a.string(),
       standardizedAddress: a.json(),
-      skipTraceStatus: a.enum(['PENDING', 'COMPLETED', 'FAILED']),
+      skipTraceStatus: a.enum(['PENDING', 'COMPLETED', 'FAILED', 'NO_MATCH']),
       latitude: a.float(),
       longitude: a.float(),
-      phone: a.phone(),
-      email: a.email(),
+      phones: a.string().array(),
+      emails: a.string().array(),
       createdAt: a.datetime(),
       updatedAt: a.datetime(),
-
+      // 🟢 NEW: Track if the address is good or bad
+      validationStatus: a.enum(['VALID', 'INVALID']),
       // Relations
       contacts: a.hasMany('Contact', 'leadId'),
       enrichments: a.hasMany('Enrichment', 'leadId'),
@@ -35,9 +36,22 @@ const schema = a.schema({
     .authorization((allow) => [allow.owner()])
     // 👇 NEW INDEX: Allows fast lookup by Owner + Address
     .secondaryIndexes((index) => [
+      // 1. Existing Index (Duplicate Check)
       index('owner')
         .sortKeys(['ownerAddress'])
         .queryField('propertyLeadsByOwnerAndOwnerAddress'),
+
+      // 2. 🟢 NEW: Sort by Date (Recent First)
+      index('owner').sortKeys(['createdAt']).queryField('leadsByDate'),
+
+      // 3. 🟢 NEW: Filter by Status (Quickly find PENDING)
+      index('owner').sortKeys(['skipTraceStatus']).queryField('leadsByStatus'),
+
+      // 4. 🟢 NEW: Filter by Type (e.g. Probate vs Preforeclosure)
+      index('owner').sortKeys(['type']).queryField('leadsByType'),
+      index('owner')
+        .sortKeys(['validationStatus'])
+        .queryField('leadsByValidationStatus'),
     ]),
 
   Contact: a
@@ -99,11 +113,14 @@ const schema = a.schema({
     })
     .authorization((allow) => allow.owner()),
 
-  testFunction: a
-    .query()
-    .arguments({ message: a.string() })
-    .returns(a.string())
-    .handler(a.handler.function(testFunction))
+  skipTraceLeads: a
+    .mutation()
+    .arguments({
+      leadIds: a.string().array().required(),
+      targetCrm: a.enum(['GHL', 'KVCORE', 'NONE']),
+    })
+    .returns(a.json())
+    .handler(a.handler.function(skipTraceLeads))
     .authorization((allow) => [allow.authenticated()]),
 });
 

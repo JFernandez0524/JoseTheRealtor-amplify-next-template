@@ -3,7 +3,6 @@ import { auth } from './auth/resource.js';
 import { data } from './data/resource.js';
 import { storage } from './storage/resource';
 import { uploadCsvHandler } from './functions/uploadCsvHandler/resource.js';
-import { testFunction } from './functions/testFunction/resource.js';
 import { EventType } from 'aws-cdk-lib/aws-s3';
 import { LambdaDestination } from 'aws-cdk-lib/aws-s3-notifications';
 import { PolicyStatement } from 'aws-cdk-lib/aws-iam';
@@ -12,7 +11,6 @@ const backend = defineBackend({
   auth,
   data,
   uploadCsvHandler,
-  testFunction,
   storage,
 });
 
