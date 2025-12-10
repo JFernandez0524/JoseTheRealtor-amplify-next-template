@@ -9,11 +9,10 @@ import axios from 'axios';
 // Import Sync functions
 // Verify these paths match your project structure
 import { syncToGoHighLevel } from '../../functions/uploadCsvHandler/src/intergrations/gohighlevel';
-import { syncToKVCore } from '../../functions/uploadCsvHandler/src/intergrations/kvcore';
 
 const ddbDocClient = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const TABLE_NAME = process.env.AMPLIFY_DATA_LEAD_TABLE_NAME;
-const BATCH_DATA_API_KEY = process.env.BATCH_DATA_API_KEY;
+const BATCH_DATA_SERVER_TOKEN = process.env.BATCH_DATA_SERVER_TOKEN;
 
 // ---------------------------------------------------------
 // 🟢 1. Local Type Definitions (Safe for Lambda)
@@ -73,7 +72,6 @@ type BatchDataResult = {
 
 type HandlerArgs = {
   leadIds: string[];
-  targetCrm: 'GHL' | 'KVCORE' | 'NONE';
 };
 
 // ---------------------------------------------------------
@@ -81,7 +79,7 @@ type HandlerArgs = {
 // ---------------------------------------------------------
 
 export const handler = async (event: HandlerArgs) => {
-  const { leadIds, targetCrm } = event;
+  const { leadIds } = event;
   console.log(`🕵️‍♂️ Starting V3 Skip Trace for ${leadIds.length} leads...`);
 
   const results = [];
@@ -203,8 +201,7 @@ export const handler = async (event: HandlerArgs) => {
       );
 
       // E. CRM Sync
-      if (targetCrm === 'GHL') await syncToGoHighLevel(updatedLead);
-      else if (targetCrm === 'KVCORE') await syncToKVCore(updatedLead);
+      await syncToGoHighLevel(updatedLead);
 
       results.push({
         id: leadId,
@@ -226,7 +223,7 @@ export const handler = async (event: HandlerArgs) => {
 // ---------------------------------------------------------
 
 async function callBatchDataV3(lead: DBLead): Promise<BatchDataResult> {
-  if (!BATCH_DATA_API_KEY) throw new Error('Missing BatchData API Key');
+  if (!BATCH_DATA_SERVER_TOKEN) throw new Error('Missing BatchData API Key');
 
   // 1. Dynamic Targeting Logic
   let targetName = { first: lead.ownerFirstName, last: lead.ownerLastName };
@@ -268,9 +265,9 @@ async function callBatchDataV3(lead: DBLead): Promise<BatchDataResult> {
         propertyAddress: targetAddress,
       },
     ],
-    matchOptions: {
+    options: {
       prioritizeMobilePhones: true,
-      includeTCPABlacklistedPhones: true, // Required to get results, we filter DNC manually below
+      includeTCPABlacklistedPhones: false,
     },
   };
 
@@ -280,7 +277,7 @@ async function callBatchDataV3(lead: DBLead): Promise<BatchDataResult> {
       payload,
       {
         headers: {
-          Authorization: `Bearer ${BATCH_DATA_API_KEY}`,
+          Authorization: `Bearer ${BATCH_DATA_SERVER_TOKEN}`,
           'Content-Type': 'application/json',
           Accept: 'application/json',
         },
@@ -311,36 +308,33 @@ async function callBatchDataV3(lead: DBLead): Promise<BatchDataResult> {
 
     let mailingData: MailingAddressData | null = null;
 
+    // 🟢 CORRECTED ADDRESS CAPTURE LOGIC
+    if (match.property?.mailingAddress) {
+      // Check the correct object location
+      const mailAddress = match.property.mailingAddress;
+
+      mailingData = {
+        // Mapping from API response fields
+        mailingAddress: mailAddress.street, // street
+        mailingCity: mailAddress.city,
+        mailingState: mailAddress.state,
+        mailingZip: mailAddress.zip, // Note: We don't need 'fullAddress' here since we're composing it from components
+      };
+    } // ... (Original logic for phones and emails remains the same, but move it here)
+
     if (match.persons && match.persons.length > 0) {
       match.persons.forEach((person: any) => {
-        // 🟢 PHONE FILTERING (Mobile Only, Score > 90, No DNC)
+        // 🟢 PHONE FILTERING
         person.phones?.forEach((p: any) => {
-          if (
-            p.type === 'Mobile' &&
-            (p.rank || 0) >= 90 &&
-            p.dnc !== true &&
-            p.number
-          ) {
+          if (p.type === 'Mobile' && (p.rank || 0) >= 90 && p.number) {
             foundPhones.push(p.number);
           }
-        });
-
-        // 🟢 EMAIL FILTERING (Tested Only)
+        }); // 🟢 EMAIL FILTERING
         person.emails?.forEach((e: any) => {
           if (e.tested === true && e.email) {
             foundEmails.push(e.email);
           }
         });
-
-        // 🟢 ADDRESS CAPTURE
-        if (!mailingData && person.address) {
-          mailingData = {
-            mailingAddress: person.address.street,
-            mailingCity: person.address.city,
-            mailingState: person.address.state,
-            mailingZip: person.address.zip,
-          };
-        }
       });
     }
 
