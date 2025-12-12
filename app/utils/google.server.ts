@@ -21,16 +21,21 @@ function parseAddressComponents(components: AddressComponent[]) {
   const result: { [key: string]: string } = {};
 
   for (const component of components) {
-    // Use the first type (e.g., 'postal_code') as the key
     const type = component.types[0];
-    result[type] = component.long_name;
+
+    // 🟢 FIX: Prioritize short_name for the state component
+    if (type === 'administrative_area_level_1') {
+      result[type] = component.short_name; // Use NJ instead of New Jersey
+    } else {
+      result[type] = component.long_name; // Use long_name for all other fields (e.g., city/county)
+    }
   }
 
   // Build the final, clean address object
   return {
     street: `${result.street_number || ''} ${result.route || ''}`.trim(),
-    city: result.locality || result.administrative_area_level_2 || '', // 'locality' is city, 'administrative_area_level_2' is county
-    state: result.administrative_area_level_1 || '',
+    city: result.locality || result.administrative_area_level_2 || '',
+    state: result.administrative_area_level_1 || '', // Will now contain 'NJ'
     zip: result.postal_code || '',
   };
 }

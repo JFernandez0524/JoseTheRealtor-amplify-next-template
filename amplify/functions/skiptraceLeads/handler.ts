@@ -268,10 +268,10 @@ async function callBatchDataV3(lead: DBLead): Promise<BatchDataResult> {
   // 1. Dynamic Targeting Logic
   let targetName = { first: lead.ownerFirstName, last: lead.ownerLastName };
   let targetAddress = {
-    street: lead.ownerAddress,
-    city: lead.ownerCity,
-    state: lead.ownerState,
-    zip: lead.ownerZip,
+    street: lead.ownerAddress ? lead.ownerAddress.trim() : '',
+    city: lead.ownerCity ? lead.ownerCity.trim() : '',
+    state: lead.ownerState ? lead.ownerState.trim().toUpperCase() : '', // Ensure upper case for state
+    zip: lead.ownerZip ? lead.ownerZip.trim() : '',
   };
 
   // Override: Probate targets Admin
