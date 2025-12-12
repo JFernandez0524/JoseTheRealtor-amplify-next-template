@@ -26,7 +26,7 @@ interface DBLead {
   phones?: string[];
   emails?: string[];
   isAbsenteeOwner?: boolean;
-  estimatedEquity?: number | null;
+  skipTraceStatus?: string;
 }
 
 export async function syncToGoHighLevel(lead: DBLead) {
@@ -60,7 +60,7 @@ export async function syncToGoHighLevel(lead: DBLead) {
     // 3. Logic: Dynamic Tags
     const tags = [
       lead.type, // "PROBATE" or "PREFORECLOSURE"
-      'Imported from App',
+      'Imported from JTR App',
       'Start Dialing Campaign',
     ];
     if (lead.isAbsenteeOwner) tags.push('Absentee Owner');
@@ -74,11 +74,6 @@ export async function syncToGoHighLevel(lead: DBLead) {
       email: primaryEmail,
       phone: primaryPhone,
 
-      // Main Address = Mailing Address (Admin or Absentee Owner)
-      address1: lead.mailingAddress || '',
-      city: lead.mailingCity || '',
-      state: lead.mailingState || '',
-      postalCode: lead.mailingZip || '',
       country: 'US',
 
       source: 'App Skip Trace',
@@ -88,11 +83,24 @@ export async function syncToGoHighLevel(lead: DBLead) {
       // 🟢 CUSTOM FIELDS: Store the actual Property Info here
       // You must create these keys in GHL Settings -> Custom Fields
       customField: {
+        // MAILING ADDRESS CUSTOM FIELDS
+        mailing_address: lead.mailingAddress || '',
+        mailing_city: lead.mailingCity || '',
+        mailing_state: lead.mailingState || '',
+        mailing_zipcode: lead.mailingZip || '',
+
+        // PROPERTY ADDRESS CUSTOM FIELDS (Existing fields)
         property_address: lead.ownerAddress,
         property_city: lead.ownerCity,
         property_state: lead.ownerState,
         property_zip: lead.ownerZip,
         lead_source_id: lead.id,
+        skiptracestatus: lead.skipTraceStatus,
+        phone_2: lead.phones && lead.phones.length > 1 ? lead.phones[1] : '', // 2nd phone number (Index 1)
+        phone_3: lead.phones && lead.phones.length > 2 ? lead.phones[2] : '', // 3rd phone number (Index 2)
+        phone_4: lead.phones && lead.phones.length > 2 ? lead.phones[3] : '', // 3rd phone number (Index 2)
+        email_2: lead.emails && lead.emails.length > 1 ? lead.emails[1] : '', // 2nd email address (Index 1)
+        email_3: lead.emails && lead.emails.length > 2 ? lead.emails[2] : '', // 3rd email address (Index 2)
       },
     };
 
