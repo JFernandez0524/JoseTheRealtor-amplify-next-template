@@ -204,6 +204,13 @@ export const handler = async (event: HandlerArgs) => {
         updatedAt: new Date().toISOString(),
       };
 
+      if (
+        updatedLead.isAbsenteeOwner === undefined ||
+        updatedLead.isAbsenteeOwner === null
+      ) {
+        updatedLead.isAbsenteeOwner = false;
+      }
+
       // D. Save to DynamoDB
       await ddbDocClient.send(
         new UpdateCommand({
