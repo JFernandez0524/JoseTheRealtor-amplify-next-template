@@ -79,7 +79,40 @@ type HandlerArgs = {
 // ---------------------------------------------------------
 
 export const handler = async (event: HandlerArgs) => {
-  const { leadIds } = event;
+  // --- START DEBUG LOGGING AND ARGUMENT EXTRACTION ---
+  console.log('--- START ARGUMENT EXTRACTION ---');
+  console.log('RAW EVENT RECEIVED:', JSON.stringify(event));
+
+  let args: HandlerArgs;
+
+  // Safely cast 'event' to 'unknown' before checking for the nested 'arguments' property
+  const eventAsUnknown = event as unknown;
+
+  if (
+    eventAsUnknown &&
+    (eventAsUnknown as { arguments: HandlerArgs }).arguments
+  ) {
+    // Case 1: Arguments are nested inside 'arguments' property
+    args = (eventAsUnknown as { arguments: HandlerArgs }).arguments;
+    console.log("Extracted args from 'arguments' property.");
+  } else if (event) {
+    // Case 2: Arguments are the event object itself
+    args = event as HandlerArgs;
+    console.log('Used event object directly as args.');
+  } else {
+    console.error('❌ ERROR: Event object is missing.');
+    return [];
+  }
+
+  const { leadIds } = args;
+  console.log('Extracted leadIds:', leadIds);
+  console.log('--- END ARGUMENT EXTRACTION ---');
+
+  // Safety check before continuing
+  if (!leadIds || !Array.isArray(leadIds) || leadIds.length === 0) {
+    console.error('❌ ERROR: Lead IDs array is empty or invalid.');
+    return [];
+  }
   console.log(`🕵️‍♂️ Starting V3 Skip Trace for ${leadIds.length} leads...`);
 
   const results = [];
