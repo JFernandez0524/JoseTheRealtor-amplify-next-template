@@ -8,7 +8,5 @@ export const uploadCsvHandler = defineFunction({
   memoryMB: 512,
   environment: {
     GOOGLE_MAPS_API_KEY: secret('GOOGLE_MAPS_API_KEY'),
-    // NOTIFICATION_WEBHOOK_URL: process.env.NOTIFICATION_WEBHOOK_URL!,
-    // AUDIT_LOG_BUCKET: process.env.AUDIT_LOG_BUCKET!,
   },
 });
