@@ -33,11 +33,9 @@ export default function DashboardPage() {
   const [searchQuery, setSearchQuery] = useState<string>('');
 
   const [isLoading, setIsLoading] = useState(true);
-  const [isSkipTracing, setIsSkipTracing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [isSkipTracing, setIsSkipTracing] = useState(false); // Removed 'error' state, all errors handled by alertState
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null); // 🟢 STATE FOR AMPLIFY ALERT
 
-  // 🟢 NEW STATE FOR AMPLIFY ALERT
   const [alertState, setAlertState] = useState<AlertState>({
     isVisible: false,
     variation: 'info',
@@ -45,9 +43,8 @@ export default function DashboardPage() {
     body: '',
   });
 
-  const router = useRouter();
+  const router = useRouter(); // 🟢 HELPER FUNCTION TO DISPLAY ALERT
 
-  // 🟢 HELPER FUNCTION TO DISPLAY ALERT
   const showAlert = (
     variation: AlertState['variation'],
     heading: string,
@@ -74,7 +71,6 @@ export default function DashboardPage() {
 
   const fetchLeads = async () => {
     setIsLoading(true);
-    setError(null);
     handleDismissAlert(); // Clear previous alerts on refresh
 
     try {
@@ -108,8 +104,12 @@ export default function DashboardPage() {
 
       setLeads(sortedLeads);
     } catch (err: any) {
-      console.error(err);
-      setError(err.message || 'Failed to load leads.');
+      console.error(err); // 🟢 FIX: Use showAlert for fetch errors
+      showAlert(
+        'error',
+        'Failed to Load Leads',
+        err.message || 'Failed to retrieve data from the server.'
+      );
     } finally {
       setIsLoading(false);
     }
@@ -139,8 +139,7 @@ export default function DashboardPage() {
         'Please select at least one lead to skip trace.'
       );
       return;
-    }
-    // Retain the native confirm for bulk action safety
+    } // Retain the native confirm for bulk action safety
     if (!confirm(`Skip Trace ${selectedLeads.length} leads?`)) return;
 
     setIsSkipTracing(true);
@@ -150,9 +149,8 @@ export default function DashboardPage() {
       await client.mutations.skipTraceLeads({
         leadIds: selectedLeads,
         targetCrm: 'NONE',
-      });
+      }); // 🟢 SUCCESS ALERT FOR SKIP TRACE
 
-      // 🟢 SUCCESS ALERT FOR SKIP TRACE
       showAlert(
         'success',
         'Skip Trace Complete!',
@@ -161,8 +159,7 @@ export default function DashboardPage() {
       setSelectedLeads([]);
       await fetchLeads();
     } catch (err: any) {
-      console.error(err);
-      // 🛑 ERROR ALERT FOR SKIP TRACE
+      console.error(err); // 🛑 ERROR ALERT FOR SKIP TRACE
       showAlert(
         'error',
         'Skip Trace Failed.',
@@ -181,8 +178,7 @@ export default function DashboardPage() {
     try {
       await Promise.all(
         selectedLeads.map((id) => client.models.PropertyLead.delete({ id }))
-      );
-      // 🟢 SUCCESS ALERT FOR DELETE
+      ); // 🟢 SUCCESS ALERT FOR DELETE
       showAlert(
         'success',
         'Delete Complete',
@@ -191,8 +187,7 @@ export default function DashboardPage() {
       setSelectedLeads([]);
       await fetchLeads();
     } catch (err: any) {
-      console.error(err);
-      // 🛑 ERROR ALERT FOR DELETE
+      console.error(err); // 🛑 ERROR ALERT FOR DELETE
       showAlert(
         'error',
         'Delete Failed',
@@ -217,8 +212,7 @@ export default function DashboardPage() {
     }
 
     const date = new Date().toISOString().split('T')[0];
-    downloadLeadsAsCsv(leadsToExport, `mojo_export_${date}.csv`);
-    // 🟢 INFO ALERT FOR EXPORT START
+    downloadLeadsAsCsv(leadsToExport, `mojo_export_${date}.csv`); // 🟢 INFO ALERT FOR EXPORT START
     showAlert(
       'info',
       'Export Started',
@@ -232,7 +226,7 @@ export default function DashboardPage() {
 
   return (
     <main className='p-6 max-w-[95%] mx-auto'>
-      {/* 🟢 AMPLIFY ALERT COMPONENT */}
+            {/* 🟢 AMPLIFY ALERT COMPONENT */}     {' '}
       {alertState.isVisible && (
         <Alert
           variation={alertState.variation}
@@ -242,7 +236,7 @@ export default function DashboardPage() {
           hasIcon={true}
           marginBottom='size.large'
         >
-          {alertState.body}
+                    {alertState.body}       {' '}
         </Alert>
       )}
             {/* Header & Actions */}     {' '}
@@ -333,8 +327,8 @@ export default function DashboardPage() {
         searchQuery={searchQuery}
         setSearchQuery={setSearchQuery}
       />
-            {/* Stats (Can be modularized later if needed) */}     {' '}
-      <div className='grid grid-cols-1 md:grid-cols-4 gap-4 mb-6'>
+            {/* Stats (Fixed for Responsiveness) */}     {' '}
+      <div className='grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-6'>
                {' '}
         <div className='bg-white rounded-lg shadow p-4 border'>
                     <p className='text-gray-600 text-sm'>Total Leads</p>       
@@ -376,15 +370,11 @@ export default function DashboardPage() {
               ).length
             }
                      {' '}
-          </p>
-                 {' '}
+          </p>{' '}
         </div>
              {' '}
       </div>
-            {/* 🛑 REMOVED OLD ERROR DISPLAY 🛑 */}     {' '}
-      {/* The general error display is handled by the fetchLeads error state, 
-        and the action alerts are handled by the new Amplify Alert. */}
-            {/* Table Component */}     {' '}
+      {/* Table Component */}{' '}
       <LeadTable
         leads={leads}
         selectedIds={selectedLeads}
@@ -392,8 +382,7 @@ export default function DashboardPage() {
         onToggleAll={toggleSelectAll}
         onToggleOne={toggleSelectLead}
         onRowClick={(id) => router.push(`/lead/${id}`)}
-      />
-         {' '}
+      />{' '}
     </main>
   );
 }

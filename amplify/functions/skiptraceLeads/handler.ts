@@ -15,38 +15,34 @@ const TABLE_NAME = process.env.AMPLIFY_DATA_LEAD_TABLE_NAME;
 const BATCH_DATA_SERVER_TOKEN = process.env.BATCH_DATA_SERVER_TOKEN;
 
 // ---------------------------------------------------------
-// 🟢 1. Local Type Definitions (Safe for Lambda)
+// 🟢 1. Local Type Definitions (Unchanged)
 // ---------------------------------------------------------
 
 // Mirrors your 'PropertyLead' Schema
 type DBLead = {
   id: string;
-  type: string;
+  type: string; // Owner Info
 
-  // Owner Info
   ownerFirstName?: string;
   ownerLastName?: string;
   ownerAddress: string;
   ownerCity: string;
   ownerState: string;
-  ownerZip: string;
+  ownerZip: string; // Admin Info
 
-  // Admin Info
   adminFirstName?: string;
   adminLastName?: string;
   adminAddress?: string;
   adminCity?: string;
   adminState?: string;
-  adminZip?: string;
+  adminZip?: string; // Mailing Info
 
-  // Mailing Info
   mailingAddress?: string | null;
   mailingCity?: string | null;
   mailingState?: string | null;
   mailingZip?: string | null;
-  isAbsenteeOwner?: boolean;
+  isAbsenteeOwner?: boolean; // Contact Arrays
 
-  // Contact Arrays
   phones?: string[];
   emails?: string[];
 
@@ -75,17 +71,17 @@ type HandlerArgs = {
 };
 
 // ---------------------------------------------------------
-// 🟢 2. Main Handler
+// 🟢 2. Main Handler (Unchanged)
 // ---------------------------------------------------------
 
 export const handler = async (event: HandlerArgs) => {
-  // --- START DEBUG LOGGING AND ARGUMENT EXTRACTION ---
+  // ... (Argument extraction logic remains the same) ...
+
   console.log('--- START ARGUMENT EXTRACTION ---');
   console.log('RAW EVENT RECEIVED:', JSON.stringify(event));
 
-  let args: HandlerArgs;
+  let args: HandlerArgs; // Safely cast 'event' to 'unknown' before checking for the nested 'arguments' property
 
-  // Safely cast 'event' to 'unknown' before checking for the nested 'arguments' property
   const eventAsUnknown = event as unknown;
 
   if (
@@ -106,14 +102,13 @@ export const handler = async (event: HandlerArgs) => {
 
   const { leadIds } = args;
   console.log('Extracted leadIds:', leadIds);
-  console.log('--- END ARGUMENT EXTRACTION ---');
+  console.log('--- END ARGUMENT EXTRACTION ---'); // Safety check before continuing
 
-  // Safety check before continuing
   if (!leadIds || !Array.isArray(leadIds) || leadIds.length === 0) {
     console.error('❌ ERROR: Lead IDs array is empty or invalid.');
     return [];
   }
-  console.log(`🕵️‍♂️ Starting V3 Skip Trace for ${leadIds.length} leads...`);
+  console.log(`🕵️‍♂️ Starting V1 Skip Trace for ${leadIds.length} leads...`);
 
   const results = [];
 
@@ -125,9 +120,8 @@ export const handler = async (event: HandlerArgs) => {
           TableName: TABLE_NAME,
           Key: { id: leadId },
         })
-      );
+      ); // Cast to our local type
 
-      // Cast to our local type
       const lead = getRes.Item as DBLead;
 
       if (!lead) {
@@ -137,31 +131,31 @@ export const handler = async (event: HandlerArgs) => {
           error: 'Lead does not exist',
         });
         continue;
-      }
+      } // B. Call BatchData V1 (using existing function name)
 
-      // B. Call BatchData V3
-      const enrichedData = await callBatchDataV3(lead);
+      const enrichedData = await callBatchDataV3(lead); // Handle Failures
 
-      // Handle Failures
       if (
         enrichedData.status === 'NO_MATCH' ||
-        enrichedData.status === 'INVALID_GEO'
+        enrichedData.status === 'INVALID_GEO' ||
+        enrichedData.status === 'ERROR'
       ) {
-        console.log(`⚠️ No match or Invalid Geo for lead: ${leadId}`);
+        // Catch V1 errors here
+        console.log(
+          `⚠️ No match, Invalid Geo, or API Error for lead: ${leadId}. Status: ${enrichedData.status}`
+        );
         await updateLeadStatus(leadId, 'NO_MATCH');
         results.push({ id: leadId, status: 'NO_MATCH' });
         continue;
-      }
+      } // C. Prepare Update Data
 
-      // C. Prepare Update Data
       const newPhones = [
         ...new Set([...(lead.phones || []), ...enrichedData.foundPhones]),
       ];
       const newEmails = [
         ...new Set([...(lead.emails || []), ...enrichedData.foundEmails]),
-      ];
+      ]; // Logic: Prioritize new mailing data from BatchData, fall back to existing DB data
 
-      // Logic: Prioritize new mailing data from BatchData, fall back to existing DB data
       const finalMailingAddress =
         enrichedData.mailingData?.mailingAddress ||
         lead.mailingAddress ||
@@ -177,10 +171,9 @@ export const handler = async (event: HandlerArgs) => {
       const finalMailingZip =
         enrichedData.mailingData?.mailingZip ||
         lead.mailingZip ||
-        lead.ownerZip;
+        lead.ownerZip; // Logic: Detect Absentee Owner (Only for Pre-foreclosure)
+      // If V1 returned a mailing address that is DIFFERENT from the property address, mark absentee.
 
-      // Logic: Detect Absentee Owner (Only for Pre-foreclosure)
-      // If V3 returned a mailing address that is DIFFERENT from the property address, mark absentee.
       let isAbsentee = lead.isAbsenteeOwner;
       if (
         lead.type !== 'PROBATE' &&
@@ -188,9 +181,8 @@ export const handler = async (event: HandlerArgs) => {
         enrichedData.mailingData.mailingAddress !== lead.ownerAddress
       ) {
         isAbsentee = true;
-      }
+      } // Prepare Update Object
 
-      // Prepare Update Object
       const updatedLead = {
         ...lead,
         phones: newPhones,
@@ -202,30 +194,29 @@ export const handler = async (event: HandlerArgs) => {
         isAbsenteeOwner: isAbsentee,
         skipTraceStatus: 'COMPLETED',
         updatedAt: new Date().toISOString(),
-      };
+      }; // 🛑 Final Absentee Owner check (Fix for :iao crash)
 
       if (
         updatedLead.isAbsenteeOwner === undefined ||
         updatedLead.isAbsenteeOwner === null
       ) {
         updatedLead.isAbsenteeOwner = false;
-      }
+      } // D. Save to DynamoDB
 
-      // D. Save to DynamoDB
       await ddbDocClient.send(
         new UpdateCommand({
           TableName: TABLE_NAME,
           Key: { id: leadId },
           UpdateExpression: `SET 
-            phones = :p, 
-            emails = :e, 
-            skipTraceStatus = :s, 
-            mailingAddress = :ma,
-            mailingCity = :mc,
-            mailingState = :ms,
-            mailingZip = :mz,
-            isAbsenteeOwner = :iao,
-            updatedAt = :u`,
+              phones = :p, 
+              emails = :e, 
+              skipTraceStatus = :s, 
+              mailingAddress = :ma,
+              mailingCity = :mc,
+              mailingState = :ms,
+              mailingZip = :mz,
+              isAbsenteeOwner = :iao,
+              updatedAt = :u`,
           ExpressionAttributeValues: {
             ':p': updatedLead.phones,
             ':e': updatedLead.emails,
@@ -238,9 +229,8 @@ export const handler = async (event: HandlerArgs) => {
             ':u': updatedLead.updatedAt,
           },
         })
-      );
+      ); // E. CRM Sync
 
-      // E. CRM Sync
       await syncToGoHighLevel(updatedLead);
 
       results.push({
@@ -252,6 +242,7 @@ export const handler = async (event: HandlerArgs) => {
     } catch (error: any) {
       console.error(`❌ Error processing lead ${leadId}:`, error);
       results.push({ id: leadId, status: 'ERROR', error: error.message });
+      await updateLeadStatus(leadId, 'FAILED'); // 🛑 Ensure status is set to FAILED on generic crash
     }
   }
 
@@ -259,27 +250,24 @@ export const handler = async (event: HandlerArgs) => {
 };
 
 // ---------------------------------------------------------
-// 🛠️ HELPER: BatchData V3 API Call
+// 🛠️ HELPER: BatchData V1 API Call
 // ---------------------------------------------------------
 
 async function callBatchDataV3(lead: DBLead): Promise<BatchDataResult> {
-  if (!BATCH_DATA_SERVER_TOKEN) throw new Error('Missing BatchData API Key');
+  if (!BATCH_DATA_SERVER_TOKEN) throw new Error('Missing BatchData API Key'); // 1. Dynamic Targeting Logic
 
-  // 1. Dynamic Targeting Logic
   let targetName = { first: lead.ownerFirstName, last: lead.ownerLastName };
   let targetAddress = {
     street: lead.ownerAddress ? lead.ownerAddress.trim() : '',
     city: lead.ownerCity ? lead.ownerCity.trim() : '',
-    state: lead.ownerState ? lead.ownerState.trim().toUpperCase() : '', // Ensure upper case for state
+    state: lead.ownerState ? lead.ownerState.trim().toUpperCase() : '',
     zip: lead.ownerZip ? lead.ownerZip.trim() : '',
-  };
+  }; // Override: Probate targets Admin
 
-  // Override: Probate targets Admin
   if (lead.type?.toUpperCase() === 'PROBATE') {
     console.log(`⚰️ Probate Lead: Skip tracing Admin`);
-    targetName = { first: lead.adminFirstName, last: lead.adminLastName };
+    targetName = { first: lead.adminFirstName, last: lead.adminLastName }; // Prefer the standardized mailing address if we have it (from upload), otherwise raw admin address
 
-    // Prefer the standardized mailing address if we have it (from upload), otherwise raw admin address
     if (lead.mailingAddress) {
       targetAddress = {
         street: lead.mailingAddress,
@@ -295,86 +283,85 @@ async function callBatchDataV3(lead: DBLead): Promise<BatchDataResult> {
         zip: lead.adminZip!,
       };
     }
-  }
+  } // 🛑 V1 PAYLOAD STRUCTURE
 
   const payload = {
-    requests: [
-      {
-        requestId: lead.id,
-        name: targetName,
-        propertyAddress: targetAddress,
-      },
-    ],
+    requestId: lead.id, // V1 accepts requestId at the top level [cite: 70]
+    name: targetName, // V1 supports name targeting [cite: 16]
+    propertyAddress: targetAddress, // V1 supports property address [cite: 13]
     options: {
-      prioritizeMobilePhones: true,
-      includeTCPABlacklistedPhones: false,
+      prioritizeMobilePhones: true, // Prioritize mobile phones [cite: 26]
+      includeTCPABlacklistedPhones: false, // V1 Default: Filters out DNC/TCPA restricted phones [cite: 23, 7]
     },
   };
 
   try {
     const res = await axios.post(
-      'https://api.batchdata.com/api/v3/property/skip-trace',
+      // 🛑 V1 ENDPOINT
+      'https://api.batchdata.com/api/v1/property/skip-trace',
       payload,
       {
         headers: {
-          Authorization: `Bearer ${BATCH_DATA_SERVER_TOKEN}`,
+          Authorization: `Bearer ${BATCH_DATA_SERVER_TOKEN}`, // Authentication required [cite: 9]
           'Content-Type': 'application/json',
           Accept: 'application/json',
         },
       }
-    );
+    ); // 🛑 V1 RESPONSE PARSING: The result object is usually nested under 'results' and contains 'persons' [cite: 28, 29]
 
-    const resultData = res.data?.result?.data || [];
-    const match = resultData.find((r: any) => r.requestId === lead.id);
+    const resultContainer = res.data?.results;
+    const person = resultContainer?.persons?.[0]; // V1 focuses on a single person [cite: 29]
+    // If no person is found, or match status is false
 
-    // Standardize error returns with consistent shape
-    if (!match)
+    if (!person || resultContainer?.meta?.matched === false) {
       return {
         status: 'NO_MATCH',
         foundPhones: [],
         foundEmails: [],
         mailingData: null,
       };
-    if (match.meta?.matched === false)
-      return {
-        status: 'INVALID_GEO',
-        foundPhones: [],
-        foundEmails: [],
-        mailingData: null,
-      };
+    }
+
+    // Note: V1 typically doesn't have an INVALID_GEO status in the same way as V3. NO_MATCH is sufficient.
 
     const foundPhones: string[] = [];
     const foundEmails: string[] = [];
 
-    let mailingData: MailingAddressData | null = null;
+    let mailingData: MailingAddressData | null = null; // 🟢 MAILING ADDRESS CAPTURE
 
-    // 🟢 CORRECTED ADDRESS CAPTURE LOGIC
-    if (match.property?.mailingAddress) {
-      // Check the correct object location
-      const mailAddress = match.property.mailingAddress;
+    if (person.mailingAddress) {
+      const mailAddress = person.mailingAddress;
 
       mailingData = {
         // Mapping from API response fields
-        mailingAddress: mailAddress.street, // street
+        mailingAddress: mailAddress.street,
         mailingCity: mailAddress.city,
         mailingState: mailAddress.state,
-        mailingZip: mailAddress.zip, // Note: We don't need 'fullAddress' here since we're composing it from components
+        mailingZip: mailAddress.zip,
       };
-    } // ... (Original logic for phones and emails remains the same, but move it here)
+    } // 🛑 PHONE FILTERING: Mobile, Score 90+, and DNC check
 
-    if (match.persons && match.persons.length > 0) {
-      match.persons.forEach((person: any) => {
-        // 🟢 PHONE FILTERING
-        person.phones?.forEach((p: any) => {
-          if (p.type === 'Mobile' && (p.rank || 0) >= 90 && p.number) {
-            foundPhones.push(p.number);
-          }
-        }); // 🟢 EMAIL FILTERING
-        person.emails?.forEach((e: any) => {
-          if (e.tested === true && e.email) {
-            foundEmails.push(e.email);
-          }
-        });
+    if (person.phoneNumbers) {
+      person.phoneNumbers.forEach((p: any) => {
+        const score = parseFloat(p.score) || 0; // Score is a string in V1 response
+        if (
+          p.type === 'Mobile' &&
+          score >= 90 &&
+          p.dnc !== true && // Explicit DNC check [cite: 40]
+          p.number
+        ) {
+          // Ensure number exists
+          foundPhones.push(p.number);
+        }
+      });
+    } // 🟢 EMAIL FILTERING
+
+    if (person.emails) {
+      person.emails.forEach((e: any) => {
+        if (e.tested === true && e.email) {
+          // Email is tested/validated [cite: 45]
+          foundEmails.push(e.email);
+        }
       });
     }
 
@@ -385,7 +372,7 @@ async function callBatchDataV3(lead: DBLead): Promise<BatchDataResult> {
       mailingData,
     };
   } catch (error: any) {
-    console.error('BatchData V3 API Error:', error.message);
+    console.error('BatchData V1 API Error:', error.message);
     return {
       status: 'ERROR',
       foundPhones: [],
