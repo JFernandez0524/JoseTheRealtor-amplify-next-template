@@ -38,6 +38,7 @@
     "autoprefixer": "^10.4.21",
     "aws-cdk": "^2",
     "aws-cdk-lib": "^2",
+    "baseline-browser-mapping": "^2.9.7",
     "constructs": "^10.3.0",
     "esbuild": "^0.25.10",
     "postcss": "^8.5.6",

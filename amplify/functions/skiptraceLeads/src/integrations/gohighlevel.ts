@@ -58,11 +58,7 @@ export async function syncToGoHighLevel(lead: DBLead) {
     // But we'll proceed so you at least have the record.
 
     // 3. Logic: Dynamic Tags
-    const tags = [
-      lead.type, // "PROBATE" or "PREFORECLOSURE"
-      'Imported from JTR App',
-      'Start Dialing Campaign',
-    ];
+    const tags = ['Start Dialing Campaign'];
     if (lead.isAbsenteeOwner) tags.push('Absentee Owner');
 
     // 4. Construct Payload
@@ -76,7 +72,7 @@ export async function syncToGoHighLevel(lead: DBLead) {
 
       country: 'US',
 
-      source: 'App Skip Trace',
+      source: 'JTR_SkipTrace_App',
       tags: tags,
       dnd: false,
 
@@ -95,10 +91,13 @@ export async function syncToGoHighLevel(lead: DBLead) {
         property_state: lead.ownerState,
         property_zip: lead.ownerZip,
         lead_source_id: lead.id,
+        type: 'lead',
+        lead_type: lead.type,
         skiptracestatus: lead.skipTraceStatus,
         phone_2: lead.phones && lead.phones.length > 1 ? lead.phones[1] : '', // 2nd phone number (Index 1)
         phone_3: lead.phones && lead.phones.length > 2 ? lead.phones[2] : '', // 3rd phone number (Index 2)
-        phone_4: lead.phones && lead.phones.length > 2 ? lead.phones[3] : '', // 3rd phone number (Index 2)
+        phone_4: lead.phones && lead.phones.length > 3 ? lead.phones[3] : '', // 3rd phone number (Index 2)
+        phone_5: lead.phones && lead.phones.length > 4 ? lead.phones[4] : '', // 3rd phone number (Index 2),
         email_2: lead.emails && lead.emails.length > 1 ? lead.emails[1] : '', // 2nd email address (Index 1)
         email_3: lead.emails && lead.emails.length > 2 ? lead.emails[2] : '', // 3rd email address (Index 2)
       },
