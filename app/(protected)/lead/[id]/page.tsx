@@ -26,6 +26,7 @@ import { type Schema } from '@/amplify/data/resource';
 
 // Define the shape of our Lead based on the Schema (Extended for custom/backend fields)
 type Lead = Schema['PropertyLead']['type'] & {
+  // Fields can be null if not set in DynamoDB
   notes?: string | null;
   ghlSyncStatus?: 'PENDING' | 'SUCCESS' | 'FAILED' | 'SKIPPED' | null;
   ghlContactId?: string | null;
@@ -309,7 +310,7 @@ export default function LeadDetailPage() {
              {' '}
       </div>
            {' '}
-      {/* 💥 FINAL LAYOUT: Using md:flex to ensure two columns display horizontally */}
+      {/* 💥 FINAL LAYOUT: Using md:flex and explicit fractional widths for ultimate enforcement */}
            {' '}
       <div className='flex flex-col md:flex-row gap-8'>
                {' '}
