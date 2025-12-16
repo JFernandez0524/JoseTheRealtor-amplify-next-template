@@ -12,19 +12,24 @@ import {
   useJsApiLoader,
   Libraries,
 } from '@react-google-maps/api';
-// REMOVED: import { ChevronLeft, ChevronRight } from 'lucide-react';
-// We will use native SVG for flexibility and consistency with Amplify UI structure
+
+// 👇 IMPORT NEW COMPONENTS FROM app/components
+import { LeadForm } from '@/app/components/leadDetails/LeadForm';
+import { GhlActions } from '@/app/components/leadDetails/GhlActions';
+import { LeadStatusBadge } from '@/app/components/leadDetails/LeadStatusBadge';
 
 // 👇 Import your frontend client
 import { client } from '@/app/utils/aws/data/frontEndClient';
 // 👇 Import the Schema type directly to ensure type safety
 import { type Schema } from '@/amplify/data/resource';
 
-// Define the shape of our Lead based on the Schema (Extended for GHL status)
+// Define the shape of our Lead based on the Schema (Extended for GHL status and the new 'notes' field)
 type Lead = Schema['PropertyLead']['type'] & {
-  ghlSyncStatus?: 'PENDING' | 'SUCCESS' | 'FAILED' | 'SKIPPED';
-  ghlContactId?: string;
-  ghlSyncDate?: string;
+  // 💥 ADDED: The 'notes' field, which is now in the schema
+  notes?: string | null;
+  ghlSyncStatus?: 'PENDING' | 'SUCCESS' | 'FAILED' | 'SKIPPED' | null;
+  ghlContactId?: string | null;
+  ghlSyncDate?: string | null;
 };
 
 const mapContainerStyle = {
@@ -37,7 +42,7 @@ const mapContainerStyle = {
 const libraries: Libraries = ['places'];
 
 const formatCurrency = (value?: number | string | null) => {
-  if (!value) return 'N/A';
+  if (!value || isNaN(Number(value))) return 'N/A';
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: 'USD',
@@ -70,9 +75,7 @@ export default function LeadDetailPage() {
   const [isSkipTracing, setIsSkipTracing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [navContext, setNavContext] = useState<NavContext | null>(null);
-
-  // --- NAVIGATION LOGIC ---
+  const [navContext, setNavContext] = useState<NavContext | null>(null); // --- NAVIGATION LOGIC ---
 
   const loadNavigationContext = useCallback(() => {
     // Only run on the client side
@@ -108,15 +111,12 @@ export default function LeadDetailPage() {
         : navContext.currentIndex - 1;
 
     if (newIndex >= 0 && newIndex < navContext.ids.length) {
-      const nextId = navContext.ids[newIndex];
-      // Use router.push to navigate to the new lead detail page
+      const nextId = navContext.ids[newIndex]; // Use router.push to navigate to the new lead detail page
       router.push(`/lead/${nextId}`);
     }
-  };
+  }; // --- Data Fetching/Update Logic ---
 
-  // --- Data Fetching Logic ---
-
-  const loadData = async (id: string) => {
+  const loadData = useCallback(async (id: string) => {
     setIsLoading(true);
     setError(null);
     try {
@@ -130,8 +130,8 @@ export default function LeadDetailPage() {
       }
 
       setLead(leadData as Lead); // Cast to the extended Lead type
-
       // 2. 🟡 FETCH MARKET DATA (Best Effort)
+
       try {
         const response = await axios.get(`/api/v1/leads/${id}`);
         if (response.data && response.data.marketAnalysis) {
@@ -149,6 +149,43 @@ export default function LeadDetailPage() {
     } finally {
       setIsLoading(false);
     }
+  }, []);
+
+  const handleSkipTrace = async () => {
+    if (!lead) return;
+    if (lead.skipTraceStatus === 'COMPLETED') return;
+
+    setIsSkipTracing(true);
+    try {
+      // Call the AppSync mutation
+      const { errors } = await client.mutations.skipTraceLeads({
+        leadIds: [lead.id],
+      });
+
+      if (errors) {
+        throw new Error(
+          errors.map((e) => e.message).join(' | ') ||
+            'Skip Trace failed to execute mutation.'
+        );
+      } // Refresh data after mutation success
+
+      await loadData(lead.id);
+      alert('Skip Trace Complete! Refreshing data...');
+    } catch (err: any) {
+      console.error('Skip trace failed:', err);
+      alert(`Skip trace failed: ${err.message || 'Please try again.'}`);
+    } finally {
+      setIsSkipTracing(false);
+    }
+  };
+
+  const handleLeadUpdate = (updatedLead: Lead) => {
+    setLead(updatedLead);
+  };
+
+  // Refetch data for GHL actions completion (called after manual sync)
+  const handleGhlSyncComplete = () => {
+    loadData(currentLeadId);
   };
 
   useEffect(() => {
@@ -156,36 +193,12 @@ export default function LeadDetailPage() {
       loadData(currentLeadId);
       loadNavigationContext(); // Load context on ID change
     }
-  }, [currentLeadId, loadNavigationContext]); // Dependency array updated
+  }, [currentLeadId, loadData, loadNavigationContext]); // --- RENDER ---
 
-  const handleSkipTrace = async () => {
-    if (!lead) return;
-    // ... (Skip Trace logic remains the same) ...
-    if (lead.skipTraceStatus === 'COMPLETED') return;
-
-    setIsSkipTracing(true);
-    try {
-      await client.mutations.skipTraceLeads({
-        leadIds: [lead.id],
-        // targetCrm: 'NONE', // Removed targetCrm argument
-      });
-
-      // Refresh data
-      await loadData(lead.id);
-      alert('Skip Trace Complete!');
-    } catch (err: any) {
-      console.error('Skip trace failed:', err);
-      alert('Skip trace failed. Please try again.');
-    } finally {
-      setIsSkipTracing(false);
-    }
-  };
-
-  // --- RENDER ---
   if (isLoading) {
     return (
       <main className='max-w-4xl mx-auto py-10 px-6 text-center'>
-        <Loader size='large' />
+                <Loader size='large' />     {' '}
       </main>
     );
   }
@@ -193,14 +206,15 @@ export default function LeadDetailPage() {
   if (error) {
     return (
       <main className='max-w-4xl mx-auto py-10 px-6'>
-        <h1 className='text-3xl font-bold text-red-600'>Error</h1>
-        <p>{error}</p>
+                <h1 className='text-3xl font-bold text-red-600'>Error</h1>     
+          <p>{error}</p>       {' '}
         <button
           onClick={() => router.push('/dashboard')}
           className='mt-4 bg-gray-200 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-300'
         >
-          ← Go to Dashboard
+                    ← Go to Dashboard        {' '}
         </button>
+             {' '}
       </main>
     );
   }
@@ -208,12 +222,11 @@ export default function LeadDetailPage() {
   if (!lead) {
     return (
       <main className='max-w-4xl mx-auto py-10 px-6'>
-        <h1 className='text-3xl font-bold'>Lead Not Found</h1>
+                <h1 className='text-3xl font-bold'>Lead Not Found</h1>     {' '}
       </main>
     );
-  }
+  } // 🟢 MAP LOGIC: Ensure we have numbers
 
-  // 🟢 MAP LOGIC: Ensure we have numbers
   const mapCenter =
     lead.latitude && lead.longitude
       ? { lat: Number(lead.latitude), lng: Number(lead.longitude) }
@@ -221,20 +234,23 @@ export default function LeadDetailPage() {
 
   return (
     <main className='max-w-6xl mx-auto py-10 px-6'>
+           {' '}
       <div className='flex justify-between items-center mb-8'>
-        {/* 💥 1. NAVIGATION ARROWS BLOCK */}
+                {/* 1. NAVIGATION ARROWS BLOCK */}       {' '}
         <div className='flex items-center gap-4'>
-          <h1 className='text-3xl font-bold text-gray-800'>Lead Detail</h1>
+                   {' '}
+          <h1 className='text-3xl font-bold text-gray-800'>Lead Detail</h1>     
+             {' '}
           {navContext && (
             <div className='flex gap-2 text-gray-500 items-center border rounded-full p-1 bg-gray-50'>
-              {/* Previous Button */}
+                            {/* Previous Button */}             {' '}
               <button
                 onClick={() => navigateToLead('prev')}
                 disabled={navContext.isFirst}
                 className='p-1 rounded-full text-gray-700 hover:bg-white disabled:opacity-30 disabled:cursor-not-allowed transition'
                 title='Previous Lead'
               >
-                {/* SVG for ChevronLeft */}
+                                {/* SVG for ChevronLeft */}               {' '}
                 <svg
                   xmlns='http://www.w3.org/2000/svg'
                   width='20'
@@ -246,23 +262,24 @@ export default function LeadDetailPage() {
                   strokeLinecap='round'
                   strokeLinejoin='round'
                 >
-                  <path d='m15 18-6-6 6-6' />
+                                    <path d='m15 18-6-6 6-6' />             
+                   {' '}
                 </svg>
+                             {' '}
               </button>
-
-              {/* Status Display */}
+                            {/* Status Display */}             {' '}
               <span className='px-2 text-sm font-medium'>
-                {navContext.currentIndex + 1} / {navContext.ids.length}
+                                {navContext.currentIndex + 1} /{' '}
+                {navContext.ids.length}             {' '}
               </span>
-
-              {/* Next Button */}
+                            {/* Next Button */}             {' '}
               <button
                 onClick={() => navigateToLead('next')}
                 disabled={navContext.isLast}
                 className='p-1 rounded-full text-gray-700 hover:bg-white disabled:opacity-30 disabled:cursor-not-allowed transition'
                 title='Next Lead'
               >
-                {/* SVG for ChevronRight */}
+                                {/* SVG for ChevronRight */}               {' '}
                 <svg
                   xmlns='http://www.w3.org/2000/svg'
                   width='20'
@@ -274,254 +291,342 @@ export default function LeadDetailPage() {
                   strokeLinecap='round'
                   strokeLinejoin='round'
                 >
-                  <path d='m9 18 6-6-6-6' />
+                                    <path d='m9 18 6-6-6-6' />             
+                   {' '}
                 </svg>
+                             {' '}
               </button>
+                         {' '}
             </div>
           )}
+                 {' '}
         </div>
-
-        {/* 2. Back Button */}
+                {/* 2. Back Button */}       {' '}
         <button
           onClick={() => router.push('/dashboard')}
           className='bg-white border text-gray-700 px-4 py-2 rounded-md hover:bg-gray-50 transition shadow-sm'
         >
-          ← Back to Dashboard
+                    ← Back to Dashboard        {' '}
         </button>
+             {' '}
       </div>
-
-      {/* Lead Information */}
+            {/* Lead Information */}     {' '}
       <div className='mb-8'>
-        <h2 className='text-3xl font-bold'>{lead.ownerAddress}</h2>
+                <h2 className='text-3xl font-bold'>{lead.ownerAddress}</h2>     
+         {' '}
         <p className='text-lg text-gray-600'>
-          {lead.ownerCity}, {lead.ownerState} {lead.ownerZip}
+                    {lead.ownerCity}, {lead.ownerState} {lead.ownerZip}     
+           {' '}
         </p>
+             {' '}
       </div>
-
+           {' '}
       <div className='grid grid-cols-1 lg:grid-cols-3 gap-8'>
+               {' '}
         <div className='lg:col-span-2 space-y-6'>
-          {/* Property Details */}
+                   {/* 💥 REPLACED: Editable Lead Form Component */}
+          <LeadForm lead={lead} onUpdate={handleLeadUpdate} client={client} /> 
+                  {/* Property Details Card (Replaces old status logic) */}     
+             {' '}
           <div className='bg-white shadow border rounded-lg p-6'>
-            <h2 className='text-xl font-semibold mb-4'>Property Details</h2>
+                       {' '}
+            <h2 className='text-xl font-semibold mb-4'>Property Details</h2>   
+                   {' '}
             <div className='grid grid-cols-2 gap-4'>
+                           {' '}
               <div>
+                               {' '}
                 <label className='text-sm font-medium text-gray-500'>
-                  Type
+                                    Type                {' '}
                 </label>
-                <p className='text-base capitalize'>{lead.type}</p>
+                               {' '}
+                <p className='text-base capitalize'>{lead.type}</p>           
+                 {' '}
               </div>
+                           
+              {/* 💥 REPLACED: Skip Trace Status Display with Badge Component */}
+                           {' '}
               <div>
+                               {' '}
                 <label className='text-sm font-medium text-gray-500'>
-                  Skip Trace Status
+                                    Skip Trace Status                {' '}
                 </label>
+                               {' '}
                 <p className='text-base'>
-                  <span
-                    className={`px-2 py-0.5 rounded text-xs font-bold ${
-                      lead.skipTraceStatus === 'COMPLETED'
-                        ? 'bg-green-100 text-green-800'
-                        : lead.skipTraceStatus === 'FAILED'
-                          ? 'bg-red-100 text-red-800'
-                          : lead.skipTraceStatus === 'NO_MATCH'
-                            ? 'bg-gray-100 text-gray-800'
-                            : 'bg-yellow-100 text-yellow-800'
-                    }`}
-                  >
-                    {lead.skipTraceStatus}
-                  </span>
+                  <LeadStatusBadge
+                    type='SKIP_TRACE'
+                    status={lead.skipTraceStatus}
+                  />
+                                 {' '}
                 </p>
+                             {' '}
               </div>
-              {/* 💥 NEW: GHL Sync Status Display */}
+                           
+              {/* 💥 REPLACED: GHL Sync Status Display with Badge Component */} 
+                         {' '}
               <div>
+                               {' '}
                 <label className='text-sm font-medium text-gray-500'>
-                  GHL Sync Status
+                                    GHL Sync Status                {' '}
                 </label>
+                               {' '}
                 <p className='text-base'>
-                  <span
-                    className={`px-2 py-0.5 rounded text-xs font-bold ${
-                      lead.ghlSyncStatus === 'SUCCESS'
-                        ? 'bg-purple-100 text-purple-800'
-                        : lead.ghlSyncStatus === 'FAILED'
-                          ? 'bg-red-100 text-red-800'
-                          : lead.ghlSyncStatus === 'SKIPPED'
-                            ? 'bg-gray-100 text-gray-800'
-                            : 'bg-yellow-100 text-yellow-800'
-                    }`}
-                  >
-                    {lead.ghlSyncStatus || 'NOT_ATTEMPTED'}
-                  </span>
+                  <LeadStatusBadge
+                    type='GHL_SYNC'
+                    status={lead.ghlSyncStatus}
+                  />
+                                 {' '}
                 </p>
+                             {' '}
               </div>
+                           
               <div>
+                               {' '}
                 <label className='text-sm font-medium text-gray-500'>
-                  Source
+                                    Source                {' '}
                 </label>
-                <p className='text-base'>CSV Import</p>
+                                <p className='text-base'>CSV Import</p>         
+                   {' '}
               </div>
+                         {' '}
             </div>
+                       {' '}
             {lead.type === 'probate' && (
               <>
+                               {' '}
                 <h3 className='text-lg font-semibold mt-6 mb-2'>
-                  Executor Info
+                                    Executor Info                {' '}
                 </h3>
+                               {' '}
                 <div className='grid grid-cols-2 gap-4'>
+                                   {' '}
                   <div>
+                                       {' '}
                     <label className='text-sm font-medium text-gray-500'>
-                      Name
+                                            Name                    {' '}
                     </label>
+                                       {' '}
                     <p className='text-base'>
-                      {lead.adminFirstName} {lead.adminLastName}
+                                            {lead.adminFirstName}{' '}
+                      {lead.adminLastName}                   {' '}
                     </p>
+                                     {' '}
                   </div>
+                                   {' '}
                   <div>
+                                       {' '}
                     <label className='text-sm font-medium text-gray-500'>
-                      Mailing Address
+                                            Mailing Address                  
+                       {' '}
                     </label>
-                    <p className='text-base'>{lead.adminAddress || 'N/A'}</p>
+                                       {' '}
+                    <p className='text-base'>{lead.adminAddress || 'N/A'}</p>   
+                                 {' '}
                   </div>
+                                 {' '}
                 </div>
+                             {' '}
               </>
             )}
+                     {' '}
           </div>
-
-          {/* Contacts Card */}
+                    {/* Contacts Card */}         {' '}
           <div className='bg-white shadow border rounded-lg p-6 relative'>
+                       {' '}
             <div className='flex justify-between items-center mb-4'>
-              <h2 className='text-xl font-semibold'>Contacts</h2>
-              {/* Skip Trace Button (re-enabled for single lead) */}
+                            <h2 className='text-xl font-semibold'>Contacts</h2> 
+                          {/* Skip Trace Button (re-enabled for single lead) */}
+                           {' '}
               <button
                 onClick={handleSkipTrace}
                 disabled={isSkipTracing || lead.skipTraceStatus === 'COMPLETED'}
                 className={`
-                  text-sm px-3 py-1.5 rounded transition-colors flex items-center gap-2
-                  ${
-                    lead.skipTraceStatus === 'COMPLETED'
-                      ? 'bg-green-100 text-green-700 cursor-not-allowed border border-green-200'
-                      : 'bg-indigo-600 text-white hover:bg-indigo-700 disabled:bg-indigo-300'
-                  }
-                `}
+                  text-sm px-3 py-1.5 rounded transition-colors flex items-center gap-2
+                  ${
+                  lead.skipTraceStatus === 'COMPLETED'
+                    ? 'bg-green-100 text-green-700 cursor-not-allowed border border-green-200'
+                    : 'bg-indigo-600 text-white hover:bg-indigo-700 disabled:bg-indigo-300'
+                }
+                `}
               >
+                               {' '}
                 {isSkipTracing ? (
                   <>
-                    <Loader size='small' variation='linear' /> Tracing...
+                                       {' '}
+                    <Loader size='small' variation='linear' /> Tracing...      
+                               {' '}
                   </>
                 ) : lead.skipTraceStatus === 'COMPLETED' ? (
                   <>
-                    <span>✓</span> Skiptrace Complete
+                                        <span>✓</span> Skiptrace Complete      
+                               {' '}
                   </>
                 ) : lead.skipTraceStatus === 'NO_MATCH' ? (
                   'Retry Skip Trace'
                 ) : (
                   'Skip Trace Owner'
                 )}
+                             {' '}
               </button>
+                         {' '}
             </div>
-
+                       {' '}
             {(!lead.phones || lead.phones.length === 0) &&
             (!lead.emails || lead.emails.length === 0) ? (
               <div className='text-center py-6 bg-gray-50 rounded border border-dashed'>
+                               {' '}
                 <p className='text-gray-500 mb-2'>No contact info available.</p>
+                               {' '}
                 <p className='text-xs text-gray-400'>
-                  Click "Skip Trace Owner" to find numbers.
+                                    Click "Skip Trace Owner" to find numbers.  
+                               {' '}
                 </p>
+                             {' '}
               </div>
             ) : (
               <div className='space-y-4'>
+                               {' '}
                 <div>
+                                   {' '}
                   <h3 className='text-xs font-bold text-gray-500 uppercase mb-2'>
-                    Phone Numbers
+                                        Phone Numbers                  {' '}
                   </h3>
+                                   {' '}
                   {lead.phones && lead.phones.length > 0 ? (
                     <div className='flex flex-wrap gap-2'>
+                                           {' '}
                       {lead.phones.map((phone, i) => (
                         <div
                           key={i}
                           className='bg-green-50 text-green-800 border border-green-200 px-3 py-1 rounded text-sm font-mono flex items-center gap-2'
                         >
-                          📞 {phone}
+                                                    📞 {phone}                 
+                               {' '}
                         </div>
                       ))}
+                                         {' '}
                     </div>
                   ) : (
                     <span className='text-sm text-gray-400 italic'>
-                      None found
+                                            None found                    {' '}
                     </span>
                   )}
+                                 {' '}
                 </div>
+                               {' '}
                 <div>
+                                   {' '}
                   <h3 className='text-xs font-bold text-gray-500 uppercase mb-2'>
-                    Emails
+                                        Emails                  {' '}
                   </h3>
+                                   {' '}
                   {lead.emails && lead.emails.length > 0 ? (
                     <div className='flex flex-wrap gap-2'>
+                                           {' '}
                       {lead.emails.map((email, i) => (
                         <div
                           key={i}
                           className='bg-blue-50 text-blue-800 border border-blue-200 px-3 py-1 rounded text-sm flex items-center gap-2'
                         >
-                          ✉️ {email}
+                                                    ✉️ {email}                 
+                               {' '}
                         </div>
                       ))}
+                                         {' '}
                     </div>
                   ) : (
                     <span className='text-sm text-gray-400 italic'>
-                      None found
+                                            None found                    {' '}
                     </span>
                   )}
+                                 {' '}
                 </div>
+                             {' '}
               </div>
             )}
+                     {' '}
           </div>
-
-          {/* Activity Log - (Kept simple for now) */}
+                    {/* Activity Log - (Kept simple for now) */}         {' '}
           <div className='bg-white shadow border rounded-lg p-6'>
-            <h2 className='text-xl font-semibold mb-4'>Activity</h2>
-            <p className='text-gray-500'>No activities logged.</p>
+                        <h2 className='text-xl font-semibold mb-4'>Activity</h2>
+                        <p className='text-gray-500'>No activities logged.</p> 
+                   {' '}
           </div>
+                 {' '}
         </div>
-
-        {/* --- Right Column --- */}
+                {/* --- Right Column --- */}       {' '}
         <div className='lg:col-span-1 space-y-6'>
-          {/* Market Intel */}
+                   {/* 💥 NEW: GHL Actions Card */}
+          <GhlActions
+            leadId={lead.id}
+            ghlContactId={lead.ghlContactId}
+            ghlSyncStatus={lead.ghlSyncStatus}
+            onSyncComplete={handleGhlSyncComplete}
+            client={client}
+          />
+                    {/* Market Intel */}         {' '}
           <div className='bg-white shadow border rounded-lg p-6 border-l-4 border-l-blue-500'>
-            <h2 className='text-xl font-semibold mb-4'>Market Intel</h2>
+                       {' '}
+            <h2 className='text-xl font-semibold mb-4'>Market Intel</h2>       
+               {' '}
             {marketData ? (
               <div className='space-y-4'>
+                               {' '}
                 <div>
+                                   {' '}
                   <label className='text-xs uppercase font-bold text-gray-400'>
-                    Est. Value (Zestimate)
+                                        Est. Value (Zestimate)                
+                     {' '}
                   </label>
+                                   {' '}
                   <p className='text-2xl font-bold text-gray-800'>
-                    {formatCurrency(marketData.zestimate)}
+                                        {formatCurrency(marketData.zestimate)} 
+                                   {' '}
                   </p>
+                                 {' '}
                 </div>
+                               {' '}
                 <div>
+                                   {' '}
                   <label className='text-xs uppercase font-bold text-gray-400'>
-                    Est. Rent
+                                        Est. Rent                  {' '}
                   </label>
+                                   {' '}
                   <p className='text-xl font-semibold text-gray-700'>
-                    {formatCurrency(marketData.rentZestimate)} /mo
+                                       {' '}
+                    {formatCurrency(marketData.rentZestimate)} /mo              
+                       {' '}
                   </p>
+                                 {' '}
                 </div>
+                               {' '}
                 <div className='pt-2'>
+                                   {' '}
                   <span className='inline-block bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded'>
-                    Source: Bridge/Zillow
+                                        Source: Bridge/Zillow                
+                     {' '}
                   </span>
+                                 {' '}
                 </div>
+                             {' '}
               </div>
             ) : (
               <div className='text-center py-4 text-gray-500'>
-                <p>No market data available.</p>
+                                <p>No market data available.</p>               {' '}
                 <p className='text-xs mt-1'>
-                  (The API route for Market Intel might be outdated. We can fix
-                  this next.)
+                                    (The API route for Market Intel might be
+                  outdated. We can fix                   this next.)            
+                     {' '}
                 </p>
+                             {' '}
               </div>
             )}
+                     {' '}
           </div>
-
-          {/* Map Card */}
+                    {/* Map Card */}         {' '}
           <div className='bg-white shadow border rounded-lg p-6'>
-            <h2 className='text-xl font-semibold mb-4'>Map</h2>
+                        <h2 className='text-xl font-semibold mb-4'>Map</h2>     
+                 {' '}
             {isMapLoaded && mapCenter ? (
               <GoogleMap
                 mapContainerStyle={mapContainerStyle}
@@ -529,19 +634,26 @@ export default function LeadDetailPage() {
                 zoom={16}
                 options={{ disableDefaultUI: true, zoomControl: true }}
               >
-                <MarkerF position={mapCenter} />
+                                <MarkerF position={mapCenter} />           
+                 {' '}
               </GoogleMap>
             ) : (
               <div
                 className='flex items-center justify-center bg-gray-100 rounded text-gray-500'
                 style={{ height: '300px' }}
               >
-                {!isMapLoaded ? 'Loading Map...' : 'Address not geocoded.'}
+                               {' '}
+                {!isMapLoaded ? 'Loading Map...' : 'Address not geocoded.'}     
+                       {' '}
               </div>
             )}
+                     {' '}
           </div>
+                 {' '}
         </div>
+             {' '}
       </div>
+         {' '}
     </main>
   );
 }
