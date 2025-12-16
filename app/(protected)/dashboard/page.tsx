@@ -1,14 +1,16 @@
+// app/(protected)/dashboard/page.tsx
+
 'use client';
 
 import React from 'react';
-import { useState, useEffect, Dispatch, SetStateAction } from 'react'; // 💥 Import Dispatch/SetStateAction for clarity
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { client } from '../../../app/utils/aws/data/frontEndClient';
 import { getFrontEndUser } from '@/app/utils/aws/auth/amplifyFrontEndUser';
 import { type Schema } from '@/amplify/data/resource';
 import { downloadLeadsAsCsv } from '@/app/utils/csvExport';
 // Import Amplify UI Components
-import { Alert, Flex } from '@aws-amplify/ui-react';
+import { Alert, Flex, Loader } from '@aws-amplify/ui-react';
 
 // Import New Modular Components
 import { DashboardFilters } from '@/app/components/dashboard/DashboardFilters';
@@ -16,9 +18,10 @@ import { LeadTable } from '@/app/components/dashboard/LeadTable';
 
 // 1. CORRECT TYPE DEFINITION
 type Lead = Schema['PropertyLead']['type'] & {
-  ghlSyncStatus?: 'PENDING' | 'SUCCESS' | 'FAILED' | 'SKIPPED';
-  ghlContactId?: string;
-  ghlSyncDate?: string;
+  ghlSyncStatus?: 'PENDING' | 'SUCCESS' | 'FAILED' | 'SKIPPED' | null;
+  ghlContactId?: string | null;
+  ghlSyncDate?: string | null;
+  notes?: string | null;
 };
 
 // Define the shape for the Alert state
@@ -33,18 +36,16 @@ export default function DashboardPage() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [selectedLeads, setSelectedLeads] = useState<string[]>([]);
 
-  // Filter States
   const [filterType, setFilterType] = useState<string>('');
   const [filterStatus, setFilterStatus] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [filterGhlStatus, setFilterGhlStatus] = useState<string>(''); // 💥 NEW GHL FILTER STATE
+  const [filterGhlStatus, setFilterGhlStatus] = useState<string>('');
 
   const [isLoading, setIsLoading] = useState(true);
   const [isSkipTracing, setIsSkipTracing] = useState(false);
   const [isGhlSyncing, setIsGhlSyncing] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
-  // 🟢 STATE FOR AMPLIFY ALERT
   const [alertState, setAlertState] = useState<AlertState>({
     isVisible: false,
     variation: 'info',
@@ -54,7 +55,6 @@ export default function DashboardPage() {
 
   const router = useRouter();
 
-  // 🟢 HELPER FUNCTION TO DISPLAY ALERT
   const showAlert = (
     variation: AlertState['variation'],
     heading: string,
@@ -72,17 +72,16 @@ export default function DashboardPage() {
     setAlertState((prev) => ({ ...prev, isVisible: false }));
   };
 
-  // Debounced fetch on filter change
   useEffect(() => {
     const timer = setTimeout(() => {
       fetchLeads();
     }, 500);
     return () => clearTimeout(timer);
-  }, [filterType, filterStatus, searchQuery, filterGhlStatus]); // 💥 ADD NEW FILTER TO DEPENDENCIES
+  }, [filterType, filterStatus, searchQuery, filterGhlStatus]);
 
   const fetchLeads = async () => {
     setIsLoading(true);
-    handleDismissAlert(); // Clear previous alerts on refresh
+    handleDismissAlert();
 
     try {
       const user = await getFrontEndUser();
@@ -97,22 +96,14 @@ export default function DashboardPage() {
       if (filterStatus) filterInput.skipTraceStatus = { eq: filterStatus };
       if (searchQuery) filterInput.ownerAddress = { contains: searchQuery };
 
-      // 💥 NEW: ADD GHL STATUS FILTER LOGIC
       if (filterGhlStatus === 'NULL') {
-        // Find leads where ghlSyncStatus is NOT set (null/undefined)
         filterInput.ghlSyncStatus = {
           notContains: 'SUCCESS|FAILED|SKIPPED|PENDING',
         };
       } else if (filterGhlStatus) {
         filterInput.ghlSyncStatus = { eq: filterGhlStatus };
       }
-      // END NEW BLOCK
-
       const hasFilters = Object.keys(filterInput).length > 0;
-
-      // SAVE NAVIGATION CONTEXT TO SESSION STORAGE BEFORE QUERY
-      // This is crucial for the detail page navigation to work
-      // Note: We cannot rely on the query result directly, we must save the list of IDs from the query.
 
       const { data, errors } = await client.models.PropertyLead.list({
         authMode: 'userPool',
@@ -130,7 +121,6 @@ export default function DashboardPage() {
 
       setLeads(sortedLeads);
 
-      // 💥 SAVE NAVIGATION CONTEXT TO SESSION STORAGE
       const leadIds = sortedLeads.map((l) => l.id);
       sessionStorage.setItem(
         'leadNavContext',
@@ -138,11 +128,10 @@ export default function DashboardPage() {
           ids: leadIds,
           filterType: filterType,
           filterStatus: filterStatus,
-          filterGhlStatus: filterGhlStatus, // Save new filter state
+          filterGhlStatus: filterGhlStatus,
           timestamp: new Date().toISOString(),
         })
       );
-      // END NEW BLOCK
     } catch (err: any) {
       console.error(err);
       showAlert(
@@ -159,7 +148,6 @@ export default function DashboardPage() {
     if (selectedLeads.length === leads.length) {
       setSelectedLeads([]);
     } else {
-      // Only select leads that have been completed skip-trace (COMPLETED status)
       const readyLeads = leads
         .filter((l) => l.skipTraceStatus === 'COMPLETED')
         .map((l) => l.id);
@@ -171,7 +159,6 @@ export default function DashboardPage() {
     if (selectedLeads.includes(id)) {
       setSelectedLeads(selectedLeads.filter((l) => l !== id));
     } else {
-      // Optional check: only allow selecting leads with COMPLETED status for sync
       const lead = leads.find((l) => l.id === id);
       if (lead && lead.skipTraceStatus === 'COMPLETED') {
         setSelectedLeads([...selectedLeads, id]);
@@ -186,7 +173,6 @@ export default function DashboardPage() {
   };
 
   const handleBulkSkipTrace = async () => {
-    // ... (Skip Trace logic remains the same) ...
     if (selectedLeads.length === 0) {
       showAlert(
         'warning',
@@ -226,7 +212,6 @@ export default function DashboardPage() {
   };
 
   const handleBulkGHLSync = async () => {
-    // Filter to only allow leads with COMPLETED status for GHL sync (safety check)
     const leadsToSync = leads.filter(
       (l) => selectedLeads.includes(l.id) && l.skipTraceStatus === 'COMPLETED'
     );
@@ -250,7 +235,7 @@ export default function DashboardPage() {
       await Promise.all(
         leadsToSync.map(async (lead) => {
           try {
-            await client.mutations.syncLeadToGHL({
+            await client.mutations.manualGhlSync({
               leadId: lead.id,
             });
             successfulSyncs++;
@@ -282,7 +267,6 @@ export default function DashboardPage() {
   };
 
   const handleDelete = async () => {
-    // ... (Delete logic remains the same) ...
     if (!confirm(`Delete ${selectedLeads.length} leads?`)) return;
     handleDismissAlert();
 
@@ -308,7 +292,6 @@ export default function DashboardPage() {
   };
 
   const handleExport = () => {
-    // ... (Export logic remains the same) ...
     const leadsToExport = leads.filter((l) => selectedLeads.includes(l.id));
     handleDismissAlert();
 
@@ -342,102 +325,84 @@ export default function DashboardPage() {
   ).length;
 
   return (
-    <main className='p-6 max-w-[95%] mx-auto'>
-      {/* 🟢 AMPLIFY ALERT COMPONENT */}
+    <main className='max-w-6xl mx-auto py-10 px-6'>
+           {' '}
+      <div className='flex justify-between items-center mb-8'>
+               {' '}
+        <h1 className='text-3xl font-bold text-gray-800'>Leads Dashboard</h1>   
+           {' '}
+        <div className='flex space-x-4'>
+                   {' '}
+          <button
+            onClick={() => router.push('/upload')}
+            className='bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition shadow-sm'
+          >
+                        Upload New Leads          {' '}
+          </button>
+                 {' '}
+        </div>
+             {' '}
+      </div>
+            {/* 🟢 ALERT BAR (Fix 1: Alert usage is correct here now) */}     {' '}
       {alertState.isVisible && (
         <Alert
           variation={alertState.variation}
-          heading={alertState.heading}
-          isDismissible={true}
+          isDismissible
           onDismiss={handleDismissAlert}
-          hasIcon={true}
-          marginBottom='size.large'
+          className='mb-6'
         >
-          {alertState.body}
+                   {' '}
+          <Flex direction='column'>
+                       {' '}
+            <strong className='text-lg'>{alertState.heading}</strong>           {' '}
+            <p>{alertState.body}</p>         {' '}
+          </Flex>
+                 {' '}
         </Alert>
       )}
-
-      {/* Header & Actions */}
-      <div className='flex flex-col md:flex-row justify-between items-center mb-6 gap-4'>
-        <div>
-          <h1 className='text-3xl font-bold text-gray-800'>All Leads Data</h1>
-          {currentUserId && (
-            <p className='text-xs text-gray-500 font-mono'>
-              User: {currentUserId}
-            </p>
-          )}
-        </div>
-
-        <div className='flex flex-wrap gap-2'>
-          <button
-            onClick={fetchLeads}
-            className='bg-white border text-gray-700 px-4 py-2 rounded-md hover:bg-gray-50'
-          >
-            🔄 Refresh
-          </button>
-          <button
-            onClick={() => router.push('/upload')}
-            className='bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700'
-          >
-            Upload CSV
-          </button>
-
-          {selectedLeads.length > 0 && (
-            <>
-              {/* Skip Trace Button */}
-              <button
-                onClick={handleBulkSkipTrace}
-                disabled={isSkipTracing}
-                className='bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 disabled:opacity-50'
-              >
-                {isSkipTracing
-                  ? 'Processing...'
-                  : `🔍 Skip Trace (${selectedLeads.length})`}
-              </button>
-
-              {/* 💥 NEW GHL SYNC BUTTON */}
-              <button
-                onClick={handleBulkGHLSync}
-                disabled={isGhlSyncing || isSkipTracing}
-                className='bg-purple-600 text-white px-4 py-2 rounded-md hover:bg-purple-700 disabled:opacity-50'
-              >
-                {isGhlSyncing
-                  ? 'Syncing GHL...'
-                  : `⬆️ Sync GHL (${selectedLeads.length})`}
-              </button>
-
-              {/* Delete Button */}
-              <button
-                onClick={handleDelete}
-                className='bg-red-500 text-white px-4 py-2 rounded-md hover:bg-red-600'
-              >
-                🗑️ Delete ({selectedLeads.length})
-              </button>
-
-              {/* Export Button */}
-              <button
-                onClick={handleExport}
-                className='bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition shadow-sm flex items-center gap-2'
-              >
-                📥 Export CSV
-              </button>
-            </>
-          )}
-        </div>
-      </div>
-
-      {/* Invalid Warning */}
-      {invalidLeadsCount > 0 && (
-        <div className='bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-lg mb-6 flex items-center gap-3'>
-          <span className='text-xl'>⚠️</span>
-          <div>
-            <strong>Attention Needed: </strong> Found
-            {invalidLeadsCount} invalid addresses. Check rows marked "INVALID".
+            {/* 🟢 NEW: CONDENSED HORIZONTAL STATS BAR (Fix 2: Modern Look) */} 
+         {' '}
+      <div className='bg-white shadow-sm border rounded-lg p-3 mb-6'>
+               {' '}
+        <Flex alignItems='center' gap='1.5rem' className='flex-wrap'>
+                    {/* Metric 1: Total Leads */}         {' '}
+          <div className='text-gray-700'>
+                       {' '}
+            <span className='font-bold text-lg'>{leads.length}</span> Total
+            Leads          {' '}
           </div>
-        </div>
-      )}
-
-      {/* Filters Component */}
+                   {/* Separator 1 */}         {' '}
+          <div className='text-gray-300 hidden md:block'>|</div>         {' '}
+          {/* Metric 2: Invalid Addresses (Red) */}         {' '}
+          <div className='text-red-700'>
+                       {' '}
+            <span className='font-bold text-lg'>{invalidLeadsCount}</span>{' '}
+            Invalid Addresses          {' '}
+          </div>
+          {/* Separator 2 */}         {' '}
+          <div className='text-gray-300 hidden md:block'>|</div>         {' '}
+          {/* Metric 3: GHL Synced (Purple) */}         {' '}
+          <div className='text-purple-700'>
+                       {' '}
+            <span className='font-bold text-lg'>{ghlSyncedCount}</span> GHL
+            Synced          {' '}
+          </div>
+          {/* Separator 3 */}         {' '}
+          <div className='text-gray-300 hidden md:block'>|</div>         {' '}
+          {/* Metric 4: GHL Failed/Pending (Gray/Default) */}         {' '}
+          <div className='text-gray-600'>
+                       {' '}
+            <span className='font-bold text-lg'>
+              {ghlFailedCount +
+                leads.filter((l) => l.ghlSyncStatus === 'PENDING').length}
+            </span>{' '}
+            Failed/Pending          {' '}
+          </div>
+                 {' '}
+        </Flex>
+             {' '}
+      </div>
+            {/* 🟢 FILTERS AND BULK ACTIONS */}     {' '}
       <DashboardFilters
         filterType={filterType}
         setFilterType={setFilterType}
@@ -445,64 +410,26 @@ export default function DashboardPage() {
         setFilterStatus={setFilterStatus}
         searchQuery={searchQuery}
         setSearchQuery={setSearchQuery}
-        filterGhlStatus={filterGhlStatus} // 💥 PASS NEW STATE
-        setFilterGhlStatus={setFilterGhlStatus} // 💥 PASS NEW SETTER
+        filterGhlStatus={filterGhlStatus}
+        setFilterGhlStatus={setFilterGhlStatus}
+        selectedLeadsCount={selectedLeads.length}
+        handleBulkSkipTrace={handleBulkSkipTrace}
+        handleBulkGHLSync={handleBulkGHLSync}
+        handleDelete={handleDelete}
+        handleExport={handleExport}
+        isSkipTracing={isSkipTracing}
+        isGhlSyncing={isGhlSyncing}
       />
-
-      {/* Stats (Updated with GHL stats) */}
-      <div className='grid grid-cols-2 sm:grid-cols-2 md:grid-cols-6 gap-4 mb-6'>
-        <div className='bg-white rounded-lg shadow p-4 border'>
-          <p className='text-gray-600 text-sm'>Total Leads</p>
-          <p className='text-3xl font-bold text-gray-900'>{leads.length}</p>
-        </div>
-
-        <div className='bg-white rounded-lg shadow p-4 border'>
-          <p className='text-gray-600 text-sm'>Pending Trace</p>
-          <p className='text-3xl font-bold text-yellow-600'>
-            {leads.filter((l) => l.skipTraceStatus === 'PENDING').length}
-          </p>
-        </div>
-
-        <div className='bg-white rounded-lg shadow p-4 border'>
-          <p className='text-gray-600 text-sm'>Enriched</p>
-          <p className='text-3xl font-bold text-green-600'>
-            {leads.filter((l) => l.skipTraceStatus === 'COMPLETED').length}
-          </p>
-        </div>
-
-        {/* GHL SYNC STATS */}
-        <div className='bg-white rounded-lg shadow p-4 border'>
-          <p className='text-gray-600 text-sm'>GHL Synced</p>
-          <p className='text-3xl font-bold text-purple-600'>{ghlSyncedCount}</p>
-        </div>
-        <div className='bg-white rounded-lg shadow p-4 border'>
-          <p className='text-gray-600 text-sm'>GHL Failed</p>
-          <p className='text-3xl font-bold text-orange-600'>{ghlFailedCount}</p>
-        </div>
-
-        <div className='bg-white rounded-lg shadow p-4 border'>
-          <p className='text-gray-600 text-sm'>Failed/No Match</p>
-          <p className='text-3xl font-bold text-red-600'>
-            {
-              leads.filter(
-                (l) =>
-                  l.skipTraceStatus === 'FAILED' ||
-                  l.skipTraceStatus === 'NO_MATCH'
-              ).length
-            }
-          </p>
-        </div>
-      </div>
-
-      {/* Table Component */}
+            {/* 🟢 LEAD TABLE */}     {' '}
       <LeadTable
         leads={leads}
-        selectedIds={selectedLeads}
         isLoading={isLoading}
+        selectedIds={selectedLeads}
         onToggleAll={toggleSelectAll}
         onToggleOne={toggleSelectLead}
-        onRowClick={(id) => router.push(`/lead/${id}`)}
+        onRowClick={(id: string) => router.push(`/lead/${id}`)}
       />
+         {' '}
     </main>
   );
 }

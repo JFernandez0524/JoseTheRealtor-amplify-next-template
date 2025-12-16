@@ -1,15 +1,15 @@
+// app/components/dashboard/LeadTable.tsx
+
 import React from 'react';
 import { StatusBadge } from '../shared/StatusBadge';
 import { formatDate } from '@/app/utils/formatters';
 import { type Schema } from '@/amplify/data/resource';
-// We will use standard icons/symbols since you use StatusBadge (custom)
-// and we want to avoid unnecessary imports like lucide-react if not used elsewhere.
 
-// 💥 1. EXTENDED LEAD TYPE
+// 1. EXTENDED LEAD TYPE (Kept correct)
 type Lead = Schema['PropertyLead']['type'] & {
-  ghlSyncStatus?: 'PENDING' | 'SUCCESS' | 'FAILED' | 'SKIPPED';
-  ghlContactId?: string;
-  ghlSyncDate?: string;
+  ghlSyncStatus?: 'PENDING' | 'SUCCESS' | 'FAILED' | 'SKIPPED' | null;
+  ghlContactId?: string | null;
+  ghlSyncDate?: string | null;
 };
 
 type Props = {
@@ -90,6 +90,7 @@ export function LeadTable({
     <div className='bg-white shadow-lg rounded-lg overflow-hidden border border-gray-200'>
       <div className='overflow-x-auto'>
         <table className='min-w-full divide-y divide-gray-200'>
+          {/* 💥 FIX: Removed whitespace between <thead> and <tr> */}
           <thead className='bg-gray-50'>
             <tr>
               <th scope='col' className='px-4 py-3 text-left w-10'>
@@ -111,7 +112,7 @@ export function LeadTable({
               <th className='px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider whitespace-nowrap'>
                 Enriched Data
               </th>
-              {/* 💥 2. NEW GHL STATUS HEADER */}
+              {/* NEW GHL STATUS HEADER */}
               <th className='px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider whitespace-nowrap bg-purple-50'>
                 GHL Sync
               </th>
@@ -135,11 +136,12 @@ export function LeadTable({
               </th>
             </tr>
           </thead>
+          {/* 💥 FIX: Removed whitespace before and after <tbody> content */}
           <tbody className='bg-white divide-y divide-gray-200'>
             {isLoading ? (
               <tr>
                 <td
-                  colSpan={11} // Increased colspan to account for new column
+                  colSpan={11}
                   className='px-6 py-10 text-center text-gray-500'
                 >
                   <div className='flex flex-col items-center'>
@@ -151,7 +153,7 @@ export function LeadTable({
             ) : leads.length === 0 ? (
               <tr>
                 <td
-                  colSpan={11} // Increased colspan to account for new column
+                  colSpan={11}
                   className='px-6 py-10 text-center text-gray-500'
                 >
                   <div className='text-lg mb-2'>📭 No leads found</div>
@@ -197,7 +199,7 @@ export function LeadTable({
                     )}
                   </td>
 
-                  {/* 💥 3. NEW GHL STATUS CELL */}
+                  {/* NEW GHL STATUS CELL */}
                   <td className='px-4 py-4 whitespace-nowrap text-sm'>
                     <GhlStatusBadge status={lead.ghlSyncStatus} />
                   </td>
