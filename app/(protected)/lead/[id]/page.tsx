@@ -1,7 +1,9 @@
+// app/(protected)/lead/[id]/page.tsx
+
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useParams } from 'next/navigation';
+import { useState, useEffect, useCallback } from 'react';
+import { useParams, useRouter } from 'next/navigation';
 import { Loader } from '@aws-amplify/ui-react';
 import axios from 'axios';
 import {
@@ -10,14 +12,20 @@ import {
   useJsApiLoader,
   Libraries,
 } from '@react-google-maps/api';
+// REMOVED: import { ChevronLeft, ChevronRight } from 'lucide-react';
+// We will use native SVG for flexibility and consistency with Amplify UI structure
 
 // 👇 Import your frontend client
 import { client } from '@/app/utils/aws/data/frontEndClient';
 // 👇 Import the Schema type directly to ensure type safety
 import { type Schema } from '@/amplify/data/resource';
 
-// Define the shape of our Lead based on the Schema
-type Lead = Schema['PropertyLead']['type'];
+// Define the shape of our Lead based on the Schema (Extended for GHL status)
+type Lead = Schema['PropertyLead']['type'] & {
+  ghlSyncStatus?: 'PENDING' | 'SUCCESS' | 'FAILED' | 'SKIPPED';
+  ghlContactId?: string;
+  ghlSyncDate?: string;
+};
 
 const mapContainerStyle = {
   width: '100%',
@@ -37,7 +45,19 @@ const formatCurrency = (value?: number | string | null) => {
   }).format(Number(value));
 };
 
+// --- NEW TYPE: Navigation Context ---
+interface NavContext {
+  ids: string[];
+  currentIndex: number;
+  isFirst: boolean;
+  isLast: boolean;
+}
+
 export default function LeadDetailPage() {
+  const router = useRouter();
+  const params = useParams();
+  const currentLeadId = params.id as string;
+
   const { isLoaded: isMapLoaded } = useJsApiLoader({
     id: 'google-map-script',
     googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY!,
@@ -50,20 +70,57 @@ export default function LeadDetailPage() {
   const [isSkipTracing, setIsSkipTracing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const params = useParams();
+  const [navContext, setNavContext] = useState<NavContext | null>(null);
 
-  useEffect(() => {
-    const id = params.id as string;
-    if (id) {
-      loadData(id);
+  // --- NAVIGATION LOGIC ---
+
+  const loadNavigationContext = useCallback(() => {
+    // Only run on the client side
+    if (typeof window === 'undefined') return;
+
+    const contextString = sessionStorage.getItem('leadNavContext');
+    if (!contextString) return;
+
+    try {
+      const context = JSON.parse(contextString);
+      const leadIds: string[] = context.ids || [];
+      const currentIndex = leadIds.findIndex((id) => id === currentLeadId);
+
+      if (currentIndex !== -1) {
+        setNavContext({
+          ids: leadIds,
+          currentIndex: currentIndex,
+          isFirst: currentIndex === 0,
+          isLast: currentIndex === leadIds.length - 1,
+        });
+      }
+    } catch (e) {
+      console.error('Error loading navigation context:', e);
     }
-  }, [params.id]);
+  }, [currentLeadId]);
+
+  const navigateToLead = (direction: 'prev' | 'next') => {
+    if (!navContext) return;
+
+    const newIndex =
+      direction === 'next'
+        ? navContext.currentIndex + 1
+        : navContext.currentIndex - 1;
+
+    if (newIndex >= 0 && newIndex < navContext.ids.length) {
+      const nextId = navContext.ids[newIndex];
+      // Use router.push to navigate to the new lead detail page
+      router.push(`/lead/${nextId}`);
+    }
+  };
+
+  // --- Data Fetching Logic ---
 
   const loadData = async (id: string) => {
     setIsLoading(true);
+    setError(null);
     try {
-      // 1. 🟢 FETCH LEAD DIRECTLY (Reliable)
-      // This uses the generated client so it handles the new Arrays correctly
+      // 1. 🟢 FETCH LEAD DIRECTLY
       const { data: leadData, errors } = await client.models.PropertyLead.get({
         id: id,
       });
@@ -72,21 +129,19 @@ export default function LeadDetailPage() {
         throw new Error('Could not find lead in database.');
       }
 
-      setLead(leadData);
+      setLead(leadData as Lead); // Cast to the extended Lead type
 
       // 2. 🟡 FETCH MARKET DATA (Best Effort)
-      // We try to hit your API, but if it fails, we don't break the whole page.
       try {
         const response = await axios.get(`/api/v1/leads/${id}`);
         if (response.data && response.data.marketAnalysis) {
           setMarketData(response.data.marketAnalysis);
+        } else {
+          setMarketData(null);
         }
       } catch (marketError) {
-        console.warn(
-          'Market Data API failed (likely due to schema change), but Lead loaded.',
-          marketError
-        );
-        // We do NOT set the main error here, so the user can still see the lead.
+        console.warn('Market Data API failed, but Lead loaded.', marketError);
+        setMarketData(null);
       }
     } catch (err: any) {
       console.error(err);
@@ -96,15 +151,23 @@ export default function LeadDetailPage() {
     }
   };
 
+  useEffect(() => {
+    if (currentLeadId) {
+      loadData(currentLeadId);
+      loadNavigationContext(); // Load context on ID change
+    }
+  }, [currentLeadId, loadNavigationContext]); // Dependency array updated
+
   const handleSkipTrace = async () => {
     if (!lead) return;
+    // ... (Skip Trace logic remains the same) ...
     if (lead.skipTraceStatus === 'COMPLETED') return;
 
     setIsSkipTracing(true);
     try {
       await client.mutations.skipTraceLeads({
         leadIds: [lead.id],
-        targetCrm: 'NONE',
+        // targetCrm: 'NONE', // Removed targetCrm argument
       });
 
       // Refresh data
@@ -132,6 +195,12 @@ export default function LeadDetailPage() {
       <main className='max-w-4xl mx-auto py-10 px-6'>
         <h1 className='text-3xl font-bold text-red-600'>Error</h1>
         <p>{error}</p>
+        <button
+          onClick={() => router.push('/dashboard')}
+          className='mt-4 bg-gray-200 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-300'
+        >
+          ← Go to Dashboard
+        </button>
       </main>
     );
   }
@@ -152,12 +221,80 @@ export default function LeadDetailPage() {
 
   return (
     <main className='max-w-6xl mx-auto py-10 px-6'>
+      <div className='flex justify-between items-center mb-8'>
+        {/* 💥 1. NAVIGATION ARROWS BLOCK */}
+        <div className='flex items-center gap-4'>
+          <h1 className='text-3xl font-bold text-gray-800'>Lead Detail</h1>
+          {navContext && (
+            <div className='flex gap-2 text-gray-500 items-center border rounded-full p-1 bg-gray-50'>
+              {/* Previous Button */}
+              <button
+                onClick={() => navigateToLead('prev')}
+                disabled={navContext.isFirst}
+                className='p-1 rounded-full text-gray-700 hover:bg-white disabled:opacity-30 disabled:cursor-not-allowed transition'
+                title='Previous Lead'
+              >
+                {/* SVG for ChevronLeft */}
+                <svg
+                  xmlns='http://www.w3.org/2000/svg'
+                  width='20'
+                  height='20'
+                  viewBox='0 0 24 24'
+                  fill='none'
+                  stroke='currentColor'
+                  strokeWidth='2'
+                  strokeLinecap='round'
+                  strokeLinejoin='round'
+                >
+                  <path d='m15 18-6-6 6-6' />
+                </svg>
+              </button>
+
+              {/* Status Display */}
+              <span className='px-2 text-sm font-medium'>
+                {navContext.currentIndex + 1} / {navContext.ids.length}
+              </span>
+
+              {/* Next Button */}
+              <button
+                onClick={() => navigateToLead('next')}
+                disabled={navContext.isLast}
+                className='p-1 rounded-full text-gray-700 hover:bg-white disabled:opacity-30 disabled:cursor-not-allowed transition'
+                title='Next Lead'
+              >
+                {/* SVG for ChevronRight */}
+                <svg
+                  xmlns='http://www.w3.org/2000/svg'
+                  width='20'
+                  height='20'
+                  viewBox='0 0 24 24'
+                  fill='none'
+                  stroke='currentColor'
+                  strokeWidth='2'
+                  strokeLinecap='round'
+                  strokeLinejoin='round'
+                >
+                  <path d='m9 18 6-6-6-6' />
+                </svg>
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* 2. Back Button */}
+        <button
+          onClick={() => router.push('/dashboard')}
+          className='bg-white border text-gray-700 px-4 py-2 rounded-md hover:bg-gray-50 transition shadow-sm'
+        >
+          ← Back to Dashboard
+        </button>
+      </div>
+
+      {/* Lead Information */}
       <div className='mb-8'>
-        <h1 className='text-3xl font-bold'>
-          {lead.ownerFirstName} {lead.ownerLastName}
-        </h1>
+        <h2 className='text-3xl font-bold'>{lead.ownerAddress}</h2>
         <p className='text-lg text-gray-600'>
-          {lead.ownerAddress}, {lead.ownerCity}, {lead.ownerState}
+          {lead.ownerCity}, {lead.ownerState} {lead.ownerZip}
         </p>
       </div>
 
@@ -175,7 +312,7 @@ export default function LeadDetailPage() {
               </div>
               <div>
                 <label className='text-sm font-medium text-gray-500'>
-                  Status
+                  Skip Trace Status
                 </label>
                 <p className='text-base'>
                   <span
@@ -193,11 +330,26 @@ export default function LeadDetailPage() {
                   </span>
                 </p>
               </div>
+              {/* 💥 NEW: GHL Sync Status Display */}
               <div>
                 <label className='text-sm font-medium text-gray-500'>
-                  Zip Code
+                  GHL Sync Status
                 </label>
-                <p className='text-base'>{lead.ownerZip}</p>
+                <p className='text-base'>
+                  <span
+                    className={`px-2 py-0.5 rounded text-xs font-bold ${
+                      lead.ghlSyncStatus === 'SUCCESS'
+                        ? 'bg-purple-100 text-purple-800'
+                        : lead.ghlSyncStatus === 'FAILED'
+                          ? 'bg-red-100 text-red-800'
+                          : lead.ghlSyncStatus === 'SKIPPED'
+                            ? 'bg-gray-100 text-gray-800'
+                            : 'bg-yellow-100 text-yellow-800'
+                    }`}
+                  >
+                    {lead.ghlSyncStatus || 'NOT_ATTEMPTED'}
+                  </span>
+                </p>
               </div>
               <div>
                 <label className='text-sm font-medium text-gray-500'>
@@ -235,6 +387,7 @@ export default function LeadDetailPage() {
           <div className='bg-white shadow border rounded-lg p-6 relative'>
             <div className='flex justify-between items-center mb-4'>
               <h2 className='text-xl font-semibold'>Contacts</h2>
+              {/* Skip Trace Button (re-enabled for single lead) */}
               <button
                 onClick={handleSkipTrace}
                 disabled={isSkipTracing || lead.skipTraceStatus === 'COMPLETED'}

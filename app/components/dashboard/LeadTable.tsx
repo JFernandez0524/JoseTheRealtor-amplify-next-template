@@ -2,9 +2,15 @@ import React from 'react';
 import { StatusBadge } from '../shared/StatusBadge';
 import { formatDate } from '@/app/utils/formatters';
 import { type Schema } from '@/amplify/data/resource';
+// We will use standard icons/symbols since you use StatusBadge (custom)
+// and we want to avoid unnecessary imports like lucide-react if not used elsewhere.
 
-// Use the Schema type directly
-type Lead = Schema['PropertyLead']['type'];
+// 💥 1. EXTENDED LEAD TYPE
+type Lead = Schema['PropertyLead']['type'] & {
+  ghlSyncStatus?: 'PENDING' | 'SUCCESS' | 'FAILED' | 'SKIPPED';
+  ghlContactId?: string;
+  ghlSyncDate?: string;
+};
 
 type Props = {
   leads: Lead[];
@@ -13,6 +19,63 @@ type Props = {
   onToggleAll: () => void;
   onToggleOne: (id: string) => void;
   onRowClick: (id: string) => void;
+};
+
+// ---------------------------------------------------------
+// Helper: GHL Status Badge Renderer (New Component)
+// ---------------------------------------------------------
+
+const GhlStatusBadge: React.FC<{ status: Lead['ghlSyncStatus'] }> = ({
+  status,
+}) => {
+  const baseClasses =
+    'px-2 py-0.5 rounded-full text-xs font-medium capitalize flex items-center gap-1';
+
+  if (!status || status === 'PENDING') {
+    return (
+      <span className={`${baseClasses} bg-yellow-100 text-yellow-800`}>
+        <span role='img' aria-label='clock'>
+          ⏳
+        </span>{' '}
+        {status || 'N/A'}
+      </span>
+    );
+  }
+
+  if (status === 'SUCCESS') {
+    return (
+      <span className={`${baseClasses} bg-purple-100 text-purple-800`}>
+        <span role='img' aria-label='check'>
+          ✅
+        </span>{' '}
+        {status}
+      </span>
+    );
+  }
+
+  if (status === 'FAILED') {
+    return (
+      <span className={`${baseClasses} bg-red-100 text-red-800`}>
+        <span role='img' aria-label='cross'>
+          ❌
+        </span>{' '}
+        {status}
+      </span>
+    );
+  }
+
+  if (status === 'SKIPPED') {
+    return (
+      <span className={`${baseClasses} bg-gray-100 text-gray-700`}>
+        <span role='img' aria-label='skip'>
+          🚫
+        </span>{' '}
+        {status}
+      </span>
+    );
+  }
+
+  return null;
 };
 
 export function LeadTable({
@@ -48,6 +111,10 @@ export function LeadTable({
               <th className='px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider whitespace-nowrap'>
                 Enriched Data
               </th>
+              {/* 💥 2. NEW GHL STATUS HEADER */}
+              <th className='px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider whitespace-nowrap bg-purple-50'>
+                GHL Sync
+              </th>
               <th className='px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider whitespace-nowrap bg-blue-50'>
                 Owner Name
               </th>
@@ -72,7 +139,7 @@ export function LeadTable({
             {isLoading ? (
               <tr>
                 <td
-                  colSpan={10}
+                  colSpan={11} // Increased colspan to account for new column
                   className='px-6 py-10 text-center text-gray-500'
                 >
                   <div className='flex flex-col items-center'>
@@ -84,7 +151,7 @@ export function LeadTable({
             ) : leads.length === 0 ? (
               <tr>
                 <td
-                  colSpan={10}
+                  colSpan={11} // Increased colspan to account for new column
                   className='px-6 py-10 text-center text-gray-500'
                 >
                   <div className='text-lg mb-2'>📭 No leads found</div>
@@ -128,6 +195,11 @@ export function LeadTable({
                     ) : (
                       <span className='text-gray-400 text-xs'>No Phones</span>
                     )}
+                  </td>
+
+                  {/* 💥 3. NEW GHL STATUS CELL */}
+                  <td className='px-4 py-4 whitespace-nowrap text-sm'>
+                    <GhlStatusBadge status={lead.ghlSyncStatus} />
                   </td>
 
                   <td className='px-4 py-4 whitespace-nowrap text-sm text-gray-900 bg-blue-50/30'>

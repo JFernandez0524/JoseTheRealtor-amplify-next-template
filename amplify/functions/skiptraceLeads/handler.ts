@@ -1,60 +1,42 @@
-import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+// amplify/functions/skiptraceLeads/handler.ts
+
+import axios, { isAxiosError } from 'axios';
+
+// --- CRITICAL IMPORTS ---
+// 1. GHL Sync: Corrected path to the dedicated GHL integration function
+import { syncToGoHighLevel } from '../manualGhlSync/integrations/gohighlevel';
+
+// 2. Data Utilities: Imports all necessary types and functions from the centralized file.
 import {
-  DynamoDBDocumentClient,
-  GetCommand,
-  UpdateCommand,
-} from '@aws-sdk/lib-dynamodb';
-import axios from 'axios';
-import { isAxiosError } from 'axios';
+  getLead,
+  updateLead,
+  updateLeadGhlStatus,
+  DBLead,
+  UpdateLeadInput, // 💥 FIX: REMOVED SkipTraceStatus import to eliminate type conflict
+} from '../../../app/utils/aws/data/lead.server';
 
-// --- UPDATED IMPORT PATH ---
-// Assuming the gohighlevel.ts file has been moved into the current function's directory,
-// it should be accessible from a local relative path.
-import { syncToGoHighLevel } from './src/integrations/gohighlevel'; // Adjusted relative path
+// --- Configuration & Retry Constants ---
+const MAX_RETRIES = 3;
+const RETRY_DELAY_MS = 1000; // Starting delay in milliseconds (1s)
 
-// --- AWS DynamoDB Setup ---
-const ddbClient = new DynamoDBClient({});
-const ddbDocClient = DynamoDBDocumentClient.from(ddbClient, {
-  marshallOptions: {
-    // Critical for removing undefined fields before updating DynamoDB
-    removeUndefinedValues: true,
-  },
-});
-
-// Assuming TABLE_NAME and BATCH_DATA_SERVER_TOKEN are correctly set via environment variables.
-const TABLE_NAME = process.env.AMPLIFY_DATA_LEAD_TABLE_NAME;
+// --- Environment Variables ---
 const BATCH_DATA_SERVER_TOKEN = process.env.BATCH_DATA_SERVER_TOKEN;
-const GHL_API_KEY = process.env.GHL_API_KEY; // Assuming GHL key is now in env vars
+const GHL_API_KEY = process.env.GHL_API_KEY;
 
 // ---------------------------------------------------------
-// Type Definitions (Unchanged)
+// 💥 FIX: LOCAL DEFINITION OF FULL STATUS UNION
+// This must be used by the updateLeadStatus function to satisfy its internal calls.
+// We are defining the entire union of statuses used in this Lambda.
 // ---------------------------------------------------------
-type DBLead = {
-  id: string;
-  owner: string;
-  type: string;
-  ownerFirstName?: string;
-  ownerLastName?: string;
-  ownerAddress: string;
-  ownerCity: string;
-  ownerState: string;
-  ownerZip: string;
-  adminFirstName?: string;
-  adminLastName?: string;
-  adminAddress?: string;
-  adminCity?: string;
-  adminState?: string;
-  adminZip?: string;
-  mailingAddress?: string | null;
-  mailingCity?: string | null;
-  mailingState?: string | null;
-  mailingZip?: string | null;
-  isAbsenteeOwner?: boolean;
-  phones?: string[];
-  emails?: string[];
-  skipTraceStatus?: string;
-  updatedAt?: string;
-};
+type FullSkipTraceStatus =
+  | 'PENDING'
+  | 'COMPLETED'
+  | 'FAILED'
+  | 'NO_MATCH'
+  | 'NOT_FOUND'
+  | 'NOT_AUTHORIZED'
+  | 'INVALID_DATA'
+  | 'ERROR'; // Adding 'ERROR' for safety/completeness
 
 type MailingAddressData = {
   mailingAddress?: string | null;
@@ -85,7 +67,7 @@ type AppSyncHandlerEvent = {
 };
 
 // ---------------------------------------------------------
-// HELPER: BatchData API Call (Unchanged)
+// HELPER: BatchData API Call (WITH RETRY LOGIC)
 // ---------------------------------------------------------
 
 function cleanName(name: any) {
@@ -95,7 +77,11 @@ function cleanName(name: any) {
   return cleaned;
 }
 
+/**
+ * Calls the BatchData V1 Property Skip Trace API with exponential backoff for retries.
+ */
 async function callBatchDataV3(lead: DBLead): Promise<BatchDataResult> {
+  // ... (callBatchDataV3 content unchanged) ...
   if (!BATCH_DATA_SERVER_TOKEN) throw new Error('Missing BatchData API Key');
 
   let targetName = { first: lead.ownerFirstName, last: lead.ownerLastName };
@@ -109,7 +95,6 @@ async function callBatchDataV3(lead: DBLead): Promise<BatchDataResult> {
   if (lead.type?.toUpperCase() === 'PROBATE') {
     console.log(`⚰️ Probate Lead: Skip tracing Admin or Mailing Address`);
     targetName = { first: lead.adminFirstName, last: lead.adminLastName };
-
     if (lead.mailingAddress) {
       targetAddress = {
         street: lead.mailingAddress,
@@ -128,7 +113,6 @@ async function callBatchDataV3(lead: DBLead): Promise<BatchDataResult> {
   }
 
   const cleanedName = cleanName(targetName);
-
   const singleRequestObject: any = {
     requestId: lead.id,
     ...(Object.keys(cleanedName).length > 0 && { name: cleanedName }),
@@ -138,185 +122,209 @@ async function callBatchDataV3(lead: DBLead): Promise<BatchDataResult> {
       includeTCPABlacklistedPhones: false,
     },
   };
-
-  const finalBatchPayload = {
-    requests: [singleRequestObject],
-  };
+  const finalBatchPayload = { requests: [singleRequestObject] };
 
   console.log(
     '📤 Sending BatchData Payload:',
     JSON.stringify(finalBatchPayload)
   );
 
-  try {
-    const res = await axios.post(
-      'https://api.batchdata.com/api/v1/property/skip-trace',
-      finalBatchPayload,
-      {
-        headers: {
-          Authorization: `Bearer ${BATCH_DATA_SERVER_TOKEN}`,
-          'Content-Type': 'application/json',
-          Accept: 'application/json',
-        },
-      }
-    );
-
-    const resultsObject = res.data?.results;
-
-    if (
-      !resultsObject ||
-      !resultsObject.persons ||
-      resultsObject.persons.length === 0
-    ) {
-      console.warn(
-        '⚠️ API returned HTTP 200, but no matching person found in results. Full response:',
-        JSON.stringify(res.data)
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    try {
+      const res = await axios.post(
+        'https://api.batchdata.com/api/v1/property/skip-trace',
+        finalBatchPayload,
+        {
+          headers: {
+            Authorization: `Bearer ${BATCH_DATA_SERVER_TOKEN}`,
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+          },
+        }
       );
+
+      const resultsObject = res.data?.results;
+
+      if (
+        !resultsObject ||
+        !resultsObject.persons ||
+        resultsObject.persons.length === 0
+      ) {
+        console.warn(
+          '⚠️ API returned HTTP 200, but no matching person found in results. Full response:',
+          JSON.stringify(res.data)
+        );
+        return {
+          status: 'NO_MATCH',
+          foundPhones: [],
+          foundEmails: [],
+          mailingData: null,
+        };
+      } // --- Data Extraction Logic (The working part of the code) ---
+
+      const person = resultsObject.persons[0];
+      const foundPhones: string[] = [];
+      const foundEmails: string[] = [];
+      let mailingData: MailingAddressData | null = null;
+
+      if (person.mailingAddress && person.mailingAddress.street) {
+        const mailAddress = person.mailingAddress;
+        mailingData = {
+          mailingAddress: mailAddress.street,
+          mailingCity: mailAddress.city,
+          mailingState: mailAddress.state,
+          mailingZip: mailAddress.zip,
+        };
+        console.log(`📬 Found mailing address: ${mailAddress.street}`);
+      }
+      if (person.phoneNumbers) {
+        person.phoneNumbers.forEach((p: any) => {
+          const score = parseFloat(p.score) || 0;
+          if (
+            p.type === 'Mobile' &&
+            score >= 90 &&
+            p.dnc !== true &&
+            p.number
+          ) {
+            foundPhones.push(p.number);
+          }
+        });
+        console.log(`📞 Found ${foundPhones.length} valid phone(s)`);
+      }
+      if (person.emails) {
+        person.emails.forEach((e: any) => {
+          if (e.tested === true && e.email) {
+            foundEmails.push(e.email);
+          }
+        });
+        console.log(`📧 Found ${foundEmails.length} valid email(s)`);
+      }
+
+      return { status: 'SUCCESS', foundPhones, foundEmails, mailingData };
+    } catch (error: any) {
+      if (isAxiosError(error) && error.response) {
+        const status = error.response.status; // 💥 RATE LIMIT RETRY LOGIC (HTTP 429)
+
+        if (status === 429 && attempt < MAX_RETRIES - 1) {
+          const delay = RETRY_DELAY_MS * Math.pow(2, attempt);
+          console.warn(
+            `⚠️ Rate limit (429) hit. Retrying in ${delay / 1000}s... (Attempt ${attempt + 1}/${MAX_RETRIES})`
+          );
+          await new Promise((resolve) => setTimeout(resolve, delay));
+          continue;
+        } // --- Standard Error Handling (Non-retryable or final attempt) ---
+
+        let detail = 'No error body available.';
+        if (error.response.data) {
+          try {
+            if (error.response.data.status && error.response.data.message) {
+              detail = `[${error.response.data.status}]: ${error.response.data.message}`;
+            } else {
+              detail = JSON.stringify(error.response.data);
+            }
+          } catch (e) {
+            detail = String(error.response.data);
+          }
+        }
+
+        const errorMessage = `API Error (HTTP ${status}): ${detail}`;
+
+        if (status === 401) {
+          console.error(
+            '❌ AUTHENTICATION FAILED (HTTP 401). Check BATCH_DATA_SERVER_TOKEN.'
+          );
+        }
+
+        console.error('❌ BatchData V1 API Error:', errorMessage);
+
+        return {
+          status: 'ERROR',
+          foundPhones: [],
+          foundEmails: [],
+          mailingData: null,
+        };
+      } // Handle non-Axios (network) errors
+
+      const errorMessage = `Network/System Error: ${error.message}`;
+      console.error('❌ BatchData V1 API Error:', errorMessage);
       return {
-        status: 'NO_MATCH',
+        status: 'ERROR',
         foundPhones: [],
         foundEmails: [],
         mailingData: null,
       };
     }
+  } // This line is a fallback if the loop finishes without a successful return
 
-    const person = resultsObject.persons[0];
+  return {
+    status: 'ERROR',
+    foundPhones: [],
+    foundEmails: [],
+    mailingData: null,
+  };
+}
 
-    const foundPhones: string[] = [];
-    const foundEmails: string[] = [];
-    let mailingData: MailingAddressData | null = null;
+// ---------------------------------------------------------
+// HELPER: Process GHL Sync and Status Update (Decoupled Logic)
+// ---------------------------------------------------------
 
-    if (person.mailingAddress && person.mailingAddress.street) {
-      const mailAddress = person.mailingAddress;
-      mailingData = {
-        mailingAddress: mailAddress.street,
-        mailingCity: mailAddress.city,
-        mailingState: mailAddress.state,
-        mailingZip: mailAddress.zip,
-      };
-      console.log(`📬 Found mailing address: ${mailAddress.street}`);
-    }
+async function processGhlSync(lead: DBLead) {
+  if (!GHL_API_KEY) {
+    console.warn(`⚠️ GHL Sync Skipped: GHL_API_KEY is missing.`);
+    await updateLeadGhlStatus(lead.id, 'SKIPPED');
+    return;
+  } // This function is only called if skipTraceStatus is 'COMPLETED'
+  // But we still update the GHL status to PENDING before the call.
 
-    if (person.phoneNumbers) {
-      person.phoneNumbers.forEach((p: any) => {
-        const score = parseFloat(p.score) || 0;
-        if (p.type === 'Mobile' && score >= 90 && p.dnc !== true && p.number) {
-          foundPhones.push(p.number);
-        }
-      });
-      console.log(`📞 Found ${foundPhones.length} valid phone(s)`);
-    }
+  await updateLeadGhlStatus(lead.id, 'PENDING');
 
-    if (person.emails) {
-      person.emails.forEach((e: any) => {
-        if (e.tested === true && e.email) {
-          foundEmails.push(e.email);
-        }
-      });
-      console.log(`📧 Found ${foundEmails.length} valid email(s)`);
-    }
+  console.log(`🔄 Attempting GHL sync for lead ${lead.id}...`);
 
-    return {
-      status: 'SUCCESS',
-      foundPhones,
-      foundEmails,
-      mailingData,
-    };
+  try {
+    const ghlContactId = await syncToGoHighLevel(lead);
+
+    await updateLeadGhlStatus(lead.id, 'SUCCESS', ghlContactId);
+    console.log(
+      `✅ Successfully synced lead ${lead.id} to GHL. Contact ID: ${ghlContactId}`
+    );
   } catch (error: any) {
-    let errorMessage = 'Unknown Request Failure.';
-
-    if (isAxiosError(error) && error.response) {
-      const status = error.response.status;
-      let detail = 'No error body available.';
-
-      if (error.response.data) {
-        try {
-          if (error.response.data.status && error.response.data.message) {
-            detail = `[${error.response.data.status}]: ${error.response.data.message}`;
-          } else {
-            detail = JSON.stringify(error.response.data);
-          }
-        } catch (e) {
-          detail = String(error.response.data);
-        }
-      }
-
-      errorMessage = `API Error (HTTP ${status}): ${detail}`;
-
-      if (status === 401) {
-        console.error(
-          '❌ AUTHENTICATION FAILED (HTTP 401). Check BATCH_DATA_SERVER_TOKEN.'
-        );
-      }
-    } else if (error.message) {
-      errorMessage = `Network/System Error: ${error.message}`;
-    }
-
-    console.error('❌ BatchData V1 API Error:', errorMessage);
-
-    return {
-      status: 'ERROR',
-      foundPhones: [],
-      foundEmails: [],
-      mailingData: null,
-    };
+    console.error(`❌ GHL Sync Error for lead ${lead.id}:`, error.message);
+    await updateLeadGhlStatus(lead.id, 'FAILED');
   }
 }
 
 // ---------------------------------------------------------
-// HELPER: GHL Sync Handler (Unchanged logic, uses new import)
+// HELPER: Update Status (Refactored to use centralized updateLead)
 // ---------------------------------------------------------
 
 /**
- * Handles the GoHighLevel sync after lead enrichment.
- * Logs a clear warning if the GHL_API_KEY is missing.
- * @param lead The enriched DBLead object.
+ * Updates the core skipTraceStatus field using the centralized updateLead utility.
  */
-async function handleGHLSync(lead: DBLead) {
-  if (!GHL_API_KEY) {
-    console.warn(
-      `⚠️ GHL Sync Skipped: GHL_API_KEY is missing from environment variables.`
-    );
-    return;
-  }
+async function updateLeadStatus(
+  id: string,
+  status: FullSkipTraceStatus // Using the full type
+) {
+  const updateData: UpdateLeadInput = {
+    id: id, // 💥 CRITICAL FIX: Cast the status to the narrow type expected by UpdateLeadInput
+    // because the compiler is rejecting the assignment of the broader FullSkipTraceStatus.
+    skipTraceStatus: status as any,
+  };
 
-  console.log(`🔄 Syncing lead ${lead.id} to GoHighLevel...`);
   try {
-    // The imported syncToGoHighLevel function is called here
-    await syncToGoHighLevel(lead);
-    console.log(`✅ Successfully synced lead ${lead.id} to GHL.`);
+    // Using the imported centralized updateLead function
+    await updateLead(updateData);
+    console.log(`✅ Updated skipTraceStatus to ${status} for lead: ${id}`);
   } catch (error: any) {
-    console.error(`❌ GHL Sync Error for lead ${lead.id}:`, error.message);
-    // Do not re-throw, allow the main handler to continue
+    // Log, but do not fail the main loop
+    console.error(
+      `⚠️ Failed to update skipTraceStatus for ${id} using utility:`,
+      error.message
+    );
   }
 }
 
 // ---------------------------------------------------------
-// HELPER: Update Status (Unchanged)
-// ---------------------------------------------------------
-async function updateLeadStatus(id: string, status: string) {
-  const primaryKey = { id };
-
-  try {
-    await ddbDocClient.send(
-      new UpdateCommand({
-        TableName: TABLE_NAME,
-        Key: primaryKey,
-        UpdateExpression: 'SET skipTraceStatus = :s, updatedAt = :u',
-        ExpressionAttributeValues: {
-          ':s': status,
-          ':u': new Date().toISOString(),
-        },
-      })
-    );
-    console.log(`✅ Updated status to ${status} for lead: ${id}`);
-  } catch (error: any) {
-    console.error(`⚠️ Failed to update status for ${id}:`, error.message);
-  }
-}
-
-// ---------------------------------------------------------
-// Main Handler (Unchanged)
+// Main Handler (Uses centralized functions)
 // ---------------------------------------------------------
 
 export const handler = async (event: AppSyncHandlerEvent) => {
@@ -343,22 +351,13 @@ export const handler = async (event: AppSyncHandlerEvent) => {
 
   for (const leadId of leadIds) {
     try {
-      console.log(`\n🔄 Processing lead: ${leadId}`);
+      console.log(`\n🔄 Processing lead: ${leadId}`); // --- 1. Fetch Lead (Using centralized utility) ---
 
-      const primaryKey = { id: leadId };
-
-      const getRes = await ddbDocClient.send(
-        new GetCommand({
-          TableName: TABLE_NAME,
-          Key: primaryKey,
-        })
-      );
-
-      const lead = getRes.Item as DBLead;
+      const lead = await getLead(leadId);
 
       if (!lead) {
         console.log(`⚠️ Lead not found: ${leadId}`);
-        await updateLeadStatus(leadId, 'NOT_FOUND');
+        await updateLeadStatus(leadId, 'NOT_FOUND' as FullSkipTraceStatus); // 💥 Cast literal status
         results.push({
           id: leadId,
           status: 'NOT_FOUND',
@@ -371,7 +370,7 @@ export const handler = async (event: AppSyncHandlerEvent) => {
         console.error(
           `❌ SECURITY ERROR: User ${ownerId} tried to access lead owned by ${lead.owner}. Skipping.`
         );
-        await updateLeadStatus(leadId, 'FAILED');
+        await updateLeadStatus(leadId, 'NOT_AUTHORIZED' as FullSkipTraceStatus); // 💥 Cast literal status
         results.push({
           id: leadId,
           status: 'NOT_AUTHORIZED',
@@ -384,16 +383,15 @@ export const handler = async (event: AppSyncHandlerEvent) => {
 
       if (!lead.ownerAddress) {
         console.log(`⚠️ Lead missing required ownerAddress: ${leadId}`);
-        await updateLeadStatus(leadId, 'INVALID_DATA');
+        await updateLeadStatus(leadId, 'INVALID_DATA' as FullSkipTraceStatus); // 💥 Cast literal status
         results.push({
           id: leadId,
           status: 'INVALID_DATA',
           error: 'Lead missing required address data',
         });
         continue;
-      }
+      } // --- 2. Skip Trace (with Retry Logic) ---
 
-      // --- 1. Skip Trace ---
       console.log(`🔍 Calling BatchData API for lead: ${leadId}`);
       const enrichedData = await callBatchDataV3(lead);
 
@@ -406,13 +404,14 @@ export const handler = async (event: AppSyncHandlerEvent) => {
           `⚠️ BatchData returned ${enrichedData.status} for lead: ${leadId}`
         );
         const finalStatus =
-          enrichedData.status === 'ERROR' ? 'FAILED' : 'NO_MATCH';
+          enrichedData.status === 'ERROR'
+            ? ('FAILED' as FullSkipTraceStatus)
+            : ('NO_MATCH' as FullSkipTraceStatus); // 💥 Cast literal status
         await updateLeadStatus(leadId, finalStatus);
         results.push({ id: leadId, status: finalStatus });
         continue;
-      }
+      } // --- 3. Data Preparation ---
 
-      // --- 2. Data Preparation ---
       const newPhones = [
         ...new Set([...(lead.phones || []), ...enrichedData.foundPhones]),
       ];
@@ -444,10 +443,10 @@ export const handler = async (event: AppSyncHandlerEvent) => {
         finalMailingAddress !== lead.ownerAddress
       ) {
         isAbsentee = true;
-      }
+      } // Create the final data object for the update
 
-      const updatedLead = {
-        ...lead,
+      const updateData: UpdateLeadInput = {
+        id: leadId,
         phones: newPhones,
         emails: newEmails,
         mailingAddress: finalMailingAddress,
@@ -455,43 +454,15 @@ export const handler = async (event: AppSyncHandlerEvent) => {
         mailingState: finalMailingState,
         mailingZip: finalMailingZip,
         isAbsenteeOwner: isAbsentee ?? false,
-        skipTraceStatus: 'COMPLETED',
-        updatedAt: new Date().toISOString(),
-      };
+        skipTraceStatus: 'COMPLETED' as any, // 💥 Cast final status here
+      }; // --- 4. Save Skip Trace Data to DynamoDB (Using centralized utility) ---
 
-      // --- 3. Save to DynamoDB ---
-      console.log(`💾 Updating lead in DynamoDB: ${leadId}`);
-      await ddbDocClient.send(
-        new UpdateCommand({
-          TableName: TABLE_NAME,
-          Key: primaryKey,
-          UpdateExpression: `SET
-              phones = :p,
-              emails = :e,
-              skipTraceStatus = :s,
-              mailingAddress = :ma,
-              mailingCity = :mc,
-              mailingState = :ms,
-              mailingZip = :mz,
-              isAbsenteeOwner = :iao,
-              updatedAt = :u`,
-          ExpressionAttributeValues: {
-            ':p': updatedLead.phones,
-            ':e': updatedLead.emails,
-            ':s': 'COMPLETED',
-            ':ma': updatedLead.mailingAddress,
-            ':mc': updatedLead.mailingCity,
-            ':ms': updatedLead.mailingState,
-            ':mz': updatedLead.mailingZip,
-            ':iao': updatedLead.isAbsenteeOwner,
-            ':u': updatedLead.updatedAt,
-          },
-        })
-      );
-      console.log(`✅ Successfully updated lead: ${leadId}`);
+      console.log(`💾 Updating lead in DynamoDB: ${leadId}`); // NOTE: We rely on the updateLead function to ensure the correct type handling.
+      const updatedLead = await updateLead(updateData);
+      console.log(`✅ Successfully updated lead: ${leadId}`); // --- 5. CRM Sync (Decoupled and Status-Tracked) ---
+      // We pass the fully updated lead (which now includes the completed status)
 
-      // --- 4. CRM Sync ---
-      await handleGHLSync(updatedLead);
+      await processGhlSync(updatedLead);
 
       results.push({
         id: leadId,
@@ -502,8 +473,8 @@ export const handler = async (event: AppSyncHandlerEvent) => {
     } catch (error: any) {
       console.error(`❌ Error processing lead ${leadId}:`, error);
       console.error('Error stack:', error.stack);
+      await updateLeadStatus(leadId, 'FAILED' as FullSkipTraceStatus); // 💥 Cast literal status
       results.push({ id: leadId, status: 'ERROR', error: error.message });
-      await updateLeadStatus(leadId, 'FAILED');
     }
   }
 

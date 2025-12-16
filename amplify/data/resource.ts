@@ -1,5 +1,6 @@
 import { type ClientSchema, a, defineData } from '@aws-amplify/backend';
 import { skipTraceLeads } from '../functions/skiptraceLeads/resource';
+import { manualGhlSync } from '../functions/manualGhlSync/resource';
 
 const schema = a.schema({
   PropertyLead: a
@@ -25,7 +26,6 @@ const schema = a.schema({
       adminZip: a.string(),
 
       // --- 🟢 Mailing Address (For Direct Mail) ---
-      // This gets populated via upload (Admin addr) or Skip Trace (Absentee Owner)
       mailingAddress: a.string(),
       mailingCity: a.string(),
       mailingState: a.string(),
@@ -48,6 +48,11 @@ const schema = a.schema({
       // Statuses
       skipTraceStatus: a.enum(['PENDING', 'COMPLETED', 'FAILED', 'NO_MATCH']),
       validationStatus: a.enum(['VALID', 'INVALID']),
+
+      // 💥 NEW: GHL Sync Status Fields
+      ghlSyncStatus: a.enum(['PENDING', 'SUCCESS', 'FAILED', 'SKIPPED']),
+      ghlContactId: a.string(), // The Contact ID returned by GHL
+      ghlSyncDate: a.datetime(), // ISO Date string of last sync attempt
 
       // Coordinates (For Map)
       latitude: a.float(),
@@ -167,10 +172,20 @@ const schema = a.schema({
     .mutation()
     .arguments({
       leadIds: a.string().array().required(),
-      targetCrm: a.enum(['GHL', 'KVCORE', 'NONE']),
+      // 💥 UPDATED: Removed targetCrm since GHL is the standard
     })
     .returns(a.json())
     .handler(a.handler.function(skipTraceLeads))
+    .authorization((allow) => [allow.authenticated()]),
+
+  // 💥 2. NEW: Manual GHL Sync (On-Demand)
+  syncLeadToGHL: a
+    .mutation()
+    .arguments({
+      leadId: a.id().required(), // Takes a single lead ID
+    })
+    .returns(a.json()) // Returns a status object for the UI
+    .handler(a.handler.function(manualGhlSync)) // Link to the new Lambda function
     .authorization((allow) => [allow.authenticated()]),
 });
 
