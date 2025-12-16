@@ -9,7 +9,7 @@ const IS_LAMBDA_CONTEXT =
   !!process.env.AWS_REGION && !!process.env.LAMBDA_TASK_ROOT;
 // 🛑 IMPORTANT: Replace this with the actual environment variable name for your DynamoDB table
 const PROPERTY_LEAD_TABLE_NAME =
-  process.env.PROPERTY_LEAD_TABLE_NAME || 'PropertyLead_Default_Table';
+  process.env.AMPLIFY_DATA_LEAD_TABLE_NAME || 'PropertyLead_Default_Table';
 
 // --- Reusable Types ---
 
