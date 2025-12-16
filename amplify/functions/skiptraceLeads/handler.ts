@@ -24,7 +24,7 @@ const ddbDocClient = DynamoDBDocumentClient.from(ddbClient, {
 // Assuming TABLE_NAME and BATCH_DATA_SERVER_TOKEN are correctly set via environment variables.
 const TABLE_NAME = process.env.AMPLIFY_DATA_LEAD_TABLE_NAME;
 const BATCH_DATA_SERVER_TOKEN = process.env.BATCH_DATA_SERVER_TOKEN;
-const GOHIGHLEVEL_API_KEY = process.env.GOHIGHLEVEL_API_KEY; // Assuming GHL key is now in env vars
+const GHL_API_KEY = process.env.GHL_API_KEY; // Assuming GHL key is now in env vars
 
 // ---------------------------------------------------------
 // Type Definitions (Unchanged)
@@ -273,9 +273,9 @@ async function callBatchDataV3(lead: DBLead): Promise<BatchDataResult> {
  * @param lead The enriched DBLead object.
  */
 async function handleGHLSync(lead: DBLead) {
-  if (!GOHIGHLEVEL_API_KEY) {
+  if (!GHL_API_KEY) {
     console.warn(
-      `⚠️ GHL Sync Skipped: GOHIGHLEVEL_API_KEY is missing from environment variables.`
+      `⚠️ GHL Sync Skipped: GHL_API_KEY is missing from environment variables.`
     );
     return;
   }
