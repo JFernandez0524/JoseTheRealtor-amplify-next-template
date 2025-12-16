@@ -1,5 +1,15 @@
 import { cookiesClient } from '../auth/amplifyServerUtils.server';
 import { type Schema } from '../../../../amplify/data/resource';
+// 💥 NEW: Import DynamoDB client for use in Lambda environment
+import { ddbDocClient } from './dynamoClient.server';
+import { GetCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
+
+// Check if we are running inside an AWS Lambda environment
+const IS_LAMBDA_CONTEXT =
+  !!process.env.AWS_REGION && !!process.env.LAMBDA_TASK_ROOT;
+// 🛑 IMPORTANT: Replace this with the actual environment variable name for your DynamoDB table
+const PROPERTY_LEAD_TABLE_NAME =
+  process.env.PROPERTY_LEAD_TABLE_NAME || 'PropertyLead_Default_Table';
 
 // --- Reusable Types ---
 
@@ -9,15 +19,15 @@ export type SkipTraceStatus =
   | 'COMPLETED'
   | 'FAILED'
   | 'NO_MATCH'
-  | 'NOT_FOUND' // <-- ADDED to resolve Lambda error
-  | 'NOT_AUTHORIZED' // <-- ADDED to resolve Lambda error
-  | 'INVALID_DATA'; // <-- ADDED to resolve Lambda error
+  | 'NOT_FOUND'
+  | 'NOT_AUTHORIZED'
+  | 'INVALID_DATA';
 
 // 💥 1. Extend the PropertyLead type to include the new GHL status fields
 export type DBLead = Schema['PropertyLead']['type'] & {
-  ghlSyncStatus?: 'PENDING' | 'SUCCESS' | 'FAILED' | 'SKIPPED';
-  ghlContactId?: string;
-  ghlSyncDate?: string; // ISO Date string of last sync attempt
+  ghlSyncStatus?: 'PENDING' | 'SUCCESS' | 'FAILED' | 'SKIPPED' | null;
+  ghlContactId?: string | null;
+  ghlSyncDate?: string | null; // ISO Date string of last sync attempt
 };
 
 // Define the base type with server-managed fields omitted
@@ -42,15 +52,14 @@ export type CreateLeadInput = BaseLeadInput &
     ownerZip: string;
   }>;
 
-// 💥 2. Update UpdateLeadInput to accept the new GHL status fields
-// We manually set skipTraceStatus here to allow all the custom statuses.
-export type UpdateLeadInput = Partial<BaseLeadInput> & {
-  // Use BaseLeadInput here for clarity
-  id: string;
-  // 💥 FIX: Combine the SkipTraceStatus union with | null
-  skipTraceStatus?: SkipTraceStatus | null; // <-- CRITICAL FIX
+// Define a type for the updateable lead properties (all keys EXCEPT 'id')
+type UpdatableLeadKeys = Exclude<keyof UpdateLeadInput, 'id'>;
 
-  ghlSyncStatus?: 'PENDING' | 'SUCCESS' | 'FAILED' | 'SKIPPED' | null; // Also allowing null for safety
+// 💥 2. Update UpdateLeadInput to accept the new GHL status fields
+export type UpdateLeadInput = Partial<BaseLeadInput> & {
+  id: string;
+  skipTraceStatus?: SkipTraceStatus | null;
+  ghlSyncStatus?: 'PENDING' | 'SUCCESS' | 'FAILED' | 'SKIPPED' | null;
   ghlContactId?: string | null;
   ghlSyncDate?: string | null;
 };
@@ -59,6 +68,7 @@ export type UpdateLeadInput = Partial<BaseLeadInput> & {
 
 /**
  * LIST all leads for the current user
+ * NOTE: Not refactored to DynamoDB, relies on Amplify client.
  */
 export async function listLeads(): Promise<DBLead[]> {
   try {
@@ -87,11 +97,12 @@ export async function listLeads(): Promise<DBLead[]> {
 
 /**
  * CREATE a new Lead
+ * NOTE: Not refactored to DynamoDB, relies on Amplify client.
  */
 export async function createLead(leadData: CreateLeadInput): Promise<DBLead> {
   try {
     const { data: newLead, errors } =
-      await cookiesClient.models.PropertyLead.create(leadData); // FIX APPLIED via type definition above
+      await cookiesClient.models.PropertyLead.create(leadData);
     if (errors) {
       throw new Error(errors.map((e: any) => e.message).join(', '));
     }
@@ -103,18 +114,32 @@ export async function createLead(leadData: CreateLeadInput): Promise<DBLead> {
 }
 
 /**
- * GET a single Lead by ID
+ * GET a single Lead by ID (HYBRID IMPLEMENTATION)
  * 💥 3. Updated return type and casting
  */
 export async function getLead(id: string): Promise<DBLead | null> {
   try {
-    const { data: lead, errors } = await cookiesClient.models.PropertyLead.get({
-      id,
-    });
-    if (errors) {
-      throw new Error(errors.map((e: any) => e.message).join(', '));
+    if (IS_LAMBDA_CONTEXT) {
+      // 🛑 LAMBDA / DYNAMODB IMPLEMENTATION
+      console.log(`[DB] Using DynamoDB client for fetch: ${id}`);
+      const command = new GetCommand({
+        TableName: PROPERTY_LEAD_TABLE_NAME,
+        Key: { id },
+      });
+      const { Item } = await ddbDocClient.send(command);
+      return (Item as DBLead) || null;
+    } else {
+      // ✅ NEXT.JS / AMPLIFY IMPLEMENTATION
+      console.log(`[DB] Using cookiesClient for fetch: ${id}`);
+      const { data: lead, errors } =
+        await cookiesClient.models.PropertyLead.get({
+          id,
+        });
+      if (errors) {
+        throw new Error(errors.map((e: any) => e.message).join(', '));
+      }
+      return lead as DBLead;
     }
-    return lead as DBLead;
   } catch (error: any) {
     console.error('❌ getLead error:', error.message);
     return null;
@@ -122,17 +147,54 @@ export async function getLead(id: string): Promise<DBLead | null> {
 }
 
 /**
- * UPDATE an existing Lead
+ * UPDATE an existing Lead (HYBRID IMPLEMENTATION)
  * 💥 4. Updated return type and casting
  */
 export async function updateLead(leadData: UpdateLeadInput): Promise<DBLead> {
   try {
-    const { data: updatedLead, errors } =
-      await cookiesClient.models.PropertyLead.update(leadData);
-    if (errors) {
-      throw new Error(errors.map((e: any) => e.message).join(', '));
+    if (IS_LAMBDA_CONTEXT) {
+      // 🛑 LAMBDA / DYNAMODB IMPLEMENTATION
+      const { id, ...attributesToUpdate } = leadData;
+
+      let UpdateExpression = 'set ';
+      const ExpressionAttributeValues: Record<string, any> = {}; // 💥 FIX: Use UpdatableLeadKeys to correctly type the keys (Fixes the index signature error)
+
+      const keys = Object.keys(attributesToUpdate) as UpdatableLeadKeys[];
+
+      for (const key of keys) {
+        // The value is now safely accessed using the strongly typed 'key'
+        const value = attributesToUpdate[key];
+        if (value !== undefined) {
+          const attributeKey = key as string;
+          UpdateExpression += `#${attributeKey} = :${attributeKey}, `;
+          ExpressionAttributeValues[`:${attributeKey}`] = value;
+        }
+      }
+      UpdateExpression = UpdateExpression.slice(0, -2); // Remove trailing comma and space
+      // If no updates, skip the API call
+
+      if (Object.keys(ExpressionAttributeValues).length === 0) {
+        throw new Error('No valid fields provided for update.');
+      }
+
+      const command = new UpdateCommand({
+        TableName: PROPERTY_LEAD_TABLE_NAME,
+        Key: { id },
+        UpdateExpression,
+        ExpressionAttributeValues,
+        ReturnValues: 'ALL_NEW',
+      });
+      const { Attributes } = await ddbDocClient.send(command);
+      return Attributes as DBLead;
+    } else {
+      // ✅ NEXT.JS / AMPLIFY IMPLEMENTATION
+      const { data: updatedLead, errors } =
+        await cookiesClient.models.PropertyLead.update(leadData);
+      if (errors) {
+        throw new Error(errors.map((e: any) => e.message).join(', '));
+      }
+      return updatedLead as DBLead;
     }
-    return updatedLead as DBLead;
   } catch (error: any) {
     console.error(`❌ updateLead error (ID: ${leadData.id}):`, error.message);
     throw error;
@@ -141,6 +203,7 @@ export async function updateLead(leadData: UpdateLeadInput): Promise<DBLead> {
 
 /**
  * DELETE a Lead
+ * NOTE: Not refactored to DynamoDB, relies on Amplify client.
  */
 export async function deleteLead(id: string) {
   try {

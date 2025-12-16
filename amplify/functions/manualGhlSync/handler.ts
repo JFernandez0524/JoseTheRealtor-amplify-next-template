@@ -3,9 +3,8 @@
 // Data Utilities: Uses the verified relative path to your centralized utility file.
 import {
   getLead,
-  updateLeadGhlStatus,
-  // 💥 Import the canonical type and alias it for clarity
-  DBLead as CanonicalLeadType,
+  updateLeadGhlStatus, // 💥 Use the imported type directly (no need to alias for a single usage)
+  DBLead,
 } from '../../../app/utils/aws/data/lead.server';
 // GHL Integration: Sync logic which should return the GHL Contact ID on success.
 import { syncToGoHighLevel } from './integrations/gohighlevel';
@@ -15,10 +14,16 @@ import { isAxiosError } from 'axios';
 // Environment Variable: Correctly uses the GHL_API_KEY environment variable.
 const GHL_API_KEY = process.env.GHL_API_KEY;
 
-// 💥 REMOVED: Local interface DBLead definition
-// We will use CanonicalLeadType everywhere instead.
+// ---------------------------------------------------------
+// Type Definitions
+// ---------------------------------------------------------
+// 💥 Define the unified sync result type for clarity
+type SyncResult = {
+  status: 'SUCCESS' | 'SKIPPED' | 'FAILED' | 'ERROR';
+  message: string;
+  ghlContactId?: string | null;
+};
 
-// --- Type Definitions ---
 type ManualSyncMutationArguments = {
   leadId: string;
 };
@@ -37,23 +42,25 @@ type AppSyncHandlerEvent = {
 /**
  * Executes the GHL sync and immediately records the outcome in the database
  * using the centralized updateLeadGhlStatus utility.
- * @param lead The enriched DBLead object (CanonicalLeadType).
+ * @param lead The enriched DBLead object.
  * @returns An object detailing the sync result.
  */
-async function processGhlSync(
-  lead: CanonicalLeadType // 💥 Use the canonical type
-): Promise<{ status: string; message: string }> {
+async function processGhlSync(lead: DBLead): Promise<SyncResult> {
   if (!GHL_API_KEY) {
     const message = `GHL Sync Skipped: GHL_API_KEY is missing.`;
     console.warn(`⚠️ ${message}`);
     await updateLeadGhlStatus(lead.id, 'SKIPPED');
     return { status: 'SKIPPED', message };
-  }
+  } // NOTE: skipTraceStatus is Optional/Nullable, so we need safe access.
+  // Check if lead is ready to sync (must be COMPLETED)
 
-  // NOTE: skipTraceStatus is Optional/Nullable, so we need safe access.
   if (lead.skipTraceStatus !== 'COMPLETED') {
     const message = `Sync Skipped: Lead skipTraceStatus is '${lead.skipTraceStatus}', not 'COMPLETED'.`;
     console.warn(`⚠️ ${message}`);
+    // Update status to SKIPPED, ensuring the status is recorded if not COMPLETED
+    if (lead.ghlSyncStatus !== 'SKIPPED') {
+      await updateLeadGhlStatus(lead.id, 'SKIPPED');
+    }
     return { status: 'SKIPPED', message };
   }
 
@@ -62,26 +69,25 @@ async function processGhlSync(
   console.log(`🔄 Attempting GHL sync for lead ${lead.id}...`);
 
   try {
-    // This call is now passing CanonicalLeadType, so the integration file
-    // must be fixed to accept CanonicalLeadType.
-    const ghlContactId = await syncToGoHighLevel(lead as any); // Cast as 'any' temporarily until Step 2 is applied
+    // Pass the fully typed lead object
+    const ghlContactId = await syncToGoHighLevel(lead); // If syncToGoHighLevel completes, record SUCCESS
 
-    // If syncToGoHighLevel completes, record SUCCESS
     await updateLeadGhlStatus(lead.id, 'SUCCESS', ghlContactId);
-    const message = `Successfully synced lead to GHL. Contact ID: ${ghlContactId}`;
-    console.log(`✅ ${message}`);
+    const message = `Successfully synced lead to GoHighLevel.`;
+    console.log(`✅ ${message} Contact ID: ${ghlContactId}`);
 
-    return { status: 'SUCCESS', message };
+    return { status: 'SUCCESS', message, ghlContactId };
   } catch (error: any) {
-    // ... (Error handling unchanged) ...
     let message = `GHL Sync failed for lead ${lead.id}.`;
+    let detail = '';
 
     if (isAxiosError(error) && error.response) {
-      message += ` API responded with HTTP ${error.response.status}. Detail: ${JSON.stringify(error.response.data)}`;
+      detail = `API responded with HTTP ${error.response.status}. Detail: ${JSON.stringify(error.response.data)}`;
     } else if (error.message) {
-      message += ` Error: ${error.message}`;
+      detail = `Error: ${error.message}`;
     }
 
+    message += ` ${detail}`;
     console.error(`❌ ${message}`);
     await updateLeadGhlStatus(lead.id, 'FAILED');
 
@@ -93,13 +99,19 @@ async function processGhlSync(
 // MAIN HANDLER
 // ---------------------------------------------------------
 
-export const handler = async (event: AppSyncHandlerEvent) => {
+export const handler = async (
+  event: AppSyncHandlerEvent
+): Promise<SyncResult & { leadId: string }> => {
   const { leadId } = event.arguments;
   const ownerId = event.identity?.sub;
 
   if (!ownerId) {
-    console.error('❌ ERROR: User identity (ownerId) is missing.');
-    return { status: 'ERROR', message: 'User identity missing.' };
+    console.error('❌ ERROR: User identity (ownerId) is missing.'); // Return type must match SyncResult & { leadId: string }
+    return {
+      status: 'ERROR',
+      message: 'User identity missing.',
+      leadId: leadId || 'unknown',
+    };
   }
 
   console.log(
@@ -107,46 +119,41 @@ export const handler = async (event: AppSyncHandlerEvent) => {
   );
 
   try {
-    // 1. Fetch the lead data using the centralized utility
-    const leadResult = await getLead(leadId);
+    // 1. Fetch the lead data using the centralized utility (Now uses DynamoDB)
+    const lead = await getLead(leadId);
 
-    if (!leadResult) {
+    if (!lead) {
       console.error(`⚠️ Lead not found: ${leadId}`);
-      return { status: 'ERROR', message: 'Lead not found in database.' };
-    }
+      return {
+        status: 'ERROR',
+        message: 'Lead not found in database.',
+        leadId,
+      };
+    } // 2. Security Check: Ensure the user owns the lead (Authorization)
 
-    // 💥 ASSERTION FIX: Assert to the CanonicalLeadType.
-    // This resolves the error about missing 'contacts', 'enrichments', etc.
-    const lead = leadResult as CanonicalLeadType;
-
-    // 2. Security Check: Ensure the user owns the lead (Authorization)
     if (lead.owner !== ownerId) {
       console.error(
         `❌ SECURITY ERROR: User ${ownerId} tried to sync lead owned by ${lead.owner}.`
       );
-      return { status: 'ERROR', message: 'Authorization denied.' };
-    }
+      return { status: 'ERROR', message: 'Authorization denied.', leadId };
+    } // 3. Execute the GHL sync and update DB status
 
-    // 3. Execute the GHL sync and update DB status
-    const syncResult = await processGhlSync(lead);
+    const syncResult = await processGhlSync(lead); // 4. Return status to AppSync
 
-    // 4. Return status to AppSync
     return {
       ...syncResult,
-      leadId: leadId,
-      ghlContactId:
-        syncResult.status === 'SUCCESS'
-          ? syncResult.message.split(': ')[1]
-          : lead.ghlContactId || null,
+      leadId: leadId, // ghlContactId is now correctly attached to syncResult inside processGhlSync
     };
   } catch (error: any) {
+    const message = `Internal server error: ${error.message}`;
     console.error(
       `❌ Unhandled Error in manualGhlSync handler for ${leadId}:`,
-      error.message
+      message
     );
     return {
       status: 'ERROR',
-      message: `Internal server error: ${error.message}`,
+      message: message,
+      leadId: leadId || 'unknown',
     };
   }
 };

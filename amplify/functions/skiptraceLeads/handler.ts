@@ -12,7 +12,7 @@ import {
   updateLead,
   updateLeadGhlStatus,
   DBLead,
-  UpdateLeadInput, // 💥 FIX: REMOVED SkipTraceStatus import to eliminate type conflict
+  UpdateLeadInput,
 } from '../../../app/utils/aws/data/lead.server';
 
 // --- Configuration & Retry Constants ---
@@ -24,9 +24,7 @@ const BATCH_DATA_SERVER_TOKEN = process.env.BATCH_DATA_SERVER_TOKEN;
 const GHL_API_KEY = process.env.GHL_API_KEY;
 
 // ---------------------------------------------------------
-// 💥 FIX: LOCAL DEFINITION OF FULL STATUS UNION
-// This must be used by the updateLeadStatus function to satisfy its internal calls.
-// We are defining the entire union of statuses used in this Lambda.
+// 💥 FIX: LOCAL DEFINITION OF FULL STATUS UNION (FOR TYPE SAFETY ONLY)
 // ---------------------------------------------------------
 type FullSkipTraceStatus =
   | 'PENDING'
@@ -36,7 +34,7 @@ type FullSkipTraceStatus =
   | 'NOT_FOUND'
   | 'NOT_AUTHORIZED'
   | 'INVALID_DATA'
-  | 'ERROR'; // Adding 'ERROR' for safety/completeness
+  | 'ERROR';
 
 type MailingAddressData = {
   mailingAddress?: string | null;
@@ -275,7 +273,6 @@ async function processGhlSync(lead: DBLead) {
     return;
   } // This function is only called if skipTraceStatus is 'COMPLETED'
   // But we still update the GHL status to PENDING before the call.
-
   await updateLeadGhlStatus(lead.id, 'PENDING');
 
   console.log(`🔄 Attempting GHL sync for lead ${lead.id}...`);
@@ -461,7 +458,6 @@ export const handler = async (event: AppSyncHandlerEvent) => {
       const updatedLead = await updateLead(updateData);
       console.log(`✅ Successfully updated lead: ${leadId}`); // --- 5. CRM Sync (Decoupled and Status-Tracked) ---
       // We pass the fully updated lead (which now includes the completed status)
-
       await processGhlSync(updatedLead);
 
       results.push({
