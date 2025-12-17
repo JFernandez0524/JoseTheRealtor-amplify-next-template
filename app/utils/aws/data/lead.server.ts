@@ -157,21 +157,29 @@ export async function updateLead(leadData: UpdateLeadInput): Promise<DBLead> {
       const { id, ...attributesToUpdate } = leadData;
 
       let UpdateExpression = 'set ';
-      const ExpressionAttributeValues: Record<string, any> = {}; // 💥 FIX: Use UpdatableLeadKeys to correctly type the keys (Fixes the index signature error)
+      const ExpressionAttributeValues: Record<string, any> = {};
+
+      // 💥 NEW: We need ExpressionAttributeNames to map the alias (#name) to the actual attribute name (name)
+      const ExpressionAttributeNames: Record<string, string> = {};
 
       const keys = Object.keys(attributesToUpdate) as UpdatableLeadKeys[];
 
       for (const key of keys) {
-        // The value is now safely accessed using the strongly typed 'key'
         const value = attributesToUpdate[key];
         if (value !== undefined) {
           const attributeKey = key as string;
+
+          // 1. Alias the name with '#' for the UpdateExpression
           UpdateExpression += `#${attributeKey} = :${attributeKey}, `;
+
+          // 2. Map the alias (#attributeKey) to the real attribute name
+          ExpressionAttributeNames[`#${attributeKey}`] = attributeKey;
+
+          // 3. Set the value
           ExpressionAttributeValues[`:${attributeKey}`] = value;
         }
       }
       UpdateExpression = UpdateExpression.slice(0, -2); // Remove trailing comma and space
-      // If no updates, skip the API call
 
       if (Object.keys(ExpressionAttributeValues).length === 0) {
         throw new Error('No valid fields provided for update.');
@@ -182,6 +190,7 @@ export async function updateLead(leadData: UpdateLeadInput): Promise<DBLead> {
         Key: { id },
         UpdateExpression,
         ExpressionAttributeValues,
+        ExpressionAttributeNames, // 💥 ADD THIS OBJECT TO THE COMMAND
         ReturnValues: 'ALL_NEW',
       });
       const { Attributes } = await ddbDocClient.send(command);
