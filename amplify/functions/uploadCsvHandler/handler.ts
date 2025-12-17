@@ -3,6 +3,7 @@ import {
   S3Client,
   GetObjectCommand,
   HeadObjectCommand,
+  DeleteObjectCommand,
 } from '@aws-sdk/client-s3';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import {
@@ -13,7 +14,7 @@ import {
 import { parse } from 'csv-parse';
 import { Readable } from 'stream';
 import { randomUUID } from 'crypto';
-import { validateAddressWithGoogle } from '../../../app/utils/google.server'; // Ensure this path is correct
+import { validateAddressWithGoogle } from '../../../app/utils/google.server';
 import { sendNotification } from './src/intergrations/notifications';
 import { logAuditEvent } from './src/intergrations/auditLogs';
 
@@ -21,30 +22,53 @@ const s3 = new S3Client({});
 const ddbDocClient = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const TABLE_NAME = process.env.AMPLIFY_DATA_LEAD_TABLE_NAME;
 
+/**
+ * 🛠️ SANITIZATION UTILITIES
+ */
+const sanitize = (val: any, maxLen = 255): string => {
+  if (typeof val !== 'string') return '';
+  return val
+    .trim()
+    .replace(/<[^>]*>?/gm, '') // Strip HTML tags to prevent XSS
+    .substring(0, maxLen);
+};
+
+const formatName = (val: any): string => {
+  const s = sanitize(val, 50);
+  if (!s) return '';
+  return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
+};
+
 export const handler: S3Handler = async (event) => {
   for (const record of event.Records) {
-    let bucketName = '';
-    let decodedKey = '';
+    let bucketName = record.s3.bucket.name;
+    let decodedKey = decodeURIComponent(record.s3.object.key).replace(
+      /\+/g,
+      ' '
+    );
+
+    // Tracking for user feedback
+    const validationErrors: { row: number; error: string }[] = [];
+    let currentRow = 0;
+    let successCount = 0;
+    let skippedCount = 0;
+    let ownerId = '';
 
     try {
-      const rawKey = record.s3.object.key;
-      decodedKey = decodeURIComponent(rawKey).replace(/\+/g, ' ');
-      bucketName = record.s3.bucket.name;
-
       // 1. Get Metadata & Lead Type
       const headObject = await s3.send(
         new HeadObjectCommand({ Bucket: bucketName, Key: decodedKey })
       );
 
-      const ownerId = headObject.Metadata?.['owner_sub'];
-      // Default to PREFORECLOSURE if missing
+      ownerId = headObject.Metadata?.['owner_sub'] || '';
       const leadType = (
         headObject.Metadata?.['leadtype'] || 'PREFORECLOSURE'
       ).toUpperCase();
 
       if (!ownerId) {
-        console.warn('⚠️ No owner_sub found. Skipping.');
-        continue;
+        throw new Error(
+          'No owner_sub found in file metadata. Security rejection.'
+        );
       }
 
       // 2. Download & Parse CSV
@@ -56,162 +80,176 @@ export const handler: S3Handler = async (event) => {
         parse({ columns: true, skip_empty_lines: true, trim: true, bom: true })
       );
 
-      let count = 0;
-      let skippedCount = 0;
-
       for await (const row of parser) {
-        // --- A. PROPERTY ADDRESS VALIDATION (Always Required) ---
-        const rawPropAddr =
-          row['ownerAddress'] || row['Property Address'] || row['Address'];
-        const rawPropCity = row['ownerCity'] || row['City'];
-        const rawPropState = row['ownerState'] || row['State'];
-        const rawPropZip = row['ownerZip'] || row['Zip'];
+        currentRow++;
+        try {
+          // --- A. SANITIZED CORE INPUTS ---
+          const firstName = formatName(
+            row['ownerFirstName'] || row['First Name'] || row['First_Name']
+          );
+          const lastName = formatName(
+            row['ownerLastName'] || row['Last Name'] || row['Last_Name']
+          );
 
-        if (!rawPropAddr) continue;
-
-        const fullPropString = `${rawPropAddr}, ${rawPropCity}, ${rawPropState} ${rawPropZip}`;
-        const propValidation = await validateAddressWithGoogle(fullPropString);
-
-        // Fallback if validation fails
-        const finalPropAddr = propValidation
-          ? propValidation.components.street
-          : rawPropAddr;
-        const finalPropCity = propValidation
-          ? propValidation.components.city
-          : rawPropCity;
-        const finalPropState = propValidation
-          ? propValidation.components.state
-          : rawPropState;
-        const finalPropZip = propValidation
-          ? propValidation.components.zip
-          : rawPropZip;
-
-        // --- B. MAILING ADDRESS LOGIC (Based on Lead Type) ---
-        let finalMailAddr = null;
-        let finalMailCity = null;
-        let finalMailState = null;
-        let finalMailZip = null;
-        let isAbsentee = false;
-
-        // If PROBATE: Validate the ADMIN address
-        if (leadType === 'PROBATE') {
-          const rawAdminAddr = row['adminAddress'] || row['Mailing Address'];
-          const rawAdminCity = row['adminCity'] || row['Mailing City'];
-          const rawAdminState = row['adminState'] || row['Mailing State'];
-          const rawAdminZip = row['adminZip'] || row['Mailing Zip'];
-
-          if (rawAdminAddr) {
-            const fullAdminString = `${rawAdminAddr}, ${rawAdminCity}, ${rawAdminState} ${rawAdminZip}`;
-            const adminValidation =
-              await validateAddressWithGoogle(fullAdminString);
-
-            finalMailAddr = adminValidation
-              ? adminValidation.components.street
-              : rawAdminAddr;
-            finalMailCity = adminValidation
-              ? adminValidation.components.city
-              : rawAdminCity;
-            finalMailState = adminValidation
-              ? adminValidation.components.state
-              : rawAdminState;
-            finalMailZip = adminValidation
-              ? adminValidation.components.zip
-              : rawAdminZip;
-
-            // For Probate, we always consider them "Absentee" effectively because we mail the Admin
-            isAbsentee = true;
+          // Basic Harmful Text Check (XSS/Script injection protection)
+          if (/<script|javascript:|on\w+=/i.test(JSON.stringify(row))) {
+            throw new Error(
+              'Potential harmful script or malformed characters detected.'
+            );
           }
-        }
-        // If PRE-FORECLOSURE: Only set if explicitly provided in CSV (e.g. separate mailing column)
-        else {
-          const rawMailAddr = row['mailingAddress']; // Optional CSV column
-          if (rawMailAddr) {
-            // ... (Optional: Validate mailing address if provided) ...
-            // For now, if provided in CSV, we assume it might be absentee
-            finalMailAddr = rawMailAddr;
-            // ... map other fields ...
-            isAbsentee = true;
+
+          const rawPropAddr = sanitize(
+            row['ownerAddress'] || row['Property Address'] || row['Address']
+          );
+          const rawPropCity = sanitize(row['ownerCity'] || row['City'], 100);
+          const rawPropState = sanitize(
+            row['ownerState'] || row['State'],
+            2
+          ).toUpperCase();
+          const rawPropZip = sanitize(row['ownerZip'] || row['Zip'], 10);
+
+          if (!rawPropAddr) throw new Error('Property Address is missing.');
+
+          // --- B. ADDRESS VALIDATION ---
+          const fullPropString = `${rawPropAddr}, ${rawPropCity}, ${rawPropState} ${rawPropZip}`;
+          const propValidation =
+            await validateAddressWithGoogle(fullPropString);
+
+          const finalPropAddr = propValidation
+            ? propValidation.components.street
+            : rawPropAddr;
+          const finalPropCity = propValidation
+            ? propValidation.components.city
+            : rawPropCity;
+          const finalPropState = propValidation
+            ? propValidation.components.state
+            : rawPropState;
+          const finalPropZip = propValidation
+            ? propValidation.components.zip
+            : rawPropZip;
+
+          // --- C. MAILING ADDRESS & LABEL LOGIC ---
+          let finalMailAddr = null;
+          let finalMailCity = null;
+          let finalMailState = null;
+          let finalMailZip = null;
+          const labels: string[] = [leadType];
+
+          if (leadType === 'PROBATE') {
+            const rawAdminAddr = sanitize(
+              row['adminAddress'] || row['Mailing Address']
+            );
+            if (rawAdminAddr) {
+              const fullAdminString = `${rawAdminAddr}, ${row['adminCity']}, ${row['adminState']} ${row['adminZip']}`;
+              const adminValidation =
+                await validateAddressWithGoogle(fullAdminString);
+              finalMailAddr = adminValidation
+                ? adminValidation.components.street
+                : rawAdminAddr;
+              labels.push('ABSENTEE');
+            }
+          } else if (row['mailingAddress']) {
+            finalMailAddr = sanitize(row['mailingAddress']);
+            labels.push('ABSENTEE');
           }
-          // Otherwise, leave finalMailAddr NULL.
-          // We will NOT default it to Property Address so we can detect absentee status later.
+
+          // --- D. DUPLICATE CHECK ---
+          const existingCheck = await ddbDocClient.send(
+            new QueryCommand({
+              TableName: TABLE_NAME,
+              IndexName: 'propertyLeadsByOwnerAndOwnerAddress',
+              KeyConditionExpression: '#owner = :owner AND #addr = :addr',
+              ExpressionAttributeNames: {
+                '#owner': 'owner',
+                '#addr': 'ownerAddress',
+              },
+              ExpressionAttributeValues: {
+                ':owner': ownerId,
+                ':addr': finalPropAddr,
+              },
+              Limit: 1,
+            })
+          );
+
+          if (existingCheck.Items && existingCheck.Items.length > 0) {
+            skippedCount++;
+            continue;
+          }
+
+          // --- E. SAVE TO DYNAMODB ---
+          const leadItem = {
+            id: randomUUID(),
+            owner: ownerId,
+            __typename: 'PropertyLead',
+            type: leadType,
+            ownerFirstName: firstName,
+            ownerLastName: lastName,
+            ownerAddress: finalPropAddr,
+            ownerCity: finalPropCity,
+            ownerState: finalPropState,
+            ownerZip: finalPropZip,
+            leadLabels: labels,
+            validationStatus: propValidation ? 'VALID' : 'INVALID',
+            phones: row['phone'] ? [sanitize(row['phone'], 20)] : [],
+            emails: row['email']
+              ? [sanitize(row['email'], 100).toLowerCase()]
+              : [],
+            skipTraceStatus: 'PENDING',
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          };
+
+          await ddbDocClient.send(
+            new PutCommand({ TableName: TABLE_NAME, Item: leadItem })
+          );
+          successCount++;
+        } catch (rowError: any) {
+          validationErrors.push({ row: currentRow, error: rowError.message });
         }
-
-        // --- C. DUPLICATE CHECK (On Property Address) ---
-        const existingCheck = await ddbDocClient.send(
-          new QueryCommand({
-            TableName: TABLE_NAME,
-            IndexName: 'propertyLeadsByOwnerAndOwnerAddress',
-            KeyConditionExpression: '#owner = :owner AND #addr = :addr',
-            ExpressionAttributeNames: {
-              '#owner': 'owner',
-              '#addr': 'ownerAddress',
-            },
-            ExpressionAttributeValues: {
-              ':owner': ownerId,
-              ':addr': finalPropAddr,
-            },
-            Limit: 1,
-          })
-        );
-
-        if (existingCheck.Items && existingCheck.Items.length > 0) {
-          skippedCount++;
-          continue;
-        }
-
-        // --- D. SAVE TO DB ---
-        count++;
-        const leadItem = {
-          id: randomUUID(),
-          owner: ownerId,
-          __typename: 'PropertyLead',
-          type: leadType, // 'PROBATE' or 'PREFORECLOSURE'
-
-          // 1. Property Info (The House)
-          ownerFirstName: row['First Name'] || row['ownerFirstName'],
-          ownerLastName: row['Last Name'] || row['ownerLastName'],
-          ownerAddress: finalPropAddr,
-          ownerCity: finalPropCity,
-          ownerState: finalPropState,
-          ownerZip: finalPropZip,
-
-          // 2. Admin Info (For Probate)
-          adminFirstName: row['adminFirstName'],
-          adminLastName: row['adminLastName'],
-          adminAddress: row['adminAddress'], // Raw input preserved
-          adminCity: row['adminCity'],
-          adminState: row['adminState'],
-          adminZip: row['adminZip'],
-
-          // 3. Mailing Info (Who we contact)
-          mailingAddress: finalMailAddr,
-          mailingCity: finalMailCity,
-          mailingState: finalMailState,
-          mailingZip: finalMailZip,
-          isAbsenteeOwner: isAbsentee,
-
-          // 4. Status & System
-          validationStatus: propValidation ? 'VALID' : 'INVALID', // Valid Property?
-          latitude: propValidation?.location?.lat || null,
-          longitude: propValidation?.location?.lng || null,
-          standardizedAddress: propValidation?.components || null,
-
-          phones: row['phone'] ? [row['phone']] : [],
-          emails: row['email'] ? [row['email']] : [],
-          skipTraceStatus: 'PENDING',
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        };
-
-        await ddbDocClient.send(
-          new PutCommand({ TableName: TABLE_NAME, Item: leadItem })
-        );
-
-        // ... notifications ...
       }
-      // ... cleanup s3 ...
-    } catch (err) {
-      console.error('Processing Error:', err);
+
+      // --- F. FINALIZATION ---
+      if (validationErrors.length === 0) {
+        // FULL SUCCESS: Delete the file from S3
+        await s3.send(
+          new DeleteObjectCommand({ Bucket: bucketName, Key: decodedKey })
+        );
+        await sendNotification(
+          ownerId,
+          'Upload Complete',
+          `Successfully imported ${successCount} leads.`
+        );
+        await logAuditEvent('CSV_IMPORT_SUCCESS', {
+          ownerId,
+          fileName: decodedKey,
+          count: successCount,
+        });
+      } else {
+        // PARTIAL FAILURE: Keep file and notify user
+        const errorSummary = validationErrors
+          .slice(0, 5)
+          .map((e) => `Row ${e.row}: ${e.error}`)
+          .join('\n');
+        await sendNotification(
+          ownerId,
+          'Upload Action Required',
+          `Processed ${successCount} leads, but ${validationErrors.length} failed validation. The file was NOT deleted. Please fix errors and re-upload.\n\nSample Errors:\n${errorSummary}`
+        );
+        await logAuditEvent('CSV_IMPORT_PARTIAL_FAILURE', {
+          ownerId,
+          fileName: decodedKey,
+          errorCount: validationErrors.length,
+        });
+      }
+    } catch (err: any) {
+      console.error('Critical Processing Error:', err);
+      if (ownerId) {
+        await sendNotification(
+          ownerId,
+          'Upload Failed',
+          `A critical error occurred: ${err.message}. Please check your CSV format.`
+        );
+      }
     }
   }
 };

@@ -43,7 +43,13 @@ backend.skipTraceLeads.addEnvironment(
 // 4. Permissions for uploadCsvHandler (Unchanged)
 backend.uploadCsvHandler.resources.lambda.addToRolePolicy(
   new PolicyStatement({
-    actions: ['s3:ListBucket', 's3:GetObject', 's3:DeleteObject'],
+    // Added s3:PutObject to allow metadata updates
+    actions: [
+      's3:ListBucket',
+      's3:GetObject',
+      's3:DeleteObject',
+      's3:PutObject',
+    ],
     resources: [storageBucket.bucketArn, `${storageBucket.bucketArn}/*`],
   })
 );

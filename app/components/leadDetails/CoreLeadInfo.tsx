@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react';
 import { Loader } from '@aws-amplify/ui-react';
 import { type Schema } from '@/amplify/data/resource';
 
-// Define the shape of our Lead based on the Schema (Extended for custom/backend fields)
 type Lead = Schema['PropertyLead']['type'] & {
   notes?: string | null;
   ghlSyncStatus?: 'PENDING' | 'SUCCESS' | 'FAILED' | 'SKIPPED' | null;
@@ -15,7 +14,7 @@ type Lead = Schema['PropertyLead']['type'] & {
 interface CoreLeadInfoProps {
   lead: Lead;
   onUpdate: (updatedLead: Lead) => void;
-  client: any; // Use 'any' for the Amplify client
+  client: any;
   isEditing: boolean;
   onEditToggle: (isEditing: boolean) => void;
 }
@@ -28,28 +27,33 @@ export function CoreLeadInfo({
   onEditToggle,
 }: CoreLeadInfoProps) {
   const [formData, setFormData] = useState({
-    // 💥 FIX 1: Include the immutable 'id' in the local state
     id: lead.id,
     ownerFirstName: lead.ownerFirstName || '',
     ownerLastName: lead.ownerLastName || '',
     notes: lead.notes || '',
+    mailingAddress: lead.mailingAddress || '',
+    mailingCity: lead.mailingCity || '',
+    mailingState: lead.mailingState || '',
+    mailingZip: lead.mailingZip || '',
+    leadLabels: lead.leadLabels || [], // 👈 Ensure this is always an array
   });
   const [isSaving, setIsSaving] = useState(false);
+  const [copied, setCopied] = useState(false);
 
-  // 💥 FIX 2: Sync formData when the lead context changes (based on ID) or when edit mode is toggled.
   useEffect(() => {
-    // Reset internal state to prop values when:
-    // 1. The lead ID changes (navigating to a new lead).
-    // 2. The component exits edit mode (isEditing becomes false).
     if (!isEditing || lead.id !== formData.id) {
       setFormData({
         id: lead.id,
         ownerFirstName: lead.ownerFirstName || '',
         ownerLastName: lead.ownerLastName || '',
         notes: lead.notes || '',
+        mailingAddress: lead.mailingAddress || '',
+        mailingCity: lead.mailingCity || '',
+        mailingState: lead.mailingState || '',
+        mailingZip: lead.mailingZip || '',
+        leadLabels: lead.leadLabels || [], // 👈 Sync with server data
       });
     }
-    // 💥 FIX 3: Include all necessary dependencies in the array
   }, [lead, isEditing, formData.id]);
 
   const handleChange = (
@@ -59,71 +63,77 @@ export function CoreLeadInfo({
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
+  const copyMailingAddress = () => {
+    const fullAddress = `${formData.mailingAddress}, ${formData.mailingCity}, ${formData.mailingState} ${formData.mailingZip}`;
+    navigator.clipboard.writeText(fullAddress);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSaving(true);
     try {
-      // Include 'id' from the formData state, which originates from the lead prop.
       const payload = {
         id: formData.id,
         ownerFirstName: formData.ownerFirstName,
         ownerLastName: formData.ownerLastName,
         notes: formData.notes,
+        mailingAddress: formData.mailingAddress,
+        mailingCity: formData.mailingCity,
+        mailingState: formData.mailingState,
+        mailingZip: formData.mailingZip,
+        leadLabels: formData.leadLabels, // 👈 Explicitly include labels in the update
       };
 
       const { data: updatedLead, errors } =
         await client.models.PropertyLead.update(payload);
 
-      if (errors || !updatedLead) {
+      if (errors || !updatedLead)
         throw new Error(errors?.[0]?.message || 'Failed to update lead.');
-      }
 
-      // Merge existing state and GHL status fields back into the updated lead object
-      const finalUpdatedLead: Lead = {
+      onUpdate({
         ...(updatedLead as Lead),
         ghlSyncStatus: lead.ghlSyncStatus,
         ghlContactId: lead.ghlContactId,
         ghlSyncDate: lead.ghlSyncDate,
-      };
-
-      onUpdate(finalUpdatedLead);
-      onEditToggle(false); // Close edit mode
-      alert('Lead saved successfully!');
+      });
+      onEditToggle(false);
     } catch (err: any) {
       console.error('Save failed:', err);
-      alert(`Save failed: ${err.message || 'Check console.'}`);
     } finally {
       setIsSaving(false);
     }
   };
 
-  // --- Render Logic for Fields (Read-Only vs. Editable) ---
-  const renderField = (
-    name: keyof Omit<typeof formData, 'id'>,
-    label: string
-  ) => {
+  const renderField = (name: keyof typeof formData, label: string) => {
     const value = formData[name];
+    if (Array.isArray(value)) return null; // Skip labels array for standard inputs
+
     const isTextArea = name === 'notes';
     const InputComponent = isTextArea ? 'textarea' : 'input';
 
     return (
-      <div>
-        <label className='block text-sm font-medium text-gray-500'>
+      <div className='w-full'>
+        <label className='block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1'>
           {label}
         </label>
         {isEditing ? (
           <InputComponent
             name={name}
-            value={value}
+            value={value as string}
             onChange={handleChange}
-            rows={isTextArea ? 3 : 1}
-            className='mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 text-gray-800'
+            className='block w-full border border-gray-200 rounded-md p-2 text-sm text-gray-800 focus:ring-indigo-500'
           />
         ) : (
           <p
-            className={`text-base text-gray-800 ${isTextArea ? 'whitespace-pre-wrap' : ''}`}
+            className={`text-base text-gray-800 font-medium ${isTextArea ? 'whitespace-pre-wrap' : ''}`}
           >
-            {value || <span className='text-gray-400 italic'>N/A</span>}
+            {value || (
+              <span className='text-gray-300 italic font-normal text-sm'>
+                N/A
+              </span>
+            )}
           </p>
         )}
       </div>
@@ -132,32 +142,85 @@ export function CoreLeadInfo({
 
   return (
     <form onSubmit={handleSave} className='space-y-6'>
-      <div className='grid grid-cols-2 gap-4'>
+      <div className='grid grid-cols-2 gap-6'>
         {renderField('ownerFirstName', 'First Name')}
         {renderField('ownerLastName', 'Last Name')}
       </div>
 
-      {renderField('notes', 'Notes')}
+      {/* 🟢 PROSPECTING LABELS DISPLAY */}
+      <div className='pt-4 border-t border-gray-100'>
+        <label className='block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2'>
+          Prospecting Labels
+        </label>
+        <div className='flex flex-wrap gap-2'>
+          {formData.leadLabels && formData.leadLabels.length > 0 ? (
+            formData.leadLabels.map((label, idx) => (
+              <span
+                key={idx}
+                className='px-2 py-1 rounded bg-slate-100 text-slate-700 text-[10px] font-bold uppercase tracking-wide border border-slate-200 shadow-sm'
+              >
+                {label?.replace(/_/g, ' ')}
+              </span>
+            ))
+          ) : (
+            <span className='text-gray-300 italic text-sm'>
+              No labels assigned
+            </span>
+          )}
+        </div>
+      </div>
 
-      {/* Save button only appears in edit mode */}
+      <div className='pt-4 border-t border-gray-100'>
+        <div className='flex justify-between items-center mb-3'>
+          <label className='text-xs font-bold text-gray-400 uppercase tracking-wider'>
+            Mailing Address
+          </label>
+          {!isEditing && formData.mailingAddress && (
+            <button
+              type='button'
+              onClick={copyMailingAddress}
+              className='text-[10px] px-2 py-1 rounded border bg-gray-50 text-gray-500'
+            >
+              {copied ? 'Copied!' : 'Copy Address'}
+            </button>
+          )}
+        </div>
+        {!isEditing ? (
+          <div>
+            <p className='text-gray-800 font-medium'>
+              {formData.mailingAddress || 'N/A'}
+            </p>
+            {formData.mailingAddress && (
+              <p className='text-sm text-gray-500'>
+                {formData.mailingCity}, {formData.mailingState}{' '}
+                {formData.mailingZip}
+              </p>
+            )}
+          </div>
+        ) : (
+          <div className='space-y-3'>
+            {renderField('mailingAddress', 'Street')}
+            <div className='grid grid-cols-3 gap-3'>
+              {renderField('mailingCity', 'City')}
+              {renderField('mailingState', 'State')}
+              {renderField('mailingZip', 'Zip')}
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className='pt-4 border-t border-gray-100'>
+        {renderField('notes', 'Internal Notes')}
+      </div>
+
       {isEditing && (
         <div className='flex justify-end pt-4'>
           <button
             type='submit'
             disabled={isSaving}
-            className={`px-4 py-2 text-sm font-medium rounded-md shadow-sm flex items-center gap-2 transition-colors ${
-              isSaving
-                ? 'bg-gray-400 text-white cursor-not-allowed'
-                : 'bg-green-600 text-white hover:bg-green-700'
-            }`}
+            className='px-6 py-2 text-sm font-bold rounded-md bg-green-600 text-white'
           >
-            {isSaving ? (
-              <>
-                <Loader size='small' variation='linear' /> Saving...
-              </>
-            ) : (
-              'Save Changes'
-            )}
+            {isSaving ? <Loader size='small' /> : 'Save Changes'}
           </button>
         </div>
       )}

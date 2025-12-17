@@ -33,6 +33,7 @@ const schema = a.schema({
       mailingState: a.string(),
       mailingZip: a.string(),
       isAbsenteeOwner: a.boolean(), // --- 🟢 Building & Tax Data (From BatchData V1) ---
+      leadLabels: a.string().array(), // --- 🟢 Lead Labels (For Dashboard) ---
 
       bedrooms: a.integer(),
       bathrooms: a.float(), // e.g. 2.5
@@ -171,6 +172,15 @@ const schema = a.schema({
     .returns(a.json()) // Returns a status object for the UI
     .handler(a.handler.function(manualGhlSync)) // Link to the new Lambda function
     .authorization((allow) => [allow.authenticated()]),
+
+  Notification: a
+    .model({
+      title: a.string(),
+      message: a.string(),
+      type: a.enum(['INFO', 'SUCCESS', 'WARNING', 'ERROR']),
+      isRead: a.boolean().default(false),
+    })
+    .authorization((allow) => [allow.owner()]),
 });
 
 export type Schema = ClientSchema<typeof schema>;

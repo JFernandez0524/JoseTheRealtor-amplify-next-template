@@ -10,8 +10,9 @@
   },
   "dependencies": {
     "@aws-amplify/adapter-nextjs": "^1.6.10",
-    "@aws-amplify/ui-react": "^6.13.1",
+    "@aws-amplify/ui-react": "^6.13.2",
     "@aws-amplify/ui-react-ai": "^1.5.0",
+    "@aws-amplify/ui-react-core": "^3.4.7",
     "@aws-sdk/client-cognito-identity-provider": "^3.908.0",
     "@aws-sdk/client-dynamodb": "^3.943.0",
     "@aws-sdk/client-s3": "^3.943.0",
