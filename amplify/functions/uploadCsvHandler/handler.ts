@@ -47,7 +47,6 @@ export const handler: S3Handler = async (event) => {
       ' '
     );
 
-    // Tracking for user feedback
     const validationErrors: { row: number; error: string }[] = [];
     let currentRow = 0;
     let successCount = 0;
@@ -91,7 +90,6 @@ export const handler: S3Handler = async (event) => {
             row['ownerLastName'] || row['Last Name'] || row['Last_Name']
           );
 
-          // Basic Harmful Text Check (XSS/Script injection protection)
           if (/<script|javascript:|on\w+=/i.test(JSON.stringify(row))) {
             throw new Error(
               'Potential harmful script or malformed characters detected.'
@@ -128,24 +126,45 @@ export const handler: S3Handler = async (event) => {
             ? propValidation.components.zip
             : rawPropZip;
 
-          // --- C. MAILING ADDRESS & LABEL LOGIC ---
+          // --- C. MAILING ADDRESS & PROBATE ADMIN LOGIC ---
           let finalMailAddr = null;
           let finalMailCity = null;
           let finalMailState = null;
           let finalMailZip = null;
+          let adminFirstName = null;
+          let adminLastName = null;
           const labels: string[] = [leadType];
 
           if (leadType === 'PROBATE') {
+            // Mapping for probate-lead-template.csv
+            adminFirstName = formatName(row['adminFirstName']);
+            adminLastName = formatName(row['adminLastName']);
+
             const rawAdminAddr = sanitize(
               row['adminAddress'] || row['Mailing Address']
             );
+            const rawAdminCity = sanitize(row['adminCity'], 100);
+            const rawAdminState = sanitize(row['adminState'], 2).toUpperCase();
+            const rawAdminZip = sanitize(row['adminZip'], 10);
+
             if (rawAdminAddr) {
-              const fullAdminString = `${rawAdminAddr}, ${row['adminCity']}, ${row['adminState']} ${row['adminZip']}`;
+              const fullAdminString = `${rawAdminAddr}, ${rawAdminCity}, ${rawAdminState} ${rawAdminZip}`;
               const adminValidation =
                 await validateAddressWithGoogle(fullAdminString);
+
               finalMailAddr = adminValidation
                 ? adminValidation.components.street
                 : rawAdminAddr;
+              finalMailCity = adminValidation
+                ? adminValidation.components.city
+                : rawAdminCity;
+              finalMailState = adminValidation
+                ? adminValidation.components.state
+                : rawAdminState;
+              finalMailZip = adminValidation
+                ? adminValidation.components.zip
+                : rawAdminZip;
+
               labels.push('ABSENTEE');
             }
           } else if (row['mailingAddress']) {
@@ -188,13 +207,32 @@ export const handler: S3Handler = async (event) => {
             ownerCity: finalPropCity,
             ownerState: finalPropState,
             ownerZip: finalPropZip,
+
+            // Mapping Probate specific fields from schema
+            adminFirstName: adminFirstName,
+            adminLastName: adminLastName,
+            adminAddress: finalMailAddr,
+            adminCity: finalMailCity,
+            adminState: finalMailState,
+            adminZip: finalMailZip,
+
+            mailingAddress: finalMailAddr,
+            mailingCity: finalMailCity,
+            mailingState: finalMailState,
+            mailingZip: finalMailZip,
+            isAbsenteeOwner: labels.includes('ABSENTEE'),
             leadLabels: labels,
+
             validationStatus: propValidation ? 'VALID' : 'INVALID',
             phones: row['phone'] ? [sanitize(row['phone'], 20)] : [],
             emails: row['email']
               ? [sanitize(row['email'], 100).toLowerCase()]
               : [],
+
+            // GHL Sync & System Fields from schema
             skipTraceStatus: 'PENDING',
+            ghlSyncStatus: 'PENDING',
+            ghlContactId: null, // 🎯 Ready for the ID-based sync path
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
           };
@@ -210,7 +248,6 @@ export const handler: S3Handler = async (event) => {
 
       // --- F. FINALIZATION ---
       if (validationErrors.length === 0) {
-        // FULL SUCCESS: Delete the file from S3
         await s3.send(
           new DeleteObjectCommand({ Bucket: bucketName, Key: decodedKey })
         );
@@ -225,7 +262,6 @@ export const handler: S3Handler = async (event) => {
           count: successCount,
         });
       } else {
-        // PARTIAL FAILURE: Keep file and notify user
         const errorSummary = validationErrors
           .slice(0, 5)
           .map((e) => `Row ${e.row}: ${e.error}`)
@@ -233,7 +269,7 @@ export const handler: S3Handler = async (event) => {
         await sendNotification(
           ownerId,
           'Upload Action Required',
-          `Processed ${successCount} leads, but ${validationErrors.length} failed validation. The file was NOT deleted. Please fix errors and re-upload.\n\nSample Errors:\n${errorSummary}`
+          `Processed ${successCount} leads, but ${validationErrors.length} failed. File was NOT deleted.\n\nSample Errors:\n${errorSummary}`
         );
         await logAuditEvent('CSV_IMPORT_PARTIAL_FAILURE', {
           ownerId,
@@ -247,7 +283,7 @@ export const handler: S3Handler = async (event) => {
         await sendNotification(
           ownerId,
           'Upload Failed',
-          `A critical error occurred: ${err.message}. Please check your CSV format.`
+          `A critical error occurred: ${err.message}.`
         );
       }
     }
