@@ -355,7 +355,9 @@ export function LeadDetailClient({ initialLead }: LeadDetailClientProps) {
             leadId={lead.id}
             ghlContactId={lead.ghlContactId}
             ghlSyncStatus={lead.ghlSyncStatus}
+            skipTraceStatus={lead.skipTraceStatus}
             onSyncComplete={async () => {
+              // Refresh logic
               const { data } = await client.models.PropertyLead.get({
                 id: lead.id,
               });
