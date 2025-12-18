@@ -8,9 +8,9 @@ import { client } from '@/app/utils/aws/data/frontEndClient';
 
 const libraries: 'places'[] = ['places'];
 
-// 🟢 CSV Template Headers matching your provided files
+// 🎯 CSV Template Headers matching your updated Probate file requirements
 const PROBATE_TEMPLATE =
-  'ownerFirstName,ownerLastName,ownerAddress,ownerCity,ownerState,ownerZip,adminFirstName,adminLastName,adminAddress,adminCity,adminState,adminZip';
+  'ownerFirstName,ownerLastName,ownerAddress,ownerCity,ownerState,ownerZip,adminFirstName,adminLastName,adminAddress,adminCity,adminState,adminZip,phone';
 const PREFORECLOSURE_TEMPLATE =
   'ownerFirstName,ownerLastName,ownerAddress,ownerCity,ownerState,ownerZip';
 
@@ -31,6 +31,7 @@ export function ManualLeadForm() {
     ownerLastName: '',
     adminFirstName: '',
     adminLastName: '',
+    phone: '', // 🎯 Added state for manual phone entry
   });
 
   const ownerRef = useRef<any>(null);
@@ -120,18 +121,20 @@ export function ManualLeadForm() {
 
     setLoading(true);
     try {
+      // 🎯 If phone is provided manually, it will be saved to phones array in DB
       const { data: newLead, errors } = await client.models.PropertyLead.create(
         {
           ...lead,
-          skipTraceStatus: 'PENDING',
+          phones: lead.phone ? [lead.phone] : [],
+          skipTraceStatus: lead.phone ? 'COMPLETED' : 'PENDING',
           ghlSyncStatus: 'PENDING',
-          ghlContactId: null, // Ready for GHL ID storage
+          ghlContactId: null,
         }
       );
 
       if (errors) throw new Error(errors[0].message);
       setMessage('✅ Lead added successfully!');
-      setLead({ type: '', ownerFirstName: '', ownerLastName: '' });
+      setLead({ type: '', ownerFirstName: '', ownerLastName: '', phone: '' });
     } catch (err: any) {
       setMessage(`❌ Error: ${err.message}`);
     } finally {
@@ -210,7 +213,8 @@ export function ManualLeadForm() {
                   onClick={downloadTemplate}
                   className='text-blue-600 font-bold hover:underline'
                 >
-                  Download {lead.type} Template
+                  Download {lead.type} Template{' '}
+                  {lead.type === 'PROBATE' && '(includes phone column)'}
                 </button>
               </div>
             )}
@@ -267,6 +271,22 @@ export function ManualLeadForm() {
                 required
               />
             </div>
+          </div>
+
+          {/* 🎯 Added Phone field for Manual Entry */}
+          <div className='space-y-1'>
+            <label className='text-xs font-bold text-gray-400 uppercase'>
+              Phone Number (Optional)
+            </label>
+            <input
+              placeholder='+12015551234'
+              className='w-full border p-2 rounded'
+              value={lead.phone}
+              onChange={(e) => setLead({ ...lead, phone: e.target.value })}
+            />
+            <p className='text-[10px] text-gray-400'>
+              Adding a phone number will skip automated skiptracing.
+            </p>
           </div>
 
           <div className='space-y-1'>

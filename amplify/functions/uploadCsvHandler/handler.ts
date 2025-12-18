@@ -1,3 +1,5 @@
+// amplify/functions/uploadCsvHandler/handler.ts
+
 import { S3Handler } from 'aws-lambda';
 import {
   S3Client,
@@ -23,7 +25,7 @@ const ddbDocClient = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const TABLE_NAME = process.env.AMPLIFY_DATA_LEAD_TABLE_NAME;
 
 /**
- * 🛠️ SANITIZATION UTILITIES
+ * 🛠️ SANITIZATION & FORMATTING UTILITIES
  */
 const sanitize = (val: any, maxLen = 255): string => {
   if (typeof val !== 'string') return '';
@@ -33,9 +35,25 @@ const sanitize = (val: any, maxLen = 255): string => {
     .substring(0, maxLen);
 };
 
+// 🎯 Standards phone numbers to E.164 (+1XXXXXXXXXX) for GHL
+const formatPhoneNumber = (val: any): string | null => {
+  const s = sanitize(val, 20).replace(/\D/g, ''); // Keep only digits
+  if (s.length === 10) return `+1${s}`;
+  if (s.length === 11 && s.startsWith('1')) return `+${s}`;
+  return null;
+};
+
+// 🎯 Handles NJ ZIP codes by padding leading zeros (e.g., 7110 -> 07110)
+const formatZip = (val: any): string => {
+  const s = sanitize(val, 10).replace(/\D/g, ''); // Keep only digits
+  if (s.length > 0 && s.length < 5) return s.padStart(5, '0');
+  return s;
+};
+
 const formatName = (val: any): string => {
   const s = sanitize(val, 50);
   if (!s) return '';
+  // Converts "JOHN" to "John" for better marketing look
   return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
 };
 
@@ -83,28 +101,25 @@ export const handler: S3Handler = async (event) => {
         currentRow++;
         try {
           // --- A. SANITIZED CORE INPUTS ---
+          // formatName handles the "Proper Case" transformation
           const firstName = formatName(
-            row['ownerFirstName'] || row['First Name'] || row['First_Name']
+            row['ownerFirstName'] || row['First Name']
           );
-          const lastName = formatName(
-            row['ownerLastName'] || row['Last Name'] || row['Last_Name']
-          );
+          const lastName = formatName(row['ownerLastName'] || row['Last Name']);
 
           if (/<script|javascript:|on\w+=/i.test(JSON.stringify(row))) {
-            throw new Error(
-              'Potential harmful script or malformed characters detected.'
-            );
+            throw new Error('Potential harmful script detected.');
           }
 
           const rawPropAddr = sanitize(
-            row['ownerAddress'] || row['Property Address'] || row['Address']
+            row['ownerAddress'] || row['Property Address']
           );
           const rawPropCity = sanitize(row['ownerCity'] || row['City'], 100);
           const rawPropState = sanitize(
             row['ownerState'] || row['State'],
             2
           ).toUpperCase();
-          const rawPropZip = sanitize(row['ownerZip'] || row['Zip'], 10);
+          const rawPropZip = formatZip(row['ownerZip'] || row['Zip']); // 🎯 Fix missing leading zero
 
           if (!rawPropAddr) throw new Error('Property Address is missing.');
 
@@ -126,7 +141,7 @@ export const handler: S3Handler = async (event) => {
             ? propValidation.components.zip
             : rawPropZip;
 
-          // --- C. MAILING ADDRESS & PROBATE ADMIN LOGIC ---
+          // --- C. PROBATE ADMIN LOGIC ---
           let finalMailAddr = null;
           let finalMailCity = null;
           let finalMailState = null;
@@ -136,7 +151,6 @@ export const handler: S3Handler = async (event) => {
           const labels: string[] = [leadType];
 
           if (leadType === 'PROBATE') {
-            // Mapping for probate-lead-template.csv
             adminFirstName = formatName(row['adminFirstName']);
             adminLastName = formatName(row['adminLastName']);
 
@@ -145,7 +159,7 @@ export const handler: S3Handler = async (event) => {
             );
             const rawAdminCity = sanitize(row['adminCity'], 100);
             const rawAdminState = sanitize(row['adminState'], 2).toUpperCase();
-            const rawAdminZip = sanitize(row['adminZip'], 10);
+            const rawAdminZip = formatZip(row['adminZip']); // 🎯 Also fix for admin zip
 
             if (rawAdminAddr) {
               const fullAdminString = `${rawAdminAddr}, ${rawAdminCity}, ${rawAdminState} ${rawAdminZip}`;
@@ -167,9 +181,6 @@ export const handler: S3Handler = async (event) => {
 
               labels.push('ABSENTEE');
             }
-          } else if (row['mailingAddress']) {
-            finalMailAddr = sanitize(row['mailingAddress']);
-            labels.push('ABSENTEE');
           }
 
           // --- D. DUPLICATE CHECK ---
@@ -195,7 +206,11 @@ export const handler: S3Handler = async (event) => {
             continue;
           }
 
-          // --- E. SAVE TO DYNAMODB ---
+          // --- E. PHONE & SKIPTRACE LOGIC ---
+          const preSkiptracedPhone = formatPhoneNumber(row['phone']);
+          const isPreSkiptraced = !!preSkiptracedPhone;
+
+          // --- F. SAVE TO DYNAMODB ---
           const leadItem = {
             id: randomUUID(),
             owner: ownerId,
@@ -207,32 +222,24 @@ export const handler: S3Handler = async (event) => {
             ownerCity: finalPropCity,
             ownerState: finalPropState,
             ownerZip: finalPropZip,
-
-            // Mapping Probate specific fields from schema
-            adminFirstName: adminFirstName,
-            adminLastName: adminLastName,
+            adminFirstName,
+            adminLastName,
             adminAddress: finalMailAddr,
             adminCity: finalMailCity,
             adminState: finalMailState,
             adminZip: finalMailZip,
-
-            mailingAddress: finalMailAddr,
-            mailingCity: finalMailCity,
-            mailingState: finalMailState,
-            mailingZip: finalMailZip,
             isAbsenteeOwner: labels.includes('ABSENTEE'),
             leadLabels: labels,
-
             validationStatus: propValidation ? 'VALID' : 'INVALID',
-            phones: row['phone'] ? [sanitize(row['phone'], 20)] : [],
+            phone: preSkiptracedPhone,
+            phones: preSkiptracedPhone ? [preSkiptracedPhone] : [],
             emails: row['email']
               ? [sanitize(row['email'], 100).toLowerCase()]
               : [],
-
-            // GHL Sync & System Fields from schema
-            skipTraceStatus: 'PENDING',
+            // 🎯 Automatically mark COMPLETED if phone was provided in CSV
+            skipTraceStatus: isPreSkiptraced ? 'COMPLETED' : 'PENDING',
             ghlSyncStatus: 'PENDING',
-            ghlContactId: null, // 🎯 Ready for the ID-based sync path
+            ghlContactId: null,
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
           };
@@ -246,7 +253,7 @@ export const handler: S3Handler = async (event) => {
         }
       }
 
-      // --- F. FINALIZATION ---
+      // --- G. FINALIZATION ---
       if (validationErrors.length === 0) {
         await s3.send(
           new DeleteObjectCommand({ Bucket: bucketName, Key: decodedKey })
@@ -254,7 +261,7 @@ export const handler: S3Handler = async (event) => {
         await sendNotification(
           ownerId,
           'Upload Complete',
-          `Successfully imported ${successCount} leads.`
+          `Imported ${successCount} leads.`
         );
         await logAuditEvent('CSV_IMPORT_SUCCESS', {
           ownerId,
@@ -262,30 +269,14 @@ export const handler: S3Handler = async (event) => {
           count: successCount,
         });
       } else {
-        const errorSummary = validationErrors
-          .slice(0, 5)
-          .map((e) => `Row ${e.row}: ${e.error}`)
-          .join('\n');
         await sendNotification(
           ownerId,
           'Upload Action Required',
-          `Processed ${successCount} leads, but ${validationErrors.length} failed. File was NOT deleted.\n\nSample Errors:\n${errorSummary}`
+          `Processed ${successCount} leads, ${validationErrors.length} failed.`
         );
-        await logAuditEvent('CSV_IMPORT_PARTIAL_FAILURE', {
-          ownerId,
-          fileName: decodedKey,
-          errorCount: validationErrors.length,
-        });
       }
     } catch (err: any) {
       console.error('Critical Processing Error:', err);
-      if (ownerId) {
-        await sendNotification(
-          ownerId,
-          'Upload Failed',
-          `A critical error occurred: ${err.message}.`
-        );
-      }
     }
   }
 };

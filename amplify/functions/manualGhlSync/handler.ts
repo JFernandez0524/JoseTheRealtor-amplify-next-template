@@ -14,7 +14,6 @@ const GHL_API_KEY = process.env.GHL_API_KEY;
 // Type Definitions
 // ---------------------------------------------------------
 type SyncResult = {
-  // 🟢 Added 'NO_CHANGE' to the allowed status types
   status: 'SUCCESS' | 'SKIPPED' | 'FAILED' | 'ERROR' | 'NO_CHANGE';
   message: string;
   ghlContactId?: string | null;
@@ -43,6 +42,7 @@ async function processGhlSync(lead: DBLead): Promise<SyncResult> {
     return { status: 'SKIPPED', message };
   }
 
+  // Ensure skiptrace is done before attempting GHL sync
   if (lead.skipTraceStatus !== 'COMPLETED') {
     const message = `Sync Skipped: Lead skipTraceStatus is '${lead.skipTraceStatus}', not 'COMPLETED'.`;
     console.warn(`⚠️ ${message}`);
@@ -53,26 +53,31 @@ async function processGhlSync(lead: DBLead): Promise<SyncResult> {
   }
 
   await updateLeadGhlStatus(lead.id, 'PENDING');
-  console.log(`🔄 Attempting GHL sync for lead ${lead.id}...`);
+  console.info(`🔄 Attempting GHL sync for lead ${lead.id}...`);
 
   try {
+    // Perform the sync - this returns the GHL Contact ID
     const syncResponse = await syncToGoHighLevel(lead);
 
-    // 🟢 Handle the "UP_TO_DATE" response from the integration
-    if (syncResponse === 'UP_TO_DATE') {
+    // 1. Handle "UP_TO_DATE" from performUpdate helper
+    if (syncResponse === 'UP_TO_DATE' || syncResponse === lead.ghlContactId) {
       const message = `No changes detected. Lead is already up-to-date in GoHighLevel.`;
-      console.log(`ℹ️ ${message}`);
+      console.info(`ℹ️ ${message}`);
 
-      // We still update the status to SUCCESS in DB because the lead is correctly synced
-      await updateLeadGhlStatus(lead.id, 'SUCCESS');
-
-      return { status: 'NO_CHANGE', message };
+      // Update DB to reflect successful state check
+      await updateLeadGhlStatus(
+        lead.id,
+        'SUCCESS',
+        lead.ghlContactId ?? undefined
+      );
+      return { status: 'NO_CHANGE', message, ghlContactId: lead.ghlContactId };
     }
 
-    // Standard Success
-    await updateLeadGhlStatus(lead.id, 'SUCCESS', syncResponse);
+    // 2. Standard Success / New ID Found
+    // This saves the ghlContactId to DynamoDB for future direct-ID updates
+    await updateLeadGhlStatus(lead.id, 'SUCCESS', syncResponse ?? undefined);
     const message = `Successfully synced lead to GoHighLevel.`;
-    console.log(`✅ ${message} Contact ID: ${syncResponse}`);
+    console.info(`✅ ${message} Contact ID: ${syncResponse}`);
 
     return { status: 'SUCCESS', message, ghlContactId: syncResponse };
   } catch (error: any) {
@@ -87,6 +92,8 @@ async function processGhlSync(lead: DBLead): Promise<SyncResult> {
 
     message += ` ${detail}`;
     console.error(`❌ ${message}`);
+
+    // Persist failure status to DB
     await updateLeadGhlStatus(lead.id, 'FAILED');
 
     return { status: 'FAILED', message };
@@ -94,13 +101,12 @@ async function processGhlSync(lead: DBLead): Promise<SyncResult> {
 }
 
 // ---------------------------------------------------------
-// MAIN HANDLER (Remains largely the same, now handles NO_CHANGE)
+// MAIN HANDLER
 // ---------------------------------------------------------
 
 export const handler = async (
   event: AppSyncHandlerEvent
 ): Promise<SyncResult & { leadId: string }> => {
-  // ... (Owner and Security checks remain unchanged)
   const { leadId } = event.arguments;
   const ownerId = event.identity?.sub;
 
@@ -123,6 +129,7 @@ export const handler = async (
       };
     }
 
+    // Security check: Only owners can sync their own leads
     if (lead.owner !== ownerId) {
       return { status: 'ERROR', message: 'Authorization denied.', leadId };
     }
