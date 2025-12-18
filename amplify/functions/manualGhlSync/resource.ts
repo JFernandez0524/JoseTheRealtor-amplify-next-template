@@ -15,7 +15,7 @@ export const manualGhlSync = defineFunction({
     // 💥 The GHL_API_KEY is a sensitive secret and should be managed securely.
     // Amplify will look up this secret at deployment time.
     GHL_API_KEY: secret('GHL_API_KEY'),
-
+    GHL_LOCATION_ID: secret('GHL_LOCATION_ID'),
     // You may also need the table name, which Amplify usually injects automatically.
     // However, if your 'lead.server.ts' needs an explicit reference, you can add it here.
     // For now, we rely on the utility file handling the database connection setup.

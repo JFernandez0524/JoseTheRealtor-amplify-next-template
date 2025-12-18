@@ -1,4 +1,4 @@
-import axios from 'axios';
+import axios, { AxiosInstance, AxiosError } from 'axios';
 import { DBLead } from '../../../../app/utils/aws/data/lead.server';
 
 const GHL_CUSTOM_FIELD_ID_MAP: Record<string, string> = {
@@ -11,7 +11,6 @@ const GHL_CUSTOM_FIELD_ID_MAP: Record<string, string> = {
   property_state: '9r9OpQaxYPxqbA6Hvtx7',
   property_zip: 'hgbjsTVwcyID7umdhm2o',
   lead_source_id: 'PBInTgsd2nMCD3Ngmy0a',
-  type: '3zHY47rcT4o2PXNAfLul',
   lead_type: 'oaf4wCuM3Ub9eGpiddrO',
   skiptracestatus: 'HrnY1GUZ7P6d6r7J0ZRc',
   phone_2: 'LkmfM0Va5PylJFsJYjCu',
@@ -23,110 +22,159 @@ const GHL_CUSTOM_FIELD_ID_MAP: Record<string, string> = {
 };
 
 const GHL_API_KEY = process.env.GHL_API_KEY;
+const LOCATION_ID = process.env.GHL_LOCATION_ID;
+
+const createGhlClient = (): AxiosInstance => {
+  const client = axios.create({
+    baseURL: 'https://services.leadconnectorhq.com',
+    timeout: 10000,
+    headers: {
+      Authorization: `Bearer ${GHL_API_KEY}`,
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+      Version: '2021-07-28',
+    },
+  });
+
+  client.interceptors.request.use((config) => {
+    console.info(`📡 [GHL REQ] ${config.method?.toUpperCase()} ${config.url}`);
+    return config;
+  });
+
+  client.interceptors.response.use(
+    (response) => {
+      console.info(
+        `✅ [GHL RES] ${response.status} from ${response.config.url}`
+      );
+      return response;
+    },
+    async (error: AxiosError) => {
+      const config = error.config as any;
+      console.error(
+        `❌ [GHL ERR] ${error.response?.status || 'TIMEOUT'} on ${config?.url}`
+      );
+      if (error.response?.data)
+        console.error(`📄 [GHL ERR DATA]`, JSON.stringify(error.response.data));
+
+      if (!config || !config.retryCount) config.retryCount = 0;
+      const shouldRetry =
+        config.retryCount < 3 &&
+        (error.code === 'ECONNABORTED' ||
+          (error.response?.status && error.response.status >= 500));
+
+      if (shouldRetry) {
+        config.retryCount += 1;
+        const delay = config.retryCount * 1000;
+        console.warn(
+          `⚠️ [RETRY] Attempt ${config.retryCount}/3 in ${delay}ms...`
+        );
+        await new Promise((resolve) => setTimeout(resolve, delay));
+        return client(config);
+      }
+      return Promise.reject(error);
+    }
+  );
+  return client;
+};
 
 export async function syncToGoHighLevel(lead: DBLead): Promise<string> {
-  if (!GHL_API_KEY) throw new Error('GHL_API_KEY Missing');
+  if (!GHL_API_KEY) throw new Error('GHL_API_KEY is missing.');
+  const ghl = createGhlClient();
 
   try {
-    let firstName = lead.ownerFirstName || 'Unknown';
-    let lastName = lead.ownerLastName || 'Owner';
+    const primaryEmail = lead.emails?.[0]?.toLowerCase() || null;
+    const primaryPhone = lead.phones?.[0] || null;
+    const normalizedType =
+      lead.type?.toUpperCase() === 'PROBATE' ? 'Probate' : 'Preforeclosure';
 
-    if (lead.type?.toUpperCase() === 'PROBATE') {
-      firstName = lead.adminFirstName || firstName;
-      lastName = lead.adminLastName || lastName;
+    // 1. SEARCH
+    let existingContact: any = null;
+    if (primaryEmail || primaryPhone) {
+      const searchBody = {
+        locationId: LOCATION_ID,
+        pageLimit: 1,
+        filters: [
+          {
+            group: 'OR',
+            filters: [
+              ...(primaryEmail
+                ? [{ field: 'email', operator: 'eq', value: primaryEmail }]
+                : []),
+              ...(primaryPhone
+                ? [{ field: 'phone', operator: 'eq', value: primaryPhone }]
+                : []),
+            ],
+          },
+        ],
+      };
+      const searchRes = await ghl.post('/contacts/search', searchBody);
+      if (searchRes.data?.contacts?.length > 0) {
+        const detailRes = await ghl.get(
+          `/contacts/${searchRes.data.contacts[0].id}`
+        );
+        existingContact = detailRes.data.contact;
+      }
     }
 
-    const primaryEmail =
-      lead.emails && lead.emails.length > 0
-        ? lead.emails[0]
-        : `no-email-${Date.now()}@example.com`;
-    const primaryPhone =
-      lead.phones && lead.phones.length > 0 ? lead.phones[0] : null;
-
-    // 🟢 Prospecting Tags (Not including Lead Type)
-    const tags = ['Start Dialing Campaign'];
-    if (lead.leadLabels && Array.isArray(lead.leadLabels)) {
-      lead.leadLabels.forEach((label) => {
-        if (label && !tags.includes(label.replace(/_/g, ' '))) {
-          tags.push(label.replace(/_/g, ' '));
-        }
-      });
-    }
-
-    // 💥 NORMALIZATION: Match GHL Dropdown Casing exactly for selection
-    let normalizedLeadType = lead.type || '';
-    if (normalizedLeadType.toUpperCase() === 'PREFORECLOSURE') {
-      normalizedLeadType = 'Preforeclosure';
-    } else if (normalizedLeadType.toUpperCase() === 'PROBATE') {
-      normalizedLeadType = 'Probate';
-    }
-
-    const customFieldsMap: Record<string, any> = {
-      mailing_address: lead.mailingAddress || '',
-      mailing_city: lead.mailingCity || '',
-      mailing_state: lead.mailingState || '',
-      mailing_zipcode: lead.mailingZip || '',
-      property_address: lead.ownerAddress || '',
-      property_city: lead.ownerCity || '',
-      property_state: lead.ownerState || '',
-      property_zip: lead.ownerZip || '',
-      lead_source_id: lead.id,
-      lead_type: normalizedLeadType, // 👈 Correct string for dropdown match
-      skiptracestatus: lead.skipTraceStatus,
-      phone_2: lead.phones?.[1] || '',
-      phone_3: lead.phones?.[2] || '',
-      phone_4: lead.phones?.[3] || '',
-      phone_5: lead.phones?.[4] || '',
-      email_2: lead.emails?.[1] || '',
-      email_3: lead.emails?.[2] || '',
-    };
-
-    const ghlCustomFields = Object.keys(customFieldsMap)
-      .filter(
-        (key) =>
-          customFieldsMap[key] !== '' &&
-          customFieldsMap[key] !== null &&
-          GHL_CUSTOM_FIELD_ID_MAP[key]
-      )
+    // 2. Construct Shared Data (No locationId here)
+    const customFields = Object.keys(GHL_CUSTOM_FIELD_ID_MAP)
       .map((key) => ({
         id: GHL_CUSTOM_FIELD_ID_MAP[key],
-        field_value: customFieldsMap[key],
-      }));
+        field_value: (lead as any)[key] || '',
+      }))
+      .filter((f) => f.field_value);
 
-    const payload: any = {
-      locationId: 'mHaAy3ZaUHgrbPyughDG',
-      firstName,
-      lastName,
-      email: primaryEmail,
+    const basePayload = {
+      firstName: lead.ownerFirstName || 'Unknown',
+      lastName: lead.ownerLastName || 'Owner',
+      email: primaryEmail || `no-email-${lead.id}@example.com`,
       phone: primaryPhone,
-      country: 'US',
+      tags: ['Start Dialing Campaign'],
       source: 'JTR_SkipTrace_App',
-      tags,
-      dnd: false,
-      customFields: ghlCustomFields,
+      customFields,
     };
 
-    if (!payload.phone) delete payload.phone;
+    // 3. Helper for Updates (Stripping locationId is required for PUT)
+    const performUpdate = async (ghlId: string, currentRecord: any) => {
+      const needsUpdate =
+        currentRecord.firstName !== basePayload.firstName ||
+        currentRecord.lastName !== basePayload.lastName ||
+        basePayload.customFields.some((nf) => {
+          const of = currentRecord.customFields?.find(
+            (f: any) => f.id === nf.id
+          );
+          return (of?.value || '') !== nf.field_value;
+        });
 
-    const res = await axios.post(
-      'https://services.leadconnectorhq.com/contacts',
-      payload,
-      {
-        headers: {
-          Authorization: `Bearer ${GHL_API_KEY}`,
-          'Content-Type': 'application/json',
-          Accept: 'application/json',
-          Version: '2021-07-28',
-        },
+      if (!needsUpdate) return 'UP_TO_DATE';
+      console.info(`🔄 Updating contact: ${ghlId}`);
+      const res = await ghl.put(`/contacts/${ghlId}`, basePayload); // No locationId in body
+      return res.data?.contact?.id || ghlId;
+    };
+
+    if (existingContact)
+      return await performUpdate(existingContact.id, existingContact);
+
+    // 4. CREATE (Requires locationId)
+    try {
+      console.info(`🆕 Creating new contact`);
+      const res = await ghl.post('/contacts/', {
+        ...basePayload,
+        locationId: LOCATION_ID,
+      });
+      return res.data?.contact?.id;
+    } catch (createErr: any) {
+      const duplicateId = createErr.response?.data?.meta?.contactId;
+      if (createErr.response?.status === 400 && duplicateId) {
+        console.warn(`🔄 Self-healing with ID: ${duplicateId}`);
+        const detailRes = await ghl.get(`/contacts/${duplicateId}`);
+        return await performUpdate(duplicateId, detailRes.data.contact);
       }
-    );
-
-    return res.data?.contact?.id;
+      throw createErr;
+    }
   } catch (error: any) {
-    const serverMsg =
-      error.response?.data?.message || JSON.stringify(error.response?.data);
     throw new Error(
-      `GHL sync failed (Status ${error.response?.status}): ${serverMsg}`
+      `GHL sync failed: ${error.response?.data?.message || error.message}`
     );
   }
 }
