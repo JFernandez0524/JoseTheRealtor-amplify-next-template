@@ -5,6 +5,7 @@ import { useJsApiLoader } from '@react-google-maps/api';
 import { uploadData } from 'aws-amplify/storage';
 import { getFrontEndUser } from '@/app/utils/aws/auth/amplifyFrontEndUser';
 import { client } from '@/app/utils/aws/data/frontEndClient';
+import { useRouter } from 'next/navigation';
 
 const libraries: 'places'[] = ['places'];
 
@@ -20,7 +21,7 @@ export function ManualLeadForm() {
     googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY!,
     libraries,
   });
-
+  const router = useRouter();
   const [mode, setMode] = useState<'csv' | 'manual'>('manual');
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
@@ -160,8 +161,11 @@ export function ManualLeadForm() {
         },
       }).result;
 
-      setMessage('✅ Uploaded! Processing leads now.');
-      setFile(null);
+      // 🎯 Success notification + Redirect
+      setMessage('✅ Uploaded! Moving to Dashboard...');
+      setTimeout(() => {
+        router.push('/dashboard');
+      }, 1500);
     } catch (err: any) {
       setMessage(`❌ Error: ${err.message}`);
     } finally {

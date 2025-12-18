@@ -62,6 +62,7 @@ export function LeadDetailClient({ initialLead }: LeadDetailClientProps) {
   // 1. STATE MANAGEMENT
   const [lead, setLead] = useState<Lead>(initialLead);
   const [marketData, setMarketData] = useState<any | null>(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isSkipTracing, setIsSkipTracing] = useState(false);
   const [navContext, setNavContext] = useState<NavContext | null>(null);
   const [isCoreInfoEditing, setIsCoreInfoEditing] = useState(false);
@@ -72,18 +73,34 @@ export function LeadDetailClient({ initialLead }: LeadDetailClientProps) {
     libraries: libraries,
   });
 
-  // 2. SYNC WITH SERVER DATA
-  // When initialLead changes (via navigation), update local state and fetch market data
+  // 2. FETCH BRIDGEAPI MARKET DATA
   useEffect(() => {
     setLead(initialLead);
+
     const fetchMarketIntel = async () => {
+      // Ensure we have a property address to search
+      if (!initialLead.ownerAddress) return;
+
+      setIsAnalyzing(true);
       try {
-        const response = await axios.get(`/api/v1/leads/${initialLead.id}`);
-        setMarketData(response.data?.marketAnalysis || null);
+        // Construct the full search string for Google -> Bridge validation
+        const fullAddress = `${initialLead.ownerAddress}, ${initialLead.ownerCity}, ${initialLead.ownerState} ${initialLead.ownerZip}`;
+
+        const response = await axios.post('/api/v1/analyze-property', {
+          address: fullAddress,
+        });
+
+        if (response.data.success) {
+          setMarketData(response.data);
+        }
       } catch (err) {
+        console.error('BridgeAPI Error:', err);
         setMarketData(null);
+      } finally {
+        setIsAnalyzing(false);
       }
     };
+
     fetchMarketIntel();
   }, [initialLead]);
 
@@ -136,10 +153,8 @@ export function LeadDetailClient({ initialLead }: LeadDetailClientProps) {
       });
       if (errors) throw new Error(errors.map((e) => e.message).join(' | '));
 
-      // Refresh local state after mutation
       const { data } = await client.models.PropertyLead.get({ id: lead.id });
       if (data) setLead(data as Lead);
-      alert('Skip Trace Complete!');
     } catch (err: any) {
       alert(`Skip trace failed: ${err.message}`);
     } finally {
@@ -159,7 +174,7 @@ export function LeadDetailClient({ initialLead }: LeadDetailClientProps) {
 
   return (
     <main className='max-w-6xl mx-auto py-6 px-6'>
-      {/* 1. DYNAMIC HEADER ROW */}
+      {/* HEADER & NAVIGATION */}
       <div className='flex flex-row items-center justify-between mb-6 border-b pb-4 border-gray-100'>
         <div className='flex items-center gap-6'>
           <h1 className='text-2xl font-bold text-gray-800'>Lead Detail</h1>
@@ -213,7 +228,7 @@ export function LeadDetailClient({ initialLead }: LeadDetailClientProps) {
         </button>
       </div>
 
-      {/* 2. HERO ADDRESS */}
+      {/* HERO SECTION */}
       <div className='mb-6'>
         <h2 className='text-3xl font-extrabold text-slate-900 tracking-tight'>
           {lead.ownerAddress || 'No Address Found'}
@@ -224,6 +239,7 @@ export function LeadDetailClient({ initialLead }: LeadDetailClientProps) {
       </div>
 
       <div className='flex flex-col md:flex-row gap-8'>
+        {/* LEFT COLUMN: CORE INFO & CONTACTS */}
         <div className='w-full md:w-2/3 space-y-6'>
           <CardWrapper
             title='Core Lead Information'
@@ -246,7 +262,7 @@ export function LeadDetailClient({ initialLead }: LeadDetailClientProps) {
                 <label className='text-sm font-medium text-gray-500'>
                   Type
                 </label>
-                <p className='capitalize'>{lead.type}</p>
+                <p className='capitalize'>{lead.type?.toLowerCase()}</p>
               </div>
               <div>
                 <label className='text-sm font-medium text-gray-500'>
@@ -274,7 +290,7 @@ export function LeadDetailClient({ initialLead }: LeadDetailClientProps) {
               <button
                 onClick={handleSkipTrace}
                 disabled={isSkipTracing || lead.skipTraceStatus === 'COMPLETED'}
-                className={`text-sm px-4 py-2 rounded-md font-medium transition ${lead.skipTraceStatus === 'COMPLETED' ? 'bg-green-50 text-green-700' : 'bg-indigo-600 text-white hover:bg-indigo-700'}`}
+                className={`text-sm px-4 py-2 rounded-md font-medium transition ${lead.skipTraceStatus === 'COMPLETED' ? 'bg-green-50 text-green-700 cursor-not-allowed' : 'bg-indigo-600 text-white hover:bg-indigo-700'}`}
               >
                 {isSkipTracing
                   ? 'Tracing...'
@@ -308,61 +324,94 @@ export function LeadDetailClient({ initialLead }: LeadDetailClientProps) {
                     )}
                   </div>
                 </div>
-                <div>
-                  <h3 className='text-xs font-bold text-gray-400 uppercase tracking-wider mb-3'>
-                    Emails
-                  </h3>
-                  <div className='grid grid-cols-1 gap-2'>
-                    {lead.emails?.map(
-                      (email, i) =>
-                        email && (
-                          <ContactActionItem
-                            key={i}
-                            value={email}
-                            type='email'
-                          />
-                        )
-                    )}
+                {/* Emails section */}
+                {lead.emails && lead.emails.length > 0 && (
+                  <div>
+                    <h3 className='text-xs font-bold text-gray-400 uppercase tracking-wider mb-3'>
+                      Emails
+                    </h3>
+                    <div className='grid grid-cols-1 gap-2'>
+                      {lead.emails.map(
+                        (email, i) =>
+                          email && (
+                            <ContactActionItem
+                              key={i}
+                              value={email}
+                              type='email'
+                            />
+                          )
+                      )}
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
             )}
           </div>
         </div>
 
+        {/* RIGHT COLUMN: GHL ACTIONS, MARKET INTEL & MAP */}
         <div className='w-full md:w-1/3 space-y-6'>
           <GhlActions
             leadId={lead.id}
             ghlContactId={lead.ghlContactId}
             ghlSyncStatus={lead.ghlSyncStatus}
-            onSyncComplete={() => router.refresh()}
+            onSyncComplete={async () => {
+              const { data } = await client.models.PropertyLead.get({
+                id: lead.id,
+              });
+              if (data) setLead(data as Lead);
+            }}
             client={client}
           />
+
+          {/* MARKET INTEL CARD */}
           <div className='bg-white shadow border rounded-lg p-6 border-l-4 border-l-blue-500'>
             <h2 className='text-xl font-semibold mb-4'>Market Intel</h2>
-            {marketData ? (
-              <div className='space-y-4'>
+
+            {isAnalyzing ? (
+              <div className='animate-pulse space-y-3'>
+                <div className='h-4 bg-gray-200 rounded w-1/2'></div>
+                <div className='h-8 bg-gray-200 rounded w-3/4'></div>
+                <div className='h-4 bg-gray-200 rounded w-1/3'></div>
+                <div className='h-6 bg-gray-200 rounded w-2/3'></div>
+              </div>
+            ) : marketData ? (
+              <div className='space-y-4 animate-in fade-in duration-500'>
                 <div>
                   <label className='text-xs uppercase font-bold text-gray-400'>
                     Zestimate
                   </label>
-                  <p className='text-2xl font-bold'>
+                  <p className='text-2xl font-bold text-blue-600'>
                     {formatCurrency(marketData.zestimate)}
                   </p>
                 </div>
                 <div>
                   <label className='text-xs uppercase font-bold text-gray-400'>
-                    Est. Rent
+                    Rent Zestimate
                   </label>
                   <p className='text-xl font-semibold'>
                     {formatCurrency(marketData.rentZestimate)} /mo
                   </p>
                 </div>
+                <div>
+                  <label className='text-xs uppercase font-bold text-gray-400'>
+                    Est. Cash Offer (75%)
+                  </label>
+                  <p className='text-xl font-semibold text-green-600'>
+                    {formatCurrency(marketData.cashOffer)}
+                  </p>
+                </div>
+                <div className='pt-2 border-t text-[10px] text-gray-400 italic'>
+                  Source: Zillow BridgeAPI
+                </div>
               </div>
             ) : (
-              <p className='text-gray-500'>No market data available.</p>
+              <p className='text-sm text-gray-400 italic'>
+                No market data found for this property.
+              </p>
             )}
           </div>
+
           <div className='bg-white shadow border rounded-lg p-6'>
             <h2 className='text-xl font-semibold mb-4'>Map</h2>
             {isMapLoaded && mapCenter ? (

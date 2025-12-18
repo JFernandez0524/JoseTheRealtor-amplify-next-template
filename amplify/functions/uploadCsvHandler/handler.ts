@@ -1,5 +1,3 @@
-// amplify/functions/uploadCsvHandler/handler.ts
-
 import { S3Handler } from 'aws-lambda';
 import {
   S3Client,
@@ -24,28 +22,23 @@ const s3 = new S3Client({});
 const ddbDocClient = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const TABLE_NAME = process.env.AMPLIFY_DATA_LEAD_TABLE_NAME;
 
-/**
- * 🛠️ SANITIZATION & FORMATTING UTILITIES
- */
 const sanitize = (val: any, maxLen = 255): string => {
   if (typeof val !== 'string') return '';
   return val
     .trim()
-    .replace(/<[^>]*>?/gm, '') // Strip HTML tags to prevent XSS
+    .replace(/<[^>]*>?/gm, '')
     .substring(0, maxLen);
 };
 
-// 🎯 Standards phone numbers to E.164 (+1XXXXXXXXXX) for GHL
 const formatPhoneNumber = (val: any): string | null => {
-  const s = sanitize(val, 20).replace(/\D/g, ''); // Keep only digits
+  const s = sanitize(val, 20).replace(/\D/g, '');
   if (s.length === 10) return `+1${s}`;
   if (s.length === 11 && s.startsWith('1')) return `+${s}`;
   return null;
 };
 
-// 🎯 Handles NJ ZIP codes by padding leading zeros (e.g., 7110 -> 07110)
 const formatZip = (val: any): string => {
-  const s = sanitize(val, 10).replace(/\D/g, ''); // Keep only digits
+  const s = sanitize(String(val), 10).replace(/\D/g, '');
   if (s.length > 0 && s.length < 5) return s.padStart(5, '0');
   return s;
 };
@@ -53,7 +46,6 @@ const formatZip = (val: any): string => {
 const formatName = (val: any): string => {
   const s = sanitize(val, 50);
   if (!s) return '';
-  // Converts "JOHN" to "John" for better marketing look
   return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
 };
 
@@ -64,31 +56,25 @@ export const handler: S3Handler = async (event) => {
       /\+/g,
       ' '
     );
-
     const validationErrors: { row: number; error: string }[] = [];
-    let currentRow = 0;
-    let successCount = 0;
-    let skippedCount = 0;
-    let ownerId = '';
+    let currentRow = 0,
+      successCount = 0,
+      skippedCount = 0,
+      ownerId = '';
+
+    console.log(`🚀 Starting processing for file: ${decodedKey}`);
 
     try {
-      // 1. Get Metadata & Lead Type
       const headObject = await s3.send(
         new HeadObjectCommand({ Bucket: bucketName, Key: decodedKey })
       );
-
       ownerId = headObject.Metadata?.['owner_sub'] || '';
       const leadType = (
         headObject.Metadata?.['leadtype'] || 'PREFORECLOSURE'
       ).toUpperCase();
 
-      if (!ownerId) {
-        throw new Error(
-          'No owner_sub found in file metadata. Security rejection.'
-        );
-      }
+      if (!ownerId) throw new Error('No owner_sub found in file metadata.');
 
-      // 2. Download & Parse CSV
       const response = await s3.send(
         new GetObjectCommand({ Bucket: bucketName, Key: decodedKey })
       );
@@ -100,117 +86,85 @@ export const handler: S3Handler = async (event) => {
       for await (const row of parser) {
         currentRow++;
         try {
-          // --- A. SANITIZED CORE INPUTS ---
-          // formatName handles the "Proper Case" transformation
           const firstName = formatName(
             row['ownerFirstName'] || row['First Name']
           );
           const lastName = formatName(row['ownerLastName'] || row['Last Name']);
-
-          if (/<script|javascript:|on\w+=/i.test(JSON.stringify(row))) {
-            throw new Error('Potential harmful script detected.');
-          }
-
+          const rawPropZip = formatZip(row['ownerZip'] || row['Zip']);
           const rawPropAddr = sanitize(
             row['ownerAddress'] || row['Property Address']
           );
-          const rawPropCity = sanitize(row['ownerCity'] || row['City'], 100);
-          const rawPropState = sanitize(
-            row['ownerState'] || row['State'],
-            2
-          ).toUpperCase();
-          const rawPropZip = formatZip(row['ownerZip'] || row['Zip']); // 🎯 Fix missing leading zero
 
-          if (!rawPropAddr) throw new Error('Property Address is missing.');
+          // --- 🔍 LOG: GOOGLE ADDRESS VALIDATION START ---
+          const fullPropString = `${rawPropAddr}, ${sanitize(row['ownerCity'])}, ${sanitize(row['ownerState'])} ${rawPropZip}`;
+          console.log(
+            `[Row ${currentRow}] Validating Property Address: ${fullPropString}`
+          );
 
-          // --- B. ADDRESS VALIDATION ---
-          const fullPropString = `${rawPropAddr}, ${rawPropCity}, ${rawPropState} ${rawPropZip}`;
           const propValidation =
             await validateAddressWithGoogle(fullPropString);
+          if (propValidation) {
+            console.log(
+              `[Row ${currentRow}] ✅ Google Match: ${propValidation.formattedAddress}`
+            );
+          } else {
+            console.warn(
+              `[Row ${currentRow}] ⚠️ Google No Match. Using raw CSV values.`
+            );
+          }
 
           const finalPropAddr = propValidation
             ? propValidation.components.street
             : rawPropAddr;
-          const finalPropCity = propValidation
-            ? propValidation.components.city
-            : rawPropCity;
-          const finalPropState = propValidation
-            ? propValidation.components.state
-            : rawPropState;
           const finalPropZip = propValidation
             ? propValidation.components.zip
             : rawPropZip;
 
-          // --- C. PROBATE ADMIN LOGIC ---
-          let finalMailAddr = null;
-          let finalMailCity = null;
-          let finalMailState = null;
-          let finalMailZip = null;
-          let adminFirstName = null;
-          let adminLastName = null;
+          let finalMailAddr = null,
+            finalMailCity = null,
+            finalMailState = null,
+            finalMailZip = null;
+          let adminFirstName = null,
+            adminLastName = null;
           const labels: string[] = [leadType];
 
           if (leadType === 'PROBATE') {
             adminFirstName = formatName(row['adminFirstName']);
             adminLastName = formatName(row['adminLastName']);
-
+            const rawAdminZip = formatZip(row['adminZip']);
             const rawAdminAddr = sanitize(
               row['adminAddress'] || row['Mailing Address']
             );
-            const rawAdminCity = sanitize(row['adminCity'], 100);
-            const rawAdminState = sanitize(row['adminState'], 2).toUpperCase();
-            const rawAdminZip = formatZip(row['adminZip']); // 🎯 Also fix for admin zip
 
             if (rawAdminAddr) {
-              const fullAdminString = `${rawAdminAddr}, ${rawAdminCity}, ${rawAdminState} ${rawAdminZip}`;
-              const adminValidation =
-                await validateAddressWithGoogle(fullAdminString);
+              console.log(
+                `[Row ${currentRow}] Validating Admin/Mailing Address...`
+              );
+              const adminValidation = await validateAddressWithGoogle(
+                `${rawAdminAddr}, ${sanitize(row['adminCity'])} ${rawAdminZip}`
+              );
 
               finalMailAddr = adminValidation
                 ? adminValidation.components.street
                 : rawAdminAddr;
               finalMailCity = adminValidation
                 ? adminValidation.components.city
-                : rawAdminCity;
+                : sanitize(row['adminCity']);
               finalMailState = adminValidation
                 ? adminValidation.components.state
-                : rawAdminState;
+                : sanitize(row['adminState']);
               finalMailZip = adminValidation
                 ? adminValidation.components.zip
                 : rawAdminZip;
-
               labels.push('ABSENTEE');
             }
           }
 
-          // --- D. DUPLICATE CHECK ---
-          const existingCheck = await ddbDocClient.send(
-            new QueryCommand({
-              TableName: TABLE_NAME,
-              IndexName: 'propertyLeadsByOwnerAndOwnerAddress',
-              KeyConditionExpression: '#owner = :owner AND #addr = :addr',
-              ExpressionAttributeNames: {
-                '#owner': 'owner',
-                '#addr': 'ownerAddress',
-              },
-              ExpressionAttributeValues: {
-                ':owner': ownerId,
-                ':addr': finalPropAddr,
-              },
-              Limit: 1,
-            })
+          const preSkiptracedPhone = formatPhoneNumber(row['phone']);
+          console.log(
+            `[Row ${currentRow}] Phone: ${preSkiptracedPhone || 'NONE'} | Status: ${preSkiptracedPhone ? 'COMPLETED' : 'PENDING'}`
           );
 
-          if (existingCheck.Items && existingCheck.Items.length > 0) {
-            skippedCount++;
-            continue;
-          }
-
-          // --- E. PHONE & SKIPTRACE LOGIC ---
-          const preSkiptracedPhone = formatPhoneNumber(row['phone']);
-          const isPreSkiptraced = !!preSkiptracedPhone;
-
-          // --- F. SAVE TO DYNAMODB ---
           const leadItem = {
             id: randomUUID(),
             owner: ownerId,
@@ -219,8 +173,12 @@ export const handler: S3Handler = async (event) => {
             ownerFirstName: firstName,
             ownerLastName: lastName,
             ownerAddress: finalPropAddr,
-            ownerCity: finalPropCity,
-            ownerState: finalPropState,
+            ownerCity: propValidation
+              ? propValidation.components.city
+              : sanitize(row['ownerCity']),
+            ownerState: propValidation
+              ? propValidation.components.state
+              : sanitize(row['ownerState']),
             ownerZip: finalPropZip,
             adminFirstName,
             adminLastName,
@@ -228,18 +186,17 @@ export const handler: S3Handler = async (event) => {
             adminCity: finalMailCity,
             adminState: finalMailState,
             adminZip: finalMailZip,
+            // 🎯 Fixed: Ensure Probate Mailing info is saved to these core fields
+            mailingAddress: finalMailAddr,
+            mailingCity: finalMailCity,
+            mailingState: finalMailState,
+            mailingZip: finalMailZip,
             isAbsenteeOwner: labels.includes('ABSENTEE'),
             leadLabels: labels,
-            validationStatus: propValidation ? 'VALID' : 'INVALID',
             phone: preSkiptracedPhone,
             phones: preSkiptracedPhone ? [preSkiptracedPhone] : [],
-            emails: row['email']
-              ? [sanitize(row['email'], 100).toLowerCase()]
-              : [],
-            // 🎯 Automatically mark COMPLETED if phone was provided in CSV
-            skipTraceStatus: isPreSkiptraced ? 'COMPLETED' : 'PENDING',
+            skipTraceStatus: preSkiptracedPhone ? 'COMPLETED' : 'PENDING',
             ghlSyncStatus: 'PENDING',
-            ghlContactId: null,
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
           };
@@ -249,34 +206,21 @@ export const handler: S3Handler = async (event) => {
           );
           successCount++;
         } catch (rowError: any) {
+          console.error(`[Row ${currentRow}] Row Error: ${rowError.message}`);
           validationErrors.push({ row: currentRow, error: rowError.message });
         }
       }
 
-      // --- G. FINALIZATION ---
+      console.log(
+        `🏁 Finished file: ${successCount} successful, ${validationErrors.length} failed.`
+      );
       if (validationErrors.length === 0) {
         await s3.send(
           new DeleteObjectCommand({ Bucket: bucketName, Key: decodedKey })
         );
-        await sendNotification(
-          ownerId,
-          'Upload Complete',
-          `Imported ${successCount} leads.`
-        );
-        await logAuditEvent('CSV_IMPORT_SUCCESS', {
-          ownerId,
-          fileName: decodedKey,
-          count: successCount,
-        });
-      } else {
-        await sendNotification(
-          ownerId,
-          'Upload Action Required',
-          `Processed ${successCount} leads, ${validationErrors.length} failed.`
-        );
       }
     } catch (err: any) {
-      console.error('Critical Processing Error:', err);
+      console.error('❌ Critical Processing Error:', err);
     }
   }
 };
