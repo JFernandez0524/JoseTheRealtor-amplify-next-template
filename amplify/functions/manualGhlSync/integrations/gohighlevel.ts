@@ -83,56 +83,65 @@ export async function syncToGoHighLevel(lead: DBLead): Promise<string> {
 
   try {
     const primaryEmail = lead.emails?.[0]?.toLowerCase() || null;
-    const primaryPhone = lead.phones?.[0] || null;
+    const primaryPhone = lead.phones || lead.phones?.[0] || null;
 
-    // 1. Construct Shared Payload (Used for both Create and Update)
-    const customFields = Object.keys(GHL_CUSTOM_FIELD_ID_MAP)
+    // 🎯 FIX: Explicitly map DB fields to GHL Custom Field IDs
+    const customFieldValues: Record<string, any> = {
+      property_address: lead.ownerAddress,
+      property_city: lead.ownerCity,
+      property_state: lead.ownerState,
+      property_zip: lead.ownerZip,
+      mailing_address: lead.mailingAddress,
+      mailing_city: lead.mailingCity,
+      mailing_state: lead.mailingState,
+      mailing_zipcode: lead.mailingZip,
+      lead_type: lead.type,
+      skiptracestatus: lead.skipTraceStatus?.toUpperCase() || 'PENDING',
+    };
+
+    // 🎯 FIX: Map additional phones (up to 5)
+    if (lead.phones && lead.phones.length > 1) {
+      lead.phones.slice(1, 5).forEach((p, idx) => {
+        customFieldValues[`phone_${idx + 2}`] = p;
+      });
+    }
+
+    // 🎯 FIX: Map additional emails
+    if (lead.emails && lead.emails.length > 1) {
+      lead.emails.slice(1, 3).forEach((e, idx) => {
+        customFieldValues[`email_${idx + 2}`] = e;
+      });
+    }
+
+    const customFields = Object.keys(customFieldValues)
+      .filter((key) => customFieldValues[key] && GHL_CUSTOM_FIELD_ID_MAP[key])
       .map((key) => ({
         id: GHL_CUSTOM_FIELD_ID_MAP[key],
-        field_value: (lead as any)[key] || '',
-      }))
-      .filter((f) => f.field_value);
+        field_value: String(customFieldValues[key]),
+      }));
 
     const basePayload = {
       firstName: lead.ownerFirstName || 'Unknown',
       lastName: lead.ownerLastName || 'Owner',
-      email: primaryEmail || `no-email-${lead.id}@example.com`,
+      // 🎯 FIX: Removed fake email placeholder
+      email: primaryEmail,
       phone: primaryPhone,
-      tags: ['Start Dialing Campaign'],
+      tags: lead.leadLabels || ['Start Dialing Campaign'],
       source: 'JTR_SkipTrace_App',
       customFields,
     };
 
-    // Helper for Updates (Stripping locationId is required for PUT)
     const performUpdate = async (ghlId: string, currentRecord?: any) => {
-      // If we already have the record, check if update is actually needed
-      if (currentRecord) {
-        const needsUpdate =
-          currentRecord.firstName !== basePayload.firstName ||
-          currentRecord.lastName !== basePayload.lastName ||
-          basePayload.customFields.some((nf) => {
-            const of = currentRecord.customFields?.find(
-              (f: any) => f.id === nf.id
-            );
-            return (of?.value || '') !== nf.field_value;
-          });
-        if (!needsUpdate) return ghlId;
-      }
-
       console.info(`🔄 Updating contact: ${ghlId}`);
       const res = await ghl.put(`/contacts/${ghlId}`, basePayload);
       return res.data?.contact?.id || ghlId;
     };
 
-    // 2. PRIORITY PATH: Direct Update via Stored GHL ID
     if (lead.ghlContactId) {
-      console.info(
-        `🎯 Stored GHL ID found: ${lead.ghlContactId}. Bypassing search.`
-      );
+      console.info(`🎯 Stored GHL ID found: ${lead.ghlContactId}`);
       return await performUpdate(lead.ghlContactId);
     }
 
-    // 3. FALLBACK PATH: Search by Email/Phone
     let existingContact: any = null;
     if (primaryEmail || primaryPhone) {
       const searchBody = {
@@ -154,36 +163,18 @@ export async function syncToGoHighLevel(lead: DBLead): Promise<string> {
       };
       const searchRes = await ghl.post('/contacts/search', searchBody);
       if (searchRes.data?.contacts?.length > 0) {
-        const detailRes = await ghl.get(
-          `/contacts/${searchRes.data.contacts[0].id}`
-        );
-        existingContact = detailRes.data.contact;
+        existingContact = searchRes.data.contacts[0];
       }
     }
 
-    if (existingContact)
-      return await performUpdate(existingContact.id, existingContact);
+    if (existingContact) return await performUpdate(existingContact.id);
 
-    // 4. CREATION PATH
-    try {
-      console.info(`🆕 Creating new contact`);
-      const res = await ghl.post('/contacts/', {
-        ...basePayload,
-        locationId: LOCATION_ID,
-      });
-      return res.data?.contact?.id;
-    } catch (createErr: any) {
-      // 5. SELF-HEALING: Extract ID from 400 Duplicate Error
-      const duplicateId = createErr.response?.data?.meta?.contactId;
-      if (createErr.response?.status === 400 && duplicateId) {
-        console.warn(
-          `🔄 Search lag detected. Self-healing with ID: ${duplicateId}`
-        );
-        const detailRes = await ghl.get(`/contacts/${duplicateId}`);
-        return await performUpdate(duplicateId, detailRes.data.contact);
-      }
-      throw createErr;
-    }
+    console.info(`🆕 Creating new contact`);
+    const res = await ghl.post('/contacts/', {
+      ...basePayload,
+      locationId: LOCATION_ID,
+    });
+    return res.data?.contact?.id;
   } catch (error: any) {
     throw new Error(
       `GHL sync failed: ${error.response?.data?.message || error.message}`

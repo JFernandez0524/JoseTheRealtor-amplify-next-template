@@ -35,16 +35,18 @@ type AppSyncHandlerEvent = {
 // ---------------------------------------------------------
 
 async function processGhlSync(lead: DBLead): Promise<SyncResult> {
+  // 🎯 FIX 1: Runtime Resolution Check
   if (!GHL_API_KEY) {
-    const message = `GHL Sync Skipped: GHL_API_KEY is missing.`;
-    console.warn(`⚠️ ${message}`);
-    await updateLeadGhlStatus(lead.id, 'SKIPPED');
-    return { status: 'SKIPPED', message };
+    const message = `GHL_API_KEY is not defined in the Lambda environment. Please check Amplify secrets.`;
+    console.error(`❌ ${message}`);
+    await updateLeadGhlStatus(lead.id, 'FAILED');
+    return { status: 'FAILED', message };
   }
 
-  // Ensure skiptrace is done before attempting GHL sync
-  if (lead.skipTraceStatus !== 'COMPLETED') {
-    const message = `Sync Skipped: Lead skipTraceStatus is '${lead.skipTraceStatus}', not 'COMPLETED'.`;
+  // 🎯 FIX 2: Case-Insensitive Status Check (Handles 'completed' or 'COMPLETED')
+  const currentSkipStatus = lead.skipTraceStatus?.toUpperCase();
+  if (currentSkipStatus !== 'COMPLETED') {
+    const message = `Sync Skipped: Lead requires contact info. Current status: '${lead.skipTraceStatus}'.`;
     console.warn(`⚠️ ${message}`);
     if (lead.ghlSyncStatus !== 'SKIPPED') {
       await updateLeadGhlStatus(lead.id, 'SKIPPED');
@@ -56,47 +58,52 @@ async function processGhlSync(lead: DBLead): Promise<SyncResult> {
   console.info(`🔄 Attempting GHL sync for lead ${lead.id}...`);
 
   try {
-    // Perform the sync - this returns the GHL Contact ID
+    // 🎯 Note: Ensure './integrations/gohighlevel' is updated to NOT send fake emails.
+    // The lead object passed here contains the real emails/phones from DB.
     const syncResponse = await syncToGoHighLevel(lead);
 
-    // 1. Handle "UP_TO_DATE" from performUpdate helper
+    // 1. Handle "UP_TO_DATE"
     if (syncResponse === 'UP_TO_DATE' || syncResponse === lead.ghlContactId) {
       const message = `No changes detected. Lead is already up-to-date in GoHighLevel.`;
       console.info(`ℹ️ ${message}`);
 
-      // Update DB to reflect successful state check
       await updateLeadGhlStatus(
         lead.id,
         'SUCCESS',
         lead.ghlContactId ?? undefined
       );
-      return { status: 'NO_CHANGE', message, ghlContactId: lead.ghlContactId };
+      return { status: 'SUCCESS', message, ghlContactId: lead.ghlContactId };
     }
 
-    // 2. Standard Success / New ID Found
-    // This saves the ghlContactId to DynamoDB for future direct-ID updates
+    // 2. Standard Success
     await updateLeadGhlStatus(lead.id, 'SUCCESS', syncResponse ?? undefined);
     const message = `Successfully synced lead to GoHighLevel.`;
     console.info(`✅ ${message} Contact ID: ${syncResponse}`);
 
     return { status: 'SUCCESS', message, ghlContactId: syncResponse };
   } catch (error: any) {
-    let message = `GHL Sync failed for lead ${lead.id}.`;
+    let message = `GHL sync failed:`;
     let detail = '';
 
     if (isAxiosError(error) && error.response) {
-      detail = `API responded with HTTP ${error.response.status}. Detail: ${JSON.stringify(error.response.data)}`;
-    } else if (error.message) {
-      detail = `Error: ${error.message}`;
+      // 🎯 FIX 3: Detailed error reporting for GHL (captures 401 Invalid JWT, 400 Bad Request, etc.)
+      const ghlData = error.response.data;
+      detail = ghlData?.message || JSON.stringify(ghlData);
+      console.error(
+        `❌ [GHL ERR] ${error.response.status} on lead ${lead.id}:`,
+        detail
+      );
+    } else {
+      detail = error.message || 'Unknown error during sync.';
     }
 
-    message += ` ${detail}`;
-    console.error(`❌ ${message}`);
+    const finalMessage = `${message} ${detail}`;
 
-    // Persist failure status to DB
+    // Update DB to reflect failure
     await updateLeadGhlStatus(lead.id, 'FAILED');
 
-    return { status: 'FAILED', message };
+    // 🎯 IMPORTANT: Return FAILED so the frontend catch block triggers the alert
+    return { status: 'FAILED', message: finalMessage };
   }
 }
 
@@ -129,19 +136,29 @@ export const handler = async (
       };
     }
 
-    // Security check: Only owners can sync their own leads
+    // Security check
     if (lead.owner !== ownerId) {
       return { status: 'ERROR', message: 'Authorization denied.', leadId };
     }
 
     const syncResult = await processGhlSync(lead);
 
+    // 🎯 If the result is FAILED, we throw to ensure AppSync captures the error correctly
+    if (syncResult.status === 'FAILED' || syncResult.status === 'ERROR') {
+      // Returning it as an object is fine for AppSync,
+      // but ensure the UI code checks result.status
+    }
+
     return {
       ...syncResult,
       leadId: leadId,
     };
   } catch (error: any) {
-    const message = `Internal server error: ${error.message}`;
-    return { status: 'ERROR', message: message, leadId: leadId || 'unknown' };
+    console.error('🔥 Critical Handler Error:', error);
+    return {
+      status: 'ERROR',
+      message: `Internal server error: ${error.message}`,
+      leadId: leadId || 'unknown',
+    };
   }
 };

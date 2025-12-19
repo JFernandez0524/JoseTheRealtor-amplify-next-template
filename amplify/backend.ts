@@ -34,6 +34,12 @@ backend.uploadCsvHandler.addEnvironment(
   leadTable.tableName
 );
 
+// 🎯 This line resolves the bucket name and sets the environment variable
+backend.uploadCsvHandler.addEnvironment(
+  'LEAD_FILES_BUCKET_NAME',
+  backend.storage.resources.bucket.bucketName
+);
+
 // 3. Environment Variables for skipTraceLeads (Unchanged - uses utility now)
 backend.skipTraceLeads.addEnvironment(
   'AMPLIFY_DATA_LEAD_TABLE_NAME',

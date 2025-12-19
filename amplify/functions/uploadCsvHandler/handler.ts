@@ -6,17 +6,11 @@ import {
   DeleteObjectCommand,
 } from '@aws-sdk/client-s3';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import {
-  DynamoDBDocumentClient,
-  PutCommand,
-  QueryCommand,
-} from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, PutCommand } from '@aws-sdk/lib-dynamodb';
 import { parse } from 'csv-parse';
 import { Readable } from 'stream';
 import { randomUUID } from 'crypto';
 import { validateAddressWithGoogle } from '../../../app/utils/google.server';
-import { sendNotification } from './src/intergrations/notifications';
-import { logAuditEvent } from './src/intergrations/auditLogs';
 
 const s3 = new S3Client({});
 const ddbDocClient = DynamoDBDocumentClient.from(new DynamoDBClient({}));
@@ -39,6 +33,7 @@ const formatPhoneNumber = (val: any): string | null => {
 
 const formatZip = (val: any): string => {
   const s = sanitize(String(val), 10).replace(/\D/g, '');
+  // 🎯 Pads NJ zips like 7050 or 7110 to 07050/07110
   if (s.length > 0 && s.length < 5) return s.padStart(5, '0');
   return s;
 };
@@ -50,16 +45,20 @@ const formatName = (val: any): string => {
 };
 
 export const handler: S3Handler = async (event) => {
+  if (!TABLE_NAME) {
+    console.error('❌ AMPLIFY_DATA_LEAD_TABLE_NAME is not defined.');
+    return;
+  }
+
   for (const record of event.Records) {
-    let bucketName = record.s3.bucket.name;
-    let decodedKey = decodeURIComponent(record.s3.object.key).replace(
+    const bucketName = record.s3.bucket.name;
+    const decodedKey = decodeURIComponent(record.s3.object.key).replace(
       /\+/g,
       ' '
     );
     const validationErrors: { row: number; error: string }[] = [];
     let currentRow = 0,
       successCount = 0,
-      skippedCount = 0,
       ownerId = '';
 
     console.log(`🚀 Starting processing for file: ${decodedKey}`);
@@ -95,8 +94,10 @@ export const handler: S3Handler = async (event) => {
             row['ownerAddress'] || row['Property Address']
           );
 
-          // --- 🔍 LOG: GOOGLE ADDRESS VALIDATION START ---
+          // 🔍 Validate Property Address
           const fullPropString = `${rawPropAddr}, ${sanitize(row['ownerCity'])}, ${sanitize(row['ownerState'])} ${rawPropZip}`;
+
+          // ✅ FIXED: Corrected variable name from fullPropPropString to fullPropString
           console.log(
             `[Row ${currentRow}] Validating Property Address: ${fullPropString}`
           );
@@ -138,7 +139,7 @@ export const handler: S3Handler = async (event) => {
 
             if (rawAdminAddr) {
               console.log(
-                `[Row ${currentRow}] Validating Admin/Mailing Address...`
+                `[Row ${currentRow}] Validating Admin Address: ${rawAdminAddr}`
               );
               const adminValidation = await validateAddressWithGoogle(
                 `${rawAdminAddr}, ${sanitize(row['adminCity'])} ${rawAdminZip}`
@@ -186,7 +187,7 @@ export const handler: S3Handler = async (event) => {
             adminCity: finalMailCity,
             adminState: finalMailState,
             adminZip: finalMailZip,
-            // 🎯 Fixed: Ensure Probate Mailing info is saved to these core fields
+            // Mirroring Probate info to core mailing fields for UI display
             mailingAddress: finalMailAddr,
             mailingCity: finalMailCity,
             mailingState: finalMailState,

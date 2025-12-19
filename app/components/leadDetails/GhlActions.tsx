@@ -27,25 +27,25 @@ export function GhlActions({
   const currentSkipStatus = skipTraceStatus?.toUpperCase();
 
   const handleManualGhlSync = async () => {
-    if (!leadId) return;
     setIsSyncing(true);
     try {
       const { data: syncResult, errors } = await client.mutations.manualGhlSync(
-        { leadId }
+        {
+          leadId,
+        }
       );
-      if (
-        errors ||
-        syncResult?.status === 'ERROR' ||
-        syncResult?.status === 'FAILED'
-      ) {
-        throw new Error(
-          errors?.[0]?.message || syncResult?.message || 'GHL Sync failed.'
-        );
+
+      if (errors || syncResult?.status === 'FAILED') {
+        // 🎯 Pull the specific error message (e.g., "Invalid JWT") from the result
+        const errorDetail =
+          syncResult?.message || errors?.[0]?.message || 'Unknown Error';
+        throw new Error(errorDetail);
       }
-      alert(`GHL Sync Status: ${syncResult?.status || 'SUCCESS'}`);
-      onSyncComplete();
+
+      alert('✅ Sync Success!');
     } catch (err: any) {
-      alert(`GHL Sync failed: ${err.message}`);
+      // 🎯 This alert will now match the CloudWatch alarm trigger
+      alert(`❌ Production Error: ${err.message}`);
     } finally {
       setIsSyncing(false);
     }
