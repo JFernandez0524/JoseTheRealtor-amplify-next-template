@@ -10,7 +10,7 @@ const GHL_CUSTOM_FIELD_ID_MAP: Record<string, string> = {
   property_city: 'h4UIjKQvFu7oRW4SAY8W',
   property_state: '9r9OpQaxYPxqbA6Hvtx7',
   property_zip: 'hgbjsTVwcyID7umdhm2o',
-  lead_source_id: 'PBInTgsd2nMCD3Ngmy0a',
+  lead_source_id: 'PBInTgsd2nMCD3Ngmy0a', // 🎯 Used for Sibling Suppression
   lead_type: 'oaf4wCuM3Ub9eGpiddrO',
   skiptracestatus: 'HrnY1GUZ7P6d6r7J0ZRc',
   phone_2: 'LkmfM0Va5PylJFsJYjCu',
@@ -77,15 +77,20 @@ const createGhlClient = (): AxiosInstance => {
   return client;
 };
 
-export async function syncToGoHighLevel(lead: DBLead): Promise<string> {
+// 🎯 Updated parameters for "1 Phone = 1 Contact" strategy
+export async function syncToGoHighLevel(
+  lead: DBLead,
+  specificPhone: string,
+  phoneIndex: number,
+  isPrimary: boolean
+): Promise<string> {
   if (!GHL_API_KEY) throw new Error('GHL_API_KEY is missing.');
   const ghl = createGhlClient();
 
   try {
     const primaryEmail = lead.emails?.[0]?.toLowerCase() || null;
-    const primaryPhone = lead.phones || lead.phones?.[0] || null;
 
-    // 🎯 FIX: Explicitly map DB fields to GHL Custom Field IDs
+    // 🎯 Construct Custom Field Values
     const customFieldValues: Record<string, any> = {
       property_address: lead.ownerAddress,
       property_city: lead.ownerCity,
@@ -97,21 +102,8 @@ export async function syncToGoHighLevel(lead: DBLead): Promise<string> {
       mailing_zipcode: lead.mailingZip,
       lead_type: lead.type,
       skiptracestatus: lead.skipTraceStatus?.toUpperCase() || 'PENDING',
+      lead_source_id: lead.id, // 🎯 Shared Lead ID for suppression workflows
     };
-
-    // 🎯 FIX: Map additional phones (up to 5)
-    if (lead.phones && lead.phones.length > 1) {
-      lead.phones.slice(1, 5).forEach((p, idx) => {
-        customFieldValues[`phone_${idx + 2}`] = p;
-      });
-    }
-
-    // 🎯 FIX: Map additional emails
-    if (lead.emails && lead.emails.length > 1) {
-      lead.emails.slice(1, 3).forEach((e, idx) => {
-        customFieldValues[`email_${idx + 2}`] = e;
-      });
-    }
 
     const customFields = Object.keys(customFieldValues)
       .filter((key) => customFieldValues[key] && GHL_CUSTOM_FIELD_ID_MAP[key])
@@ -120,56 +112,48 @@ export async function syncToGoHighLevel(lead: DBLead): Promise<string> {
         field_value: String(customFieldValues[key]),
       }));
 
+    // 🎯 Define Tags based on primary status
+    const tags = [...(lead.leadLabels || []), 'Multi-Phone-Lead'];
+    if (isPrimary) {
+      tags.push('Direct_Mail_Eligible');
+      tags.push('Primary_Contact');
+    }
+
     const basePayload = {
       firstName: lead.ownerFirstName || 'Unknown',
-      lastName: lead.ownerLastName || 'Owner',
-      // 🎯 FIX: Removed fake email placeholder
-      email: primaryEmail,
-      phone: primaryPhone,
-      tags: lead.leadLabels || ['Start Dialing Campaign'],
+      // 🎯 Differentiate names for the dialer
+      lastName: `${lead.ownerLastName || 'Owner'} (${phoneIndex})`,
+      email: isPrimary ? primaryEmail : undefined, // Attach email only to primary to avoid duplicates
+      phone: specificPhone,
+      tags,
       source: 'JTR_SkipTrace_App',
       customFields,
     };
 
-    const performUpdate = async (ghlId: string, currentRecord?: any) => {
-      console.info(`🔄 Updating contact: ${ghlId}`);
+    const performUpdate = async (ghlId: string) => {
+      console.info(`🔄 Updating contact ${ghlId} with phone ${specificPhone}`);
       const res = await ghl.put(`/contacts/${ghlId}`, basePayload);
       return res.data?.contact?.id || ghlId;
     };
 
-    if (lead.ghlContactId) {
-      console.info(`🎯 Stored GHL ID found: ${lead.ghlContactId}`);
-      return await performUpdate(lead.ghlContactId);
-    }
-
+    // 🎯 SEARCH: Find by this SPECIFIC phone number to avoid merging siblings
     let existingContact: any = null;
-    if (primaryEmail || primaryPhone) {
-      const searchBody = {
-        locationId: LOCATION_ID,
-        pageLimit: 1,
-        filters: [
-          {
-            group: 'OR',
-            filters: [
-              ...(primaryEmail
-                ? [{ field: 'email', operator: 'eq', value: primaryEmail }]
-                : []),
-              ...(primaryPhone
-                ? [{ field: 'phone', operator: 'eq', value: primaryPhone }]
-                : []),
-            ],
-          },
-        ],
-      };
-      const searchRes = await ghl.post('/contacts/search', searchBody);
-      if (searchRes.data?.contacts?.length > 0) {
-        existingContact = searchRes.data.contacts[0];
-      }
+    const searchBody = {
+      locationId: LOCATION_ID,
+      pageLimit: 1,
+      filters: [{ field: 'phone', operator: 'eq', value: specificPhone }],
+    };
+
+    const searchRes = await ghl.post('/contacts/search', searchBody);
+    if (searchRes.data?.contacts?.length > 0) {
+      existingContact = searchRes.data.contacts[0];
     }
 
     if (existingContact) return await performUpdate(existingContact.id);
 
-    console.info(`🆕 Creating new contact`);
+    console.info(
+      `🆕 Creating new contact for phone ${phoneIndex}: ${specificPhone}`
+    );
     const res = await ghl.post('/contacts/', {
       ...basePayload,
       locationId: LOCATION_ID,

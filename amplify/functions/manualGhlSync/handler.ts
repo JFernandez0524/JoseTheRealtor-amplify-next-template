@@ -35,75 +35,59 @@ type AppSyncHandlerEvent = {
 // ---------------------------------------------------------
 
 async function processGhlSync(lead: DBLead): Promise<SyncResult> {
-  // 🎯 FIX 1: Runtime Resolution Check
   if (!GHL_API_KEY) {
-    const message = `GHL_API_KEY is not defined in the Lambda environment. Please check Amplify secrets.`;
-    console.error(`❌ ${message}`);
+    const message = `GHL_API_KEY is missing. Check Amplify secrets.`;
     await updateLeadGhlStatus(lead.id, 'FAILED');
     return { status: 'FAILED', message };
   }
 
-  // 🎯 FIX 2: Case-Insensitive Status Check (Handles 'completed' or 'COMPLETED')
   const currentSkipStatus = lead.skipTraceStatus?.toUpperCase();
   if (currentSkipStatus !== 'COMPLETED') {
-    const message = `Sync Skipped: Lead requires contact info. Current status: '${lead.skipTraceStatus}'.`;
-    console.warn(`⚠️ ${message}`);
-    if (lead.ghlSyncStatus !== 'SKIPPED') {
-      await updateLeadGhlStatus(lead.id, 'SKIPPED');
-    }
-    return { status: 'SKIPPED', message };
+    return {
+      status: 'SKIPPED',
+      message: `Lead status is ${lead.skipTraceStatus}`,
+    };
   }
 
-  await updateLeadGhlStatus(lead.id, 'PENDING');
-  console.info(`🔄 Attempting GHL sync for lead ${lead.id}...`);
+  const phones = lead.phones || [];
+  if (phones.length === 0) {
+    return { status: 'FAILED', message: 'No phone numbers found.' };
+  }
 
   try {
-    // 🎯 Note: Ensure './integrations/gohighlevel' is updated to NOT send fake emails.
-    // The lead object passed here contains the real emails/phones from DB.
-    const syncResponse = await syncToGoHighLevel(lead);
+    const syncResults: string[] = [];
 
-    // 1. Handle "UP_TO_DATE"
-    if (syncResponse === 'UP_TO_DATE' || syncResponse === lead.ghlContactId) {
-      const message = `No changes detected. Lead is already up-to-date in GoHighLevel.`;
-      console.info(`ℹ️ ${message}`);
+    for (let i = 0; i < phones.length; i++) {
+      const rawPhone = phones[i];
 
-      await updateLeadGhlStatus(
-        lead.id,
-        'SUCCESS',
-        lead.ghlContactId ?? undefined
+      // 🎯 Type Guard: Ensures we don't pass null to a string parameter
+      if (!rawPhone) continue;
+
+      const currentPhone: string = rawPhone;
+      const phoneIndex = i + 1;
+      const isPrimary = i === 0;
+
+      const ghlContactId = await syncToGoHighLevel(
+        lead,
+        currentPhone,
+        phoneIndex,
+        isPrimary
       );
-      return { status: 'SUCCESS', message, ghlContactId: lead.ghlContactId };
+
+      syncResults.push(ghlContactId);
     }
 
-    // 2. Standard Success
-    await updateLeadGhlStatus(lead.id, 'SUCCESS', syncResponse ?? undefined);
-    const message = `Successfully synced lead to GoHighLevel.`;
-    console.info(`✅ ${message} Contact ID: ${syncResponse}`);
+    const primaryGhlId = syncResults[0];
+    await updateLeadGhlStatus(lead.id, 'SUCCESS', primaryGhlId);
 
-    return { status: 'SUCCESS', message, ghlContactId: syncResponse };
+    return {
+      status: 'SUCCESS',
+      message: `Synced ${phones.length} contacts.`,
+      ghlContactId: primaryGhlId,
+    };
   } catch (error: any) {
-    let message = `GHL sync failed:`;
-    let detail = '';
-
-    if (isAxiosError(error) && error.response) {
-      // 🎯 FIX 3: Detailed error reporting for GHL (captures 401 Invalid JWT, 400 Bad Request, etc.)
-      const ghlData = error.response.data;
-      detail = ghlData?.message || JSON.stringify(ghlData);
-      console.error(
-        `❌ [GHL ERR] ${error.response.status} on lead ${lead.id}:`,
-        detail
-      );
-    } else {
-      detail = error.message || 'Unknown error during sync.';
-    }
-
-    const finalMessage = `${message} ${detail}`;
-
-    // Update DB to reflect failure
     await updateLeadGhlStatus(lead.id, 'FAILED');
-
-    // 🎯 IMPORTANT: Return FAILED so the frontend catch block triggers the alert
-    return { status: 'FAILED', message: finalMessage };
+    return { status: 'FAILED', message: error.message };
   }
 }
 
@@ -136,18 +120,11 @@ export const handler = async (
       };
     }
 
-    // Security check
     if (lead.owner !== ownerId) {
       return { status: 'ERROR', message: 'Authorization denied.', leadId };
     }
 
     const syncResult = await processGhlSync(lead);
-
-    // 🎯 If the result is FAILED, we throw to ensure AppSync captures the error correctly
-    if (syncResult.status === 'FAILED' || syncResult.status === 'ERROR') {
-      // Returning it as an object is fine for AppSync,
-      // but ensure the UI code checks result.status
-    }
 
     return {
       ...syncResult,

@@ -7,7 +7,7 @@ interface GhlActionsProps {
   leadId: string;
   ghlContactId: string | null | undefined;
   ghlSyncStatus: string | null | undefined;
-  skipTraceStatus: string | null | undefined; // 🎯 Ensure this is here
+  skipTraceStatus: string | null | undefined;
   onSyncComplete: () => void;
   client: any;
 }
@@ -36,25 +36,31 @@ export function GhlActions({
       );
 
       if (errors || syncResult?.status === 'FAILED') {
-        // 🎯 Pull the specific error message (e.g., "Invalid JWT") from the result
+        // 🎯 Pull the specific error message from the Lambda result
         const errorDetail =
           syncResult?.message || errors?.[0]?.message || 'Unknown Error';
         throw new Error(errorDetail);
       }
 
       alert('✅ Sync Success!');
+      // 🎯 Refresh the lead data in the parent component
+      onSyncComplete();
     } catch (err: any) {
-      // 🎯 This alert will now match the CloudWatch alarm trigger
-      alert(`❌ Production Error: ${err.message}`);
+      alert(`❌ Sync Error: ${err.message}`);
     } finally {
       setIsSyncing(false);
     }
   };
 
-  // 🎯 THE FIX: Enable button only if lead has phone (COMPLETED) and isn't already synced (SUCCESS)
+  /**
+   * 🎯 THE FIX: Button Logic
+   * 1. Must be COMPLETED (has phone numbers).
+   * 2. Must not be currently syncing.
+   * 3. We NO LONGER block if status is 'SUCCESS' so we can push updates.
+   */
   const isReadyToSync = currentSkipStatus === 'COMPLETED';
+  const canClickSync = isReadyToSync && !isSyncing;
   const isAlreadySynced = currentGhlStatus === 'SUCCESS';
-  const canClickSync = isReadyToSync && !isSyncing && !isAlreadySynced;
 
   return (
     <div className='bg-white shadow border rounded-lg p-6 border-l-4 border-l-purple-500'>
@@ -65,33 +71,45 @@ export function GhlActions({
             Sync Status
           </label>
           <span
-            className={`px-2 py-0.5 rounded text-xs font-bold ${currentGhlStatus === 'SUCCESS' ? 'bg-purple-100 text-purple-800' : 'bg-gray-100'}`}
+            className={`px-2 py-0.5 rounded text-xs font-bold ${
+              currentGhlStatus === 'SUCCESS'
+                ? 'bg-purple-100 text-purple-800'
+                : 'bg-gray-100 text-gray-600'
+            }`}
           >
-            {ghlSyncStatus || 'N/A'}
+            {ghlSyncStatus || 'NOT SYNCED'}
           </span>
         </div>
 
         <button
           onClick={handleManualGhlSync}
-          disabled={!canClickSync} // 🎯 This is now gated by the new logic
+          disabled={!canClickSync}
           className={`w-full text-sm px-3 py-2 rounded transition-colors flex items-center justify-center gap-2 font-medium ${
             !canClickSync
               ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
-              : 'bg-indigo-600 text-white hover:bg-indigo-700'
+              : isAlreadySynced
+                ? 'bg-indigo-100 text-indigo-700 border border-indigo-300 hover:bg-indigo-200'
+                : 'bg-indigo-600 text-white hover:bg-indigo-700'
           }`}
         >
           {isSyncing ? (
             <>
-              <Loader size='small' variation='linear' /> Syncing...
+              <Loader size='small' /> Updating...
             </>
-          ) : isAlreadySynced ? (
-            '✓ Synced to GHL'
           ) : !isReadyToSync ? (
             'Awaiting Contact Info'
+          ) : isAlreadySynced ? (
+            'Push Update to GHL' // 🎯 Visual cue that this is an update, not first sync
           ) : (
-            'Manual Sync to GHL'
+            'Initial Sync to GHL'
           )}
         </button>
+
+        {isAlreadySynced && !isSyncing && (
+          <p className='text-[10px] text-gray-400 text-center italic'>
+            Lead already in GHL. Click above to sync recent changes.
+          </p>
+        )}
       </div>
     </div>
   );
