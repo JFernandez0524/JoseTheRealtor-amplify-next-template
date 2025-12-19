@@ -33,7 +33,6 @@ const formatPhoneNumber = (val: any): string | null => {
 
 const formatZip = (val: any): string => {
   const s = sanitize(String(val), 10).replace(/\D/g, '');
-  // 🎯 Pads NJ zips like 7050 or 7110 to 07050/07110
   if (s.length > 0 && s.length < 5) return s.padStart(5, '0');
   return s;
 };
@@ -42,6 +41,17 @@ const formatName = (val: any): string => {
   const s = sanitize(val, 50);
   if (!s) return '';
   return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
+};
+
+/**
+ * 🧹 CITY CLEANER
+ * Normalizes "City of Orange" to "Orange" before geocoding to improve Google accuracy.
+ */
+const cleanCityForGeocoding = (city: string) => {
+  if (!city) return '';
+  return city
+    .replace(/\b(city|town|borough|township|village)\s+of\s+/i, '')
+    .trim();
 };
 
 export const handler: S3Handler = async (event) => {
@@ -56,12 +66,9 @@ export const handler: S3Handler = async (event) => {
       /\+/g,
       ' '
     );
-    const validationErrors: { row: number; error: string }[] = [];
     let currentRow = 0,
       successCount = 0,
       ownerId = '';
-
-    console.log(`🚀 Starting processing for file: ${decodedKey}`);
 
     try {
       const headObject = await s3.send(
@@ -85,42 +92,48 @@ export const handler: S3Handler = async (event) => {
       for await (const row of parser) {
         currentRow++;
         try {
-          const firstName = formatName(
-            row['ownerFirstName'] || row['First Name']
-          );
-          const lastName = formatName(row['ownerLastName'] || row['Last Name']);
+          // 1. RAW DATA EXTRACTION
           const rawPropZip = formatZip(row['ownerZip'] || row['Zip']);
           const rawPropAddr = sanitize(
             row['ownerAddress'] || row['Property Address']
           );
+          const rawPropCity = sanitize(row['ownerCity']);
+          const rawPropState = sanitize(row['ownerState']);
 
-          // 🔍 Validate Property Address
-          const fullPropString = `${rawPropAddr}, ${sanitize(row['ownerCity'])}, ${sanitize(row['ownerState'])} ${rawPropZip}`;
+          // 2. PRE-CLEAN CITY FOR BETTER GOOGLE MATCHING
+          const cleanCity = cleanCityForGeocoding(rawPropCity);
+          const fullPropString = `${rawPropAddr}, ${cleanCity}, ${rawPropState} ${rawPropZip}`;
 
-          // ✅ FIXED: Corrected variable name from fullPropPropString to fullPropString
-          console.log(
-            `[Row ${currentRow}] Validating Property Address: ${fullPropString}`
-          );
-
+          // 3. 🔍 VALIDATE PROPERTY ADDRESS WITH GOOGLE
           const propValidation =
             await validateAddressWithGoogle(fullPropString);
-          if (propValidation) {
-            console.log(
-              `[Row ${currentRow}] ✅ Google Match: ${propValidation.formattedAddress}`
-            );
-          } else {
-            console.warn(
-              `[Row ${currentRow}] ⚠️ Google No Match. Using raw CSV values.`
-            );
-          }
 
-          const finalPropAddr = propValidation
-            ? propValidation.components.street
-            : rawPropAddr;
-          const finalPropZip = propValidation
-            ? propValidation.components.zip
-            : rawPropZip;
+          // 🎯 EXTRACT STANDARDIZED COMPONENTS
+          // We prioritize Google's results to overwrite "City of Orange" with "Orange"
+          const std = propValidation?.components;
+          const finalPropAddr = std?.street || rawPropAddr;
+          const finalPropCity = std?.city || rawPropCity;
+          const finalPropState = std?.state || rawPropState;
+          const finalPropZip = std?.zip || rawPropZip;
 
+          const standardizedAddress = propValidation
+            ? {
+                street: finalPropAddr,
+                city: finalPropCity,
+                state: finalPropState,
+                zip: finalPropZip,
+              }
+            : null;
+
+          // 4. COORDINATES
+          const latitude = propValidation?.location?.lat
+            ? String(propValidation.location.lat)
+            : null;
+          const longitude = propValidation?.location?.lng
+            ? String(propValidation.location.lng)
+            : null;
+
+          // 5. PROBATE ADMIN / MAILING ADDRESS LOGIC
           let finalMailAddr = null,
             finalMailCity = null,
             finalMailState = null,
@@ -138,56 +151,47 @@ export const handler: S3Handler = async (event) => {
             );
 
             if (rawAdminAddr) {
-              console.log(
-                `[Row ${currentRow}] Validating Admin Address: ${rawAdminAddr}`
-              );
               const adminValidation = await validateAddressWithGoogle(
                 `${rawAdminAddr}, ${sanitize(row['adminCity'])} ${rawAdminZip}`
               );
-
-              finalMailAddr = adminValidation
-                ? adminValidation.components.street
-                : rawAdminAddr;
-              finalMailCity = adminValidation
-                ? adminValidation.components.city
-                : sanitize(row['adminCity']);
-              finalMailState = adminValidation
-                ? adminValidation.components.state
-                : sanitize(row['adminState']);
-              finalMailZip = adminValidation
-                ? adminValidation.components.zip
-                : rawAdminZip;
+              const aStd = adminValidation?.components;
+              finalMailAddr = aStd?.street || rawAdminAddr;
+              finalMailCity = aStd?.city || sanitize(row['adminCity']);
+              finalMailState = aStd?.state || sanitize(row['adminState']);
+              finalMailZip = aStd?.zip || rawAdminZip;
               labels.push('ABSENTEE');
             }
           }
 
           const preSkiptracedPhone = formatPhoneNumber(row['phone']);
-          console.log(
-            `[Row ${currentRow}] Phone: ${preSkiptracedPhone || 'NONE'} | Status: ${preSkiptracedPhone ? 'COMPLETED' : 'PENDING'}`
-          );
 
+          // 6. 🎯 CONSTRUCT FINAL LEAD ITEM
           const leadItem = {
             id: randomUUID(),
             owner: ownerId,
             __typename: 'PropertyLead',
             type: leadType,
-            ownerFirstName: firstName,
-            ownerLastName: lastName,
+            ownerFirstName: formatName(
+              row['ownerFirstName'] || row['First Name']
+            ),
+            ownerLastName: formatName(row['ownerLastName'] || row['Last Name']),
+
+            // Standardized Property Fields
             ownerAddress: finalPropAddr,
-            ownerCity: propValidation
-              ? propValidation.components.city
-              : sanitize(row['ownerCity']),
-            ownerState: propValidation
-              ? propValidation.components.state
-              : sanitize(row['ownerState']),
+            ownerCity: finalPropCity,
+            ownerState: finalPropState,
             ownerZip: finalPropZip,
+            standardizedAddress, // 🔒 Critical for Bridge API
+
+            latitude,
+            longitude,
+
             adminFirstName,
             adminLastName,
             adminAddress: finalMailAddr,
             adminCity: finalMailCity,
             adminState: finalMailState,
             adminZip: finalMailZip,
-            // Mirroring Probate info to core mailing fields for UI display
             mailingAddress: finalMailAddr,
             mailingCity: finalMailCity,
             mailingState: finalMailState,
@@ -200,6 +204,7 @@ export const handler: S3Handler = async (event) => {
             ghlSyncStatus: 'PENDING',
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
+            validationStatus: propValidation ? 'VALID' : 'UNVERIFIED',
           };
 
           await ddbDocClient.send(
@@ -207,19 +212,13 @@ export const handler: S3Handler = async (event) => {
           );
           successCount++;
         } catch (rowError: any) {
-          console.error(`[Row ${currentRow}] Row Error: ${rowError.message}`);
-          validationErrors.push({ row: currentRow, error: rowError.message });
+          console.error(`Row ${currentRow} failed:`, rowError.message);
         }
       }
 
-      console.log(
-        `🏁 Finished file: ${successCount} successful, ${validationErrors.length} failed.`
+      await s3.send(
+        new DeleteObjectCommand({ Bucket: bucketName, Key: decodedKey })
       );
-      if (validationErrors.length === 0) {
-        await s3.send(
-          new DeleteObjectCommand({ Bucket: bucketName, Key: decodedKey })
-        );
-      }
     } catch (err: any) {
       console.error('❌ Critical Processing Error:', err);
     }

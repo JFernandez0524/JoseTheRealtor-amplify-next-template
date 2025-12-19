@@ -9,13 +9,14 @@ import {
   useJsApiLoader,
   Libraries,
 } from '@react-google-maps/api';
+import { Loader } from '@aws-amplify/ui-react';
 
-// 👇 COMPONENTS
-import { CoreLeadInfo } from '@/app/components/leadDetails/CoreLeadInfo';
-import { GhlActions } from '@/app/components/leadDetails/GhlActions';
-import { LeadStatusBadge } from '@/app/components/leadDetails/LeadStatusBadge';
-import { CardWrapper } from '@/app/components/leadDetails/CardWrapper';
-import { ContactActionItem } from '@/app/components/leadDetails/ContactActionItem';
+// 👇 YOUR MODULAR COMPONENTS
+import { CoreLeadInfo } from './CoreLeadInfo';
+import { GhlActions } from './GhlActions';
+import { LeadStatusBadge } from './LeadStatusBadge';
+import { CardWrapper } from './CardWrapper';
+import { ContactActionItem } from './ContactActionItem';
 
 // 👇 UTILS
 import { client } from '@/app/utils/aws/data/frontEndClient';
@@ -29,21 +30,16 @@ type Lead = Schema['PropertyLead']['type'] & {
 };
 
 const libraries: Libraries = ['places'];
-const mapContainerStyle = {
-  width: '100%',
-  height: '300px',
-  borderRadius: '0.5rem',
-  marginTop: '1.5rem',
-};
+const mapContainerStyle = { width: '100%', height: '100%' };
 
-const formatCurrency = (value?: number | string | null) => {
-  if (!value || isNaN(Number(value))) return 'N/A';
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    maximumFractionDigits: 0,
-  }).format(Number(value));
-};
+const formatCurrency = (v?: any) =>
+  v
+    ? new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: 'USD',
+        maximumFractionDigits: 0,
+      }).format(Number(v))
+    : '---';
 
 interface NavContext {
   ids: string[];
@@ -52,14 +48,8 @@ interface NavContext {
   isLast: boolean;
 }
 
-interface LeadDetailClientProps {
-  initialLead: Lead;
-}
-
-export function LeadDetailClient({ initialLead }: LeadDetailClientProps) {
+export function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
   const router = useRouter();
-
-  // 1. STATE MANAGEMENT
   const [lead, setLead] = useState<Lead>(initialLead);
   const [marketData, setMarketData] = useState<any | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -70,369 +60,461 @@ export function LeadDetailClient({ initialLead }: LeadDetailClientProps) {
   const { isLoaded: isMapLoaded } = useJsApiLoader({
     id: 'google-map-script',
     googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY!,
-    libraries: libraries,
+    libraries,
   });
 
-  // 2. FETCH BRIDGEAPI MARKET DATA
+  // 1. DATA FETCHING (ANALYZER)
   useEffect(() => {
-    setLead(initialLead);
-
     const fetchMarketIntel = async () => {
-      // Ensure we have a property address to search
-      if (!initialLead.ownerAddress) return;
-
       setIsAnalyzing(true);
       try {
-        // Construct the full search string for Google -> Bridge validation
-        const fullAddress = `${initialLead.ownerAddress}, ${initialLead.ownerCity}, ${initialLead.ownerState} ${initialLead.ownerZip}`;
-
         const response = await axios.post('/api/v1/analyze-property', {
-          address: fullAddress,
+          lat: Number(initialLead.latitude),
+          lng: Number(initialLead.longitude),
+          standardizedAddress: initialLead.standardizedAddress,
         });
 
         if (response.data.success) {
           setMarketData(response.data);
         }
       } catch (err) {
-        console.error('BridgeAPI Error:', err);
-        setMarketData(null);
+        console.error('Analysis Failed:', err);
       } finally {
         setIsAnalyzing(false);
       }
     };
 
+    setLead(initialLead);
     fetchMarketIntel();
   }, [initialLead]);
 
-  // 3. NAVIGATION LOGIC
-  const loadNavigationContext = useCallback(() => {
+  // 2. NAVIGATION LOGIC
+  const loadNav = useCallback(() => {
     if (typeof window === 'undefined') return;
     const contextString = sessionStorage.getItem('leadNavContext');
     if (!contextString) return;
     try {
       const context = JSON.parse(contextString);
-      const leadIds: string[] = context.ids || [];
-      const currentIndex = leadIds.findIndex(
-        (id: string) => id === initialLead.id
-      );
-      if (currentIndex !== -1) {
+      const leadIds = context.ids || [];
+      const idx = leadIds.indexOf(initialLead.id);
+      if (idx !== -1) {
         setNavContext({
           ids: leadIds,
-          currentIndex: currentIndex,
-          isFirst: currentIndex === 0,
-          isLast: currentIndex === leadIds.length - 1,
+          currentIndex: idx,
+          isFirst: idx === 0,
+          isLast: idx === leadIds.length - 1,
         });
       }
     } catch (e) {
-      console.error('Error loading navigation context:', e);
+      console.error('Nav Context Load Error:', e);
     }
   }, [initialLead.id]);
 
   useEffect(() => {
-    loadNavigationContext();
-  }, [loadNavigationContext]);
+    loadNav();
+  }, [loadNav]);
 
-  const navigateToLead = (direction: 'prev' | 'next') => {
-    if (!navContext) return;
-    const newIndex =
-      direction === 'next'
-        ? navContext.currentIndex + 1
-        : navContext.currentIndex - 1;
-    if (newIndex >= 0 && newIndex < navContext.ids.length) {
-      router.push(`/lead/${navContext.ids[newIndex]}`);
-    }
-  };
-
-  // 4. HANDLERS
+  // 3. ACTION HANDLERS
   const handleSkipTrace = async () => {
     if (lead.skipTraceStatus === 'COMPLETED') return;
     setIsSkipTracing(true);
     try {
-      const { errors } = await client.mutations.skipTraceLeads({
-        leadIds: [lead.id],
-      });
-      if (errors) throw new Error(errors.map((e) => e.message).join(' | '));
-
+      await client.mutations.skipTraceLeads({ leadIds: [lead.id] });
       const { data } = await client.models.PropertyLead.get({ id: lead.id });
       if (data) setLead(data as Lead);
     } catch (err: any) {
-      alert(`Skip trace failed: ${err.message}`);
+      alert(err.message);
     } finally {
       setIsSkipTracing(false);
     }
   };
 
-  const handleLeadUpdate = (updatedLead: Lead) => {
-    setLead(updatedLead);
-    setIsCoreInfoEditing(false);
-  };
-
+  // DATA MAPPING SHORTCUTS
+  const parcel = marketData?.parcel;
+  const valuation = marketData?.valuation;
+  const building = parcel?.building?.[0] || {};
+  const legal = parcel?.legal || {};
+  const garage = parcel?.garages?.[0] || {};
   const mapCenter =
     lead.latitude && lead.longitude
       ? { lat: Number(lead.latitude), lng: Number(lead.longitude) }
       : null;
 
+  /**
+   * ✅ CLEAN ADDRESS HELPER
+   * Handles raw strings OR JSON strings from the database
+   */
+  const getCleanAddress = (val: any): string => {
+    if (typeof val !== 'string' || val.trim() === '') return '';
+
+    // Detect JSON string (common when objects are stored in string fields)
+    if (val.trim().startsWith('{')) {
+      try {
+        const parsed = JSON.parse(val);
+        const { street, city, state, zip } = parsed;
+        // Construct standard format: 123 Main St, City, ST 12345
+        return [street, city, state ? `${state} ${zip || ''}`.trim() : zip]
+          .filter(Boolean)
+          .join(', ');
+      } catch (e) {
+        return val; // Fallback to raw string if parsing fails
+      }
+    }
+    return val;
+  };
+
+  const cleanStandardized = getCleanAddress(lead.standardizedAddress);
+  const cleanOwner = getCleanAddress(lead.ownerAddress);
+
+  const displayAddress: React.ReactNode =
+    cleanStandardized !== ''
+      ? cleanStandardized
+      : cleanOwner !== ''
+        ? cleanOwner
+        : 'No Address Provided';
+
+  const showSubAddress = cleanStandardized === '';
+
   return (
-    <main className='max-w-6xl mx-auto py-6 px-6'>
-      {/* HEADER & NAVIGATION */}
-      <div className='flex flex-row items-center justify-between mb-6 border-b pb-4 border-gray-100'>
-        <div className='flex items-center gap-6'>
-          <h1 className='text-2xl font-bold text-gray-800'>Lead Detail</h1>
+    <main className='max-w-[1600px] mx-auto py-6 px-8 bg-slate-50 min-h-screen'>
+      {/* 🔝 TOP NAVIGATION BAR */}
+      <div className='flex items-center justify-between mb-8'>
+        <div className='flex items-center gap-4'>
+          <button
+            onClick={() => router.push('/dashboard')}
+            className='p-2 hover:bg-white rounded-full border hover:border-slate-200 transition'
+          >
+            <svg
+              xmlns='http://www.w3.org/2000/svg'
+              width='20'
+              height='20'
+              viewBox='0 0 24 24'
+              fill='none'
+              stroke='currentColor'
+              strokeWidth='2'
+            >
+              <path d='m15 18-6-6 6-6' />
+            </svg>
+          </button>
+          <h1 className='text-xl font-bold text-slate-800 uppercase tracking-tight'>
+            Property Record
+          </h1>
           {navContext && (
-            <div className='flex items-center gap-1 bg-gray-50 border rounded-full px-3 py-1 text-gray-500 shadow-sm'>
+            <div className='flex items-center gap-3 ml-4 bg-white border rounded-full px-4 py-1.5 shadow-sm text-[10px] font-black tracking-widest text-slate-500'>
               <button
-                onClick={() => navigateToLead('prev')}
                 disabled={navContext.isFirst}
-                className='p-1 rounded-full text-gray-700 hover:bg-white disabled:opacity-30 transition'
+                onClick={() =>
+                  router.push(
+                    `/lead/${navContext.ids[navContext.currentIndex - 1]}`
+                  )
+                }
+                className='hover:text-indigo-600 disabled:opacity-20 uppercase'
               >
-                <svg
-                  xmlns='http://www.w3.org/2000/svg'
-                  width='18'
-                  height='18'
-                  viewBox='0 0 24 24'
-                  fill='none'
-                  stroke='currentColor'
-                  strokeWidth='2.5'
-                >
-                  <path d='m15 18-6-6 6-6' />
-                </svg>
+                Prev
               </button>
-              <span className='px-2 text-xs font-bold tracking-tighter'>
+              <span className='text-slate-200'>|</span>
+              <span>
                 {navContext.currentIndex + 1} / {navContext.ids.length}
               </span>
+              <span className='text-slate-200'>|</span>
               <button
-                onClick={() => navigateToLead('next')}
                 disabled={navContext.isLast}
-                className='p-1 rounded-full text-gray-700 hover:bg-white disabled:opacity-30 transition'
+                onClick={() =>
+                  router.push(
+                    `/lead/${navContext.ids[navContext.currentIndex + 1]}`
+                  )
+                }
+                className='hover:text-indigo-600 disabled:opacity-20 uppercase'
               >
-                <svg
-                  xmlns='http://www.w3.org/2000/svg'
-                  width='18'
-                  height='18'
-                  viewBox='0 0 24 24'
-                  fill='none'
-                  stroke='currentColor'
-                  strokeWidth='2.5'
-                >
-                  <path d='m9 18 6-6-6-6' />
-                </svg>
+                Next
               </button>
             </div>
           )}
         </div>
-        <button
-          onClick={() => router.push('/dashboard')}
-          className='text-sm font-medium text-gray-500 hover:text-gray-800 transition-colors'
-        >
-          ← Back to Dashboard
-        </button>
       </div>
 
-      {/* HERO SECTION */}
-      <div className='mb-6'>
-        <h2 className='text-3xl font-extrabold text-slate-900 tracking-tight'>
-          {lead.ownerAddress || 'No Address Found'}
-        </h2>
-        <p className='text-lg text-slate-500 font-medium -mt-1'>
-          {lead.ownerCity}, {lead.ownerState} {lead.ownerZip}
-        </p>
-      </div>
-
-      <div className='flex flex-col md:flex-row gap-8'>
-        {/* LEFT COLUMN: CORE INFO & CONTACTS */}
-        <div className='w-full md:w-2/3 space-y-6'>
-          <CardWrapper
-            title='Core Lead Information'
-            isEditable={true}
-            onEditToggle={setIsCoreInfoEditing}
-          >
-            <CoreLeadInfo
-              lead={lead}
-              onUpdate={handleLeadUpdate}
-              client={client}
-              isEditing={isCoreInfoEditing}
-              onEditToggle={setIsCoreInfoEditing}
-            />
-          </CardWrapper>
-
-          <div className='bg-white shadow border rounded-lg p-6'>
-            <h2 className='text-xl font-semibold mb-4'>Property Details</h2>
-            <div className='grid grid-cols-3 gap-4'>
+      <div className='grid grid-cols-12 gap-8'>
+        <div className='col-span-12 lg:col-span-9 space-y-8'>
+          {/* HERO SECTION */}
+          <section className='bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden'>
+            <div className='h-[350px] bg-slate-100 relative'>
+              {isMapLoaded && mapCenter && (
+                <GoogleMap
+                  mapContainerStyle={mapContainerStyle}
+                  center={mapCenter}
+                  zoom={18}
+                  options={{ disableDefaultUI: true }}
+                >
+                  <MarkerF position={mapCenter} />
+                </GoogleMap>
+              )}
+            </div>
+            <div className='p-10 flex flex-col md:flex-row justify-between items-start md:items-end gap-6'>
               <div>
-                <label className='text-sm font-medium text-gray-500'>
-                  Type
-                </label>
-                <p className='capitalize'>{lead.type?.toLowerCase()}</p>
+                <div className='flex items-center gap-3 mb-3'>
+                  <span className='bg-indigo-600 text-white text-[10px] font-black px-2.5 py-1 rounded uppercase tracking-widest'>
+                    {lead.type}
+                  </span>
+                </div>
+                <h2 className='text-4xl md:text-5xl font-black text-slate-900 tracking-tight leading-tight max-w-4xl'>
+                  {displayAddress}
+                </h2>
+                {showSubAddress && (
+                  <p className='text-2xl text-slate-500 font-medium'>
+                    {lead.ownerCity}, {lead.ownerState} {lead.ownerZip}
+                  </p>
+                )}
               </div>
-              <div>
-                <label className='text-sm font-medium text-gray-500'>
-                  Skip Trace Status
-                </label>
-                <div>
+              <div className='bg-slate-50 p-6 rounded-2xl border border-slate-100 text-right min-w-[240px]'>
+                <p className='text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-1'>
+                  Zestimate® Value
+                </p>
+                <p className='text-4xl font-black text-indigo-600 tracking-tighter'>
+                  {formatCurrency(valuation?.zestimate)}
+                </p>
+              </div>
+            </div>
+          </section>
+
+          {/* SECOND ROW */}
+          <div className='grid grid-cols-1 md:grid-cols-2 gap-8'>
+            <CardWrapper
+              title='Owner & Contacts'
+              isEditable
+              onEditToggle={setIsCoreInfoEditing}
+            >
+              <CoreLeadInfo
+                lead={lead}
+                onUpdate={setLead}
+                client={client}
+                isEditing={isCoreInfoEditing}
+                onEditToggle={setIsCoreInfoEditing}
+              />
+              <div className='mt-6 pt-6 border-t space-y-3'>
+                <p className='text-[10px] font-bold text-slate-400 uppercase italic'>
+                  Verified Contact Methods
+                </p>
+                {lead.phones?.map((p, i) => (
+                  <ContactActionItem key={i} value={p} type='phone' />
+                ))}
+                {lead.emails?.map((e, i) => (
+                  <ContactActionItem key={i} value={e} type='email' />
+                ))}
+                {!lead.phones?.length && !lead.emails?.length && (
+                  <p className='text-sm italic text-slate-300'>
+                    No verified contacts. Run skip trace.
+                  </p>
+                )}
+              </div>
+            </CardWrapper>
+
+            <CardWrapper title='Market Intel & Taxes'>
+              <div className='space-y-6'>
+                <MarketRow
+                  label='Total Assessed'
+                  value={formatCurrency(parcel?.totalValue)}
+                />
+                <MarketRow
+                  label='Tax Amount'
+                  value={formatCurrency(parcel?.taxAmount)}
+                  subtitle={`Year: ${parcel?.taxYear || '---'}`}
+                />
+                <div className='mt-8 p-6 bg-indigo-900 rounded-2xl text-white shadow-xl'>
+                  <p className='text-[10px] font-black text-indigo-300 uppercase mb-2 tracking-widest'>
+                    Valuation Confidence
+                  </p>
+                  <p className='text-3xl font-black'>
+                    {valuation?.highPercent
+                      ? 100 - valuation.highPercent
+                      : '---'}
+                    %
+                  </p>
+                  <p className='text-[10px] text-indigo-400 mt-2 italic leading-relaxed uppercase'>
+                    Range: {formatCurrency(valuation?.minus30)} —{' '}
+                    {formatCurrency(valuation?.zestimate * 1.1)}
+                  </p>
+                </div>
+              </div>
+            </CardWrapper>
+          </div>
+
+          {/* THIRD ROW: TECHNICAL DATA */}
+          <CardWrapper title='Technical Property Analysis'>
+            <div className='grid grid-cols-2 md:grid-cols-4 gap-y-12 gap-x-8'>
+              <InfoRow label='APN' value={parcel?.apn} />
+              <InfoRow
+                label='Living Area'
+                value={
+                  parcel?.buildingSizeSquareFeet
+                    ? `${parcel.buildingSizeSquareFeet.toLocaleString()} SqFt`
+                    : null
+                }
+              />
+              <InfoRow
+                label='Lot Size Sqft'
+                value={
+                  parcel?.lotSizeSquareFeet
+                    ? `${parcel.lotSizeSquareFeet.toLocaleString()} SqFt`
+                    : null
+                }
+              />
+              <InfoRow
+                label='Lot Size (Acres)'
+                value={
+                  parcel?.lotSizeAcres ? `${parcel.lotSizeAcres} Acres` : null
+                }
+              />
+              <InfoRow label='Year Built' value={building?.yearBuilt} />
+              <InfoRow label='Stories' value={building?.totalStories} />
+              <InfoRow
+                label='Beds / Baths'
+                value={`${building?.bedrooms || '-'} / ${building?.baths || '-'}`}
+              />
+              <InfoRow label='Zoning' value={parcel?.zoningDescription} />
+              <InfoRow label='Construction' value={building?.foundation} />
+              <InfoRow label='Land Use' value={parcel?.landUseDescription} />
+              <InfoRow
+                label='Air Conditioning'
+                value={building?.airConditioning}
+              />
+              <InfoRow label='Heating' value={building?.heating} />
+              <InfoRow label='Condition' value={building?.condition} />
+              <InfoRow label='County' value={parcel?.county} />
+              <InfoRow label='Township' value={legal?.township} />
+              <InfoRow
+                label='Block / Lot'
+                value={`${legal?.block || '-'} / ${legal?.lot || '-'}`}
+              />
+              <InfoRow
+                label='Garage'
+                value={
+                  garage?.carCount
+                    ? `${garage.carCount} Car (${garage.type})`
+                    : null
+                }
+              />
+              <InfoRow
+                label='Building Count'
+                value={parcel?.numberOfBuildings}
+              />
+            </div>
+          </CardWrapper>
+        </div>
+
+        {/* ⚡ ACTION SIDEBAR */}
+        <div className='col-span-12 lg:col-span-3 space-y-6'>
+          <div className='sticky top-8 space-y-6'>
+            <div className='bg-slate-900 rounded-[2.5rem] p-10 shadow-2xl border border-slate-800'>
+              <h3 className='text-white text-[10px] font-black uppercase mb-10 flex items-center gap-3 tracking-widest'>
+                <span className='w-2 h-2 bg-green-500 rounded-full animate-pulse' />{' '}
+                Progression
+              </h3>
+              <div className='space-y-5'>
+                <button
+                  onClick={handleSkipTrace}
+                  disabled={
+                    isSkipTracing || lead.skipTraceStatus === 'COMPLETED'
+                  }
+                  className='w-full bg-white text-slate-900 font-black text-[10px] uppercase tracking-widest py-5 rounded-2xl hover:bg-slate-100 shadow-lg disabled:opacity-40 flex items-center justify-center gap-2'
+                >
+                  {isSkipTracing ? (
+                    <Loader size='small' />
+                  ) : lead.skipTraceStatus === 'COMPLETED' ? (
+                    '✓ Traced'
+                  ) : (
+                    'Run Skip Trace'
+                  )}
+                </button>
+                <GhlActions
+                  leadId={lead.id}
+                  ghlContactId={lead.ghlContactId}
+                  ghlSyncStatus={lead.ghlSyncStatus}
+                  skipTraceStatus={lead.skipTraceStatus}
+                  onSyncComplete={() => {}}
+                  client={client}
+                />
+              </div>
+            </div>
+
+            <CardWrapper title='Lead Pipeline'>
+              <div className='space-y-4 pt-2'>
+                <div className='flex justify-between items-center'>
+                  <span className='text-[10px] font-bold text-slate-400 uppercase tracking-tighter'>
+                    Discovery
+                  </span>
                   <LeadStatusBadge
                     type='SKIP_TRACE'
                     status={lead.skipTraceStatus}
                   />
                 </div>
-              </div>
-              <div>
-                <label className='text-sm font-medium text-gray-500'>
-                  Source
-                </label>
-                <p>CSV Import</p>
-              </div>
-            </div>
-          </div>
-
-          <div className='bg-white shadow border rounded-lg p-6 relative'>
-            <div className='flex justify-between items-center mb-6'>
-              <h2 className='text-xl font-semibold text-gray-800'>Contacts</h2>
-              <button
-                onClick={handleSkipTrace}
-                disabled={isSkipTracing || lead.skipTraceStatus === 'COMPLETED'}
-                className={`text-sm px-4 py-2 rounded-md font-medium transition ${lead.skipTraceStatus === 'COMPLETED' ? 'bg-green-50 text-green-700 cursor-not-allowed' : 'bg-indigo-600 text-white hover:bg-indigo-700'}`}
-              >
-                {isSkipTracing
-                  ? 'Tracing...'
-                  : lead.skipTraceStatus === 'COMPLETED'
-                    ? '✓ Skiptrace Complete'
-                    : 'Skip Trace Owner'}
-              </button>
-            </div>
-            {!lead.phones?.length && !lead.emails?.length ? (
-              <div className='text-center py-10 bg-gray-50 rounded-lg border border-dashed border-gray-300'>
-                <p className='text-gray-500 font-medium'>
-                  No contact info available.
-                </p>
-              </div>
-            ) : (
-              <div className='space-y-6'>
-                <div>
-                  <h3 className='text-xs font-bold text-gray-400 uppercase tracking-wider mb-3'>
-                    Phone Numbers
-                  </h3>
-                  <div className='grid grid-cols-1 gap-2'>
-                    {lead.phones?.map(
-                      (phone, i) =>
-                        phone && (
-                          <ContactActionItem
-                            key={i}
-                            value={phone}
-                            type='phone'
-                          />
-                        )
-                    )}
-                  </div>
-                </div>
-                {/* Emails section */}
-                {lead.emails && lead.emails.length > 0 && (
-                  <div>
-                    <h3 className='text-xs font-bold text-gray-400 uppercase tracking-wider mb-3'>
-                      Emails
-                    </h3>
-                    <div className='grid grid-cols-1 gap-2'>
-                      {lead.emails.map(
-                        (email, i) =>
-                          email && (
-                            <ContactActionItem
-                              key={i}
-                              value={email}
-                              type='email'
-                            />
-                          )
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* RIGHT COLUMN: GHL ACTIONS, MARKET INTEL & MAP */}
-        <div className='w-full md:w-1/3 space-y-6'>
-          <GhlActions
-            leadId={lead.id}
-            ghlContactId={lead.ghlContactId}
-            ghlSyncStatus={lead.ghlSyncStatus}
-            skipTraceStatus={lead.skipTraceStatus}
-            onSyncComplete={async () => {
-              // Refresh logic
-              const { data } = await client.models.PropertyLead.get({
-                id: lead.id,
-              });
-              if (data) setLead(data as Lead);
-            }}
-            client={client}
-          />
-
-          {/* MARKET INTEL CARD */}
-          <div className='bg-white shadow border rounded-lg p-6 border-l-4 border-l-blue-500'>
-            <h2 className='text-xl font-semibold mb-4'>Market Intel</h2>
-
-            {isAnalyzing ? (
-              <div className='animate-pulse space-y-3'>
-                <div className='h-4 bg-gray-200 rounded w-1/2'></div>
-                <div className='h-8 bg-gray-200 rounded w-3/4'></div>
-                <div className='h-4 bg-gray-200 rounded w-1/3'></div>
-                <div className='h-6 bg-gray-200 rounded w-2/3'></div>
-              </div>
-            ) : marketData ? (
-              <div className='space-y-4 animate-in fade-in duration-500'>
-                <div>
-                  <label className='text-xs uppercase font-bold text-gray-400'>
-                    Zestimate
-                  </label>
-                  <p className='text-2xl font-bold text-blue-600'>
-                    {formatCurrency(marketData.zestimate)}
-                  </p>
-                </div>
-                <div>
-                  <label className='text-xs uppercase font-bold text-gray-400'>
-                    Rent Zestimate
-                  </label>
-                  <p className='text-xl font-semibold'>
-                    {formatCurrency(marketData.rentZestimate)} /mo
-                  </p>
-                </div>
-                <div>
-                  <label className='text-xs uppercase font-bold text-gray-400'>
-                    Est. Cash Offer (75%)
-                  </label>
-                  <p className='text-xl font-semibold text-green-600'>
-                    {formatCurrency(marketData.cashOffer)}
-                  </p>
-                </div>
-                <div className='pt-2 border-t text-[10px] text-gray-400 italic'>
-                  Source: Zillow BridgeAPI
+                <div className='flex justify-between items-center'>
+                  <span className='text-[10px] font-bold text-slate-400 uppercase tracking-tighter'>
+                    CRM Sync
+                  </span>
+                  <LeadStatusBadge
+                    type='GHL_SYNC'
+                    status={lead.ghlSyncStatus}
+                  />
                 </div>
               </div>
-            ) : (
-              <p className='text-sm text-gray-400 italic'>
-                No market data found for this property.
-              </p>
-            )}
-          </div>
-
-          <div className='bg-white shadow border rounded-lg p-6'>
-            <h2 className='text-xl font-semibold mb-4'>Map</h2>
-            {isMapLoaded && mapCenter ? (
-              <GoogleMap
-                mapContainerStyle={mapContainerStyle}
-                center={mapCenter}
-                zoom={16}
-                options={{ disableDefaultUI: true, zoomControl: true }}
-              >
-                <MarkerF position={mapCenter} />
-              </GoogleMap>
-            ) : (
-              <div className='flex items-center justify-center bg-gray-100 rounded text-gray-500 h-[300px]'>
-                Map Loading...
-              </div>
-            )}
+            </CardWrapper>
           </div>
         </div>
       </div>
     </main>
+  );
+}
+
+// ✅ REUSABLE HELPERS WITH TYPE-SAFE RENDERING
+function InfoRow({ label, value }: { label: string; value: any }) {
+  const getDisplayValue = (val: any): React.ReactNode => {
+    if (val === null || val === undefined || val === '') return '---';
+    if (typeof val === 'object' || typeof val === 'boolean') return '---';
+    return String(val);
+  };
+
+  return (
+    <div>
+      <p className='text-[9px] font-black text-slate-400 uppercase mb-2 tracking-widest'>
+        {label}
+      </p>
+      <p className='text-sm font-bold text-slate-700 leading-tight'>
+        {getDisplayValue(value)}
+      </p>
+    </div>
+  );
+}
+
+function MarketRow({
+  label,
+  value,
+  subtitle,
+}: {
+  label: string;
+  value: any;
+  subtitle?: string;
+}) {
+  const getDisplayValue = (val: any): React.ReactNode => {
+    if (val === null || val === undefined || val === '') return '---';
+    if (typeof val === 'object' || typeof val === 'boolean') return '---';
+    return String(val);
+  };
+
+  return (
+    <div className='flex justify-between items-start py-2.5 border-b border-slate-50'>
+      <div>
+        <p className='text-xs font-bold text-slate-600 tracking-tight'>
+          {label}
+        </p>
+        {subtitle && (
+          <p className='text-[9px] text-slate-400 uppercase mt-0.5'>
+            {subtitle}
+          </p>
+        )}
+      </div>
+      <p className='text-sm font-black text-slate-900 tracking-tighter'>
+        {getDisplayValue(value)}
+      </p>
+    </div>
   );
 }

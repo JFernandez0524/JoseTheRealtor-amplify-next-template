@@ -20,7 +20,7 @@ export default async function HomePage() {
         <HeroSection user={user} />
 
         {/* This component will get focus state from the context */}
-        <PropertyAnalyzer />
+        <PropertyAnalyzer user={user} />
       </FormFocusProvider>
 
       <footer className='mt-12 text-sm text-gray-500'>
