@@ -1,6 +1,7 @@
 // amplify/functions/skiptraceLeads/handler.ts
 
 import axios, { isAxiosError } from 'axios';
+// Note: We keep this import so the processGhlSync helper remains valid for other parts of the system if needed
 import { syncToGoHighLevel } from '../manualGhlSync/integrations/gohighlevel';
 import {
   getLead,
@@ -153,6 +154,8 @@ async function callBatchDataV3(lead: DBLead): Promise<BatchDataResult> {
         );
         continue;
       }
+      // Log the specific error for debugging (like the 403)
+      console.error(`BatchData API Error: ${error.message}`);
       return {
         status: 'ERROR',
         foundPhones: [],
@@ -169,9 +172,7 @@ async function callBatchDataV3(lead: DBLead): Promise<BatchDataResult> {
   };
 }
 
-// ---------------------------------------------------------
-// 🎯 FIXED: processGhlSync to handle 1 Phone = 1 Contact
-// ---------------------------------------------------------
+// Helper kept for manual triggers, but no longer called automatically in the handler
 async function processGhlSync(lead: DBLead) {
   if (!GHL_API_KEY) {
     await updateLeadGhlStatus(lead.id, 'SKIPPED');
@@ -183,8 +184,6 @@ async function processGhlSync(lead: DBLead) {
 
   try {
     const syncResults: string[] = [];
-
-    // 🎯 Loop through found phones and sync each as a unique contact
     for (let i = 0; i < phones.length; i++) {
       const currentPhone = phones[i];
       if (!currentPhone) continue;
@@ -232,6 +231,7 @@ export const handler = async (event: AppSyncHandlerEvent) => {
 
       const enrichedData = await callBatchDataV3(lead);
 
+      // 🛑 FIXED: Ensure we don't mark as COMPLETED if the API call failed (e.g., 403 error)
       if (enrichedData.status !== 'SUCCESS') {
         const finalStatus =
           enrichedData.status === 'ERROR' ? 'FAILED' : 'NO_MATCH';
@@ -270,13 +270,15 @@ export const handler = async (event: AppSyncHandlerEvent) => {
         skipTraceStatus: 'COMPLETED',
       };
 
-      const updatedLead = await updateLead(updateData);
+      // Update the database with found phones/emails
+      await updateLead(updateData);
 
-      // 🎯 Trigger the multi-contact sync logic
-      await processGhlSync(updatedLead);
+      // 🛑 REMOVED: await processGhlSync(updatedLead);
+      // This stops the automatic GHL sync. Syncing to CRM is now a manual operation.
 
       results.push({ id: leadId, status: 'SUCCESS', phones: newPhones.length });
     } catch (error: any) {
+      console.error(`General Handler Error for ${leadId}:`, error.message);
       await updateLeadStatus(leadId, 'FAILED');
       results.push({ id: leadId, status: 'ERROR' });
     }

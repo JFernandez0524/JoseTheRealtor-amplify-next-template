@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import axios from 'axios';
 import {
@@ -11,12 +11,19 @@ import {
 } from '@react-google-maps/api';
 import { Loader } from '@aws-amplify/ui-react';
 
-// 👇 RESTORED MODULAR COMPONENTS
+// 👇 RESTORED REACH/REACT ICONS
+import {
+  HiOutlinePhone,
+  HiOutlineEnvelope,
+  HiChevronLeft,
+} from 'react-icons/hi2';
+import { FiMapPin } from 'react-icons/fi';
+
+// 👇 MODULAR COMPONENTS
 import { CoreLeadInfo } from './CoreLeadInfo';
 import { GhlActions } from './GhlActions';
 import { LeadStatusBadge } from './LeadStatusBadge';
 import { CardWrapper } from './CardWrapper';
-import { ContactActionItem } from './ContactActionItem';
 
 // 👇 UTILS
 import { client } from '@/app/utils/aws/data/frontEndClient';
@@ -63,10 +70,14 @@ export function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
     libraries,
   });
 
-  // 1. DATA FETCHING (ANALYZER)
+  // 1. DATA FETCHING (ANALYZER) - With Production Guards
   useEffect(() => {
     const fetchMarketIntel = async () => {
-      if (!initialLead?.id) return;
+      if (
+        !initialLead?.id ||
+        (!initialLead?.latitude && !initialLead.standardizedAddress)
+      )
+        return;
       setIsAnalyzing(true);
 
       let street = initialLead.ownerAddress || '';
@@ -75,21 +86,14 @@ export function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
       let zip = initialLead.ownerZip || '';
 
       const rawAddress = initialLead.standardizedAddress;
-
-      // Type Guard for TypeScript safety
-      if (typeof rawAddress === 'string') {
-        const trimmed = rawAddress.trim();
-        if (trimmed.startsWith('{')) {
-          try {
-            const parsed = JSON.parse(trimmed);
-            street = parsed.street || street;
-            city = parsed.city || city;
-            state = parsed.state || state;
-            zip = parsed.zip || zip;
-          } catch (e) {
-            console.error('JSON Parse Error', e);
-          }
-        }
+      if (typeof rawAddress === 'string' && rawAddress.trim().startsWith('{')) {
+        try {
+          const parsed = JSON.parse(rawAddress);
+          street = parsed.street || street;
+          city = parsed.city || city;
+          state = parsed.state || state;
+          zip = parsed.zip || zip;
+        } catch (e) {}
       }
 
       try {
@@ -112,29 +116,34 @@ export function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
     fetchMarketIntel();
   }, [initialLead]);
 
-  // 2. NAVIGATION LOGIC - Load on mount and after each navigation
+  // 2. NAVIGATION LOGIC (With Dynamic Refresh for Probate/New leads)
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-
-    const loadNavigation = () => {
+    const loadNavigation = async () => {
       const contextString = sessionStorage.getItem('leadNavContext');
-      console.log('Loading nav context:', contextString); // Debug log
-
-      if (!contextString) {
-        console.log('No nav context found in sessionStorage');
-        return;
-      }
+      if (!contextString) return;
 
       try {
         const context = JSON.parse(contextString);
-        const leadIds = context.ids || [];
-        const idx = leadIds.indexOf(initialLead.id);
+        let leadIds = context.ids || [];
+        let idx = leadIds.indexOf(initialLead.id);
 
-        console.log('Nav context parsed:', {
-          leadIds,
-          currentId: initialLead.id,
-          foundIndex: idx,
-        }); // Debug log
+        // 🔄 REFRESH: If current lead is not in the dashboard list, fetch fresh IDs
+        if (idx === -1) {
+          console.log('Refreshing navigation list from DB...');
+          const { data: freshLeads } = await client.models.PropertyLead.list({
+            filter: context.filterType
+              ? { type: { eq: context.filterType } }
+              : undefined,
+            selectionSet: ['id'],
+          });
+          leadIds = freshLeads.map((l) => l.id);
+          idx = leadIds.indexOf(initialLead.id);
+
+          sessionStorage.setItem(
+            'leadNavContext',
+            JSON.stringify({ ...context, ids: leadIds })
+          );
+        }
 
         if (idx !== -1) {
           setNavContext({
@@ -143,18 +152,27 @@ export function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
             isFirst: idx === 0,
             isLast: idx === leadIds.length - 1,
           });
-        } else {
-          console.log('Current lead ID not found in context');
         }
       } catch (e) {
-        console.error('Nav Context Load Error:', e);
+        console.error('Navigation Load Error:', e);
       }
     };
-
     loadNavigation();
   }, [initialLead.id]);
 
-  // 3. ACTION HANDLERS
+  // 3. HANDLERS
+  const handlePrevious = () => {
+    if (navContext && !navContext.isFirst) {
+      router.push(`/lead/${navContext.ids[navContext.currentIndex - 1]}`);
+    }
+  };
+
+  const handleNext = () => {
+    if (navContext && !navContext.isLast) {
+      router.push(`/lead/${navContext.ids[navContext.currentIndex + 1]}`);
+    }
+  };
+
   const handleSkipTrace = async () => {
     if (lead.skipTraceStatus === 'COMPLETED') return;
     setIsSkipTracing(true);
@@ -169,103 +187,60 @@ export function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
     }
   };
 
-  const handlePrevious = () => {
-    if (navContext && !navContext.isFirst) {
-      const prevId = navContext.ids[navContext.currentIndex - 1];
-      console.log('Navigating to previous:', prevId);
-      router.push(`/lead/${prevId}`);
-    }
-  };
-
-  const handleNext = () => {
-    if (navContext && !navContext.isLast) {
-      const nextId = navContext.ids[navContext.currentIndex + 1];
-      console.log('Navigating to next:', nextId);
-      router.push(`/lead/${nextId}`);
-    }
-  };
-
-  // DATA MAPPING SHORTCUTS
-  const parcel = marketData?.parcel;
+  // 4. MAPPINGS
+  const parcel = marketData?.assessment || marketData?.parcel;
   const valuation = marketData?.valuation;
   const building = parcel?.building?.[0] || {};
-  const legal = parcel?.legal || {};
-  const garage = parcel?.garages?.[0] || {};
   const mapCenter =
-    lead.latitude && lead.longitude
+    lead.latitude && Number(lead.latitude) !== 0
       ? { lat: Number(lead.latitude), lng: Number(lead.longitude) }
       : null;
 
-  // ADDRESS CLEANER FOR UI
-  const getCleanAddress = (val: any): string => {
-    if (typeof val !== 'string' || val.trim() === '') return '';
+  const getCleanAddress = (val: any) => {
+    if (typeof val !== 'string' || !val.trim()) return '';
     if (val.trim().startsWith('{')) {
       try {
-        const parsed = JSON.parse(val);
-        return [
-          parsed.street,
-          parsed.city,
-          parsed.state
-            ? `${parsed.state} ${parsed.zip || ''}`.trim()
-            : parsed.zip,
-        ]
-          .filter(Boolean)
-          .join(', ');
-      } catch (e) {
+        const p = JSON.parse(val);
+        return `${p.street || ''}, ${p.city || ''}, ${p.state || ''} ${p.zip || ''}`.replace(
+          /^[,\s]+|[,\s]+$/g,
+          ''
+        );
+      } catch {
         return val;
       }
     }
     return val;
   };
 
-  const cleanStandardized = getCleanAddress(lead.standardizedAddress);
-  const cleanOwner = getCleanAddress(lead.ownerAddress);
   const displayAddress =
-    cleanStandardized || cleanOwner || 'No Address Provided';
-  const showSubAddress = !cleanStandardized;
+    getCleanAddress(lead.standardizedAddress) ||
+    getCleanAddress(lead.ownerAddress) ||
+    'Address Not Available';
 
   return (
     <main className='max-w-[1600px] mx-auto py-6 px-8 bg-slate-50 min-h-screen'>
-      {/* 🔝 TOP NAVIGATION BAR - ALWAYS VISIBLE */}
+      {/* 🔝 HEADER / NAV */}
       <div className='flex items-center justify-between mb-8'>
         <div className='flex items-center gap-6'>
-          {/* Back Button */}
           <button
             onClick={() => router.push('/dashboard')}
             className='p-2 hover:bg-white rounded-full border border-slate-200 transition'
-            aria-label='Back to dashboard'
           >
-            <svg
-              xmlns='http://www.w3.org/2000/svg'
-              width='20'
-              height='20'
-              viewBox='0 0 24 24'
-              fill='none'
-              stroke='currentColor'
-              strokeWidth='2'
-            >
-              <path d='m15 18-6-6 6-6' />
-            </svg>
+            <HiChevronLeft className='text-xl text-slate-600' />
           </button>
-
-          {/* Title */}
           <h1 className='text-xl font-bold text-slate-800 uppercase tracking-tight'>
             PROPERTY RECORD
           </h1>
         </div>
 
-        {/* Navigation Controls - NOW ALWAYS VISIBLE */}
         <div className='flex items-center gap-4'>
-          {/* PREV Button */}
           <button
             onClick={handlePrevious}
             disabled={!navContext || navContext.isFirst}
-            className='px-4 py-2 text-xs font-black uppercase tracking-widest text-slate-600 hover:text-indigo-600 disabled:opacity-30 disabled:cursor-not-allowed transition-colors'
+            className='px-4 py-2 text-xs font-black uppercase tracking-widest text-slate-600 hover:text-indigo-600 disabled:opacity-30 transition-colors'
           >
             PREV
           </button>
-
-          {/* Counter */}
           <div className='px-4 py-2 bg-white border border-slate-200 rounded-lg shadow-sm'>
             <span className='text-xs font-black text-slate-800'>
               {navContext
@@ -273,12 +248,10 @@ export function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
                 : '- / -'}
             </span>
           </div>
-
-          {/* NEXT Button */}
           <button
             onClick={handleNext}
             disabled={!navContext || navContext.isLast}
-            className='px-4 py-2 text-xs font-black uppercase tracking-widest text-slate-600 hover:text-indigo-600 disabled:opacity-30 disabled:cursor-not-allowed transition-colors'
+            className='px-4 py-2 text-xs font-black uppercase tracking-widest text-slate-600 hover:text-indigo-600 disabled:opacity-30 transition-colors'
           >
             NEXT
           </button>
@@ -287,10 +260,10 @@ export function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
 
       <div className='grid grid-cols-12 gap-8'>
         <div className='col-span-12 lg:col-span-9 space-y-8'>
-          {/* HERO SECTION */}
+          {/* MAP & HERO */}
           <section className='bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden'>
             <div className='h-[350px] bg-slate-100 relative'>
-              {isMapLoaded && mapCenter && (
+              {isMapLoaded && mapCenter ? (
                 <GoogleMap
                   mapContainerStyle={mapContainerStyle}
                   center={mapCenter}
@@ -299,23 +272,20 @@ export function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
                 >
                   <MarkerF position={mapCenter} />
                 </GoogleMap>
+              ) : (
+                <div className='flex items-center justify-center h-full text-slate-400 font-bold uppercase text-[10px] tracking-widest'>
+                  <FiMapPin className='mr-2 text-lg' /> Map Data Loading...
+                </div>
               )}
             </div>
             <div className='p-10 flex flex-col md:flex-row justify-between items-start md:items-end gap-6'>
-              <div>
-                <div className='flex items-center gap-3 mb-3'>
-                  <span className='bg-indigo-600 text-white text-[10px] font-black px-2.5 py-1 rounded uppercase tracking-widest'>
-                    {lead.type}
-                  </span>
-                </div>
-                <h2 className='text-4xl md:text-5xl font-black text-slate-900 tracking-tight leading-tight max-w-4xl'>
+              <div className='flex-1'>
+                <span className='bg-indigo-600 text-white text-[10px] font-black px-2.5 py-1 rounded uppercase tracking-widest mb-3 inline-block'>
+                  {lead.type}
+                </span>
+                <h2 className='text-4xl font-black text-slate-900 tracking-tight leading-tight'>
                   {displayAddress}
                 </h2>
-                {showSubAddress && (
-                  <p className='text-2xl text-slate-500 font-medium'>
-                    {lead.ownerCity}, {lead.ownerState} {lead.ownerZip}
-                  </p>
-                )}
               </div>
               <div className='bg-slate-50 p-6 rounded-2xl border border-slate-100 text-right min-w-[240px]'>
                 <p className='text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1'>
@@ -343,35 +313,65 @@ export function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
               />
             </CardWrapper>
 
-            <CardWrapper title='Market Intel & Taxes'>
+            {/* RESTORED: SKIP TRACE RESULTS SECTION */}
+            <CardWrapper title='Skip Trace Results'>
               <div className='space-y-6'>
-                <MarketRow
-                  label='Total Assessed'
-                  value={formatCurrency(parcel?.totalValue)}
-                />
-                <MarketRow
-                  label='Tax Amount'
-                  value={formatCurrency(parcel?.taxAmount)}
-                  subtitle={`Year: ${parcel?.taxYear || '---'}`}
-                />
-                <div className='mt-8 p-6 bg-indigo-900 rounded-2xl text-white shadow-xl'>
-                  <p className='text-[10px] font-black text-indigo-300 uppercase mb-2 tracking-widest'>
-                    Valuation Confidence
-                  </p>
-                  <p className='text-3xl font-black'>
-                    {valuation?.highPercent
-                      ? 100 - valuation.highPercent
-                      : '---'}
-                    %
-                  </p>
+                <div>
+                  <h4 className='text-[10px] font-black uppercase text-slate-400 mb-3 flex items-center gap-2'>
+                    <HiOutlinePhone className='text-lg text-indigo-500' />{' '}
+                    Phones
+                  </h4>
+                  <div className='space-y-2'>
+                    {lead.phones && lead.phones.length > 0 ? (
+                      lead.phones.map((p: any, idx) => (
+                        <div
+                          key={idx}
+                          className='flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100'
+                        >
+                          <span className='font-mono font-bold text-slate-700'>
+                            {p.number || p}
+                          </span>
+                          <span className='text-[9px] font-black bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded uppercase'>
+                            {p.type || 'Mobile'}
+                          </span>
+                        </div>
+                      ))
+                    ) : (
+                      <p className='text-xs text-slate-400 italic'>
+                        No phone numbers found.
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <div>
+                  <h4 className='text-[10px] font-black uppercase text-slate-400 mb-3 flex items-center gap-2'>
+                    <HiOutlineEnvelope className='text-lg text-indigo-500' />{' '}
+                    Emails
+                  </h4>
+                  <div className='space-y-2'>
+                    {lead.emails && lead.emails.length > 0 ? (
+                      lead.emails.map((e: any, idx) => (
+                        <div
+                          key={idx}
+                          className='p-3 bg-slate-50 rounded-xl border border-slate-100 text-sm font-medium text-slate-600'
+                        >
+                          {e.address || e}
+                        </div>
+                      ))
+                    ) : (
+                      <p className='text-xs text-slate-400 italic'>
+                        No email addresses found.
+                      </p>
+                    )}
+                  </div>
                 </div>
               </div>
             </CardWrapper>
           </div>
 
-          {/* 🔍 RESTORED TECHNICAL PROPERTY ANALYSIS SECTION */}
+          {/* ANALYSIS GRID */}
           <CardWrapper title='Technical Property Analysis'>
-            <div className='grid grid-cols-2 md:grid-cols-4 gap-y-12 gap-x-8'>
+            <div className='grid grid-cols-2 md:grid-cols-4 gap-y-10 gap-x-8'>
               <InfoRow label='APN' value={parcel?.apn} />
               <InfoRow
                 label='Living Area'
@@ -382,57 +382,26 @@ export function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
                 }
               />
               <InfoRow
-                label='Lot Size Sqft'
+                label='Lot Size'
                 value={
                   parcel?.lotSizeSquareFeet
                     ? `${parcel.lotSizeSquareFeet.toLocaleString()} SqFt`
                     : null
                 }
               />
-              <InfoRow
-                label='Lot Size (Acres)'
-                value={
-                  parcel?.lotSizeAcres ? `${parcel.lotSizeAcres} Acres` : null
-                }
-              />
               <InfoRow label='Year Built' value={building?.yearBuilt} />
-              <InfoRow label='Stories' value={building?.totalStories} />
               <InfoRow
                 label='Beds / Baths'
                 value={`${building?.bedrooms || '-'} / ${building?.baths || '-'}`}
               />
+              <InfoRow label='Stories' value={building?.totalStories} />
               <InfoRow label='Zoning' value={parcel?.zoningDescription} />
-              <InfoRow label='Construction' value={building?.foundation} />
-              <InfoRow label='Land Use' value={parcel?.landUseDescription} />
-              <InfoRow
-                label='Air Conditioning'
-                value={building?.airConditioning}
-              />
-              <InfoRow label='Heating' value={building?.heating} />
-              <InfoRow label='Condition' value={building?.condition} />
               <InfoRow label='County' value={parcel?.county} />
-              <InfoRow label='Township' value={legal?.township} />
-              <InfoRow
-                label='Block / Lot'
-                value={`${legal?.block || '-'} / ${legal?.lot || '-'}`}
-              />
-              <InfoRow
-                label='Garage'
-                value={
-                  garage?.carCount
-                    ? `${garage.carCount} Car (${garage.type})`
-                    : null
-                }
-              />
-              <InfoRow
-                label='Building Count'
-                value={parcel?.numberOfBuildings}
-              />
             </div>
           </CardWrapper>
         </div>
 
-        {/* ⚡ ACTION SIDEBAR */}
+        {/* SIDEBAR */}
         <div className='col-span-12 lg:col-span-3 space-y-6'>
           <div className='sticky top-8 space-y-6'>
             <div className='bg-slate-900 rounded-[2.5rem] p-10 shadow-2xl border border-slate-800'>
@@ -467,7 +436,6 @@ export function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
               </div>
             </div>
 
-            {/* 📊 RESTORED LEAD PIPELINE CARD */}
             <CardWrapper title='Lead Pipeline'>
               <div className='space-y-4 pt-2'>
                 <div className='flex justify-between items-center'>
@@ -497,52 +465,16 @@ export function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
   );
 }
 
-// ✅ HELPERS
+// HELPERS
 function InfoRow({ label, value }: { label: string; value: any }) {
-  const getDisplayValue = (val: any): React.ReactNode => {
-    if (val === null || val === undefined || val === '') return '---';
-    if (typeof val === 'object' || typeof val === 'boolean') return '---';
-    return String(val);
-  };
+  const getDisplayValue = (val: any) =>
+    val === null || val === undefined || val === '' ? '---' : String(val);
   return (
     <div>
       <p className='text-[9px] font-black text-slate-400 uppercase mb-2 tracking-widest'>
         {label}
       </p>
       <p className='text-sm font-bold text-slate-700 leading-tight'>
-        {getDisplayValue(value)}
-      </p>
-    </div>
-  );
-}
-
-function MarketRow({
-  label,
-  value,
-  subtitle,
-}: {
-  label: string;
-  value: any;
-  subtitle?: string;
-}) {
-  const getDisplayValue = (val: any): React.ReactNode => {
-    if (val === null || val === undefined || val === '') return '---';
-    if (typeof val === 'object' || typeof val === 'boolean') return '---';
-    return String(val);
-  };
-  return (
-    <div className='flex justify-between items-start py-2.5 border-b border-slate-50'>
-      <div>
-        <p className='text-xs font-bold text-slate-600 tracking-tight'>
-          {label}
-        </p>
-        {subtitle && (
-          <p className='text-[9px] text-slate-400 uppercase mt-0.5'>
-            {subtitle}
-          </p>
-        )}
-      </div>
-      <p className='text-sm font-black text-slate-900 tracking-tighter'>
         {getDisplayValue(value)}
       </p>
     </div>
