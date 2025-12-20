@@ -11,7 +11,7 @@ import {
 } from '@react-google-maps/api';
 import { Loader } from '@aws-amplify/ui-react';
 
-// 👇 YOUR MODULAR COMPONENTS
+// 👇 RESTORED MODULAR COMPONENTS
 import { CoreLeadInfo } from './CoreLeadInfo';
 import { GhlActions } from './GhlActions';
 import { LeadStatusBadge } from './LeadStatusBadge';
@@ -66,53 +66,93 @@ export function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
   // 1. DATA FETCHING (ANALYZER)
   useEffect(() => {
     const fetchMarketIntel = async () => {
+      if (!initialLead?.id) return;
       setIsAnalyzing(true);
+
+      let street = initialLead.ownerAddress || '';
+      let city = initialLead.ownerCity || '';
+      let state = initialLead.ownerState || '';
+      let zip = initialLead.ownerZip || '';
+
+      const rawAddress = initialLead.standardizedAddress;
+
+      // Type Guard for TypeScript safety
+      if (typeof rawAddress === 'string') {
+        const trimmed = rawAddress.trim();
+        if (trimmed.startsWith('{')) {
+          try {
+            const parsed = JSON.parse(trimmed);
+            street = parsed.street || street;
+            city = parsed.city || city;
+            state = parsed.state || state;
+            zip = parsed.zip || zip;
+          } catch (e) {
+            console.error('JSON Parse Error', e);
+          }
+        }
+      }
+
       try {
         const response = await axios.post('/api/v1/analyze-property', {
           lat: Number(initialLead.latitude),
           lng: Number(initialLead.longitude),
-          standardizedAddress: initialLead.standardizedAddress,
+          street,
+          city,
+          state,
+          zip,
         });
-
-        if (response.data.success) {
-          setMarketData(response.data);
-        }
+        if (response.data.success) setMarketData(response.data);
       } catch (err) {
         console.error('Analysis Failed:', err);
       } finally {
         setIsAnalyzing(false);
       }
     };
-
     setLead(initialLead);
     fetchMarketIntel();
   }, [initialLead]);
 
-  // 2. NAVIGATION LOGIC
-  const loadNav = useCallback(() => {
-    if (typeof window === 'undefined') return;
-    const contextString = sessionStorage.getItem('leadNavContext');
-    if (!contextString) return;
-    try {
-      const context = JSON.parse(contextString);
-      const leadIds = context.ids || [];
-      const idx = leadIds.indexOf(initialLead.id);
-      if (idx !== -1) {
-        setNavContext({
-          ids: leadIds,
-          currentIndex: idx,
-          isFirst: idx === 0,
-          isLast: idx === leadIds.length - 1,
-        });
-      }
-    } catch (e) {
-      console.error('Nav Context Load Error:', e);
-    }
-  }, [initialLead.id]);
-
+  // 2. NAVIGATION LOGIC - Load on mount and after each navigation
   useEffect(() => {
-    loadNav();
-  }, [loadNav]);
+    if (typeof window === 'undefined') return;
+
+    const loadNavigation = () => {
+      const contextString = sessionStorage.getItem('leadNavContext');
+      console.log('Loading nav context:', contextString); // Debug log
+
+      if (!contextString) {
+        console.log('No nav context found in sessionStorage');
+        return;
+      }
+
+      try {
+        const context = JSON.parse(contextString);
+        const leadIds = context.ids || [];
+        const idx = leadIds.indexOf(initialLead.id);
+
+        console.log('Nav context parsed:', {
+          leadIds,
+          currentId: initialLead.id,
+          foundIndex: idx,
+        }); // Debug log
+
+        if (idx !== -1) {
+          setNavContext({
+            ids: leadIds,
+            currentIndex: idx,
+            isFirst: idx === 0,
+            isLast: idx === leadIds.length - 1,
+          });
+        } else {
+          console.log('Current lead ID not found in context');
+        }
+      } catch (e) {
+        console.error('Nav Context Load Error:', e);
+      }
+    };
+
+    loadNavigation();
+  }, [initialLead.id]);
 
   // 3. ACTION HANDLERS
   const handleSkipTrace = async () => {
@@ -129,6 +169,22 @@ export function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
     }
   };
 
+  const handlePrevious = () => {
+    if (navContext && !navContext.isFirst) {
+      const prevId = navContext.ids[navContext.currentIndex - 1];
+      console.log('Navigating to previous:', prevId);
+      router.push(`/lead/${prevId}`);
+    }
+  };
+
+  const handleNext = () => {
+    if (navContext && !navContext.isLast) {
+      const nextId = navContext.ids[navContext.currentIndex + 1];
+      console.log('Navigating to next:', nextId);
+      router.push(`/lead/${nextId}`);
+    }
+  };
+
   // DATA MAPPING SHORTCUTS
   const parcel = marketData?.parcel;
   const valuation = marketData?.valuation;
@@ -140,24 +196,23 @@ export function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
       ? { lat: Number(lead.latitude), lng: Number(lead.longitude) }
       : null;
 
-  /**
-   * ✅ CLEAN ADDRESS HELPER
-   * Handles raw strings OR JSON strings from the database
-   */
+  // ADDRESS CLEANER FOR UI
   const getCleanAddress = (val: any): string => {
     if (typeof val !== 'string' || val.trim() === '') return '';
-
-    // Detect JSON string (common when objects are stored in string fields)
     if (val.trim().startsWith('{')) {
       try {
         const parsed = JSON.parse(val);
-        const { street, city, state, zip } = parsed;
-        // Construct standard format: 123 Main St, City, ST 12345
-        return [street, city, state ? `${state} ${zip || ''}`.trim() : zip]
+        return [
+          parsed.street,
+          parsed.city,
+          parsed.state
+            ? `${parsed.state} ${parsed.zip || ''}`.trim()
+            : parsed.zip,
+        ]
           .filter(Boolean)
           .join(', ');
       } catch (e) {
-        return val; // Fallback to raw string if parsing fails
+        return val;
       }
     }
     return val;
@@ -165,24 +220,20 @@ export function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
 
   const cleanStandardized = getCleanAddress(lead.standardizedAddress);
   const cleanOwner = getCleanAddress(lead.ownerAddress);
-
-  const displayAddress: React.ReactNode =
-    cleanStandardized !== ''
-      ? cleanStandardized
-      : cleanOwner !== ''
-        ? cleanOwner
-        : 'No Address Provided';
-
-  const showSubAddress = cleanStandardized === '';
+  const displayAddress =
+    cleanStandardized || cleanOwner || 'No Address Provided';
+  const showSubAddress = !cleanStandardized;
 
   return (
     <main className='max-w-[1600px] mx-auto py-6 px-8 bg-slate-50 min-h-screen'>
-      {/* 🔝 TOP NAVIGATION BAR */}
+      {/* 🔝 TOP NAVIGATION BAR - ALWAYS VISIBLE */}
       <div className='flex items-center justify-between mb-8'>
-        <div className='flex items-center gap-4'>
+        <div className='flex items-center gap-6'>
+          {/* Back Button */}
           <button
             onClick={() => router.push('/dashboard')}
-            className='p-2 hover:bg-white rounded-full border hover:border-slate-200 transition'
+            className='p-2 hover:bg-white rounded-full border border-slate-200 transition'
+            aria-label='Back to dashboard'
           >
             <svg
               xmlns='http://www.w3.org/2000/svg'
@@ -196,40 +247,41 @@ export function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
               <path d='m15 18-6-6 6-6' />
             </svg>
           </button>
+
+          {/* Title */}
           <h1 className='text-xl font-bold text-slate-800 uppercase tracking-tight'>
-            Property Record
+            PROPERTY RECORD
           </h1>
-          {navContext && (
-            <div className='flex items-center gap-3 ml-4 bg-white border rounded-full px-4 py-1.5 shadow-sm text-[10px] font-black tracking-widest text-slate-500'>
-              <button
-                disabled={navContext.isFirst}
-                onClick={() =>
-                  router.push(
-                    `/lead/${navContext.ids[navContext.currentIndex - 1]}`
-                  )
-                }
-                className='hover:text-indigo-600 disabled:opacity-20 uppercase'
-              >
-                Prev
-              </button>
-              <span className='text-slate-200'>|</span>
-              <span>
-                {navContext.currentIndex + 1} / {navContext.ids.length}
-              </span>
-              <span className='text-slate-200'>|</span>
-              <button
-                disabled={navContext.isLast}
-                onClick={() =>
-                  router.push(
-                    `/lead/${navContext.ids[navContext.currentIndex + 1]}`
-                  )
-                }
-                className='hover:text-indigo-600 disabled:opacity-20 uppercase'
-              >
-                Next
-              </button>
-            </div>
-          )}
+        </div>
+
+        {/* Navigation Controls - NOW ALWAYS VISIBLE */}
+        <div className='flex items-center gap-4'>
+          {/* PREV Button */}
+          <button
+            onClick={handlePrevious}
+            disabled={!navContext || navContext.isFirst}
+            className='px-4 py-2 text-xs font-black uppercase tracking-widest text-slate-600 hover:text-indigo-600 disabled:opacity-30 disabled:cursor-not-allowed transition-colors'
+          >
+            PREV
+          </button>
+
+          {/* Counter */}
+          <div className='px-4 py-2 bg-white border border-slate-200 rounded-lg shadow-sm'>
+            <span className='text-xs font-black text-slate-800'>
+              {navContext
+                ? `${navContext.currentIndex + 1} / ${navContext.ids.length}`
+                : '- / -'}
+            </span>
+          </div>
+
+          {/* NEXT Button */}
+          <button
+            onClick={handleNext}
+            disabled={!navContext || navContext.isLast}
+            className='px-4 py-2 text-xs font-black uppercase tracking-widest text-slate-600 hover:text-indigo-600 disabled:opacity-30 disabled:cursor-not-allowed transition-colors'
+          >
+            NEXT
+          </button>
         </div>
       </div>
 
@@ -266,7 +318,7 @@ export function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
                 )}
               </div>
               <div className='bg-slate-50 p-6 rounded-2xl border border-slate-100 text-right min-w-[240px]'>
-                <p className='text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-1'>
+                <p className='text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1'>
                   Zestimate® Value
                 </p>
                 <p className='text-4xl font-black text-indigo-600 tracking-tighter'>
@@ -276,7 +328,6 @@ export function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
             </div>
           </section>
 
-          {/* SECOND ROW */}
           <div className='grid grid-cols-1 md:grid-cols-2 gap-8'>
             <CardWrapper
               title='Owner & Contacts'
@@ -290,22 +341,6 @@ export function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
                 isEditing={isCoreInfoEditing}
                 onEditToggle={setIsCoreInfoEditing}
               />
-              <div className='mt-6 pt-6 border-t space-y-3'>
-                <p className='text-[10px] font-bold text-slate-400 uppercase italic'>
-                  Verified Contact Methods
-                </p>
-                {lead.phones?.map((p, i) => (
-                  <ContactActionItem key={i} value={p} type='phone' />
-                ))}
-                {lead.emails?.map((e, i) => (
-                  <ContactActionItem key={i} value={e} type='email' />
-                ))}
-                {!lead.phones?.length && !lead.emails?.length && (
-                  <p className='text-sm italic text-slate-300'>
-                    No verified contacts. Run skip trace.
-                  </p>
-                )}
-              </div>
             </CardWrapper>
 
             <CardWrapper title='Market Intel & Taxes'>
@@ -329,16 +364,12 @@ export function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
                       : '---'}
                     %
                   </p>
-                  <p className='text-[10px] text-indigo-400 mt-2 italic leading-relaxed uppercase'>
-                    Range: {formatCurrency(valuation?.minus30)} —{' '}
-                    {formatCurrency(valuation?.zestimate * 1.1)}
-                  </p>
                 </div>
               </div>
             </CardWrapper>
           </div>
 
-          {/* THIRD ROW: TECHNICAL DATA */}
+          {/* 🔍 RESTORED TECHNICAL PROPERTY ANALYSIS SECTION */}
           <CardWrapper title='Technical Property Analysis'>
             <div className='grid grid-cols-2 md:grid-cols-4 gap-y-12 gap-x-8'>
               <InfoRow label='APN' value={parcel?.apn} />
@@ -415,7 +446,7 @@ export function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
                   disabled={
                     isSkipTracing || lead.skipTraceStatus === 'COMPLETED'
                   }
-                  className='w-full bg-white text-slate-900 font-black text-[10px] uppercase tracking-widest py-5 rounded-2xl hover:bg-slate-100 shadow-lg disabled:opacity-40 flex items-center justify-center gap-2'
+                  className='w-full bg-white text-slate-900 font-black text-[10px] uppercase py-5 rounded-2xl shadow-lg disabled:opacity-40 flex items-center justify-center gap-2'
                 >
                   {isSkipTracing ? (
                     <Loader size='small' />
@@ -436,6 +467,7 @@ export function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
               </div>
             </div>
 
+            {/* 📊 RESTORED LEAD PIPELINE CARD */}
             <CardWrapper title='Lead Pipeline'>
               <div className='space-y-4 pt-2'>
                 <div className='flex justify-between items-center'>
@@ -465,14 +497,13 @@ export function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
   );
 }
 
-// ✅ REUSABLE HELPERS WITH TYPE-SAFE RENDERING
+// ✅ HELPERS
 function InfoRow({ label, value }: { label: string; value: any }) {
   const getDisplayValue = (val: any): React.ReactNode => {
     if (val === null || val === undefined || val === '') return '---';
     if (typeof val === 'object' || typeof val === 'boolean') return '---';
     return String(val);
   };
-
   return (
     <div>
       <p className='text-[9px] font-black text-slate-400 uppercase mb-2 tracking-widest'>
@@ -499,7 +530,6 @@ function MarketRow({
     if (typeof val === 'object' || typeof val === 'boolean') return '---';
     return String(val);
   };
-
   return (
     <div className='flex justify-between items-start py-2.5 border-b border-slate-50'>
       <div>
