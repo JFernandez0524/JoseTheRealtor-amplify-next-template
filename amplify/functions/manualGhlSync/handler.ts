@@ -1,5 +1,3 @@
-// amplify/functions/manualGhlSync/handler.ts
-
 import {
   getLead,
   updateLeadGhlStatus,
@@ -7,11 +5,13 @@ import {
 } from '../../../app/utils/aws/data/lead.server';
 import { syncToGoHighLevel } from './integrations/gohighlevel';
 import { isAxiosError } from 'axios';
+// ✅ ADDED: Import for usage tracking
+import { cookiesClient } from '../../../app/utils/aws/auth/amplifyServerUtils.server';
 
 const GHL_API_KEY = process.env.GHL_API_KEY;
 
 // ---------------------------------------------------------
-// Type Definitions
+// Type Definitions (Preserved)
 // ---------------------------------------------------------
 type SyncResult = {
   status: 'SUCCESS' | 'SKIPPED' | 'FAILED' | 'ERROR' | 'NO_CHANGE';
@@ -27,11 +27,13 @@ type AppSyncHandlerEvent = {
   arguments: ManualSyncMutationArguments;
   identity: {
     sub: string;
+    // ✅ UPDATED: Include claims for group checking
+    claims?: { [key: string]: any };
   } | null;
 };
 
 // ---------------------------------------------------------
-// HELPER: Core GHL Sync Logic (processGhlSync)
+// HELPER: Core GHL Sync Logic (Preserved exactly as provided)
 // ---------------------------------------------------------
 
 async function processGhlSync(lead: DBLead): Promise<SyncResult> {
@@ -60,7 +62,6 @@ async function processGhlSync(lead: DBLead): Promise<SyncResult> {
     for (let i = 0; i < phones.length; i++) {
       const rawPhone = phones[i];
 
-      // 🎯 Type Guard: Ensures we don't pass null to a string parameter
       if (!rawPhone) continue;
 
       const currentPhone: string = rawPhone;
@@ -92,7 +93,7 @@ async function processGhlSync(lead: DBLead): Promise<SyncResult> {
 }
 
 // ---------------------------------------------------------
-// MAIN HANDLER
+// MAIN HANDLER (Updated with Tier Check & Usage Tracking)
 // ---------------------------------------------------------
 
 export const handler = async (
@@ -109,6 +110,21 @@ export const handler = async (
     };
   }
 
+  // 🛡️ 1. NEW: Tier Authorization Check
+  const groups = event.identity?.claims?.['cognito:groups'] || [];
+  const isAuthorized =
+    groups.includes('PRO') ||
+    groups.includes('AI_PLAN') ||
+    groups.includes('ADMINS');
+
+  if (!isAuthorized) {
+    return {
+      status: 'ERROR',
+      message: 'Unauthorized: Subscription required for CRM sync.',
+      leadId: leadId,
+    };
+  }
+
   try {
     const lead = await getLead(leadId);
 
@@ -120,11 +136,34 @@ export const handler = async (
       };
     }
 
+    // 🛡️ 2. Ownership Verification
     if (lead.owner !== ownerId) {
-      return { status: 'ERROR', message: 'Authorization denied.', leadId };
+      return {
+        status: 'ERROR',
+        message: 'Authorization denied: Ownership mismatch.',
+        leadId,
+      };
     }
 
+    // 🚀 3. Execute Existing Logic
     const syncResult = await processGhlSync(lead);
+
+    // 📊 4. NEW: Track usage in UserAccount if sync was successful
+    if (syncResult.status === 'SUCCESS') {
+      try {
+        const { data: accounts } =
+          await cookiesClient.models.UserAccount.list();
+        if (accounts && accounts[0]) {
+          await cookiesClient.models.UserAccount.update({
+            id: accounts[0].id,
+            totalLeadsSynced: (accounts[0].totalLeadsSynced || 0) + 1,
+          });
+        }
+      } catch (err) {
+        // We log usage errors but don't fail the sync for the user
+        console.error('Failed to update usage stats:', err);
+      }
+    }
 
     return {
       ...syncResult,

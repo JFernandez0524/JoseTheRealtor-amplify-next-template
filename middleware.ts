@@ -1,44 +1,40 @@
-import { fetchAuthSession } from 'aws-amplify/auth/server';
 import { NextRequest, NextResponse } from 'next/server';
+import { fetchAuthSession } from 'aws-amplify/auth/server';
 import { runWithAmplifyServerContext } from '@/app/utils/aws/auth/amplifyServerUtils.server';
 
 export async function middleware(request: NextRequest) {
   const response = NextResponse.next();
-  const path = request.nextUrl.pathname;
+  const { pathname } = request.nextUrl;
 
-  const authData = await runWithAmplifyServerContext({
+  // 1. Define Public Paths
+  const publicPaths = ['/login', '/signup', '/pricing', '/forgot-password'];
+  const isPublicPath = publicPaths.some((path) => pathname.startsWith(path));
+
+  // 2. Bypass for Public Paths and Webhooks
+  if (
+    isPublicPath ||
+    pathname.startsWith('/api/webhooks') ||
+    pathname === '/'
+  ) {
+    return response;
+  }
+
+  // 3. Simple Auth Check using your server runner logic
+  const authenticated = await runWithAmplifyServerContext({
     nextServerContext: { request, response },
     operation: async (contextSpec) => {
       try {
         const session = await fetchAuthSession(contextSpec);
-        if (!session.tokens) return { authenticated: false, groups: [] };
-        // Extract groups from the access token
-        const groups =
-          (session.tokens.accessToken.payload['cognito:groups'] as string[]) ||
-          [];
-        return { authenticated: true, groups };
-      } catch (error) {
-        return { authenticated: false, groups: [] };
+        return !!(session.tokens?.accessToken && session.tokens?.idToken);
+      } catch {
+        return false;
       }
     },
   });
 
-  // Redirect to login if not authenticated
-  if (!authData.authenticated) {
+  // 4. Redirect to login if trying to access a protected route without a session
+  if (!authenticated) {
     return NextResponse.redirect(new URL('/login', request.url));
-  }
-
-  const isPro = authData.groups.includes('PRO');
-  const isAdmin = authData.groups.includes('ADMINS');
-
-  const hasPremiumAccess = isPro || isAdmin;
-
-  // Protect the dashboard and upload paths
-  const premiumPaths = ['/dashboard', '/upload', '/profile'];
-  const isPremiumPath = premiumPaths.some((p) => path.startsWith(p));
-
-  if (isPremiumPath && !hasPremiumAccess) {
-    return NextResponse.redirect(new URL('/pricing', request.url));
   }
 
   return response;
@@ -46,9 +42,9 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    '/dashboard/:path*',
-    '/profile/:path*',
-    '/upload/:path*',
-    '/api/((?!v1/analyze-property).*)',
+    /*
+     * Match all paths except webhooks, static files, images, and favicon
+     */
+    '/((?!api/webhooks|_next/static|_next/image|favicon.ico).*)',
   ],
 };

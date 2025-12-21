@@ -1,20 +1,20 @@
 // amplify/functions/skiptraceLeads/handler.ts
 
 import axios, { isAxiosError } from 'axios';
-// Note: We keep this import so the processGhlSync helper remains valid for other parts of the system if needed
-import { syncToGoHighLevel } from '../manualGhlSync/integrations/gohighlevel';
 import {
   getLead,
   updateLead,
-  updateLeadGhlStatus,
   DBLead,
-  UpdateLeadInput,
 } from '../../../app/utils/aws/data/lead.server';
+import { cookiesClient } from '../../../app/utils/aws/auth/amplifyServerUtils.server';
 
 const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 1000;
 const BATCH_DATA_SERVER_TOKEN = process.env.BATCH_DATA_SERVER_TOKEN;
-const GHL_API_KEY = process.env.GHL_API_KEY;
+
+// ---------------------------------------------------------
+// Type Definitions (Preserved)
+// ---------------------------------------------------------
 
 type FullSkipTraceStatus =
   | 'PENDING'
@@ -43,8 +43,15 @@ type BatchDataResult = {
 type SkipTraceMutationArguments = { leadIds: string[] };
 type AppSyncHandlerEvent = {
   arguments: SkipTraceMutationArguments;
-  identity: { sub: string } | null;
+  identity: {
+    sub: string;
+    claims: { [key: string]: any };
+  } | null;
 };
+
+// ---------------------------------------------------------
+// Helper Functions (Preserved & Working)
+// ---------------------------------------------------------
 
 function cleanName(name: any) {
   const cleaned: any = {};
@@ -154,7 +161,6 @@ async function callBatchDataV3(lead: DBLead): Promise<BatchDataResult> {
         );
         continue;
       }
-      // Log the specific error for debugging (like the 403)
       console.error(`BatchData API Error: ${error.message}`);
       return {
         status: 'ERROR',
@@ -172,58 +178,50 @@ async function callBatchDataV3(lead: DBLead): Promise<BatchDataResult> {
   };
 }
 
-// Helper kept for manual triggers, but no longer called automatically in the handler
-async function processGhlSync(lead: DBLead) {
-  if (!GHL_API_KEY) {
-    await updateLeadGhlStatus(lead.id, 'SKIPPED');
-    return;
-  }
-
-  await updateLeadGhlStatus(lead.id, 'PENDING');
-  const phones = lead.phones || [];
-
-  try {
-    const syncResults: string[] = [];
-    for (let i = 0; i < phones.length; i++) {
-      const currentPhone = phones[i];
-      if (!currentPhone) continue;
-
-      const isPrimary = i === 0;
-      const ghlContactId = await syncToGoHighLevel(
-        lead,
-        currentPhone,
-        i + 1,
-        isPrimary
-      );
-      syncResults.push(ghlContactId);
-    }
-
-    await updateLeadGhlStatus(lead.id, 'SUCCESS', syncResults[0]);
-  } catch (error: any) {
-    console.error(`❌ GHL Sync Error for lead ${lead.id}:`, error.message);
-    await updateLeadGhlStatus(lead.id, 'FAILED');
-  }
-}
-
-async function updateLeadStatus(id: string, status: FullSkipTraceStatus) {
-  const updateData: any = { id, skipTraceStatus: status };
-  try {
-    await updateLead(updateData);
-  } catch (error: any) {
-    console.error(`⚠️ Failed to update status for ${id}:`, error.message);
-  }
-}
+// ---------------------------------------------------------
+// Main Handler (Updated with Authorization & Wallet logic)
+// ---------------------------------------------------------
 
 export const handler = async (event: AppSyncHandlerEvent) => {
   const { leadIds } = event.arguments;
   const ownerId = event.identity?.sub;
 
-  if (!ownerId || !leadIds?.length) return [];
+  // 🛡️ 1. Identity Check
+  if (!ownerId || !leadIds?.length) {
+    throw new Error('Unauthorized: Missing user identity or lead data.');
+  }
 
-  const results = [];
-  for (const leadId of leadIds) {
-    try {
+  // 🛡️ 2. Group Protection (Tier Check)
+  const groups = event.identity?.claims?.['cognito:groups'] || [];
+  const isAuthorized =
+    groups.includes('PRO') ||
+    groups.includes('AI_PLAN') ||
+    groups.includes('ADMINS');
+
+  if (!isAuthorized) {
+    throw new Error(
+      'Forbidden: A paid membership is required to use this feature.'
+    );
+  }
+
+  try {
+    // 💰 3. Wallet Check
+    const { data: accounts } = await cookiesClient.models.UserAccount.list();
+    const userAccount = accounts[0]; // Assuming one profile per owner
+
+    if (!userAccount || (userAccount.credits || 0) < leadIds.length) {
+      throw new Error(
+        `Insufficient Credits: Need ${leadIds.length}, have ${userAccount?.credits || 0}.`
+      );
+    }
+
+    const results = [];
+    let processedSuccessfully = 0;
+
+    for (const leadId of leadIds) {
       const lead = await getLead(leadId);
+
+      // 🛡️ 4. Ownership Lock
       if (!lead || lead.owner !== ownerId) {
         results.push({ id: leadId, status: 'ERROR' });
         continue;
@@ -231,15 +229,15 @@ export const handler = async (event: AppSyncHandlerEvent) => {
 
       const enrichedData = await callBatchDataV3(lead);
 
-      // 🛑 FIXED: Ensure we don't mark as COMPLETED if the API call failed (e.g., 403 error)
       if (enrichedData.status !== 'SUCCESS') {
         const finalStatus =
           enrichedData.status === 'ERROR' ? 'FAILED' : 'NO_MATCH';
-        await updateLeadStatus(leadId, finalStatus as FullSkipTraceStatus);
+        await updateLead({ id: leadId, skipTraceStatus: finalStatus as any });
         results.push({ id: leadId, status: finalStatus });
         continue;
       }
 
+      // Success Logic
       const newPhones = [
         ...new Set([...(lead.phones || []), ...enrichedData.foundPhones]),
       ];
@@ -247,41 +245,35 @@ export const handler = async (event: AppSyncHandlerEvent) => {
         ...new Set([...(lead.emails || []), ...enrichedData.foundEmails]),
       ];
 
-      const updateData: any = {
+      await updateLead({
         id: leadId,
         phones: newPhones,
         emails: newEmails,
         mailingAddress:
-          enrichedData.mailingData?.mailingAddress ||
-          lead.mailingAddress ||
-          lead.ownerAddress,
-        mailingCity:
-          enrichedData.mailingData?.mailingCity ||
-          lead.mailingCity ||
-          lead.ownerCity,
-        mailingState:
-          enrichedData.mailingData?.mailingState ||
-          lead.mailingState ||
-          lead.ownerState,
-        mailingZip:
-          enrichedData.mailingData?.mailingZip ||
-          lead.mailingZip ||
-          lead.ownerZip,
+          enrichedData.mailingData?.mailingAddress || lead.ownerAddress,
+        mailingCity: enrichedData.mailingData?.mailingCity || lead.ownerCity,
+        mailingState: enrichedData.mailingData?.mailingState || lead.ownerState,
+        mailingZip: enrichedData.mailingData?.mailingZip || lead.ownerZip,
         skipTraceStatus: 'COMPLETED',
-      };
+      });
 
-      // Update the database with found phones/emails
-      await updateLead(updateData);
-
-      // 🛑 REMOVED: await processGhlSync(updatedLead);
-      // This stops the automatic GHL sync. Syncing to CRM is now a manual operation.
-
+      processedSuccessfully++;
       results.push({ id: leadId, status: 'SUCCESS', phones: newPhones.length });
-    } catch (error: any) {
-      console.error(`General Handler Error for ${leadId}:`, error.message);
-      await updateLeadStatus(leadId, 'FAILED');
-      results.push({ id: leadId, status: 'ERROR' });
     }
+
+    // 💰 5. Deduct Credits
+    if (processedSuccessfully > 0) {
+      await cookiesClient.models.UserAccount.update({
+        id: userAccount.id,
+        credits: (userAccount.credits || 0) - processedSuccessfully,
+        totalSkipsPerformed:
+          (userAccount.totalSkipsPerformed || 0) + processedSuccessfully,
+      });
+    }
+
+    return results;
+  } catch (error: any) {
+    console.error('🔥 Lambda Handler Error:', error.message);
+    throw error;
   }
-  return results;
 };

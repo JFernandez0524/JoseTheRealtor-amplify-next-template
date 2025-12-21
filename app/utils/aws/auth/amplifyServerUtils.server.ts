@@ -95,3 +95,17 @@ export async function createLeadInDatabase(lead: Lead) {
     console.error('❌ createLeadInDatabase error:', error.message);
   }
 }
+
+export async function AuthGetUserGroupsServer(): Promise<string[]> {
+  try {
+    const session = await runWithAmplifyServerContext({
+      nextServerContext: { cookies },
+      operation: (contextSpec) => fetchAuthSession(contextSpec),
+    });
+    return (
+      (session.tokens?.accessToken.payload['cognito:groups'] as string[]) || []
+    );
+  } catch {
+    return [];
+  }
+}

@@ -1,5 +1,10 @@
 import { NextResponse } from 'next/server';
 import axios from 'axios';
+// ✅ Import Server Utilities for Membership Protection
+import {
+  AuthIsUserAuthenticatedServer,
+  AuthGetUserGroupsServer,
+} from '@/app/utils/aws/auth/amplifyServerUtils.server';
 
 const BRIDGE_API_KEY = process.env.BRIDGE_API_KEY;
 
@@ -95,6 +100,33 @@ const generateAddressVariations = (street: string) => {
 
 export async function POST(req: Request) {
   try {
+    // 🛡️ 1. AUTHENTICATION GUARD
+    const isAuthenticated = await AuthIsUserAuthenticatedServer();
+    if (!isAuthenticated) {
+      return NextResponse.json(
+        { success: false, error: 'Unauthorized: Please log in.' },
+        { status: 401 }
+      );
+    }
+
+    // 🛡️ 2. MEMBERSHIP TIER GUARD
+    const groups = await AuthGetUserGroupsServer();
+    const isAuthorized =
+      groups.includes('PRO') ||
+      groups.includes('AI_PLAN') ||
+      groups.includes('ADMINS');
+
+    if (!isAuthorized) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Forbidden: Property analysis requires a membership.',
+        },
+        { status: 403 }
+      );
+    }
+
+    // --- START ORIGINAL LOGIC ---
     const body = await req.json();
 
     const {
@@ -206,17 +238,9 @@ export async function POST(req: Request) {
             { params: coordParams }
           );
 
-          console.log(
-            `📍 Coordinate search (${radius}mi): Found ${zResCoord.data.bundle?.length || 0} results`
-          );
-
           if (zResCoord.data.bundle?.[0]) {
             valuation = zResCoord.data.bundle[0];
-            console.log(`✅ Match found at radius ${radius}mi:`, {
-              address: valuation.address,
-              city: valuation.city,
-              state: valuation.state,
-            });
+            console.log(`✅ Match found at radius ${radius}mi`);
             break;
           }
         } catch (err) {
@@ -236,23 +260,10 @@ export async function POST(req: Request) {
     const zpid = valuation?.zpid;
     const targetState = valuation?.state || state;
 
-    console.log('📊 Zestimate Result:', {
-      found: !!valuation,
-      method: successfulVariation
-        ? 'address'
-        : lat && lng
-          ? 'coordinates'
-          : 'none',
-      zpid: zpid,
-      zestimate: valuation?.zestimate,
-    });
-
     // 🚀 STEP 3: Assessment waterfall
     let assessment = null;
 
-    // A. By ZPID
     if (zpid) {
-      console.log(`🔍 Fetching assessment by ZPID: ${zpid}`);
       try {
         const resA = await axios.get(
           `https://api.bridgedataoutput.com/api/v2/pub/assessments`,
@@ -266,17 +277,13 @@ export async function POST(req: Request) {
           }
         );
         assessment = resA.data.bundle?.[0];
-        if (assessment) console.log('✅ Assessment found by ZPID');
       } catch (err) {
         console.error('❌ Assessment by ZPID failed');
       }
     }
 
-    // B. By Coordinates
     if (!assessment && lat && lng) {
-      console.log(`🔍 Fetching assessment by coordinates...`);
       const radii = ['0.01', '0.05', '0.1'];
-
       for (const radius of radii) {
         try {
           const resB = await axios.get(
@@ -291,14 +298,11 @@ export async function POST(req: Request) {
               },
             }
           );
-
           const stateMatch = resB.data.bundle?.find(
             (a: any) => a.address?.state === targetState
           );
-
           if (stateMatch) {
             assessment = stateMatch;
-            console.log(`✅ Assessment found at ${radius}mi`);
             break;
           }
         } catch (err) {
@@ -307,10 +311,7 @@ export async function POST(req: Request) {
       }
     }
 
-    // C. By Address variations
     if (!assessment && streetVariations.length > 0) {
-      console.log(`🔍 Trying assessment by address variations...`);
-
       for (const street of streetVariations) {
         try {
           const resC = await axios.get(
@@ -325,28 +326,16 @@ export async function POST(req: Request) {
               },
             }
           );
-
           const stateMatch = resC.data.bundle?.find(
             (a: any) => a.address?.state === targetState
           );
-
           if (stateMatch) {
             assessment = stateMatch;
-            console.log(`✅ Assessment found with variation: "${street}"`);
             break;
           }
-        } catch (err) {
-          // Continue to next variation
-        }
+        } catch (err) {}
       }
     }
-
-    console.log('📋 Final Results:', {
-      valuation: !!valuation,
-      assessment: !!assessment,
-      addressVariationUsed: successfulVariation,
-    });
-    console.log('--- END BRIDGE API REQUEST ---');
 
     return NextResponse.json({
       success: true,

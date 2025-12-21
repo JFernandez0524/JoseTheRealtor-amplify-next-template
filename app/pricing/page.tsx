@@ -1,7 +1,12 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { client } from '@/app/utils/aws/data/frontEndClient';
+import { getFrontEndUser } from '@/app/utils/aws/auth/amplifyFrontEndUser';
+import { useAccess } from '@/app/context/AccessContext';
+import type { Schema } from '@/amplify/data/resource';
+
 // Using only react-icons as requested
 import {
   HiCheck,
@@ -13,6 +18,8 @@ import {
   HiOutlineSparkles,
   HiOutlineArrowRight,
 } from 'react-icons/hi2';
+
+type UserAccount = Schema['UserAccount']['type'];
 
 const subscriptions = [
   {
@@ -43,17 +50,99 @@ const subscriptions = [
 ];
 
 const creditPacks = [
-  { name: '$10 Pack', price: '$10', credits: 100, label: 'Starter' },
-  { name: '$20 Pack', price: '$20', credits: 200, label: 'Growth' },
-  { name: '$50 Pack', price: '$50', credits: 500, label: 'Pro' },
+  {
+    id: 'pack_10',
+    name: '$10 Pack',
+    price: '$10',
+    credits: 100,
+    label: 'Starter',
+    value: 100,
+  },
+  {
+    id: 'pack_20',
+    name: '$20 Pack',
+    price: '$20',
+    credits: 200,
+    label: 'Growth',
+    value: 200,
+  },
+  {
+    id: 'pack_50',
+    name: '$50 Pack',
+    price: '$50',
+    credits: 500,
+    label: 'Pro',
+    value: 500,
+  },
 ];
 
 export default function PricingPage() {
   const router = useRouter();
+  const { hasPaidPlan, isAI } = useAccess();
+  const [userAccount, setUserAccount] = useState<UserAccount | null>(null);
+  const [loading, setLoading] = useState<string | null>(null);
 
-  const handleCheckout = (priceId: string, type: 'sub' | 'one-time') => {
-    // This will eventually call your Stripe API route
-    console.log(`Initiating ${type} checkout for ${priceId}`);
+  // 1. Fetch current balance if user is logged in
+  useEffect(() => {
+    async function fetchBalance() {
+      try {
+        const { data: accounts } = await client.models.UserAccount.list();
+        if (accounts && accounts[0]) {
+          setUserAccount(accounts[0]);
+        }
+      } catch (err) {
+        console.error('Error fetching account:', err);
+      }
+    }
+    fetchBalance();
+  }, []);
+
+  // 2. Handle Subscription Upgrade (Dev Mode)
+  const handleSubscriptionUpgrade = async (tier: string) => {
+    setLoading(tier);
+    try {
+      const user = await getFrontEndUser();
+      if (!user) {
+        alert('Please log in to upgrade.');
+        return router.push('/login');
+      }
+
+      await client.mutations.addUserToGroup({
+        userId: user.userId,
+        groupName: tier,
+      });
+
+      alert(`Success! You are now subscribed to the ${tier} plan.`);
+      window.location.reload();
+    } catch (err: any) {
+      alert(`Upgrade Error: ${err.message}`);
+    } finally {
+      setLoading(null);
+    }
+  };
+
+  // 3. Handle Credit Purchase (Dev Mode)
+  const handleCreditPurchase = async (packId: string, amount: number) => {
+    setLoading(packId);
+    try {
+      if (!userAccount) {
+        alert('Please log in to refill your wallet.');
+        return router.push('/login');
+      }
+
+      // Direct DynamoDB Update for Dev Mode
+      await client.models.UserAccount.update({
+        id: userAccount.id,
+        credits: (userAccount.credits || 0) + amount,
+      });
+
+      alert(`Successfully added ${amount} credits to your wallet!`);
+      window.location.reload();
+    } catch (err: any) {
+      alert(`Refill Error: ${err.message}`);
+    } finally {
+      setLoading(null);
+    }
   };
 
   return (
@@ -69,7 +158,7 @@ export default function PricingPage() {
           </p>
         </div>
 
-        {/* 1. SUBSCRIPTIONS SECTION (TIER ACCESS) */}
+        {/* 1. SUBSCRIPTIONS SECTION */}
         <div className='mb-10 flex items-center gap-4'>
           <h2 className='text-xs font-black uppercase tracking-[0.2em] text-slate-400'>
             Monthly Subscriptions
@@ -78,51 +167,68 @@ export default function PricingPage() {
         </div>
 
         <div className='grid grid-cols-1 md:grid-cols-2 gap-8 mb-24'>
-          {subscriptions.map((sub) => (
-            <div
-              key={sub.name}
-              className='bg-white p-10 rounded-[2.5rem] border border-slate-200 shadow-sm flex flex-col hover:border-indigo-300 transition-colors'
-            >
-              <div className='mb-6'>{sub.icon}</div>
-              <h3 className='text-2xl font-black text-slate-900 mb-2 tracking-tight'>
-                {sub.name}
-              </h3>
-              <div className='flex items-baseline gap-1 mb-6'>
-                <span className='text-5xl font-black text-slate-900 tracking-tighter'>
-                  {sub.price}
-                </span>
-                <span className='text-slate-500 font-bold uppercase text-[10px] tracking-widest'>
-                  /mo
-                </span>
-              </div>
-              <p className='text-slate-500 text-sm mb-8 font-medium'>
-                {sub.description}
-              </p>
+          {subscriptions.map((sub) => {
+            const isCurrent =
+              (sub.tier === 'PRO' && hasPaidPlan && !isAI) ||
+              (sub.tier === 'AI_PLAN' && isAI);
 
-              <ul className='space-y-4 mb-10 flex-grow'>
-                {sub.features.map((f) => (
-                  <li
-                    key={f}
-                    className='flex gap-3 text-sm text-slate-600 font-semibold items-center'
-                  >
-                    <HiCheck className='text-indigo-500 text-xl flex-shrink-0' />{' '}
-                    {f}
-                  </li>
-                ))}
-              </ul>
-
-              <button
-                onClick={() => handleCheckout(sub.tier, 'sub')}
-                className='w-full py-4 bg-slate-900 text-white rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-slate-800 transition-all flex items-center justify-center gap-2 group'
+            return (
+              <div
+                key={sub.name}
+                className={`bg-white p-10 rounded-[2.5rem] border ${isCurrent ? 'border-indigo-500 ring-2 ring-indigo-50 shadow-lg' : 'border-slate-200'} shadow-sm flex flex-col hover:border-indigo-300 transition-colors`}
               >
-                Select {sub.name}{' '}
-                <HiOutlineArrowRight className='text-lg group-hover:translate-x-1 transition-transform' />
-              </button>
-            </div>
-          ))}
+                <div className='mb-6'>{sub.icon}</div>
+                <h3 className='text-2xl font-black text-slate-900 mb-2 tracking-tight'>
+                  {sub.name}
+                </h3>
+                <div className='flex items-baseline gap-1 mb-6'>
+                  <span className='text-5xl font-black text-slate-900 tracking-tighter'>
+                    {sub.price}
+                  </span>
+                  <span className='text-slate-500 font-bold uppercase text-[10px] tracking-widest'>
+                    /mo
+                  </span>
+                </div>
+                <p className='text-slate-500 text-sm mb-8 font-medium'>
+                  {sub.description}
+                </p>
+
+                <ul className='space-y-4 mb-10 flex-grow'>
+                  {sub.features.map((f) => (
+                    <li
+                      key={f}
+                      className='flex gap-3 text-sm text-slate-600 font-semibold items-center'
+                    >
+                      <HiCheck className='text-indigo-500 text-xl flex-shrink-0' />{' '}
+                      {f}
+                    </li>
+                  ))}
+                </ul>
+
+                <button
+                  onClick={() => handleSubscriptionUpgrade(sub.tier)}
+                  disabled={isCurrent || loading === sub.tier}
+                  className={`w-full py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] transition-all flex items-center justify-center gap-2 group ${
+                    isCurrent
+                      ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                      : 'bg-slate-900 text-white hover:bg-slate-800'
+                  }`}
+                >
+                  {isCurrent
+                    ? 'Current Plan'
+                    : loading === sub.tier
+                      ? 'Processing...'
+                      : `Select ${sub.name}`}{' '}
+                  {!isCurrent && (
+                    <HiOutlineArrowRight className='text-lg group-hover:translate-x-1 transition-transform' />
+                  )}
+                </button>
+              </div>
+            );
+          })}
         </div>
 
-        {/* 2. SKIP-TRACE WALLET SECTION (PREPAID CREDITS) */}
+        {/* 2. SKIP-TRACE WALLET SECTION */}
         <div className='bg-indigo-600 rounded-[3rem] p-8 md:p-16 text-white shadow-2xl relative overflow-hidden'>
           <HiOutlineDatabase className='absolute -bottom-20 -right-20 text-[25rem] text-indigo-500 opacity-20 pointer-events-none' />
 
@@ -144,7 +250,9 @@ export default function PricingPage() {
                 <p className='text-[10px] font-black uppercase tracking-widest text-indigo-200'>
                   Current Balance
                 </p>
-                <p className='text-2xl font-black'>0 Credits</p>
+                <p className='text-2xl font-black'>
+                  {userAccount?.credits || 0} Credits
+                </p>
               </div>
             </div>
 
@@ -164,10 +272,13 @@ export default function PricingPage() {
                     Skips
                   </p>
                   <button
-                    onClick={() => handleCheckout(pack.price, 'one-time')}
-                    className='w-full py-4 bg-white text-indigo-600 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-indigo-50 transition shadow-xl'
+                    onClick={() => handleCreditPurchase(pack.id, pack.value)}
+                    disabled={loading === pack.id}
+                    className='w-full py-4 bg-white text-indigo-600 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-indigo-50 transition shadow-xl disabled:opacity-50'
                   >
-                    Buy for {pack.price}
+                    {loading === pack.id
+                      ? 'Refilling...'
+                      : `Buy for ${pack.price}`}
                   </button>
                 </div>
               ))}

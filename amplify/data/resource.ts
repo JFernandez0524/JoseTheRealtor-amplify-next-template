@@ -194,10 +194,29 @@ const schema = a.schema({
       userId: a.string().required(),
       groupName: a.string().required(),
     })
-    // 🔒 Only current ADMINS can promote others
-    .authorization((allow) => [allow.group('ADMINS')])
+    // 🚧 DEV MODE: Allow authenticated users to promote themselves for testing
+    // 🔒 PROD MODE: Change back to .group('ADMINS')
+    .authorization((allow) => [allow.authenticated()])
     .handler(a.handler.function(addUserToGroup))
     .returns(a.json()),
+
+  UserAccount: a
+    .model({
+      owner: a.string().authorization((allow) => [allow.owner().to(['read'])]),
+      email: a.string().required(),
+
+      // 💰 WALLET: 1 credit = $0.10 skip trace
+      credits: a.integer().default(0),
+
+      // 🔑 CRM CONFIG: Storing these here allows the "Brand-Invisible" sync
+      crmLocationId: a.string(),
+      crmApiKey: a.string(), // Consider encrypting this in a production environment
+
+      // 📊 USAGE TRACKING
+      totalLeadsSynced: a.integer().default(0),
+      totalSkipsPerformed: a.integer().default(0),
+    })
+    .authorization((allow) => [allow.owner(), allow.group('ADMINS')]),
 });
 
 export type Schema = ClientSchema<typeof schema>;

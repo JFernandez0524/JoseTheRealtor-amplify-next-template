@@ -1,28 +1,45 @@
 // app/(protected)/layout.tsx
-
 import { Suspense } from 'react';
+import { redirect } from 'next/navigation';
 import LoadingOverlay from '@/app/components/shared/LoadingOverlay';
+import { AccessProvider } from '@/app/context/AccessContext';
+import {
+  AuthGetUserGroupsServer,
+  AuthIsUserAuthenticatedServer,
+} from '@/app/utils/aws/auth/amplifyServerUtils.server';
 
-/**
- * Protected Layout
- * This wraps all pages in the (protected) group.
- * The Suspense boundary here will catch the loading state of any
- * Server Component page beneath it.
- */
-export default function ProtectedLayout({
+export default async function ProtectedLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  // 1. Run the Auth Check on the Server
+  const isAuthenticated = await AuthIsUserAuthenticatedServer();
+  if (!isAuthenticated) {
+    redirect('/login');
+  }
+
+  // 2. Get Groups and calculate access levels
+  const groups = await AuthGetUserGroupsServer();
+
+  const accessData = {
+    isPro: groups.includes('PRO'),
+    isAdmin: groups.includes('ADMINS'),
+    isAI: groups.includes('AI_PLAN'),
+    hasPaidPlan:
+      groups.includes('PRO') ||
+      groups.includes('AI_PLAN') ||
+      groups.includes('ADMINS'),
+  };
+
   return (
     <div className='min-h-screen bg-slate-50'>
-      {/* If you have a shared Sidebar or Navbar for 
-          protected pages, you would place it here. 
-      */}
-
-      <main>
-        <Suspense fallback={<LoadingOverlay />}>{children}</Suspense>
-      </main>
+      {/* 3. Wrap everything in the AccessProvider */}
+      <AccessProvider access={accessData}>
+        <main>
+          <Suspense fallback={<LoadingOverlay />}>{children}</Suspense>
+        </main>
+      </AccessProvider>
     </div>
   );
 }
