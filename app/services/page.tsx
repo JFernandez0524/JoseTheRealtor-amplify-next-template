@@ -1,4 +1,4 @@
-export default function ServicesPage() {
+export default async function ServicesPage() {
   return (
     <main className='max-w-2xl mx-auto py-10 px-6'>
       <h1 className='text-3xl font-bold mb-6'>Our Services</h1>

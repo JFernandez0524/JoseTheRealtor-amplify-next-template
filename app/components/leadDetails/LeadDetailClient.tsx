@@ -11,7 +11,7 @@ import {
 } from '@react-google-maps/api';
 import { Loader } from '@aws-amplify/ui-react';
 
-// 👇 RESTORED REACH/REACT ICONS
+// Icons
 import {
   HiOutlinePhone,
   HiOutlineEnvelope,
@@ -19,14 +19,15 @@ import {
 } from 'react-icons/hi2';
 import { FiMapPin } from 'react-icons/fi';
 
-// 👇 MODULAR COMPONENTS
+// Modular Components
 import { CoreLeadInfo } from './CoreLeadInfo';
 import { GhlActions } from './GhlActions';
 import { LeadStatusBadge } from './LeadStatusBadge';
 import { CardWrapper } from './CardWrapper';
 
-// 👇 UTILS
+// Utils
 import { client } from '@/app/utils/aws/data/frontEndClient';
+import { getFrontEndAuthSession } from '@/app/utils/aws/auth/amplifyFrontEndUser';
 import { type Schema } from '@/amplify/data/resource';
 
 type Lead = Schema['PropertyLead']['type'] & {
@@ -63,6 +64,7 @@ export function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
   const [isSkipTracing, setIsSkipTracing] = useState(false);
   const [navContext, setNavContext] = useState<NavContext | null>(null);
   const [isCoreInfoEditing, setIsCoreInfoEditing] = useState(false);
+  const [access, setAccess] = useState({ isAdmin: false, isPro: false });
 
   const { isLoaded: isMapLoaded } = useJsApiLoader({
     id: 'google-map-script',
@@ -70,7 +72,24 @@ export function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
     libraries,
   });
 
-  // 1. DATA FETCHING (ANALYZER) - With Production Guards
+  // 1. AUTH CHECK - Updated for ADMINS
+  useEffect(() => {
+    async function checkAccess() {
+      const session = await getFrontEndAuthSession();
+      if (session) {
+        const groups =
+          (session.tokens?.accessToken.payload['cognito:groups'] as string[]) ||
+          [];
+        setAccess({
+          isAdmin: groups.includes('ADMINS'),
+          isPro: groups.includes('PRO'),
+        });
+      }
+    }
+    checkAccess();
+  }, []);
+
+  // 2. DATA FETCHING (ANALYZER)
   useEffect(() => {
     const fetchMarketIntel = async () => {
       if (
@@ -116,20 +135,17 @@ export function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
     fetchMarketIntel();
   }, [initialLead]);
 
-  // 2. NAVIGATION LOGIC (With Dynamic Refresh for Probate/New leads)
+  // 3. NAVIGATION LOGIC - Updated path to match /lead/ structure
   useEffect(() => {
     const loadNavigation = async () => {
       const contextString = sessionStorage.getItem('leadNavContext');
       if (!contextString) return;
-
       try {
         const context = JSON.parse(contextString);
         let leadIds = context.ids || [];
         let idx = leadIds.indexOf(initialLead.id);
 
-        // 🔄 REFRESH: If current lead is not in the dashboard list, fetch fresh IDs
         if (idx === -1) {
-          console.log('Refreshing navigation list from DB...');
           const { data: freshLeads } = await client.models.PropertyLead.list({
             filter: context.filterType
               ? { type: { eq: context.filterType } }
@@ -138,7 +154,6 @@ export function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
           });
           leadIds = freshLeads.map((l) => l.id);
           idx = leadIds.indexOf(initialLead.id);
-
           sessionStorage.setItem(
             'leadNavContext',
             JSON.stringify({ ...context, ids: leadIds })
@@ -160,7 +175,6 @@ export function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
     loadNavigation();
   }, [initialLead.id]);
 
-  // 3. HANDLERS
   const handlePrevious = () => {
     if (navContext && !navContext.isFirst) {
       router.push(`/lead/${navContext.ids[navContext.currentIndex - 1]}`);
@@ -219,7 +233,7 @@ export function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
 
   return (
     <main className='max-w-[1600px] mx-auto py-6 px-8 bg-slate-50 min-h-screen'>
-      {/* 🔝 HEADER / NAV */}
+      {/* HEADER / NAV */}
       <div className='flex items-center justify-between mb-8'>
         <div className='flex items-center gap-6'>
           <button
@@ -292,7 +306,9 @@ export function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
                   Zestimate® Value
                 </p>
                 <p className='text-4xl font-black text-indigo-600 tracking-tighter'>
-                  {formatCurrency(valuation?.zestimate)}
+                  {access.isAdmin || access.isPro
+                    ? formatCurrency(valuation?.zestimate)
+                    : '$XX,XXX (PRO Only)'}
                 </p>
               </div>
             </div>
@@ -313,7 +329,6 @@ export function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
               />
             </CardWrapper>
 
-            {/* RESTORED: SKIP TRACE RESULTS SECTION */}
             <CardWrapper title='Skip Trace Results'>
               <div className='space-y-6'>
                 <div>
@@ -369,35 +384,40 @@ export function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
             </CardWrapper>
           </div>
 
-          {/* ANALYSIS GRID */}
           <CardWrapper title='Technical Property Analysis'>
-            <div className='grid grid-cols-2 md:grid-cols-4 gap-y-10 gap-x-8'>
-              <InfoRow label='APN' value={parcel?.apn} />
-              <InfoRow
-                label='Living Area'
-                value={
-                  parcel?.buildingSizeSquareFeet
-                    ? `${parcel.buildingSizeSquareFeet.toLocaleString()} SqFt`
-                    : null
-                }
-              />
-              <InfoRow
-                label='Lot Size'
-                value={
-                  parcel?.lotSizeSquareFeet
-                    ? `${parcel.lotSizeSquareFeet.toLocaleString()} SqFt`
-                    : null
-                }
-              />
-              <InfoRow label='Year Built' value={building?.yearBuilt} />
-              <InfoRow
-                label='Beds / Baths'
-                value={`${building?.bedrooms || '-'} / ${building?.baths || '-'}`}
-              />
-              <InfoRow label='Stories' value={building?.totalStories} />
-              <InfoRow label='Zoning' value={parcel?.zoningDescription} />
-              <InfoRow label='County' value={parcel?.county} />
-            </div>
+            {isAnalyzing ? (
+              <div className='py-10 flex justify-center'>
+                <Loader size='large' />
+              </div>
+            ) : (
+              <div className='grid grid-cols-2 md:grid-cols-4 gap-y-10 gap-x-8'>
+                <InfoRow label='APN' value={parcel?.apn} />
+                <InfoRow
+                  label='Living Area'
+                  value={
+                    parcel?.buildingSizeSquareFeet
+                      ? `${parcel.buildingSizeSquareFeet.toLocaleString()} SqFt`
+                      : null
+                  }
+                />
+                <InfoRow
+                  label='Lot Size'
+                  value={
+                    parcel?.lotSizeSquareFeet
+                      ? `${parcel.lotSizeSquareFeet.toLocaleString()} SqFt`
+                      : null
+                  }
+                />
+                <InfoRow label='Year Built' value={building?.yearBuilt} />
+                <InfoRow
+                  label='Beds / Baths'
+                  value={`${building?.bedrooms || '-'} / ${building?.baths || '-'}`}
+                />
+                <InfoRow label='Stories' value={building?.totalStories} />
+                <InfoRow label='Zoning' value={parcel?.zoningDescription} />
+                <InfoRow label='County' value={parcel?.county} />
+              </div>
+            )}
           </CardWrapper>
         </div>
 
@@ -465,7 +485,6 @@ export function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
   );
 }
 
-// HELPERS
 function InfoRow({ label, value }: { label: string; value: any }) {
   const getDisplayValue = (val: any) =>
     val === null || val === undefined || val === '' ? '---' : String(val);

@@ -17,7 +17,6 @@ export default async function ProfilePage() {
   }
 
   const attributes = await AuthGetUserAttributesServer();
-  console.log('attributes', attributes);
 
   // 3️⃣ Render profile details (SSR-rendered)
   return (

@@ -3,6 +3,7 @@
 import { type ClientSchema, a, defineData } from '@aws-amplify/backend';
 import { skipTraceLeads } from '../functions/skiptraceLeads/resource';
 import { manualGhlSync } from '../functions/manualGhlSync/resource';
+import { addUserToGroup } from './add-user-to-group/resource';
 
 const schema = a.schema({
   PropertyLead: a
@@ -80,7 +81,12 @@ const schema = a.schema({
       enrichments: a.hasMany('Enrichment', 'leadId'),
       activities: a.hasMany('Activity', 'leadId'),
     })
-    .authorization((allow) => [allow.owner()])
+    .authorization((allow) => [
+      // Users can still manage their own data
+      allow.owner(),
+      // Optional: Allow Admins to see all records for support
+      allow.group('ADMINS'),
+    ])
     .secondaryIndexes((index) => [
       // 1. Duplicate Check
       index('owner')
@@ -162,7 +168,7 @@ const schema = a.schema({
     })
     .returns(a.json())
     .handler(a.handler.function(skipTraceLeads))
-    .authorization((allow) => [allow.authenticated()]), // 💥 FIX 2: Rename mutation to match resource name `manualGhlSync`
+    .authorization((allow) => [allow.groups(['PRO', 'ADMINS'])]), // 💥 FIX 2: Rename mutation to match resource name `manualGhlSync`
 
   manualGhlSync: a
     .mutation()
@@ -171,7 +177,7 @@ const schema = a.schema({
     })
     .returns(a.json()) // Returns a status object for the UI
     .handler(a.handler.function(manualGhlSync)) // Link to the new Lambda function
-    .authorization((allow) => [allow.authenticated()]),
+    .authorization((allow) => [allow.groups(['PRO', 'ADMINS'])]),
 
   Notification: a
     .model({
@@ -181,6 +187,17 @@ const schema = a.schema({
       isRead: a.boolean().default(false),
     })
     .authorization((allow) => [allow.owner()]),
+
+  addUserToGroup: a
+    .mutation()
+    .arguments({
+      userId: a.string().required(),
+      groupName: a.string().required(),
+    })
+    // 🔒 Only current ADMINS can promote others
+    .authorization((allow) => [allow.group('ADMINS')])
+    .handler(a.handler.function(addUserToGroup))
+    .returns(a.json()),
 });
 
 export type Schema = ClientSchema<typeof schema>;

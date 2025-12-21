@@ -1,5 +1,6 @@
 // amplify/auth/resource.ts
 import { defineAuth, secret } from '@aws-amplify/backend';
+import { addUserToGroup } from '../data/add-user-to-group/resource';
 
 export const auth = defineAuth({
   loginWith: {
@@ -49,4 +50,10 @@ export const auth = defineAuth({
       ],
     },
   },
+  // Define your monetization and admin groups
+  groups: ['ADMINS', 'PRO', 'FREE'],
+  access: (allow) => [
+    // Grant the function permission to modify Cognito groups
+    allow.resource(addUserToGroup).to(['addUserToGroup']),
+  ],
 });
