@@ -1,5 +1,4 @@
 import { defineFunction, secret } from '@aws-amplify/backend';
-import { data } from '../../data/resource';
 
 export const skipTraceLeads = defineFunction({
   name: 'skipTraceLeads',

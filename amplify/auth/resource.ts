@@ -51,9 +51,5 @@ export const auth = defineAuth({
     },
   },
   // Define your monetization and admin groups
-  groups: ['ADMINS', 'PRO', 'FREE'],
-  access: (allow) => [
-    // Grant the function permission to modify Cognito groups
-    allow.resource(addUserToGroup).to(['addUserToGroup']),
-  ],
+  groups: ['ADMINS', 'PRO', 'AI_PLAN', 'FREE'],
 });
