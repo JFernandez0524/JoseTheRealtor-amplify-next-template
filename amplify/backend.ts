@@ -30,3 +30,10 @@ backend.storage.resources.bucket.addEventNotification(
     prefix: 'leadFiles/',
   }
 );
+
+const leadTable = backend.data.resources.tables['PropertyLead'];
+const userAccountTable = backend.data.resources.tables['UserAccount'];
+
+// Grant the GHL function access to the tables
+leadTable.grantReadWriteData(backend.manualGhlSync.resources.lambda);
+userAccountTable.grantReadWriteData(backend.manualGhlSync.resources.lambda);

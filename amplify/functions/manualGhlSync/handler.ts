@@ -1,7 +1,6 @@
 import { Amplify } from 'aws-amplify';
 import { getAmplifyDataClientConfig } from '@aws-amplify/backend/function/runtime';
 import { generateClient } from 'aws-amplify/data';
-import { env } from '$amplify/env/manualGhlSync';
 import type { Schema } from '../../data/resource';
 import { syncToGoHighLevel } from './integrations/gohighlevel';
 
@@ -9,7 +8,7 @@ import { syncToGoHighLevel } from './integrations/gohighlevel';
  * 🚀 INITIALIZE AMPLIFY CLIENT
  */
 const { resourceConfig, libraryOptions } = await getAmplifyDataClientConfig(
-  env as any
+  process.env as any
 );
 Amplify.configure(resourceConfig, libraryOptions);
 
