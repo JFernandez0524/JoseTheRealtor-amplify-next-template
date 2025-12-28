@@ -45,5 +45,5 @@
     "amplify_outputs.json",
     "amplify/**/*.ts"
   ],
-  "exclude": ["node_modules"]
+  "exclude": ["node_modules", "amplify"]
 }

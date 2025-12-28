@@ -13,7 +13,6 @@ import { randomUUID } from 'crypto';
 import { Amplify } from 'aws-amplify';
 import { getAmplifyDataClientConfig } from '@aws-amplify/backend/function/runtime';
 import { generateClient } from 'aws-amplify/data';
-import { env } from '$amplify/env/uploadCsvHandler';
 import type { Schema } from '../../data/resource';
 import { validateAddressWithGoogle } from '../../../app/utils/google.server';
 
@@ -22,7 +21,7 @@ import { validateAddressWithGoogle } from '../../../app/utils/google.server';
  * Using 'env as any' to bypass temporary local environment type mismatches.
  */
 const { resourceConfig, libraryOptions } = await getAmplifyDataClientConfig(
-  env as any
+  process.env as any
 );
 Amplify.configure(resourceConfig, libraryOptions);
 

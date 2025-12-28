@@ -2,14 +2,13 @@ import axios, { isAxiosError } from 'axios';
 import { Amplify } from 'aws-amplify';
 import { getAmplifyDataClientConfig } from '@aws-amplify/backend/function/runtime';
 import { generateClient } from 'aws-amplify/data';
-import { env } from '$amplify/env/skipTraceLeads';
 import type { Schema } from '../../data/resource';
 
 /**
  * 🚀 INITIALIZE AMPLIFY CLIENT
  */
 const { resourceConfig, libraryOptions } = await getAmplifyDataClientConfig(
-  env as any
+  process.env as any
 );
 Amplify.configure(resourceConfig, libraryOptions);
 
