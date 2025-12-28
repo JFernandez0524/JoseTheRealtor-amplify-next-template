@@ -9,7 +9,15 @@ interface AccessContextType {
   hasPaidPlan: boolean;
 }
 
-const AccessContext = createContext<AccessContextType | undefined>(undefined);
+// 🛡️ Give it a default value so it doesn't crash during build/SSR
+const defaultAccess: AccessContextType = {
+  isPro: false,
+  isAdmin: false,
+  isAI: false,
+  hasPaidPlan: false,
+};
+
+const AccessContext = createContext<AccessContextType>(defaultAccess);
 
 export function AccessProvider({
   children,
@@ -23,11 +31,8 @@ export function AccessProvider({
   );
 }
 
-// This is the hook you will use in your buttons and tables
 export function useAccess() {
   const context = useContext(AccessContext);
-  if (context === undefined) {
-    throw new Error('useAccess must be used within an AccessProvider');
-  }
+  // No longer throwing error; returns defaultAccess if outside provider
   return context;
 }

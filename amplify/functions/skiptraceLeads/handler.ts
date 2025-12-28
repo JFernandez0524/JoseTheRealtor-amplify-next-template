@@ -1,30 +1,28 @@
-// amplify/functions/skiptraceLeads/handler.ts
-
 import axios, { isAxiosError } from 'axios';
-import {
-  getLead,
-  updateLead,
-  DBLead,
-} from '../../../app/utils/aws/data/lead.server';
-import { cookiesClient } from '../../../app/utils/aws/auth/amplifyServerUtils.server';
+import { Amplify } from 'aws-amplify';
+import { getAmplifyDataClientConfig } from '@aws-amplify/backend/function/runtime';
+import { generateClient } from 'aws-amplify/data';
+import { env } from '$amplify/env/skipTraceLeads';
+import type { Schema } from '../../data/resource';
+
+/**
+ * 🚀 INITIALIZE AMPLIFY CLIENT
+ */
+const { resourceConfig, libraryOptions } = await getAmplifyDataClientConfig(
+  env as any
+);
+Amplify.configure(resourceConfig, libraryOptions);
+
+const client = generateClient<Schema>();
 
 const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 1000;
 const BATCH_DATA_SERVER_TOKEN = process.env.BATCH_DATA_SERVER_TOKEN;
 
 // ---------------------------------------------------------
-// Type Definitions (Preserved)
+// Type Definitions
 // ---------------------------------------------------------
-
-type FullSkipTraceStatus =
-  | 'PENDING'
-  | 'COMPLETED'
-  | 'FAILED'
-  | 'NO_MATCH'
-  | 'NOT_FOUND'
-  | 'NOT_AUTHORIZED'
-  | 'INVALID_DATA'
-  | 'ERROR';
+type Handler = Schema['skipTraceLeads']['functionHandler'];
 
 type MailingAddressData = {
   mailingAddress?: string | null;
@@ -40,27 +38,18 @@ type BatchDataResult = {
   mailingData?: MailingAddressData | null;
 };
 
-type SkipTraceMutationArguments = { leadIds: string[] };
-type AppSyncHandlerEvent = {
-  arguments: SkipTraceMutationArguments;
-  identity: {
-    sub: string;
-    claims: { [key: string]: any };
-  } | null;
-};
-
 // ---------------------------------------------------------
-// Helper Functions (Preserved & Working)
+// Helper Functions
 // ---------------------------------------------------------
 
-function cleanName(name: any) {
+function cleanName(name: { first?: string | null; last?: string | null }) {
   const cleaned: any = {};
   if (name.first) cleaned.first = name.first;
   if (name.last) cleaned.last = name.last;
   return cleaned;
 }
 
-async function callBatchDataV3(lead: DBLead): Promise<BatchDataResult> {
+async function callBatchDataV3(lead: any): Promise<BatchDataResult> {
   if (!BATCH_DATA_SERVER_TOKEN) throw new Error('Missing BatchData API Key');
 
   let targetName = { first: lead.ownerFirstName, last: lead.ownerLastName };
@@ -161,7 +150,6 @@ async function callBatchDataV3(lead: DBLead): Promise<BatchDataResult> {
         );
         continue;
       }
-      console.error(`BatchData API Error: ${error.message}`);
       return {
         status: 'ERROR',
         foundPhones: [],
@@ -179,24 +167,30 @@ async function callBatchDataV3(lead: DBLead): Promise<BatchDataResult> {
 }
 
 // ---------------------------------------------------------
-// Main Handler (Updated with Authorization & Wallet logic)
+// Main Handler
 // ---------------------------------------------------------
 
-export const handler = async (event: AppSyncHandlerEvent) => {
+export const handler: Handler = async (event) => {
   const { leadIds } = event.arguments;
-  const ownerId = event.identity?.sub;
+  const identity = event.identity;
 
-  // 🛡️ 1. Identity Check
+  let ownerId: string | undefined;
+  let groups: string[] = [];
+
+  // 🛡️ 1. Extract Identity Safely
+  if (identity && 'sub' in identity) {
+    ownerId = identity.sub;
+    groups = (identity as any).claims?.['cognito:groups'] || [];
+  }
+
   if (!ownerId || !leadIds?.length) {
     throw new Error('Unauthorized: Missing user identity or lead data.');
   }
 
-  // 🛡️ 2. Group Protection (Tier Check)
-  const groups = event.identity?.claims?.['cognito:groups'] || [];
-  const isAuthorized =
-    groups.includes('PRO') ||
-    groups.includes('AI_PLAN') ||
-    groups.includes('ADMINS');
+  // 🛡️ 2. Tier Authorization Check
+  const isAuthorized = groups.some((g: string) =>
+    ['PRO', 'AI_PLAN', 'ADMINS'].includes(g)
+  );
 
   if (!isAuthorized) {
     throw new Error(
@@ -205,9 +199,11 @@ export const handler = async (event: AppSyncHandlerEvent) => {
   }
 
   try {
-    // 💰 3. Wallet Check
-    const { data: accounts } = await cookiesClient.models.UserAccount.list();
-    const userAccount = accounts[0]; // Assuming one profile per owner
+    // 💰 3. Wallet Check using .list() with Filter
+    const { data: accounts } = await client.models.UserAccount.list({
+      filter: { owner: { eq: ownerId } },
+    });
+    const userAccount = accounts[0];
 
     if (!userAccount || (userAccount.credits || 0) < leadIds.length) {
       throw new Error(
@@ -219,10 +215,16 @@ export const handler = async (event: AppSyncHandlerEvent) => {
     let processedSuccessfully = 0;
 
     for (const leadId of leadIds) {
-      const lead = await getLead(leadId);
+      if (!leadId) {
+        results.push({ id: 'unknown', status: 'ERROR' });
+        continue;
+      }
+      // 🛡️ 4. Ownership Lock & Fetch
+      const { data: lead } = await client.models.PropertyLead.get({
+        id: leadId,
+      });
 
-      // 🛡️ 4. Ownership Lock
-      if (!lead || lead.owner !== ownerId) {
+      if (!lead || (lead.owner ?? '') !== ownerId) {
         results.push({ id: leadId, status: 'ERROR' });
         continue;
       }
@@ -232,12 +234,15 @@ export const handler = async (event: AppSyncHandlerEvent) => {
       if (enrichedData.status !== 'SUCCESS') {
         const finalStatus =
           enrichedData.status === 'ERROR' ? 'FAILED' : 'NO_MATCH';
-        await updateLead({ id: leadId, skipTraceStatus: finalStatus as any });
+        await client.models.PropertyLead.update({
+          id: leadId,
+          skipTraceStatus: finalStatus as any,
+        });
         results.push({ id: leadId, status: finalStatus });
         continue;
       }
 
-      // Success Logic
+      // 5. Success Logic: Update Lead
       const newPhones = [
         ...new Set([...(lead.phones || []), ...enrichedData.foundPhones]),
       ];
@@ -245,7 +250,7 @@ export const handler = async (event: AppSyncHandlerEvent) => {
         ...new Set([...(lead.emails || []), ...enrichedData.foundEmails]),
       ];
 
-      await updateLead({
+      await client.models.PropertyLead.update({
         id: leadId,
         phones: newPhones,
         emails: newEmails,
@@ -261,9 +266,9 @@ export const handler = async (event: AppSyncHandlerEvent) => {
       results.push({ id: leadId, status: 'SUCCESS', phones: newPhones.length });
     }
 
-    // 💰 5. Deduct Credits
+    // 💰 6. Deduct Credits
     if (processedSuccessfully > 0) {
-      await cookiesClient.models.UserAccount.update({
+      await client.models.UserAccount.update({
         id: userAccount.id,
         credits: (userAccount.credits || 0) - processedSuccessfully,
         totalSkipsPerformed:
@@ -271,7 +276,7 @@ export const handler = async (event: AppSyncHandlerEvent) => {
       });
     }
 
-    return results;
+    return JSON.stringify(results); // Return as JSON string for your mutation return type
   } catch (error: any) {
     console.error('🔥 Lambda Handler Error:', error.message);
     throw error;

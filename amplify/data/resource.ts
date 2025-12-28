@@ -1,5 +1,3 @@
-// amplify/data/schema.ts
-
 import { type ClientSchema, a, defineData } from '@aws-amplify/backend';
 import { skipTraceLeads } from '../functions/skiptraceLeads/resource';
 import { manualGhlSync } from '../functions/manualGhlSync/resource';
@@ -164,7 +162,7 @@ const schema = a.schema({
       leadIds: a.string().array().required(),
     })
     .returns(a.json())
-    .handler(a.handler.function(skipTraceLeads))
+    .handler(a.handler.function('skipTraceLeads'))
     .authorization((allow) => [allow.groups(['PRO', 'ADMINS'])]),
 
   manualGhlSync: a
@@ -173,7 +171,7 @@ const schema = a.schema({
       leadId: a.id().required(),
     })
     .returns(a.json())
-    .handler(a.handler.function(manualGhlSync))
+    .handler(a.handler.function('manualGhlSync'))
     .authorization((allow) => [allow.groups(['PRO', 'ADMINS'])]),
 
   Notification: a
@@ -192,7 +190,7 @@ const schema = a.schema({
       groupName: a.string().required(),
     })
     // 🚧 DEV MODE: Temporarily allow any authenticated user to promote themselves
-    .authorization((allow) => [allow.authenticated()])
+    .authorization((allow) => [allow.authenticated(), allow.group('ADMINS')])
     .handler(a.handler.function(addUserToGroup))
     .returns(a.json()),
 

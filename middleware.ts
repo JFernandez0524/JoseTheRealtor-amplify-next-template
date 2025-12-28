@@ -41,10 +41,10 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
+  /*
+   * Match all paths except webhooks, static files, images, login, pricing, services and favicon
+   */
   matcher: [
-    /*
-     * Match all paths except webhooks, static files, images, and favicon
-     */
-    '/((?!api/webhooks|_next/static|_next/image|favicon.ico).*)',
+    '/((?!api|_next/static|_next/image|favicon.ico|login|pricing|services).*)',
   ],
 };

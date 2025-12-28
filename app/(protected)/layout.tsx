@@ -2,11 +2,13 @@
 import { Suspense } from 'react';
 import { redirect } from 'next/navigation';
 import LoadingOverlay from '@/app/components/shared/LoadingOverlay';
-import { AccessProvider } from '@/app/context/AccessContext';
+
 import {
   AuthGetUserGroupsServer,
   AuthIsUserAuthenticatedServer,
 } from '@/app/utils/aws/auth/amplifyServerUtils.server';
+
+export const dynamic = 'force-dynamic';
 
 export default async function ProtectedLayout({
   children,
@@ -35,11 +37,10 @@ export default async function ProtectedLayout({
   return (
     <div className='min-h-screen bg-slate-50'>
       {/* 3. Wrap everything in the AccessProvider */}
-      <AccessProvider access={accessData}>
-        <main>
-          <Suspense fallback={<LoadingOverlay />}>{children}</Suspense>
-        </main>
-      </AccessProvider>
+
+      <main>
+        <Suspense fallback={<LoadingOverlay />}>{children}</Suspense>
+      </main>
     </div>
   );
 }

@@ -52,4 +52,5 @@ export const auth = defineAuth({
   },
   // Define your monetization and admin groups
   groups: ['ADMINS', 'PRO', 'AI_PLAN', 'FREE'],
+  access: (allow) => [allow.resource(addUserToGroup).to(['addUserToGroup'])],
 });

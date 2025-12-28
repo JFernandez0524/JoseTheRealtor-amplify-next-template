@@ -7,6 +7,8 @@ import { getFrontEndUser } from '@/app/utils/aws/auth/amplifyFrontEndUser';
 import { useAccess } from '@/app/context/AccessContext';
 import type { Schema } from '@/amplify/data/resource';
 
+export const dynamic = 'force-dynamic';
+
 // Using only react-icons as requested
 import {
   HiCheck,
@@ -83,14 +85,25 @@ export default function PricingPage() {
   const [loading, setLoading] = useState<string | null>(null);
 
   // 1. Fetch current balance if user is logged in
+  // app/pricing/page.tsx
+
   useEffect(() => {
     async function fetchBalance() {
       try {
+        // 🛡️ 1. Check if we even have a user session first
+        const user = await getFrontEndUser();
+        if (!user) {
+          console.log('No user logged in, skipping balance fetch.');
+          return;
+        }
+
+        // 2. Only fetch if the user exists
         const { data: accounts } = await client.models.UserAccount.list();
         if (accounts && accounts[0]) {
           setUserAccount(accounts[0]);
         }
       } catch (err) {
+        // This will now only catch actual API errors, not "Logged Out" errors
         console.error('Error fetching account:', err);
       }
     }

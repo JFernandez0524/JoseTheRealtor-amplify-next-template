@@ -13,11 +13,11 @@ export async function getFrontEndUser(): Promise<AuthUser | null> {
     const user = await getCurrentUser();
     return user;
   } catch (error: any) {
-    if (error.name !== 'UserUnauthenticatedException') {
-      console.error('Error fetching current user:', error);
-      // You may want to remove this throw, just like in the function below
-      throw new Error('Error fetching current user');
-    }
+    // if (error.name !== 'UserUnauthenticatedException') {
+    //   console.error('Error fetching current user:', error);
+    //   // You may want to remove this throw, just like in the function below
+    //   throw new Error('Error fetching current user');
+    // }
     return null;
   }
 }

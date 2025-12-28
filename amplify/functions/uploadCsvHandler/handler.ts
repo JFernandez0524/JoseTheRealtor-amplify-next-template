@@ -1,5 +1,3 @@
-// amplify/functions/process-csv/handler.ts
-
 import { S3Handler } from 'aws-lambda';
 import {
   S3Client,
@@ -7,27 +5,36 @@ import {
   HeadObjectCommand,
   DeleteObjectCommand,
 } from '@aws-sdk/client-s3';
-import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import {
-  DynamoDBDocumentClient,
-  PutCommand,
-  GetCommand,
-} from '@aws-sdk/lib-dynamodb';
 import { parse } from 'csv-parse';
 import { Readable } from 'stream';
 import { randomUUID } from 'crypto';
+
+// --- AMPLIFY GEN 2 IMPORTS ---
+import { Amplify } from 'aws-amplify';
+import { getAmplifyDataClientConfig } from '@aws-amplify/backend/function/runtime';
+import { generateClient } from 'aws-amplify/data';
+import { env } from '$amplify/env/uploadCsvHandler';
+import type { Schema } from '../../data/resource';
 import { validateAddressWithGoogle } from '../../../app/utils/google.server';
 
-const s3 = new S3Client({});
-const ddbClient = new DynamoDBClient({});
-const ddbDocClient = DynamoDBDocumentClient.from(ddbClient);
+/**
+ * 🚀 INITIALIZE AMPLIFY CLIENT
+ * Using 'env as any' to bypass temporary local environment type mismatches.
+ */
+const { resourceConfig, libraryOptions } = await getAmplifyDataClientConfig(
+  env as any
+);
+Amplify.configure(resourceConfig, libraryOptions);
 
-// Environment Variables
-const TABLE_NAME = process.env.AMPLIFY_DATA_LEAD_TABLE_NAME;
-const USER_ACCOUNT_TABLE = process.env.AMPLIFY_DATA_USER_ACCOUNT_TABLE_NAME;
+const client = generateClient<Schema>();
+const s3 = new S3Client({});
+
+// 🛡️ Define the strict type based on your schema
+// 🛡️ This extracts the exact input type for the create method
+type LeadCreateInput = Parameters<typeof client.models.PropertyLead.create>[0];
 
 // ---------------------------------------------------------
-// 🛠️ FORMATTING HELPERS (Full Implementation)
+// 🛠️ FORMATTING HELPERS
 // ---------------------------------------------------------
 
 const sanitize = (val: any, maxLen = 255): string => {
@@ -69,11 +76,6 @@ const cleanCityForGeocoding = (city: string) => {
 // ---------------------------------------------------------
 
 export const handler: S3Handler = async (event) => {
-  if (!TABLE_NAME || !USER_ACCOUNT_TABLE) {
-    console.error('❌ Missing required environment variables.');
-    return;
-  }
-
   for (const record of event.Records) {
     const bucketName = record.s3.bucket.name;
     const decodedKey = decodeURIComponent(record.s3.object.key).replace(
@@ -104,28 +106,24 @@ export const handler: S3Handler = async (event) => {
       }
 
       // 🛡️ 2. MEMBERSHIP PROTECTION GUARD
-      // We check if the owner exists in the UserAccount table before processing
       try {
-        const userAccountRes = await ddbDocClient.send(
-          new GetCommand({
-            TableName: USER_ACCOUNT_TABLE,
-            Key: { owner: ownerId }, // Partition Key: owner
-          })
-        );
+        const { data: userAccounts } = await client.models.UserAccount.list({
+          filter: {
+            owner: {
+              eq: ownerId,
+            },
+          },
+        });
 
-        if (!userAccountRes.Item) {
+        if (!userAccounts) {
           console.error(
-            `❌ Authorization Denied: User ${ownerId} does not have a valid account record.`
+            `❌ Auth Denied: User ${ownerId} has no account record.`
           );
           await s3.send(
             new DeleteObjectCommand({ Bucket: bucketName, Key: decodedKey })
           );
           return;
         }
-
-        // Optional: Check if user is in PRO/ADMIN group if you store groups in DDB
-        // const groups = userAccountRes.Item.groups || [];
-        // if (!groups.includes('PRO') && !groups.includes('ADMINS')) { ... }
       } catch (authError) {
         console.error('❌ Membership check failed:', authError);
         return;
@@ -152,7 +150,6 @@ export const handler: S3Handler = async (event) => {
           const rawPropCity = sanitize(row['ownerCity']);
           const rawPropState = sanitize(row['ownerState']);
 
-          // --- PRE-CLEAN CITY FOR BETTER GOOGLE MATCHING ---
           const cleanCity = cleanCityForGeocoding(rawPropCity);
           const fullPropString = `${rawPropAddr}, ${cleanCity}, ${rawPropState} ${rawPropZip}`;
 
@@ -160,7 +157,6 @@ export const handler: S3Handler = async (event) => {
           const propValidation =
             await validateAddressWithGoogle(fullPropString);
 
-          // EXTRACT STANDARDIZED COMPONENTS
           const std = propValidation?.components;
           const finalPropAddr = std?.street || rawPropAddr;
           const finalPropCity = std?.city || rawPropCity;
@@ -176,21 +172,21 @@ export const handler: S3Handler = async (event) => {
               }
             : null;
 
-          // --- COORDINATES ---
+          // 🔢 CONVERT TO NUMBERS: Satisfies a.float() type requirement
           const latitude = propValidation?.location?.lat
-            ? String(propValidation.location.lat)
+            ? Number(propValidation.location.lat)
             : null;
           const longitude = propValidation?.location?.lng
-            ? String(propValidation.location.lng)
+            ? Number(propValidation.location.lng)
             : null;
 
-          // --- PROBATE ADMIN / MAILING ADDRESS LOGIC ---
-          let finalMailAddr = null;
-          let finalMailCity = null;
-          let finalMailState = null;
-          let finalMailZip = null;
-          let adminFirstName = null;
-          let adminLastName = null;
+          // --- PROBATE ADMIN LOGIC ---
+          let finalMailAddr = null,
+            finalMailCity = null,
+            finalMailState = null,
+            finalMailZip = null;
+          let adminFirstName = null,
+            adminLastName = null;
           const labels: string[] = [leadType];
 
           if (leadType === 'PROBATE') {
@@ -216,11 +212,11 @@ export const handler: S3Handler = async (event) => {
 
           const preSkiptracedPhone = formatPhoneNumber(row['phone']);
 
-          // --- 🎯 CONSTRUCT FINAL LEAD ITEM ---
-          const leadItem = {
+          // --- 🎯 CONSTRUCT LEAD ITEM (Mapped to LeadItem Type) ---
+          // 🎯 CONSTRUCT LEAD ITEM
+          const leadItem: LeadCreateInput = {
             id: randomUUID(),
             owner: ownerId,
-            __typename: 'PropertyLead',
             type: leadType,
             ownerFirstName: formatName(
               row['ownerFirstName'] || row['First Name']
@@ -230,9 +226,9 @@ export const handler: S3Handler = async (event) => {
             ownerCity: finalPropCity,
             ownerState: finalPropState,
             ownerZip: finalPropZip,
-            standardizedAddress,
-            latitude,
-            longitude,
+            standardizedAddress: standardizedAddress as any, // Cast JSON if needed
+            latitude, // Must be number | null
+            longitude, // Must be number | null
             adminFirstName,
             adminLastName,
             adminAddress: finalMailAddr,
@@ -245,19 +241,15 @@ export const handler: S3Handler = async (event) => {
             mailingZip: finalMailZip,
             isAbsenteeOwner: labels.includes('ABSENTEE'),
             leadLabels: labels,
-            phone: preSkiptracedPhone,
             phones: preSkiptracedPhone ? [preSkiptracedPhone] : [],
             skipTraceStatus: preSkiptracedPhone ? 'COMPLETED' : 'PENDING',
             ghlSyncStatus: 'PENDING',
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-            validationStatus: propValidation ? 'VALID' : 'UNVERIFIED',
+            validationStatus: (propValidation ? 'VALID' : 'UNVERIFIED') as any,
           };
 
-          // --- SAVE TO DYNAMODB ---
-          await ddbDocClient.send(
-            new PutCommand({ TableName: TABLE_NAME, Item: leadItem })
-          );
+          // --- 💾 SAVE TO DYNAMODB ---
+          await client.models.PropertyLead.create(leadItem);
+
           successCount++;
         } catch (rowError: any) {
           console.error(`❌ Row ${currentRow} failed:`, rowError.message);

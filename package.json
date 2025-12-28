@@ -13,7 +13,6 @@
     "@aws-amplify/ui-react": "^6.13.2",
     "@aws-amplify/ui-react-ai": "^1.5.0",
     "@aws-amplify/ui-react-core": "^3.4.7",
-    "@aws-sdk/client-cognito-identity-provider": "^3.908.0",
     "@aws-sdk/client-dynamodb": "^3.943.0",
     "@aws-sdk/client-s3": "^3.943.0",
     "@aws-sdk/lib-dynamodb": "^3.943.0",
@@ -33,6 +32,8 @@
   "devDependencies": {
     "@aws-amplify/backend": "^1.16.1",
     "@aws-amplify/backend-cli": "^1.8.0",
+    "@aws-sdk/client-cognito-identity-provider": "^3.958.0",
+    "@types/aws-lambda": "^8.10.159",
     "@types/formidable": "^3.4.5",
     "@types/node": "^20",
     "@types/react": "^18",
