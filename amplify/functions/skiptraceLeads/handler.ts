@@ -276,7 +276,7 @@ export const handler: Handler = async (event) => {
       });
     }
 
-    return JSON.stringify(results); // Return as JSON string for your mutation return type
+    return results; // Return as JSON string for your mutation return type
   } catch (error: any) {
     console.error('🔥 Lambda Handler Error:', error.message);
     throw error;

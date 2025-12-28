@@ -125,39 +125,44 @@ export default function LeadDashboardClient({ initialLeads }: Props) {
   const handleBulkSkipTrace = async () => {
     if (selectedIds.length === 0) return;
 
-    // Check Wallet Balance
     const currentCredits = userAccount?.credits || 0;
     if (currentCredits < selectedIds.length) {
-      alert(
-        `Insufficient Credits! You need ${selectedIds.length} but only have ${currentCredits}. Please refill your wallet.`
-      );
+      alert(`Insufficient Credits! You need ${selectedIds.length}...`);
       return;
     }
 
-    if (
-      !confirm(
-        `Skip-trace ${selectedIds.length} leads? (Cost: ${selectedIds.length} credits)`
-      )
-    )
-      return;
+    if (!confirm(`Skip-trace ${selectedIds.length} leads?`)) return;
 
     setIsProcessing(true);
     try {
-      const { errors } = await client.mutations.skipTraceLeads({
+      // 1. Capture the data result
+      const { data, errors } = await client.mutations.skipTraceLeads({
         leadIds: selectedIds,
       });
+
       if (errors) throw new Error(errors[0].message);
 
-      alert('Bulk skip-trace initiated! Data will appear shortly.');
+      // 2. Since your handler returns the 'results' array:
+      // data looks like: [{ id: '...', status: 'SUCCESS', phones: 2 }, ...]
+      const results = data as Array<{ id: string; status: string }>;
+      const successful = results.filter((r) => r.status === 'SUCCESS').length;
+      const failed = results.filter(
+        (r) => r.status === 'FAILED' || r.status === 'ERROR'
+      ).length;
+
+      // 3. Precise Feedback
+      alert(
+        `Skip-trace complete!\n✅ Successful: ${successful}\n❌ Failed/No Match: ${failed}`
+      );
+
       setSelectedIds([]);
     } catch (err) {
       console.error('Skip-trace error:', err);
-      alert('Error starting skip-trace. Check your network connection.');
+      alert('Error during skip-trace. Check your network connection.');
     } finally {
       setIsProcessing(false);
     }
   };
-
   const handleDeleteLeads = async () => {
     if (!isAdmin) {
       alert('Unauthorized: Only Admins can bulk delete leads.');

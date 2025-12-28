@@ -1,5 +1,5 @@
+// amplify/data/add-user-to-group/handler.ts
 import type { Schema } from '../resource';
-import { env } from '$amplify/env/addUserToGroup';
 import {
   AdminAddUserToGroupCommand,
   CognitoIdentityProviderClient,
@@ -12,14 +12,17 @@ const cognitoClient = new CognitoIdentityProviderClient({});
 export const handler: Handler = async (event) => {
   const { userId, groupName } = event.arguments;
 
-  if (!userId || !groupName) {
-    throw new Error('Missing userId or groupName.');
+  // ONLY CHANGE: Use process.env instead of $amplify/env import
+  const userPoolId = process.env.AMPLIFY_AUTH_USERPOOL_ID;
+
+  if (!userPoolId) {
+    throw new Error('AMPLIFY_AUTH_USERPOOL_ID environment variable is not set');
   }
 
   const command = new AdminAddUserToGroupCommand({
     Username: userId,
     GroupName: groupName,
-    UserPoolId: env.AMPLIFY_AUTH_USERPOOL_ID,
+    UserPoolId: userPoolId,
   });
 
   try {

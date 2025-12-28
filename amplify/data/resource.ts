@@ -1,6 +1,4 @@
 import { type ClientSchema, a, defineData } from '@aws-amplify/backend';
-import { skipTraceLeads } from '../functions/skiptraceLeads/resource';
-import { manualGhlSync } from '../functions/manualGhlSync/resource';
 import { addUserToGroup } from './add-user-to-group/resource';
 
 const schema = a.schema({
