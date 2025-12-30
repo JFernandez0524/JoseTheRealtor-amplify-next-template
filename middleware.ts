@@ -7,13 +7,21 @@ export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // 1. Define Public Paths
-  const publicPaths = ['/login', '/signup', '/pricing', '/forgot-password'];
+  const publicPaths = [
+    '/login', 
+    '/signup', 
+    '/pricing', 
+    '/about', 
+    '/services', 
+    '/logout',
+    '/forgot-password'
+  ];
   const isPublicPath = publicPaths.some((path) => pathname.startsWith(path));
 
-  // 2. Bypass for Public Paths and Webhooks
+  // 2. Bypass for Public Paths, API routes, and Webhooks
   if (
     isPublicPath ||
-    pathname.startsWith('/api/webhooks') ||
+    pathname.startsWith('/api/') ||
     pathname === '/'
   ) {
     return response;
@@ -42,9 +50,10 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   /*
-   * Match all paths except webhooks, static files, images, login, pricing, services and favicon
+   * Match all paths except static files, images, and favicon
+   * Let the middleware handle route-specific logic
    */
   matcher: [
-    '/((?!api|_next/static|_next/image|favicon.ico|login|pricing|services).*)',
+    '/((?!_next/static|_next/image|favicon.ico).*)',
   ],
 };

@@ -32,17 +32,21 @@ export default async function ProfilePage() {
     AuthGetUserGroupsServer(),
   ]);
 
-  // 2. Fetch User Account (Wallet/Stats) from DB
-  const { data: accounts } = await cookiesClient.models.UserAccount.list();
+  // 2. Fetch User Account (Wallet/Stats) from DB - Filter by current user
+  const { data: accounts } = await cookiesClient.models.UserAccount.list({
+    filter: { owner: { eq: user.userId } },
+  });
   const userAccount = accounts?.[0];
 
   // 3. Determine Subscription Level
   // We filter out the system "Google" group to show only app-specific tiers
-  const subscriptionTier = groups.includes('AI_PLAN')
-    ? 'AI Outreach Pro'
-    : groups.includes('PRO')
-      ? 'Sync Pro'
-      : 'Free Tier';
+  const subscriptionTier = groups.includes('ADMINS')
+    ? 'Admin (Full Access)'
+    : groups.includes('AI_PLAN')
+      ? 'AI Outreach Pro'
+      : groups.includes('PRO')
+        ? 'Sync Pro'
+        : 'Free Tier';
 
   return (
     <main className='max-w-4xl mx-auto py-12 px-6'>
@@ -157,12 +161,14 @@ export default async function ProfilePage() {
                 Current Plan
               </p>
               <h3 className='text-2xl font-black mb-6'>{subscriptionTier}</h3>
-              <a
-                href='/pricing'
-                className='inline-block bg-white text-indigo-600 px-6 py-2 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-indigo-50 transition-colors'
-              >
-                Upgrade Plan
-              </a>
+              {!groups.includes('ADMINS') && (
+                <a
+                  href='/pricing'
+                  className='inline-block bg-white text-indigo-600 px-6 py-2 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-indigo-50 transition-colors'
+                >
+                  Upgrade Plan
+                </a>
+              )}
             </div>
           </div>
 
@@ -180,12 +186,14 @@ export default async function ProfilePage() {
                 Credits
               </span>
             </div>
-            <a
-              href='/pricing'
-              className='block text-center bg-slate-900 text-white py-3 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-800 transition-colors'
-            >
-              Add Credits
-            </a>
+            {!groups.includes('ADMINS') && (
+              <a
+                href='/pricing'
+                className='block text-center bg-slate-900 text-white py-3 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-800 transition-colors'
+              >
+                Add Credits
+              </a>
+            )}
           </div>
         </div>
       </div>

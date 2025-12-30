@@ -100,7 +100,7 @@ export async function syncToGoHighLevel(
       mailing_city: lead.mailingCity,
       mailing_state: lead.mailingState,
       mailing_zipcode: lead.mailingZip,
-      lead_type: lead.type,
+      lead_type: lead.type === 'PROBATE' ? 'Probate' : lead.type === 'PREFORECLOSURE' ? 'Preforeclosure' : lead.type,
       skiptracestatus: lead.skipTraceStatus?.toUpperCase() || 'PENDING',
       lead_source_id: lead.id, // 🎯 Shared Lead ID for suppression workflows
     };

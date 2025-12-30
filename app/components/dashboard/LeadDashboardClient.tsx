@@ -50,20 +50,15 @@ export default function LeadDashboardClient({ initialLeads }: Props) {
         const user = await getFrontEndUser();
         if (!user) return;
 
-        const { data: accounts } = await client.models.UserAccount.list();
+        // Fix: Only fetch existing account, don't create new ones
+        const { data: accounts } = await client.models.UserAccount.list({
+          filter: { owner: { eq: user.userId } },
+        });
 
         if (accounts.length > 0) {
           setUserAccount(accounts[0]);
-        } else {
-          // No profile found: Initialize the user's wallet
-          const { data: newAccount } = await client.models.UserAccount.create({
-            email: user.signInDetails?.loginId || 'user@email.com',
-            credits: 10, // Starter credits
-            totalLeadsSynced: 0,
-            totalSkipsPerformed: 0,
-          });
-          if (newAccount) setUserAccount(newAccount);
         }
+        // Note: Account creation is handled by AccessContext
       } catch (err) {
         console.error('UserAccount error:', err);
       }
@@ -125,10 +120,13 @@ export default function LeadDashboardClient({ initialLeads }: Props) {
   const handleBulkSkipTrace = async () => {
     if (selectedIds.length === 0) return;
 
-    const currentCredits = userAccount?.credits || 0;
-    if (currentCredits < selectedIds.length) {
-      alert(`Insufficient Credits! You need ${selectedIds.length}...`);
-      return;
+    // Skip credit check for admins
+    if (!isAdmin) {
+      const currentCredits = userAccount?.credits || 0;
+      if (currentCredits < selectedIds.length) {
+        alert(`Insufficient Credits! You need ${selectedIds.length}...`);
+        return;
+      }
     }
 
     if (!confirm(`Skip-trace ${selectedIds.length} leads?`)) return;

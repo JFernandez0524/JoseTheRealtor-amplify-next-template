@@ -72,6 +72,19 @@ export function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
     libraries,
   });
 
+  const refreshLeadData = async () => {
+    try {
+      const { data: updatedLead } = await client.models.PropertyLead.get({
+        id: lead.id
+      });
+      if (updatedLead) {
+        setLead(updatedLead as Lead);
+      }
+    } catch (err) {
+      console.error('Failed to refresh lead data:', err);
+    }
+  };
+
   // 1. AUTH CHECK - Updated for ADMINS
   useEffect(() => {
     async function checkAccess() {
@@ -450,7 +463,7 @@ export function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
                   ghlContactId={lead.ghlContactId}
                   ghlSyncStatus={lead.ghlSyncStatus}
                   skipTraceStatus={lead.skipTraceStatus}
-                  onSyncComplete={() => {}}
+                  onSyncComplete={refreshLeadData}
                   client={client}
                 />
               </div>

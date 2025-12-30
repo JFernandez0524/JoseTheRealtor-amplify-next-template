@@ -5,6 +5,7 @@ import React, {
   useContext,
   ReactNode,
   useState,
+  useRef,
   useEffect,
   useCallback,
 } from 'react';
@@ -30,8 +31,14 @@ const defaultAccess: AccessContextType = {
 
 const AccessContext = createContext<AccessContextType>(defaultAccess);
 
+// Global flag to prevent multiple user creation attempts across all instances
+let globalUserCreationInProgress: Record<string, boolean> = {};
+
 export function AccessProvider({ children }: { children: ReactNode }) {
   const [access, setAccess] = useState<AccessContextType>(defaultAccess);
+  
+  // Add creation lock to prevent race conditions
+  const creatingAccount = useRef(false);
 
   const checkAccess = useCallback(async () => {
     try {
@@ -48,20 +55,65 @@ export function AccessProvider({ children }: { children: ReactNode }) {
 
       if (!userId || !userEmail) return;
 
-      // 1. Check if the UserAccount exists
-      const { data: accounts } = await client.models.UserAccount.list({
-        filter: { owner: { eq: userId } },
+      console.log('🔍 AccessContext - Checking user:', { userId, userEmail });
+
+      // 1. Check if the UserAccount exists by BOTH userId AND email
+      const [
+        { data: accountsByOwner },
+        { data: accountsByEmail }
+      ] = await Promise.all([
+        client.models.UserAccount.list({
+          filter: { owner: { eq: userId } },
+        }),
+        client.models.UserAccount.list({
+          filter: { email: { eq: userEmail } },
+        })
+      ]);
+
+      console.log('🔍 Found accounts:', { 
+        byOwner: accountsByOwner?.length || 0, 
+        byEmail: accountsByEmail?.length || 0 
       });
+
+      const accounts = accountsByOwner || [];
+      const existingAccountByEmail = accountsByEmail?.[0];
 
       // 2. Create DB record if missing (Handles Social Logins)
       if (accounts.length === 0) {
-        await client.models.UserAccount.create({
-          email: userEmail,
-          credits: 0,
-          totalLeadsSynced: 0,
-          totalSkipsPerformed: 0,
-        });
-        console.log('✅ UserAccount initialized for:', userEmail);
+        // If there's already an account with this email but different userId, don't create another
+        if (existingAccountByEmail) {
+          console.log('⚠️ Account exists with same email but different userId. This might be a Google login issue.');
+          console.log('Existing account owner:', existingAccountByEmail.owner);
+          console.log('Current userId:', userId);
+          // Don't create a new account, just continue with access setup
+        } else {
+          // Check global flag first
+          if (globalUserCreationInProgress[userEmail]) {
+            console.log('UserAccount creation already in progress for email, skipping...');
+          } else {
+            // Set global flag by email instead of userId
+            globalUserCreationInProgress[userEmail] = true;
+            
+            try {
+              console.log('Creating UserAccount for:', userEmail);
+              
+              await client.models.UserAccount.create({
+                email: userEmail,
+                credits: 10, // Starter credits for new users
+                totalLeadsSynced: 0,
+                totalSkipsPerformed: 0,
+              });
+              console.log('✅ UserAccount initialized for:', userEmail);
+            } catch (createError) {
+              console.log('UserAccount creation failed:', createError);
+            } finally {
+              // Clear global flag after delay
+              setTimeout(() => {
+                delete globalUserCreationInProgress[userEmail];
+              }, 5000);
+            }
+          }
+        }
       }
 
       // 3. 🛡️ Identity Fail-Safe: Add to FREE group if not in any app groups
@@ -104,6 +156,12 @@ export function AccessProvider({ children }: { children: ReactNode }) {
       if (payload.event === 'signedIn' || payload.event === 'tokenRefresh') {
         checkAccess();
       } else if (payload.event === 'signedOut') {
+        // Clear localStorage flags on sign out
+        Object.keys(localStorage).forEach(key => {
+          if (key.startsWith('userAccount_created_')) {
+            localStorage.removeItem(key);
+          }
+        });
         setAccess({ ...defaultAccess, isLoading: false });
       }
     });

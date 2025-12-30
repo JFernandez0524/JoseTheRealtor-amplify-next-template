@@ -1,19 +1,13 @@
-import { Amplify } from 'aws-amplify';
-import { getAmplifyDataClientConfig } from '@aws-amplify/backend/function/runtime';
-import { generateClient } from 'aws-amplify/data';
-import type { Schema } from '../../data/resource';
+import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import { DynamoDBDocumentClient, GetCommand, UpdateCommand, ScanCommand } from '@aws-sdk/lib-dynamodb';
 import { syncToGoHighLevel } from './integrations/gohighlevel';
 
-/**
- * 🚀 INITIALIZE AMPLIFY CLIENT
- */
-const { resourceConfig, libraryOptions } = await getAmplifyDataClientConfig(
-  process.env as any
-);
-Amplify.configure(resourceConfig, libraryOptions);
+const dynamoClient = new DynamoDBClient({});
+const docClient = DynamoDBDocumentClient.from(dynamoClient);
 
-const client = generateClient<Schema>();
 const GHL_API_KEY = process.env.GHL_API_KEY;
+const propertyLeadTableName = process.env.AMPLIFY_DATA_PropertyLead_TABLE_NAME;
+const userAccountTableName = process.env.AMPLIFY_DATA_UserAccount_TABLE_NAME;
 
 type SyncResult = {
   status: 'SUCCESS' | 'SKIPPED' | 'FAILED' | 'ERROR' | 'NO_CHANGE';
@@ -21,7 +15,7 @@ type SyncResult = {
   ghlContactId?: string | null;
 };
 
-type Handler = Schema['manualGhlSync']['functionHandler'];
+type Handler = (event: { arguments: { leadId: string }; identity: { sub: string } }) => Promise<any>;
 
 // ---------------------------------------------------------
 // HELPER: Core GHL Sync Logic
@@ -29,10 +23,14 @@ type Handler = Schema['manualGhlSync']['functionHandler'];
 async function processGhlSync(lead: any): Promise<SyncResult> {
   if (!GHL_API_KEY) {
     const message = `GHL_API_KEY is missing. Check Amplify secrets.`;
-    await client.models.PropertyLead.update({
-      id: lead.id,
-      ghlSyncStatus: 'FAILED',
-    });
+    await docClient.send(new UpdateCommand({
+      TableName: propertyLeadTableName,
+      Key: { id: lead.id },
+      UpdateExpression: 'SET ghlSyncStatus = :status',
+      ExpressionAttributeValues: {
+        ':status': 'FAILED'
+      }
+    }));
     return { status: 'FAILED', message };
   }
 
@@ -62,12 +60,16 @@ async function processGhlSync(lead: any): Promise<SyncResult> {
     }
 
     const primaryGhlId = syncResults[0];
-    await client.models.PropertyLead.update({
-      id: lead.id,
-      ghlSyncStatus: 'SUCCESS',
-      ghlContactId: primaryGhlId,
-      ghlSyncDate: new Date().toISOString(),
-    });
+    await docClient.send(new UpdateCommand({
+      TableName: propertyLeadTableName,
+      Key: { id: lead.id },
+      UpdateExpression: 'SET ghlSyncStatus = :status, ghlContactId = :contactId, ghlSyncDate = :syncDate',
+      ExpressionAttributeValues: {
+        ':status': 'SUCCESS',
+        ':contactId': primaryGhlId,
+        ':syncDate': new Date().toISOString()
+      }
+    }));
 
     return {
       status: 'SUCCESS',
@@ -75,10 +77,14 @@ async function processGhlSync(lead: any): Promise<SyncResult> {
       ghlContactId: primaryGhlId,
     };
   } catch (error: any) {
-    await client.models.PropertyLead.update({
-      id: lead.id,
-      ghlSyncStatus: 'FAILED',
-    });
+    await docClient.send(new UpdateCommand({
+      TableName: propertyLeadTableName,
+      Key: { id: lead.id },
+      UpdateExpression: 'SET ghlSyncStatus = :status',
+      ExpressionAttributeValues: {
+        ':status': 'FAILED'
+      }
+    }));
     return { status: 'FAILED', message: error.message };
   }
 }
@@ -123,7 +129,10 @@ export const handler: Handler = async (event) => {
 
   try {
     // 🛡️ 4. Ownership Verification
-    const { data: lead } = await client.models.PropertyLead.get({ id: leadId });
+    const { Item: lead } = await docClient.send(new GetCommand({
+      TableName: propertyLeadTableName,
+      Key: { id: leadId }
+    }));
 
     if (!lead || lead.owner !== ownerId) {
       return { status: 'ERROR', message: 'Authorization denied.', leadId };
@@ -135,15 +144,26 @@ export const handler: Handler = async (event) => {
     // 📊 6. Track usage
     if (syncResult.status === 'SUCCESS') {
       try {
-        const { data: accounts } = await client.models.UserAccount.list({
-          filter: { owner: { eq: ownerId } },
-        });
+        const { Items: accounts } = await docClient.send(new ScanCommand({
+          TableName: userAccountTableName,
+          FilterExpression: '#owner = :ownerId',
+          ExpressionAttributeNames: {
+            '#owner': 'owner'
+          },
+          ExpressionAttributeValues: {
+            ':ownerId': ownerId
+          }
+        }));
 
         if (accounts && accounts[0]) {
-          await client.models.UserAccount.update({
-            id: accounts[0].id,
-            totalLeadsSynced: (accounts[0].totalLeadsSynced || 0) + 1,
-          });
+          await docClient.send(new UpdateCommand({
+            TableName: userAccountTableName,
+            Key: { id: accounts[0].id },
+            UpdateExpression: 'SET totalLeadsSynced = :newTotal',
+            ExpressionAttributeValues: {
+              ':newTotal': (accounts[0].totalLeadsSynced || 0) + 1
+            }
+          }));
         }
       } catch (err) {
         console.error('📊 Stats update failed (non-critical):', err);

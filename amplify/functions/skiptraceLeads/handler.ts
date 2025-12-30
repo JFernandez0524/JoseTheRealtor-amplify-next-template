@@ -1,27 +1,20 @@
 import axios, { isAxiosError } from 'axios';
-import { Amplify } from 'aws-amplify';
-import { getAmplifyDataClientConfig } from '@aws-amplify/backend/function/runtime';
-import { generateClient } from 'aws-amplify/data';
-import type { Schema } from '../../data/resource';
+import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import { DynamoDBDocumentClient, GetCommand, UpdateCommand, ScanCommand } from '@aws-sdk/lib-dynamodb';
 
-/**
- * 🚀 INITIALIZE AMPLIFY CLIENT
- */
-const { resourceConfig, libraryOptions } = await getAmplifyDataClientConfig(
-  process.env as any
-);
-Amplify.configure(resourceConfig, libraryOptions);
-
-const client = generateClient<Schema>();
+const dynamoClient = new DynamoDBClient({});
+const docClient = DynamoDBDocumentClient.from(dynamoClient);
 
 const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 1000;
 const BATCH_DATA_SERVER_TOKEN = process.env.BATCH_DATA_SERVER_TOKEN;
+const propertyLeadTableName = process.env.AMPLIFY_DATA_PropertyLead_TABLE_NAME;
+const userAccountTableName = process.env.AMPLIFY_DATA_UserAccount_TABLE_NAME;
 
 // ---------------------------------------------------------
 // Type Definitions
 // ---------------------------------------------------------
-type Handler = Schema['skipTraceLeads']['functionHandler'];
+type Handler = (event: { arguments: { leadIds: string[] }; identity: { sub: string } }) => Promise<any>;
 
 type MailingAddressData = {
   mailingAddress?: string | null;
@@ -198,11 +191,18 @@ export const handler: Handler = async (event) => {
   }
 
   try {
-    // 💰 3. Wallet Check using .list() with Filter
-    const { data: accounts } = await client.models.UserAccount.list({
-      filter: { owner: { eq: ownerId } },
-    });
-    const userAccount = accounts[0];
+    // 💰 3. Wallet Check using ScanCommand with Filter
+    const { Items: accounts } = await docClient.send(new ScanCommand({
+      TableName: userAccountTableName,
+      FilterExpression: '#owner = :ownerId',
+      ExpressionAttributeNames: {
+        '#owner': 'owner'
+      },
+      ExpressionAttributeValues: {
+        ':ownerId': ownerId
+      }
+    }));
+    const userAccount = accounts?.[0];
 
     if (!userAccount || (userAccount.credits || 0) < leadIds.length) {
       throw new Error(
@@ -219,9 +219,10 @@ export const handler: Handler = async (event) => {
         continue;
       }
       // 🛡️ 4. Ownership Lock & Fetch
-      const { data: lead } = await client.models.PropertyLead.get({
-        id: leadId,
-      });
+      const { Item: lead } = await docClient.send(new GetCommand({
+        TableName: propertyLeadTableName,
+        Key: { id: leadId }
+      }));
 
       if (!lead || (lead.owner ?? '') !== ownerId) {
         results.push({ id: leadId, status: 'ERROR' });
@@ -233,10 +234,14 @@ export const handler: Handler = async (event) => {
       if (enrichedData.status !== 'SUCCESS') {
         const finalStatus =
           enrichedData.status === 'ERROR' ? 'FAILED' : 'NO_MATCH';
-        await client.models.PropertyLead.update({
-          id: leadId,
-          skipTraceStatus: finalStatus as any,
-        });
+        await docClient.send(new UpdateCommand({
+          TableName: propertyLeadTableName,
+          Key: { id: leadId },
+          UpdateExpression: 'SET skipTraceStatus = :status',
+          ExpressionAttributeValues: {
+            ':status': finalStatus
+          }
+        }));
         results.push({ id: leadId, status: finalStatus });
         continue;
       }
@@ -249,17 +254,20 @@ export const handler: Handler = async (event) => {
         ...new Set([...(lead.emails || []), ...enrichedData.foundEmails]),
       ];
 
-      await client.models.PropertyLead.update({
-        id: leadId,
-        phones: newPhones,
-        emails: newEmails,
-        mailingAddress:
-          enrichedData.mailingData?.mailingAddress || lead.ownerAddress,
-        mailingCity: enrichedData.mailingData?.mailingCity || lead.ownerCity,
-        mailingState: enrichedData.mailingData?.mailingState || lead.ownerState,
-        mailingZip: enrichedData.mailingData?.mailingZip || lead.ownerZip,
-        skipTraceStatus: 'COMPLETED',
-      });
+      await docClient.send(new UpdateCommand({
+        TableName: propertyLeadTableName,
+        Key: { id: leadId },
+        UpdateExpression: 'SET phones = :phones, emails = :emails, mailingAddress = :mailingAddress, mailingCity = :mailingCity, mailingState = :mailingState, mailingZip = :mailingZip, skipTraceStatus = :status',
+        ExpressionAttributeValues: {
+          ':phones': newPhones,
+          ':emails': newEmails,
+          ':mailingAddress': enrichedData.mailingData?.mailingAddress || lead.ownerAddress,
+          ':mailingCity': enrichedData.mailingData?.mailingCity || lead.ownerCity,
+          ':mailingState': enrichedData.mailingData?.mailingState || lead.ownerState,
+          ':mailingZip': enrichedData.mailingData?.mailingZip || lead.ownerZip,
+          ':status': 'COMPLETED'
+        }
+      }));
 
       processedSuccessfully++;
       results.push({ id: leadId, status: 'SUCCESS', phones: newPhones.length });
@@ -267,12 +275,15 @@ export const handler: Handler = async (event) => {
 
     // 💰 6. Deduct Credits
     if (processedSuccessfully > 0) {
-      await client.models.UserAccount.update({
-        id: userAccount.id,
-        credits: (userAccount.credits || 0) - processedSuccessfully,
-        totalSkipsPerformed:
-          (userAccount.totalSkipsPerformed || 0) + processedSuccessfully,
-      });
+      await docClient.send(new UpdateCommand({
+        TableName: userAccountTableName,
+        Key: { id: userAccount.id },
+        UpdateExpression: 'SET credits = :newCredits, totalSkipsPerformed = :newTotal',
+        ExpressionAttributeValues: {
+          ':newCredits': (userAccount.credits || 0) - processedSuccessfully,
+          ':newTotal': (userAccount.totalSkipsPerformed || 0) + processedSuccessfully
+        }
+      }));
     }
 
     return results; // Return as JSON string for your mutation return type

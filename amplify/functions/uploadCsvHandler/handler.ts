@@ -5,18 +5,16 @@ import {
   HeadObjectCommand,
   DeleteObjectCommand,
 } from '@aws-sdk/client-s3';
+import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import { DynamoDBDocumentClient, PutCommand, ScanCommand } from '@aws-sdk/lib-dynamodb';
 import { parse } from 'csv-parse';
 import { Readable } from 'stream';
 import { randomUUID } from 'crypto';
-
-// --- AMPLIFY GEN 2 IMPORTS ---
-import { Amplify } from 'aws-amplify';
-import { getAmplifyDataClientConfig } from '@aws-amplify/backend/function/runtime';
-import { generateClient } from 'aws-amplify/data';
-import type { Schema } from '../../data/resource';
 import { validateAddressWithGoogle } from '../../../app/utils/google.server';
 
 const s3 = new S3Client({});
+const dynamoClient = new DynamoDBClient({});
+const docClient = DynamoDBDocumentClient.from(dynamoClient);
 
 // ---------------------------------------------------------
 // 🛠️ FORMATTING HELPERS
@@ -61,24 +59,17 @@ const cleanCityForGeocoding = (city: string) => {
 // ---------------------------------------------------------
 
 export const handler: S3Handler = async (event) => {
-  /**
-   * 🚀 INITIALIZE AMPLIFY CLIENT
-   * Using 'env as any' to bypass temporary local environment type mismatches.
-   */
-  const { resourceConfig, libraryOptions } = await getAmplifyDataClientConfig(
-    process.env as any
-  );
-  Amplify.configure(resourceConfig, libraryOptions);
-
-  const client = generateClient<Schema>();
-  // 🛡️ Define the strict type based on your schema
-  // 🛡️ This extracts the exact input type for the create method
-  type LeadCreateInput = Parameters<
-    typeof client.models.PropertyLead.create
-  >[0];
-
-  const autoBucketName = process.env.leadFiles_BUCKET_NAME;
+  const autoBucketName = event.Records[0].s3.bucket.name;
   console.log(`Bucket Name: ${autoBucketName}`);
+
+  // Get table names from environment variables (set by backend.ts)
+  const propertyLeadTableName = process.env.AMPLIFY_DATA_PropertyLead_TABLE_NAME;
+  const userAccountTableName = process.env.AMPLIFY_DATA_UserAccount_TABLE_NAME;
+
+  if (!propertyLeadTableName || !userAccountTableName) {
+    console.error('Missing table name environment variables');
+    return;
+  }
 
   for (const record of event.Records) {
     const decodedKey = decodeURIComponent(record.s3.object.key).replace(
@@ -110,23 +101,45 @@ export const handler: S3Handler = async (event) => {
 
       // 🛡️ 2. MEMBERSHIP PROTECTION GUARD
       try {
-        const { data: userAccounts } = await client.models.UserAccount.list({
-          filter: {
-            owner: {
-              eq: ownerId,
-            },
+        // First try to find by owner ID
+        let userAccountScan = await docClient.send(new ScanCommand({
+          TableName: userAccountTableName,
+          FilterExpression: '#owner = :ownerId',
+          ExpressionAttributeNames: {
+            '#owner': 'owner'
           },
-        });
+          ExpressionAttributeValues: {
+            ':ownerId': ownerId
+          }
+        }));
 
-        if (!userAccounts) {
+        // If not found by owner ID, try to find by partial owner match (for Google login variations)
+        if (!userAccountScan.Items || userAccountScan.Items.length === 0) {
+          console.log(`No account found for exact owner ${ownerId}, trying partial match...`);
+          
+          userAccountScan = await docClient.send(new ScanCommand({
+            TableName: userAccountTableName,
+            FilterExpression: 'contains(#owner, :partialOwnerId)',
+            ExpressionAttributeNames: {
+              '#owner': 'owner'
+            },
+            ExpressionAttributeValues: {
+              ':partialOwnerId': ownerId.split('::')[0] // Get the base user ID before ::google_
+            }
+          }));
+        }
+
+        if (!userAccountScan.Items || userAccountScan.Items.length === 0) {
           console.error(
-            `❌ Auth Denied: User ${ownerId} has no account record.`
+            `❌ Auth Denied: User ${ownerId} has no account record. User needs to visit the app first to initialize their account.`
           );
           await s3.send(
             new DeleteObjectCommand({ Bucket: autoBucketName, Key: decodedKey })
           );
           return;
         }
+        
+        console.log(`✅ Found UserAccount for owner ${ownerId}`);
       } catch (authError) {
         console.error('❌ Membership check failed:', authError);
         return;
@@ -215,43 +228,44 @@ export const handler: S3Handler = async (event) => {
 
           const preSkiptracedPhone = formatPhoneNumber(row['phone']);
 
-          // --- 🎯 CONSTRUCT LEAD ITEM (Mapped to LeadItem Type) ---
-          // 🎯 CONSTRUCT LEAD ITEM
-          const leadItem: LeadCreateInput = {
+          // --- 💾 SAVE TO DYNAMODB ---
+          const leadItem = {
             id: randomUUID(),
             owner: ownerId,
             type: leadType,
-            ownerFirstName: formatName(
-              row['ownerFirstName'] || row['First Name']
-            ),
+            ownerFirstName: formatName(row['ownerFirstName'] || row['First Name']),
             ownerLastName: formatName(row['ownerLastName'] || row['Last Name']),
             ownerAddress: finalPropAddr,
             ownerCity: finalPropCity,
             ownerState: finalPropState,
             ownerZip: finalPropZip,
-            standardizedAddress: standardizedAddress as any, // Cast JSON if needed
-            latitude, // Must be number | null
-            longitude, // Must be number | null
             adminFirstName,
             adminLastName,
             adminAddress: finalMailAddr,
             adminCity: finalMailCity,
             adminState: finalMailState,
             adminZip: finalMailZip,
-            mailingAddress: finalMailAddr,
-            mailingCity: finalMailCity,
-            mailingState: finalMailState,
-            mailingZip: finalMailZip,
+            mailingAddress: finalMailAddr || finalPropAddr,
+            mailingCity: finalMailCity || finalPropCity,
+            mailingState: finalMailState || finalPropState,
+            mailingZip: finalMailZip || finalPropZip,
+            standardizedAddress: standardizedAddress,
+            latitude,
+            longitude,
             isAbsenteeOwner: labels.includes('ABSENTEE'),
             leadLabels: labels,
             phones: preSkiptracedPhone ? [preSkiptracedPhone] : [],
             skipTraceStatus: preSkiptracedPhone ? 'COMPLETED' : 'PENDING',
             ghlSyncStatus: 'PENDING',
-            validationStatus: (propValidation ? 'VALID' : 'UNVERIFIED') as any,
+            validationStatus: propValidation ? 'VALID' : 'INVALID',
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
           };
 
-          // --- 💾 SAVE TO DYNAMODB ---
-          await client.models.PropertyLead.create(leadItem);
+          await docClient.send(new PutCommand({
+            TableName: propertyLeadTableName,
+            Item: leadItem
+          }));
 
           successCount++;
         } catch (rowError: any) {
