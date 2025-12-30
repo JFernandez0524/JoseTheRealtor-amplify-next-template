@@ -25,7 +25,7 @@ export default async function RootLayout({
     <html lang='en'>
       <body className={inter.className}>
         <AuthProvider>
-          <AccessProvider access={guestAccess}>
+          <AccessProvider>
             <ConversationsProvider>
               <Navbar />
               {children}

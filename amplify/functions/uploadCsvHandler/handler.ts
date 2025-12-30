@@ -16,21 +16,7 @@ import { generateClient } from 'aws-amplify/data';
 import type { Schema } from '../../data/resource';
 import { validateAddressWithGoogle } from '../../../app/utils/google.server';
 
-/**
- * 🚀 INITIALIZE AMPLIFY CLIENT
- * Using 'env as any' to bypass temporary local environment type mismatches.
- */
-const { resourceConfig, libraryOptions } = await getAmplifyDataClientConfig(
-  process.env as any
-);
-Amplify.configure(resourceConfig, libraryOptions);
-
-const client = generateClient<Schema>();
 const s3 = new S3Client({});
-
-// 🛡️ Define the strict type based on your schema
-// 🛡️ This extracts the exact input type for the create method
-type LeadCreateInput = Parameters<typeof client.models.PropertyLead.create>[0];
 
 // ---------------------------------------------------------
 // 🛠️ FORMATTING HELPERS
@@ -75,8 +61,26 @@ const cleanCityForGeocoding = (city: string) => {
 // ---------------------------------------------------------
 
 export const handler: S3Handler = async (event) => {
+  /**
+   * 🚀 INITIALIZE AMPLIFY CLIENT
+   * Using 'env as any' to bypass temporary local environment type mismatches.
+   */
+  const { resourceConfig, libraryOptions } = await getAmplifyDataClientConfig(
+    process.env as any
+  );
+  Amplify.configure(resourceConfig, libraryOptions);
+
+  const client = generateClient<Schema>();
+  // 🛡️ Define the strict type based on your schema
+  // 🛡️ This extracts the exact input type for the create method
+  type LeadCreateInput = Parameters<
+    typeof client.models.PropertyLead.create
+  >[0];
+
+  const autoBucketName = process.env.leadFiles_BUCKET_NAME;
+  console.log(`Bucket Name: ${autoBucketName}`);
+
   for (const record of event.Records) {
-    const bucketName = record.s3.bucket.name;
     const decodedKey = decodeURIComponent(record.s3.object.key).replace(
       /\+/g,
       ' '
@@ -89,7 +93,7 @@ export const handler: S3Handler = async (event) => {
     try {
       // 1. Extract Metadata from S3 Object
       const headObject = await s3.send(
-        new HeadObjectCommand({ Bucket: bucketName, Key: decodedKey })
+        new HeadObjectCommand({ Bucket: autoBucketName, Key: decodedKey })
       );
 
       ownerId = headObject.Metadata?.['owner_sub'] || '';
@@ -119,7 +123,7 @@ export const handler: S3Handler = async (event) => {
             `❌ Auth Denied: User ${ownerId} has no account record.`
           );
           await s3.send(
-            new DeleteObjectCommand({ Bucket: bucketName, Key: decodedKey })
+            new DeleteObjectCommand({ Bucket: autoBucketName, Key: decodedKey })
           );
           return;
         }
@@ -130,7 +134,7 @@ export const handler: S3Handler = async (event) => {
 
       // 3. Initiate Stream Processing
       const response = await s3.send(
-        new GetObjectCommand({ Bucket: bucketName, Key: decodedKey })
+        new GetObjectCommand({ Bucket: autoBucketName, Key: decodedKey })
       );
 
       const stream = response.Body as Readable;
@@ -257,7 +261,7 @@ export const handler: S3Handler = async (event) => {
 
       // 4. Cleanup S3 File
       await s3.send(
-        new DeleteObjectCommand({ Bucket: bucketName, Key: decodedKey })
+        new DeleteObjectCommand({ Bucket: autoBucketName, Key: decodedKey })
       );
       console.log(
         `✅ Finished: Processed ${successCount} leads for ${ownerId}`

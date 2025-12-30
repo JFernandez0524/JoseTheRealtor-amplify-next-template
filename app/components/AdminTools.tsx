@@ -1,28 +1,53 @@
 'use client';
-//Component to add user to ADMINS group
 
-import { generateClient } from 'aws-amplify/data';
-import type { Schema } from '@/amplify/data/resource';
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { signOut } from 'aws-amplify/auth'; // Import directly for the logic
+import { client } from '@/app/utils/aws/data/frontEndClient';
+import { HiOutlineShieldCheck } from 'react-icons/hi2';
 
-const client = generateClient<Schema>();
+export default function AdminTools({ userId }: { userId: string }) {
+  const [loading, setLoading] = useState(false);
+  const router = useRouter();
 
-export default function AdminTools() {
   const promoteToAdmin = async () => {
-    const { data, errors } = await client.mutations.addUserToGroup({
-      userId: '< REPLACE_WITH_USER_ID >',
-      groupName: 'ADMINS', // Must match the group defined in auth/resource.ts
-    });
+    const confirmAction = confirm(
+      'This will promote you to Admin and sign you out to refresh your security permissions. Proceed?'
+    );
+    if (!confirmAction) return;
 
-    if (errors) {
-      console.error('Promotion failed:', errors);
-    } else {
-      console.log('User promoted successfully:', data);
+    setLoading(true);
+    try {
+      const { errors } = await client.mutations.addUserToGroup({
+        userId,
+        groupName: 'ADMINS',
+      });
+
+      if (errors) {
+        alert(`Promotion failed: ${errors[0].message}`);
+      } else {
+        // 🛡️ Success Path
+        alert('Success! You are now an Admin. Signing out now...');
+
+        // Clear the session and redirect
+        await signOut();
+        router.push('/login');
+      }
+    } catch (err: any) {
+      alert(`Error: ${err.message}`);
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <div>
-      <button onClick={promoteToAdmin}>Promote Me to Admin</button>
-    </div>
+    <button
+      onClick={promoteToAdmin}
+      disabled={loading}
+      className='flex items-center gap-2 bg-amber-600 text-white px-6 py-3 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-amber-700 transition-all shadow-md disabled:opacity-50 disabled:cursor-not-allowed'
+    >
+      <HiOutlineShieldCheck className='text-lg' />
+      {loading ? 'Promoting...' : 'Promote Me to Admin'}
+    </button>
   );
 }

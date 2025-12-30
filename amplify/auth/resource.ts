@@ -1,6 +1,7 @@
 // amplify/auth/resource.ts
 import { defineAuth, secret } from '@aws-amplify/backend';
 import { addUserToGroup } from '../data/add-user-to-group/resource';
+import { postConfirmation } from './post-confirmation/resource';
 
 export const auth = defineAuth({
   loginWith: {
@@ -52,5 +53,11 @@ export const auth = defineAuth({
   },
   // Define your monetization and admin groups
   groups: ['ADMINS', 'PRO', 'AI_PLAN', 'FREE'],
-  access: (allow) => [allow.resource(addUserToGroup).to(['addUserToGroup'])],
+  triggers: {
+    postConfirmation,
+  },
+  access: (allow) => [
+    allow.resource(addUserToGroup).to(['addUserToGroup']),
+    allow.resource(postConfirmation).to(['addUserToGroup']),
+  ],
 });

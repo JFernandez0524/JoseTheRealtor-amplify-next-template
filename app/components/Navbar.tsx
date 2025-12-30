@@ -3,10 +3,9 @@
 import Link from 'next/link';
 import { useState, useRef, useEffect } from 'react';
 import Logout from './Logout';
-import { useAuthenticator } from '@aws-amplify/ui-react';
 import { usePathname } from 'next/navigation';
-import { useUserProfile } from '../hooks/useUserProfile';
 import { useAccess } from '../context/AccessContext';
+import { useUserProfile } from '../hooks/useUserProfile';
 import { HiMenu, HiX } from 'react-icons/hi';
 
 const Navbar = () => {
@@ -15,13 +14,15 @@ const Navbar = () => {
   const dropdownRef = useRef<HTMLDivElement>(null);
   const pathname = usePathname();
 
-  const { user, authStatus } = useAuthenticator((context) => [
-    context.user,
-    context.authStatus,
-  ]);
+  /** * 🛡️ CONSOLIDATED ACCESS HOOK
+   * Now includes isLoading to prevent UI flickering during session checks
+   */
+  const { hasPaidPlan, isAdmin, isLoading } = useAccess();
 
+  /** * 👤 PROFILE DATA
+   * We keep useUserProfile for the 'picture' and 'name' attributes
+   */
   const attributes = useUserProfile();
-  const { hasPaidPlan, isAdmin } = useAccess();
 
   // 1. Lock body scroll when mobile menu is open
   useEffect(() => {
@@ -35,6 +36,7 @@ const Navbar = () => {
     };
   }, [isMobileMenuOpen]);
 
+  // 2. Click Outside Dropdown Handler
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (
@@ -48,12 +50,12 @@ const Navbar = () => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Close mobile menu when route changes
+  // 3. Close mobile menu when route changes
   useEffect(() => {
     setIsMobileMenuOpen(false);
   }, [pathname]);
 
-  const displayName = attributes?.name || user?.username || 'Guest';
+  const displayName = attributes?.name || 'User';
   const profilePic =
     attributes?.picture ||
     `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=0D8ABC&color=fff&rounded=true`;
@@ -63,11 +65,14 @@ const Navbar = () => {
   const activeLinkClass =
     'font-bold text-blue-600 transition-colors duration-200';
 
-  // Mobile specific classes for the full-screen effect
   const mobileLinkClass =
     'text-2xl font-semibold text-gray-800 hover:text-blue-600 py-4 border-b border-gray-50 w-full text-center';
   const mobileActiveLinkClass =
     'text-2xl font-bold text-blue-600 py-4 border-b border-gray-50 w-full text-center';
+
+  // 🔒 AUTH GUARD HELPER
+  // If isLoading is true, we don't show auth-dependent items yet to prevent "jumping" UI
+  const isAuthenticated = !isLoading && attributes?.email;
 
   return (
     <nav className='bg-white border-b border-gray-200 sticky top-0 z-50'>
@@ -98,7 +103,7 @@ const Navbar = () => {
             Services
           </Link>
 
-          {authStatus === 'authenticated' && (
+          {isAuthenticated && (
             <>
               {hasPaidPlan && (
                 <>
@@ -133,7 +138,7 @@ const Navbar = () => {
             </>
           )}
 
-          {authStatus === 'authenticated' ? (
+          {isAuthenticated ? (
             <div ref={dropdownRef} className='relative ml-4'>
               <button
                 onClick={() => setMenuOpen(!menuOpen)}
@@ -162,30 +167,31 @@ const Navbar = () => {
               )}
             </div>
           ) : (
-            <Link
-              href='/login'
-              className='bg-blue-600 text-white px-5 py-2 rounded-lg font-bold text-sm'
-            >
-              Sign In
-            </Link>
+            !isLoading && (
+              <Link
+                href='/login'
+                className='bg-blue-600 text-white px-5 py-2 rounded-lg font-bold text-sm'
+              >
+                Sign In
+              </Link>
+            )
           )}
         </div>
 
-        {/* --- MOBILE TOGGLE BUTTON --- */}
+        {/* --- MOBILE TOGGLE --- */}
         <div className='flex md:hidden items-center space-x-4 z-[60]'>
           <button
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-            className='text-gray-600 text-3xl focus:outline-none p-2'
-            aria-label='Toggle Menu'
+            className='text-gray-600 text-3xl p-2'
           >
             {isMobileMenuOpen ? <HiX /> : <HiMenu />}
           </button>
         </div>
       </div>
 
-      {/* --- FULL SCREEN MOBILE OVERLAY --- */}
+      {/* --- MOBILE OVERLAY --- */}
       <div
-        className={`fixed inset-0 bg-white z-[55] flex flex-col items-center justify-center px-6 transition-transform duration-300 ease-in-out md:hidden ${isMobileMenuOpen ? 'translate-x-0' : 'translate-x-full'}`}
+        className={`fixed inset-0 bg-white z-[55] flex flex-col items-center justify-center px-6 transition-transform duration-300 md:hidden ${isMobileMenuOpen ? 'translate-x-0' : 'translate-x-full'}`}
       >
         <div className='flex flex-col items-center w-full max-w-sm space-y-2'>
           <Link
@@ -205,7 +211,7 @@ const Navbar = () => {
             Services
           </Link>
 
-          {authStatus === 'authenticated' ? (
+          {isAuthenticated && (
             <>
               {hasPaidPlan && (
                 <>
@@ -249,7 +255,8 @@ const Navbar = () => {
                 <Logout />
               </div>
             </>
-          ) : (
+          )}
+          {!isAuthenticated && !isLoading && (
             <Link
               href='/login'
               className='mt-8 bg-blue-600 text-white w-full py-5 rounded-2xl font-bold text-xl text-center shadow-lg'

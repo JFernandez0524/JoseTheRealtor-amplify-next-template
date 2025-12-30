@@ -20,20 +20,9 @@ const backend = defineBackend({
   addUserToGroup,
 });
 
-// ============================================
-// YOUR ORIGINAL CODE BELOW (UNCHANGED)
-// ============================================
+// 🚀 S3 Trigger (uploadCsvHandler is in storage stack, so no cross-stack reference)
 backend.storage.resources.bucket.addEventNotification(
   EventType.OBJECT_CREATED_PUT,
   new LambdaDestination(backend.uploadCsvHandler.resources.lambda),
-  {
-    prefix: 'leadFiles/',
-  }
+  { prefix: 'leadFiles/' }
 );
-
-const leadTable = backend.data.resources.tables['PropertyLead'];
-const userAccountTable = backend.data.resources.tables['UserAccount'];
-
-// Grant the GHL function access to the tables
-leadTable.grantReadWriteData(backend.manualGhlSync.resources.lambda);
-userAccountTable.grantReadWriteData(backend.manualGhlSync.resources.lambda);
