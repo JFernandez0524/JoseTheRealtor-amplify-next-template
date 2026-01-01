@@ -20,6 +20,12 @@ const GHL_CUSTOM_FIELD_ID_MAP: Record<string, string> = {
   phone_5: '8fIoSV1W05ciIrn01QT0',
   email_2: 'JY5nf3NzRwfCGvN5u00E',
   email_3: '1oy6TLKItn5RkebjI7kD',
+  // 🆕 NEW APP CONTROL FIELDS
+  app_user_id: 'CNoGugInWOC59hAPptxY',
+  app_plan: 'YEJuROSCNnG9OXi3K8lb',
+  app_account_status: 'diShiF2bpX7VFql08MVN',
+  app_lead_id: 'aBlDP8DU3dFSHI2LFesn',
+  ai_state: '1NxQW2kKMVgozjSUuu7s',
 };
 
 const GHL_API_KEY = process.env.GHL_API_KEY;
@@ -83,13 +89,23 @@ export async function syncToGoHighLevel(
   lead: DBLead,
   specificPhone: string,
   phoneIndex: number,
-  isPrimary: boolean
+  isPrimary: boolean,
+  userGroups: string[] = [],
+  userId: string = ''
 ): Promise<string> {
   if (!GHL_API_KEY) throw new Error('GHL_API_KEY is missing.');
   const ghl = createGhlClient();
 
   try {
     const primaryEmail = lead.emails?.[0]?.toLowerCase() || null;
+
+    // 🆕 Determine user plan and account status
+    const isAIPlan = userGroups.includes('AI_PLAN');
+    const isPROPlan = userGroups.includes('PRO');
+    const isAdmin = userGroups.includes('ADMINS');
+    
+    const appPlan = isAIPlan ? 'AI' : isPROPlan ? 'SYNC' : 'SYNC'; // Default to SYNC for paid users
+    const appAccountStatus = 'active'; // TODO: Add billing status check for 'past_due'/'canceled'
 
     // 🎯 Construct Custom Field Values
     const customFieldValues: Record<string, any> = {
@@ -105,17 +121,28 @@ export async function syncToGoHighLevel(
       contact_type: specificPhone ? 'Phone Contact' : 'Direct Mail',
       skiptracestatus: lead.skipTraceStatus?.toUpperCase() || 'PENDING',
       lead_source_id: lead.id, // 🎯 Shared Lead ID for suppression workflows
+      // 🆕 APP CONTROL FIELDS
+      app_user_id: userId,
+      app_plan: appPlan,
+      app_account_status: appAccountStatus,
+      app_lead_id: lead.id,
+      ai_state: isAIPlan ? 'not_started' : 'not_started', // Always start with not_started
     };
 
     const customFields = Object.keys(customFieldValues)
       .filter((key) => customFieldValues[key] && GHL_CUSTOM_FIELD_ID_MAP[key])
       .map((key) => ({
         id: GHL_CUSTOM_FIELD_ID_MAP[key],
-        field_value: String(customFieldValues[key]),
+        value: String(customFieldValues[key]), // Use 'value' not 'field_value'
       }));
 
     // 🎯 Define Tags based on primary status and phone availability
     const tags = [...(lead.leadLabels || [])];
+    
+    // 🆕 APP CONTROL TAGS (source of truth)
+    tags.push('App:Synced');
+    if (isAIPlan) tags.push('App:AI-Enabled');
+    // TODO: Add App:Billing-Hold based on payment status
     
     if (specificPhone) {
       tags.push('Multi-Phone-Lead');

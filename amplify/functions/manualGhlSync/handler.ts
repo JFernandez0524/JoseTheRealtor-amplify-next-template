@@ -20,7 +20,7 @@ type Handler = (event: { arguments: { leadId: string }; identity: { sub: string 
 // ---------------------------------------------------------
 // HELPER: Core GHL Sync Logic
 // ---------------------------------------------------------
-async function processGhlSync(lead: any): Promise<SyncResult> {
+async function processGhlSync(lead: any, groups: string[] = [], ownerId: string = ''): Promise<SyncResult> {
   if (!GHL_API_KEY) {
     const message = `GHL_API_KEY is missing. Check Amplify secrets.`;
     await docClient.send(new UpdateCommand({
@@ -56,7 +56,9 @@ async function processGhlSync(lead: any): Promise<SyncResult> {
         lead,
         '', // Empty phone
         1,
-        true
+        true,
+        groups, // Pass user groups
+        ownerId // Pass user ID
       );
 
       await docClient.send(new UpdateCommand({
@@ -95,7 +97,9 @@ async function processGhlSync(lead: any): Promise<SyncResult> {
         lead,
         phones[i],
         i + 1,
-        i === 0
+        i === 0,
+        groups, // Pass user groups
+        ownerId // Pass user ID
       );
       syncResults.push(ghlContactId);
     }
@@ -180,7 +184,7 @@ export const handler: Handler = async (event) => {
     }
 
     // 🚀 5. Execute Logic
-    const syncResult = await processGhlSync(lead);
+    const syncResult = await processGhlSync(lead, groups, ownerId);
 
     // 📊 6. Track usage
     if (syncResult.status === 'SUCCESS') {
