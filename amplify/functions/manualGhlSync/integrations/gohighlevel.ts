@@ -39,7 +39,7 @@ const createGhlClient = (): AxiosInstance => {
       Authorization: `Bearer ${GHL_API_KEY}`,
       'Content-Type': 'application/json',
       Accept: 'application/json',
-      Version: '2021-07-28',
+      Version: '2021-07-28', // 🚨 CRITICAL: GHL Version header
     },
   });
 

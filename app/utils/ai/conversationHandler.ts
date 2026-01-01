@@ -70,7 +70,9 @@ async function sendGHLMessage(conversationId: string, message: string) {
       {
         headers: {
           'Authorization': `Bearer ${GHL_API_KEY}`,
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'Version': '2021-07-28',
+          'Accept': 'application/json'
         }
       }
     );
@@ -166,7 +168,9 @@ async function updateAIState(contactId: string, newState: string) {
       {
         headers: {
           'Authorization': `Bearer ${GHL_API_KEY}`,
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'Version': '2021-07-28',
+          'Accept': 'application/json'
         }
       }
     );
