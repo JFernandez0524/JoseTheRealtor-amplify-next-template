@@ -203,8 +203,9 @@ export const handler: Handler = async (event) => {
       }
     }));
     const userAccount = accounts?.[0];
+    const isAdmin = groups.includes('ADMINS');
 
-    if (!userAccount || (userAccount.credits || 0) < leadIds.length) {
+    if (!isAdmin && (!userAccount || (userAccount.credits || 0) < leadIds.length)) {
       throw new Error(
         `Insufficient Credits: Need ${leadIds.length}, have ${userAccount?.credits || 0}.`
       );
@@ -273,8 +274,8 @@ export const handler: Handler = async (event) => {
       results.push({ id: leadId, status: 'SUCCESS', phones: newPhones.length });
     }
 
-    // 💰 6. Deduct Credits
-    if (processedSuccessfully > 0) {
+    // 💰 6. Deduct Credits (skip for admins)
+    if (processedSuccessfully > 0 && !isAdmin && userAccount) {
       await docClient.send(new UpdateCommand({
         TableName: userAccountTableName,
         Key: { id: userAccount.id },

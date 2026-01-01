@@ -12,6 +12,7 @@ const GHL_CUSTOM_FIELD_ID_MAP: Record<string, string> = {
   property_zip: 'hgbjsTVwcyID7umdhm2o',
   lead_source_id: 'PBInTgsd2nMCD3Ngmy0a', // 🎯 Used for Sibling Suppression
   lead_type: 'oaf4wCuM3Ub9eGpiddrO',
+  contact_type: 'pGfgxcdFaYAkdq0Vp53j', // Phone Contact vs Direct Mail
   skiptracestatus: 'HrnY1GUZ7P6d6r7J0ZRc',
   phone_2: 'LkmfM0Va5PylJFsJYjCu',
   phone_3: 'Cu6zwsuWrxoVWdxySc6t',
@@ -101,6 +102,7 @@ export async function syncToGoHighLevel(
       mailing_state: lead.mailingState,
       mailing_zipcode: lead.mailingZip,
       lead_type: lead.type === 'PROBATE' ? 'Probate' : lead.type === 'PREFORECLOSURE' ? 'Preforeclosure' : lead.type,
+      contact_type: specificPhone ? 'Phone Contact' : 'Direct Mail',
       skiptracestatus: lead.skipTraceStatus?.toUpperCase() || 'PENDING',
       lead_source_id: lead.id, // 🎯 Shared Lead ID for suppression workflows
     };
@@ -112,8 +114,15 @@ export async function syncToGoHighLevel(
         field_value: String(customFieldValues[key]),
       }));
 
-    // 🎯 Define Tags based on primary status
-    const tags = [...(lead.leadLabels || []), 'Multi-Phone-Lead'];
+    // 🎯 Define Tags based on primary status and phone availability
+    const tags = [...(lead.leadLabels || [])];
+    
+    if (specificPhone) {
+      tags.push('Multi-Phone-Lead');
+    } else {
+      tags.push('Direct-Mail-Only');
+    }
+    
     if (isPrimary) {
       tags.push('Direct_Mail_Eligible');
       tags.push('Primary_Contact');
@@ -121,38 +130,53 @@ export async function syncToGoHighLevel(
 
     const basePayload = {
       firstName: lead.ownerFirstName || 'Unknown',
-      // 🎯 Differentiate names for the dialer
-      lastName: `${lead.ownerLastName || 'Owner'} (${phoneIndex})`,
+      lastName: `${lead.ownerLastName || 'Owner'}${specificPhone ? ` (${phoneIndex})` : ''}`,
       email: isPrimary ? primaryEmail : undefined, // Attach email only to primary to avoid duplicates
-      phone: specificPhone,
+      phone: specificPhone || undefined, // Don't send empty phone
       tags,
       source: 'JTR_SkipTrace_App',
       customFields,
     };
 
     const performUpdate = async (ghlId: string) => {
-      console.info(`🔄 Updating contact ${ghlId} with phone ${specificPhone}`);
+      console.info(`🔄 Updating contact ${ghlId}${specificPhone ? ` with phone ${specificPhone}` : ' (direct mail only)'}`);
       const res = await ghl.put(`/contacts/${ghlId}`, basePayload);
       return res.data?.contact?.id || ghlId;
     };
 
-    // 🎯 SEARCH: Find by this SPECIFIC phone number to avoid merging siblings
+    // 🎯 SEARCH: Find existing contact
     let existingContact: any = null;
-    const searchBody = {
-      locationId: LOCATION_ID,
-      pageLimit: 1,
-      filters: [{ field: 'phone', operator: 'eq', value: specificPhone }],
-    };
-
-    const searchRes = await ghl.post('/contacts/search', searchBody);
-    if (searchRes.data?.contacts?.length > 0) {
-      existingContact = searchRes.data.contacts[0];
+    
+    if (specificPhone) {
+      // Search by phone if available
+      const searchBody = {
+        locationId: LOCATION_ID,
+        pageLimit: 1,
+        filters: [{ field: 'phone', operator: 'eq', value: specificPhone }],
+      };
+      const searchRes = await ghl.post('/contacts/search', searchBody);
+      if (searchRes.data?.contacts?.length > 0) {
+        existingContact = searchRes.data.contacts[0];
+      }
+    } else {
+      // Search by email or name for direct mail leads
+      if (primaryEmail) {
+        const searchBody = {
+          locationId: LOCATION_ID,
+          pageLimit: 1,
+          filters: [{ field: 'email', operator: 'eq', value: primaryEmail }],
+        };
+        const searchRes = await ghl.post('/contacts/search', searchBody);
+        if (searchRes.data?.contacts?.length > 0) {
+          existingContact = searchRes.data.contacts[0];
+        }
+      }
     }
 
     if (existingContact) return await performUpdate(existingContact.id);
 
     console.info(
-      `🆕 Creating new contact for phone ${phoneIndex}: ${specificPhone}`
+      `🆕 Creating new contact${specificPhone ? ` for phone ${phoneIndex}: ${specificPhone}` : ' for direct mail workflow'}`
     );
     const res = await ghl.post('/contacts/', {
       ...basePayload,

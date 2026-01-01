@@ -234,7 +234,16 @@ export default function LeadDashboardClient({ initialLeads }: Props) {
             prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
           );
         }}
-        onRowClick={(id) => router.push(`/lead/${id}`)}
+        onRowClick={(id) => {
+          // Set navigation context for lead details page
+          const leadIds = filteredLeads.map(lead => lead.id);
+          const navContext = {
+            ids: leadIds,
+            filterType: filterType || null
+          };
+          sessionStorage.setItem('leadNavContext', JSON.stringify(navContext));
+          router.push(`/lead/${id}`);
+        }}
       />
     </div>
   );

@@ -35,7 +35,10 @@ async function processGhlSync(lead: any): Promise<SyncResult> {
   }
 
   const currentSkipStatus = lead.skipTraceStatus?.toUpperCase();
+  console.log(`🔍 Lead ${lead.id} skipTraceStatus: ${currentSkipStatus}`);
+  
   if (currentSkipStatus !== 'COMPLETED') {
+    console.log(`⏭️ Skipping sync - status is ${lead.skipTraceStatus}`);
     return {
       status: 'SKIPPED',
       message: `Lead status is ${lead.skipTraceStatus}`,
@@ -43,8 +46,46 @@ async function processGhlSync(lead: any): Promise<SyncResult> {
   }
 
   const phones = lead.phones || [];
+  console.log(`📞 Found ${phones.length} phones:`, phones);
+  
   if (phones.length === 0) {
-    return { status: 'FAILED', message: 'No phone numbers found.' };
+    console.log(`📬 No phones found - syncing for direct mail workflow`);
+    // Sync without phone for direct mail workflow
+    try {
+      const ghlContactId = await syncToGoHighLevel(
+        lead,
+        '', // Empty phone
+        1,
+        true
+      );
+
+      await docClient.send(new UpdateCommand({
+        TableName: propertyLeadTableName,
+        Key: { id: lead.id },
+        UpdateExpression: 'SET ghlSyncStatus = :status, ghlContactId = :contactId, ghlSyncDate = :syncDate',
+        ExpressionAttributeValues: {
+          ':status': 'SUCCESS',
+          ':contactId': ghlContactId,
+          ':syncDate': new Date().toISOString()
+        }
+      }));
+
+      return {
+        status: 'SUCCESS',
+        message: 'Synced for direct mail workflow (no phone).',
+        ghlContactId: ghlContactId,
+      };
+    } catch (error: any) {
+      await docClient.send(new UpdateCommand({
+        TableName: propertyLeadTableName,
+        Key: { id: lead.id },
+        UpdateExpression: 'SET ghlSyncStatus = :status',
+        ExpressionAttributeValues: {
+          ':status': 'FAILED'
+        }
+      }));
+      return { status: 'FAILED', message: error.message };
+    }
   }
 
   try {
