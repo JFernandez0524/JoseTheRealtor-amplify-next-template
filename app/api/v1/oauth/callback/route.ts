@@ -36,11 +36,12 @@ export async function GET(req: Request) {
         client_secret: GHL_CLIENT_SECRET,
         grant_type: 'authorization_code',
         code: code,
+        user_type: 'Location', // Request Location-level token
         redirect_uri: GHL_REDIRECT_URI
       },
       {
         headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
+          'Content-Type': 'application/json', // Use JSON, not form-encoded
           'Accept': 'application/json'
         }
       }
@@ -51,6 +52,8 @@ export async function GET(req: Request) {
       refresh_token,
       locationId,
       companyId,
+      userId,
+      userType,
       expires_in
     } = tokenResponse.data;
 
@@ -69,6 +72,8 @@ export async function GET(req: Request) {
     console.log('Tokens received:', {
       locationId,
       companyId,
+      userId,
+      userType,
       hasAccessToken: !!access_token,
       hasRefreshToken: !!refresh_token,
       expiresIn: expires_in

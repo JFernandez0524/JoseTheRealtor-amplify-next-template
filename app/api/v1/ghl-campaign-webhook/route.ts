@@ -146,7 +146,7 @@ async function handleCampaignStatus({
       if (siblings.length > 1) {
         // 🚨 SAFETY GUARD: Don't delete Primary Contact
         const tags = contact?.tags || [];
-        if (tags.includes('Primary_Contact')) return;
+        if (tags.includes('primary_contact')) return;
         
         // Delete this specific contact (bad number)
         await axios.delete(`${GHL_BASE}/contacts/${contactId}`, { headers: GHL_HEADERS });
@@ -222,7 +222,7 @@ async function handleBadNumber({
     if (siblings.length > 1) {
       // 🚨 SAFETY GUARD: Don't delete Primary Contact
       const tags = contact?.tags || [];
-      if (tags.includes('Primary_Contact')) return;
+      if (tags.includes('primary_contact')) return;
       
       // Delete this bad number contact
       await axios.delete(`${GHL_BASE}/contacts/${contactId}`, { headers: GHL_HEADERS });

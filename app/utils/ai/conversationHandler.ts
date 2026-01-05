@@ -143,16 +143,26 @@ Respond naturally and helpfully:`;
 
 // Check if contact has AI enabled and is in good standing
 function isAIEnabled(contact: any): boolean {
-  const appPlan = contact?.customFields?.find((f: any) => f.id === 'YEJuROSCNnG9OXi3K8lb')?.value;
-  const accountStatus = contact?.customFields?.find((f: any) => f.id === 'diShiF2bpX7VFql08MVN')?.value;
-  const aiState = contact?.customFields?.find((f: any) => f.id === '1NxQW2kKMVgozjSUuu7s')?.value;
+  // 🔧 TEMPORARY FIX: Since AI control fields don't exist yet,
+  // enable AI for contacts with phone numbers and specific lead types
+  const hasPhone = contact?.phone;
+  const leadType = contact?.customFields?.find((f: any) => f.id === 'oaf4wCuM3Ub9eGpiddrO')?.value;
+  const contactType = contact?.customFields?.find((f: any) => f.id === 'pGfgxcdFaYAkdq0Vp53j')?.value;
   
-  // Check if AI is enabled and account is in good standing
-  const hasAIPlan = appPlan === 'AI';
-  const accountActive = accountStatus === 'active';
-  const aiNotPaused = aiState !== 'paused';
+  // Enable AI for contacts with phones that aren't direct mail only
+  const isDirectMailOnly = contactType === 'Direct Mail';
+  const hasValidLeadType = ['Probate', 'PREFORECLOSURE', 'Preforeclosure'].includes(leadType);
   
-  return hasAIPlan && accountActive && aiNotPaused;
+  return hasPhone && hasValidLeadType && !isDirectMailOnly;
+  
+  // 🚨 TODO: Once AI control fields are added to GHL, use this logic:
+  // const appPlan = contact?.customFields?.find((f: any) => f.id === 'YEJuROSCNnG9OXi3K8lb')?.value;
+  // const accountStatus = contact?.customFields?.find((f: any) => f.id === 'diShiF2bpX7VFql08MVN')?.value;
+  // const aiState = contact?.customFields?.find((f: any) => f.id === '1NxQW2kKMVgozjSUuu7s')?.value;
+  // const hasAIPlan = appPlan === 'AI';
+  // const accountActive = accountStatus === 'active';
+  // const aiNotPaused = aiState !== 'paused';
+  // return hasAIPlan && accountActive && aiNotPaused;
 }
 
 // Update AI state in GHL

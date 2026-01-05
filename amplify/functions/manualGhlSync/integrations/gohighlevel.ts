@@ -136,20 +136,36 @@ export async function syncToGoHighLevel(
         value: String(customFieldValues[key]), // Use 'value' not 'field_value'
       }));
 
-    // 🎯 Define Tags based on primary status and phone availability
+    // 🎯 Define Tags based on primary status and phone eligibility
     const tags = [...(lead.leadLabels || [])];
     
     // 🆕 APP CONTROL TAGS (source of truth)
     tags.push('App:Synced');
     if (isAIPlan) tags.push('App:AI-Enabled');
-    // TODO: Add App:Billing-Hold based on payment status
     
-    if (specificPhone) {
+    // 🚨 BILLING STATUS CHECK (bypass for admins)
+    if (!isAdmin && appAccountStatus === 'past_due') {
+      tags.push('App:Billing-Hold');
+    }
+    
+    // 🎯 DIALER CAMPAIGN LOGIC - All users need completed skip trace + phone
+    const isCallable = specificPhone && 
+                      lead.skipTraceStatus === 'COMPLETED' && 
+                      !lead.leadLabels?.some(tag => ['DNC', 'Not_Interested', 'Do_Not_Call'].includes(tag));
+    
+    if (isCallable) {
       tags.push('Multi-Phone-Lead');
+      tags.push('start dialing campaign'); // 🎯 TRIGGER TAG for Dialer Logic: Weekly 8x Loop
+    } else if (specificPhone) {
+      // Has phone but not callable (failed skip trace, DNC, etc.)
+      tags.push('Multi-Phone-Lead');
+      tags.push('Direct-Mail-Only'); // Route to mail instead
     } else {
+      // No phone at all
       tags.push('Direct-Mail-Only');
     }
     
+    // 🛡️ DIRECT MAIL PROTECTION - Only ONE sibling gets mail eligibility
     if (isPrimary) {
       tags.push('Direct_Mail_Eligible');
       tags.push('Primary_Contact');
