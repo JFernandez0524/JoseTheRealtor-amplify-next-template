@@ -144,14 +144,14 @@ export async function syncToGoHighLevel(
     if (isAIPlan) tags.push('App:AI-Enabled');
     
     // 🚨 BILLING STATUS CHECK (bypass for admins)
-    if (!isAdmin && appAccountStatus === 'past_due') {
+    if (!isAdmin && (appAccountStatus as string) === 'past_due') {
       tags.push('App:Billing-Hold');
     }
     
     // 🎯 DIALER CAMPAIGN LOGIC - All users need completed skip trace + phone
     const isCallable = specificPhone && 
                       lead.skipTraceStatus === 'COMPLETED' && 
-                      !lead.leadLabels?.some(tag => ['DNC', 'Not_Interested', 'Do_Not_Call'].includes(tag));
+                      !(lead.leadLabels || []).some(tag => ['DNC', 'Not_Interested', 'Do_Not_Call'].includes(tag));
     
     if (isCallable) {
       tags.push('Multi-Phone-Lead');
