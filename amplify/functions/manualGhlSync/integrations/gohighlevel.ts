@@ -151,7 +151,7 @@ export async function syncToGoHighLevel(
     // 🎯 DIALER CAMPAIGN LOGIC - All users need completed skip trace + phone
     const isCallable = specificPhone && 
                       lead.skipTraceStatus === 'COMPLETED' && 
-                      !(lead.leadLabels || []).some(tag => ['DNC', 'Not_Interested', 'Do_Not_Call'].includes(tag));
+                      !(lead.leadLabels || []).filter(tag => tag !== null).some(tag => ['DNC', 'Not_Interested', 'Do_Not_Call'].includes(tag));
     
     if (isCallable) {
       tags.push('Multi-Phone-Lead');
