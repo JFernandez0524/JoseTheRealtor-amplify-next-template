@@ -54,14 +54,12 @@ async function callBatchDataV3(lead: any): Promise<BatchDataResult> {
 
   if (lead.type?.toUpperCase() === 'PROBATE') {
     targetName = { first: lead.adminFirstName, last: lead.adminLastName };
-    if (lead.mailingAddress) {
-      targetAddress = {
-        street: lead.mailingAddress,
-        city: lead.mailingCity!,
-        state: lead.mailingState!,
-        zip: lead.mailingZip!,
-      };
-    }
+    targetAddress = {
+      street: lead.adminAddress?.trim() || '',
+      city: lead.adminCity?.trim() || '',
+      state: lead.adminState?.trim().toUpperCase() || '',
+      zip: lead.adminZip?.trim() || '',
+    };
   }
 
   const cleanedName = cleanName(targetName);
