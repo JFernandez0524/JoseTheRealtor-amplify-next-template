@@ -25,6 +25,7 @@ export default function LeadDashboardClient({ initialLeads }: Props) {
   const [userAccount, setUserAccount] = useState<UserAccount | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isSynced, setIsSynced] = useState(false);
 
   // Filter States
   const [searchQuery, setSearchQuery] = useState('');
@@ -37,7 +38,10 @@ export default function LeadDashboardClient({ initialLeads }: Props) {
   // 1. Listen for Real-time Lead updates
   useEffect(() => {
     const sub = client.models.PropertyLead.observeQuery().subscribe({
-      next: ({ items }) => setLeads([...items]),
+      next: ({ items, isSynced }) => {
+        setLeads([...items]);
+        setIsSynced(isSynced);
+      },
       error: (err) => console.error('Subscription error:', err),
     });
     return () => sub.unsubscribe();
@@ -209,6 +213,12 @@ export default function LeadDashboardClient({ initialLeads }: Props) {
 
       {/* Wallet Status Bar */}
       <div className='flex justify-end items-center gap-4 px-2'>
+        {!isSynced && (
+          <div className='flex items-center gap-2 text-[11px] font-bold uppercase tracking-tighter text-blue-600 bg-blue-50 border border-blue-200 px-4 py-1.5 rounded-full shadow-sm'>
+            <span className='w-2 h-2 rounded-full bg-blue-500 animate-pulse' />
+            Syncing...
+          </div>
+        )}
         <div className='flex items-center gap-2 text-[11px] font-bold uppercase tracking-tighter text-slate-500 bg-white border border-slate-200 px-4 py-1.5 rounded-full shadow-sm'>
           <span className='w-2 h-2 rounded-full bg-green-500 animate-pulse' />
           Available Wallet:{' '}

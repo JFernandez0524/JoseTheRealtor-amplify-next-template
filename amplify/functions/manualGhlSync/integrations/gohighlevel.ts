@@ -143,6 +143,13 @@ export async function syncToGoHighLevel(
     tags.push('App:Synced');
     if (isAIPlan) tags.push('App:AI-Enabled');
     
+    // 📊 DATA SOURCE TRACKING
+    if (lead.skipTraceStatus === 'COMPLETED') {
+      tags.push('Data:SkipTraced'); // Phone/email from skip trace
+    } else if (specificPhone) {
+      tags.push('Data:OriginalUpload'); // Phone was in original upload
+    }
+    
     // 🚨 BILLING STATUS CHECK (bypass for admins)
     if (!isAdmin && (appAccountStatus as string) === 'past_due') {
       tags.push('App:Billing-Hold');
