@@ -69,9 +69,12 @@ function analyzeContactWorkflow(contact: any) {
       hasPhone: !!contact.phone,
       hasValidLeadType: ['Probate', 'PREFORECLOSURE', 'Preforeclosure'].includes(leadType),
       notDirectMailOnly: contactType !== 'Direct Mail',
-      wouldEnableAI: function() {
-        return this.hasPhone && this.hasValidLeadType && this.notDirectMailOnly;
-      }()
+      wouldEnableAI: (() => {
+        const hasPhone = !!contact.phone;
+        const hasValidLeadType = ['Probate', 'PREFORECLOSURE', 'Preforeclosure'].includes(leadType);
+        const notDirectMailOnly = contactType !== 'Direct Mail';
+        return hasPhone && hasValidLeadType && notDirectMailOnly;
+      })()
     },
     
     campaignFlow: {
