@@ -179,8 +179,8 @@ export async function syncToGoHighLevel(
     }
 
     const basePayload = {
-      firstName: lead.ownerFirstName || 'Unknown',
-      lastName: `${lead.ownerLastName || 'Owner'}${specificPhone ? ` (${phoneIndex})` : ''}`,
+      firstName: lead.adminFirstName || lead.ownerFirstName || 'Unknown',
+      lastName: `${lead.adminLastName || lead.ownerLastName || 'Owner'}${specificPhone ? ` (${phoneIndex})` : ''}`,
       email: isPrimary ? primaryEmail : undefined, // Attach email only to primary to avoid duplicates
       phone: specificPhone || undefined, // Don't send empty phone
       tags,
