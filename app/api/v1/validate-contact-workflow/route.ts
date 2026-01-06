@@ -61,7 +61,7 @@ function analyzeContactWorkflow(contact: any) {
       isPrimaryContact: tags.includes('primary_contact'),
       isDirectMailOnly: tags.includes('direct-mail-only'),
       isMultiPhoneLead: tags.includes('multi-phone-lead'),
-      hasActiveCampaign: tags.some(tag => tag.includes('campaign')),
+      hasActiveCampaign: tags.some((tag: string) => tag.includes('campaign')),
       isDirectMailEligible: tags.includes('direct_mail_eligible')
     },
     
