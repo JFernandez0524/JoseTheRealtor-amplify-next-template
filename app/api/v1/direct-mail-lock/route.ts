@@ -33,7 +33,7 @@ export async function POST(req: Request) {
     const siblings = searchResponse.data?.contacts || [];
     
     // Check if any sibling already has DM_Lock tag
-    const alreadyMailed = siblings.some(contact => 
+    const alreadyMailed = siblings.some((contact: any) => 
       contact.tags?.includes('DM_Lock') || contact.tags?.includes('Direct_Mail_Sent')
     );
 
