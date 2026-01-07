@@ -249,6 +249,7 @@ export const handler: S3Handler = async (event) => {
             mailingCity: finalMailCity || finalPropCity,
             mailingState: finalMailState || finalPropState,
             mailingZip: finalMailZip || finalPropZip,
+            notes: [], // Initialize empty notes array
             standardizedAddress: standardizedAddress,
             latitude,
             longitude,

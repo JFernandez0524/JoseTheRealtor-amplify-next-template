@@ -18,7 +18,7 @@ const schema = a.schema({
       ownerZip: a.string().required(),
 
       // 💥 FIX 1: ADD NOTES FIELD for user-edited data (SOT: DynamoDB)
-      notes: a.string(),
+      notes: a.json().array(), // Array of {text: string, createdAt: string, createdBy: string}
 
       // --- Admin/Executor Info (Probate) ---
       adminFirstName: a.string(),
@@ -35,16 +35,6 @@ const schema = a.schema({
       mailingZip: a.string(),
       isAbsenteeOwner: a.boolean(),
       leadLabels: a.string().array(), // --- 🟢 Lead Labels (For Dashboard) ---
-
-      // --- 🟢 Building & Tax Data (From BatchData V1) ---
-      bedrooms: a.integer(),
-      bathrooms: a.float(), // e.g. 2.5
-      squareFeet: a.integer(),
-      lotSize: a.integer(),
-      yearBuilt: a.integer(),
-      propertyType: a.string(), // e.g. "Single Family"
-      taxAssessment: a.float(),
-      taxYear: a.integer(),
 
       // --- System Fields ---
       standardizedAddress: a.json(), // Google Validation Object

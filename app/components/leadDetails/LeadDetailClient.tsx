@@ -31,7 +31,7 @@ import { getFrontEndAuthSession } from '@/app/utils/aws/auth/amplifyFrontEndUser
 import { type Schema } from '@/amplify/data/resource';
 
 type Lead = Schema['PropertyLead']['type'] & {
-  notes?: string | null;
+  notes?: Array<{text: string, createdAt: string, createdBy?: string}> | null;
   ghlSyncStatus?: 'PENDING' | 'SUCCESS' | 'FAILED' | 'SKIPPED' | null;
   ghlContactId?: string | null;
   ghlSyncDate?: string | null;

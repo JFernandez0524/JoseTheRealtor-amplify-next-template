@@ -3,9 +3,10 @@
 import { useState, useEffect } from 'react';
 import { Loader } from '@aws-amplify/ui-react';
 import { type Schema } from '@/amplify/data/resource';
+import { NotesSection } from './NotesSection';
 
 type Lead = Schema['PropertyLead']['type'] & {
-  notes?: string | null;
+  notes?: Array<{text: string, createdAt: string, createdBy?: string}> | null;
   ghlSyncStatus?: 'PENDING' | 'SUCCESS' | 'FAILED' | 'SKIPPED' | null;
   ghlContactId?: string | null;
   ghlSyncDate?: string | null;
@@ -30,7 +31,7 @@ export function CoreLeadInfo({
     id: lead.id,
     ownerFirstName: lead.ownerFirstName || '',
     ownerLastName: lead.ownerLastName || '',
-    notes: lead.notes || '',
+    notes: lead.notes || [],
     mailingAddress: lead.mailingAddress || '',
     mailingCity: lead.mailingCity || '',
     mailingState: lead.mailingState || '',
@@ -46,7 +47,7 @@ export function CoreLeadInfo({
         id: lead.id,
         ownerFirstName: lead.ownerFirstName || '',
         ownerLastName: lead.ownerLastName || '',
-        notes: lead.notes || '',
+        notes: lead.notes || [],
         mailingAddress: lead.mailingAddress || '',
         mailingCity: lead.mailingCity || '',
         mailingState: lead.mailingState || '',
@@ -210,7 +211,11 @@ export function CoreLeadInfo({
       </div>
 
       <div className='pt-4 border-t border-gray-100'>
-        {renderField('notes', 'Internal Notes')}
+        <NotesSection 
+          notes={formData.notes}
+          onNotesUpdate={(notes) => setFormData(prev => ({ ...prev, notes }))}
+          isEditing={isEditing}
+        />
       </div>
 
       {isEditing && (
