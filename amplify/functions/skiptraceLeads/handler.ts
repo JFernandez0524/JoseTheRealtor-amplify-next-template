@@ -203,6 +203,15 @@ export const handler: Handler = async (event) => {
     const userAccount = accounts?.[0];
     const isAdmin = groups.includes('ADMINS');
 
+    // Check if credits are expired
+    if (!isAdmin && userAccount?.creditsExpiresAt) {
+      const expirationDate = new Date(userAccount.creditsExpiresAt);
+      const now = new Date();
+      if (now > expirationDate) {
+        throw new Error('Credits have expired. Please upgrade to continue using skip tracing.');
+      }
+    }
+
     if (!isAdmin && (!userAccount || (userAccount.credits || 0) < leadIds.length)) {
       throw new Error(
         `Insufficient Credits: Need ${leadIds.length}, have ${userAccount?.credits || 0}.`

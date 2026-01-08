@@ -174,7 +174,7 @@ const schema = a.schema({
     })
     .returns(a.json())
     .handler(a.handler.function(skipTraceLeads))
-    .authorization((allow) => [allow.groups(['PRO', 'ADMINS'])]),
+    .authorization((allow) => [allow.groups(['FREE', 'PRO', 'ADMINS'])]),
 
   manualGhlSync: a
     .mutation()
@@ -210,6 +210,9 @@ const schema = a.schema({
       owner: a.string().authorization((allow) => [allow.owner().to(['read'])]),
       email: a.string().required(),
       credits: a.integer().default(0),
+      creditsExpiresAt: a.datetime(),
+      registrationIP: a.string(),
+      lastLoginIP: a.string(),
       crmLocationId: a.string(),
       crmApiKey: a.string(),
       totalLeadsSynced: a.integer().default(0),

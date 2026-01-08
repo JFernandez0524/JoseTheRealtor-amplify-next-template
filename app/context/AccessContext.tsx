@@ -92,6 +92,39 @@ export function AccessProvider({ children }: { children: ReactNode }) {
           console.log('Current userId:', userId);
           // Don't create a new account, just continue with access setup
         } else {
+          // Anti-abuse checks
+          const disposableEmailDomains = [
+            '10minutemail.com', 'tempmail.org', 'guerrillamail.com',
+            'mailinator.com', 'yopmail.com', 'throwaway.email',
+            'temp-mail.org', 'getnada.com', 'maildrop.cc'
+          ];
+
+          const emailDomain = userEmail.split('@')[1]?.toLowerCase();
+          if (disposableEmailDomains.includes(emailDomain)) {
+            console.error('❌ Disposable email addresses not allowed');
+            return;
+          }
+
+          // Get client IP from API
+          let clientIP = '0.0.0.0';
+          try {
+            const ipResponse = await fetch('/api/v1/get-client-ip');
+            const ipData = await ipResponse.json();
+            clientIP = ipData.ip || '0.0.0.0';
+          } catch (ipError) {
+            console.log('Failed to get client IP:', ipError);
+          }
+
+          // Check for existing accounts with same IP
+          const { data: existingIPAccounts } = await client.models.UserAccount.list({
+            filter: { registrationIP: { eq: clientIP } },
+          });
+
+          if (existingIPAccounts && existingIPAccounts.length >= 1) {
+            console.error('❌ Maximum accounts per IP address reached');
+            return;
+          }
+
           // Check global flag first
           if (globalUserCreationInProgress[userEmail]) {
             console.log('UserAccount creation already in progress for email, skipping...');
@@ -102,9 +135,16 @@ export function AccessProvider({ children }: { children: ReactNode }) {
             try {
               console.log('Creating UserAccount for:', userEmail);
               
+              // Set credit expiration to 30 days from now
+              const creditsExpiresAt = new Date();
+              creditsExpiresAt.setDate(creditsExpiresAt.getDate() + 30);
+              
               await client.models.UserAccount.create({
                 email: userEmail,
-                credits: 10, // Starter credits for new users
+                credits: 5, // Starter credits for new users
+                creditsExpiresAt: creditsExpiresAt.toISOString(),
+                registrationIP: clientIP,
+                lastLoginIP: clientIP,
                 totalLeadsSynced: 0,
                 totalSkipsPerformed: 0,
               });
