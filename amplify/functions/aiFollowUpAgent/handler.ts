@@ -150,25 +150,34 @@ async function getDueTasksFromGHL(integration: GhlIntegration) {
 async function processGHLTask(task: any, integration: GhlIntegration) {
   console.log(`🎯 Processing GHL task ${task.id}: ${task.title}`);
   
-  // Determine task type from title
-  const isCallTask = task.title?.includes('CALL');
-  const isTextTask = task.title?.includes('TEXT');
+  // Get lead info for context (if available)
+  const lead = await getLeadByGhlContactId(task.contactId);
   
-  if (isTextTask) {
-    // Generate AI message and send SMS
-    const aiMessage = await generateFollowUpMessageFromTask(task);
-    await sendGHLMessage(task.contactId, aiMessage, integration.accessToken);
-    await updateRateLimitCounters(integration);
-  } else if (isCallTask) {
-    // Generate talking points and update task
-    const talkingPoints = await generateFollowUpMessageFromTask(task);
-    await updateGHLTaskWithTalkingPoints(task.id, talkingPoints, integration.accessToken);
+  // Generate AI suggestions for this task
+  const aiSuggestions = await generateFollowUpMessage(lead || { id: '', owner: integration.userId }, task);
+  
+  // Update task with AI suggestions
+  await updateGHLTaskWithAI(task.id, aiSuggestions, integration.accessToken);
+  
+  console.log(`✅ Updated task ${task.id} with AI suggestions`);
+}
+
+async function getLeadByGhlContactId(ghlContactId: string): Promise<Lead | null> {
+  try {
+    const scanParams = {
+      TableName: PROPERTY_LEAD_TABLE,
+      FilterExpression: 'ghlContactId = :contactId',
+      ExpressionAttributeValues: {
+        ':contactId': ghlContactId
+      }
+    };
+    
+    const result = await docClient.send(new ScanCommand(scanParams));
+    return result.Items?.[0] as Lead || null;
+  } catch (error) {
+    console.error(`❌ Error finding lead for GHL contact ${ghlContactId}:`, error);
+    return null;
   }
-  
-  // Mark task as completed in GHL
-  await markGHLTaskCompleted(task.id, integration.accessToken);
-  
-  console.log(`✅ Completed GHL task ${task.id}`);
 }
 
 async function findLeadsWithGhlContacts(): Promise<Lead[]> {
