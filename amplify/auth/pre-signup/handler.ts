@@ -25,8 +25,7 @@ export const handler: PreSignUpTriggerHandler = async (event) => {
       if (existingUsers.Users && existingUsers.Users.length > 0) {
         // Check if any existing user is a Google user
         const hasGoogleUser = existingUsers.Users.some(user => 
-          user.Username?.startsWith('google_') || 
-          user.Identities?.some(identity => identity.ProviderName === 'Google')
+          user.Username?.startsWith('google_')
         );
 
         if (hasGoogleUser) {
