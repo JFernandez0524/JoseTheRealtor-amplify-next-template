@@ -41,10 +41,6 @@ const schema = a.schema({
 
       // 💥 FIX 1: ADD NOTES FIELD for user-edited data (SOT: DynamoDB)
       notes: a.json().array(), // Array of {text: string, createdAt: string, createdBy: string}
-      
-      // 🎯 FOLLOW-UP TASK MANAGEMENT (Optional fields)
-      followUpTask: a.json(), // {taskDate: string, taskTime: string, taskType: 'call'|'text', description: string, status: 'pending'|'completed', ghlTaskId?: string}
-      followUpDueAt: a.datetime(), // ISO datetime for easy querying/sorting
 
       // --- Admin/Executor Info (Probate) ---
       adminFirstName: a.string(),

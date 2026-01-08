@@ -24,15 +24,6 @@ interface GhlIntegration {
   lastDayReset?: string;
 }
 
-interface FollowUpTask {
-  taskDate: string;
-  taskTime: string;
-  taskType: 'call' | 'text';
-  description: string;
-  status: 'pending' | 'completed';
-  ghlTaskId?: string;
-}
-
 interface Lead {
   id: string;
   owner: string;
@@ -40,41 +31,38 @@ interface Lead {
   ownerLastName?: string;
   ghlContactId?: string;
   notes?: Array<{text: string, createdAt: string, createdBy?: string}>;
-  followUpTask?: FollowUpTask;
-  followUpDueAt?: string;
 }
 
 export const handler = async (event: any) => {
   console.log('🤖 AI Follow-Up Agent starting...');
   
   try {
-    // 1. Find leads with pending follow-ups that are due
-    const dueLeads = await findDueFollowUps();
+    // 1. Get all active GHL integrations
+    const integrations = await getAllActiveIntegrations();
     
-    if (dueLeads.length === 0) {
-      console.log('✅ No follow-ups due at this time');
-      return { statusCode: 200, processedLeads: 0 };
+    if (integrations.length === 0) {
+      console.log('✅ No active GHL integrations found');
+      return { statusCode: 200, processedTasks: 0 };
     }
     
-    console.log(`📋 Found ${dueLeads.length} leads with due follow-ups`);
+    let totalProcessed = 0;
     
-    // 2. Process each lead
-    let processedCount = 0;
-    for (const lead of dueLeads) {
+    // 2. Check each user's GHL tasks
+    for (const integration of integrations) {
       try {
-        await processLeadFollowUp(lead);
-        processedCount++;
+        const processed = await processUserTasks(integration);
+        totalProcessed += processed;
       } catch (error) {
-        console.error(`❌ Failed to process lead ${lead.id}:`, error);
+        console.error(`❌ Failed to process tasks for user ${integration.userId}:`, error);
       }
     }
     
-    console.log(`✅ Processed ${processedCount}/${dueLeads.length} follow-ups`);
+    console.log(`✅ Processed ${totalProcessed} follow-up tasks across all users`);
     
     return {
       statusCode: 200,
-      processedLeads: processedCount,
-      totalDue: dueLeads.length
+      processedTasks: totalProcessed,
+      totalIntegrations: integrations.length
     };
     
   } catch (error) {
@@ -83,18 +71,112 @@ export const handler = async (event: any) => {
   }
 };
 
-async function findDueFollowUps(): Promise<Lead[]> {
-  const now = new Date().toISOString();
+async function getAllActiveIntegrations() {
+  const scanParams = {
+    TableName: GHL_INTEGRATION_TABLE,
+    FilterExpression: 'isActive = :active',
+    ExpressionAttributeValues: {
+      ':active': true
+    }
+  };
   
+  const result = await docClient.send(new ScanCommand(scanParams));
+  return result.Items as GhlIntegration[] || [];
+}
+
+async function processUserTasks(integration: GhlIntegration): Promise<number> {
+  // Check rate limits first
+  const canSend = await checkRateLimits(integration);
+  if (!canSend) {
+    console.log(`🚦 Rate limit exceeded for user ${integration.userId}`);
+    return 0;
+  }
+
+  // Get due tasks from GHL
+  const dueTasks = await getDueTasksFromGHL(integration);
+  
+  if (dueTasks.length === 0) {
+    return 0;
+  }
+
+  console.log(`📋 Found ${dueTasks.length} due tasks for user ${integration.userId}`);
+  
+  let processed = 0;
+  for (const task of dueTasks) {
+    try {
+      await processGHLTask(task, integration);
+      processed++;
+    } catch (error) {
+      console.error(`❌ Failed to process task ${task.id}:`, error);
+    }
+  }
+  
+  return processed;
+}
+
+async function getDueTasksFromGHL(integration: GhlIntegration) {
+  try {
+    const now = new Date().toISOString();
+    
+    // Get tasks from GHL API
+    const response = await axios.get(
+      'https://services.leadconnectorhq.com/contacts/tasks',
+      {
+        headers: {
+          'Authorization': `Bearer ${integration.accessToken}`,
+          'Content-Type': 'application/json',
+          'Version': '2021-07-28'
+        },
+        params: {
+          completed: false,
+          dueBefore: now,
+          limit: 50
+        }
+      }
+    );
+
+    // Filter for AI-created follow-up tasks
+    return response.data.tasks?.filter((task: any) => 
+      task.title?.includes('Follow-up:') || 
+      task.body?.includes('AI Follow-up System')
+    ) || [];
+    
+  } catch (error) {
+    console.error(`❌ Error getting tasks from GHL for user ${integration.userId}:`, error);
+    return [];
+  }
+}
+
+async function processGHLTask(task: any, integration: GhlIntegration) {
+  console.log(`🎯 Processing GHL task ${task.id}: ${task.title}`);
+  
+  // Determine task type from title
+  const isCallTask = task.title?.includes('CALL');
+  const isTextTask = task.title?.includes('TEXT');
+  
+  if (isTextTask) {
+    // Generate AI message and send SMS
+    const aiMessage = await generateFollowUpMessageFromTask(task);
+    await sendGHLMessage(task.contactId, aiMessage, integration.accessToken);
+    await updateRateLimitCounters(integration);
+  } else if (isCallTask) {
+    // Generate talking points and update task
+    const talkingPoints = await generateFollowUpMessageFromTask(task);
+    await updateGHLTaskWithTalkingPoints(task.id, talkingPoints, integration.accessToken);
+  }
+  
+  // Mark task as completed in GHL
+  await markGHLTaskCompleted(task.id, integration.accessToken);
+  
+  console.log(`✅ Completed GHL task ${task.id}`);
+}
+
+async function findLeadsWithGhlContacts(): Promise<Lead[]> {
   const scanParams = {
     TableName: PROPERTY_LEAD_TABLE,
-    FilterExpression: 'followUpDueAt <= :now AND attribute_exists(followUpTask) AND followUpTask.#status = :pending',
-    ExpressionAttributeNames: {
-      '#status': 'status'
-    },
+    FilterExpression: 'attribute_exists(ghlContactId) AND ghlContactId <> :empty',
     ExpressionAttributeValues: {
-      ':now': now,
-      ':pending': 'pending'
+      ':empty': ''
     }
   };
   
@@ -103,12 +185,12 @@ async function findDueFollowUps(): Promise<Lead[]> {
 }
 
 async function processLeadFollowUp(lead: Lead) {
-  if (!lead.followUpTask || !lead.ghlContactId) {
-    console.log(`⏭️ Skipping lead ${lead.id} - missing task or GHL contact`);
+  if (!lead.ghlContactId) {
+    console.log(`⏭️ Skipping lead ${lead.id} - no GHL contact ID`);
     return;
   }
   
-  console.log(`🎯 Processing follow-up for lead ${lead.id} (${lead.followUpTask.taskType})`);
+  console.log(`🎯 Processing follow-up for lead ${lead.id}`);
   
   // 1. Get OAuth token and check rate limits
   const tokenResult = await getGhlAccessToken(lead.owner);
@@ -119,23 +201,45 @@ async function processLeadFollowUp(lead: Lead) {
   
   const { token: accessToken, integration } = tokenResult;
   
-  // 2. Generate AI message based on context
-  const aiMessage = await generateFollowUpMessage(lead);
+  // 2. Get tasks from GHL for this contact
+  const tasksResponse = await fetch(`https://services.leadconnectorhq.com/contacts/${lead.ghlContactId}/tasks`, {
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+      'Version': '2021-07-28'
+    }
+  });
+
+  if (!tasksResponse.ok) {
+    console.error(`❌ Failed to fetch tasks for contact ${lead.ghlContactId}`);
+    return;
+  }
+
+  const { tasks } = await tasksResponse.json();
   
-  // 3. Send message via GHL (only for text messages - calls create tasks)
-  if (lead.followUpTask.taskType === 'text') {
-    await sendGHLMessage(lead.ghlContactId, aiMessage, accessToken);
-    // Update rate limit counters after successful send
-    await updateRateLimitCounters(integration);
-  } else {
-    // For calls, create a task in GHL (doesn't count against rate limits)
-    await createGHLTask(lead.ghlContactId, aiMessage, lead.followUpTask, accessToken);
+  // 3. Find due follow-up tasks
+  const dueTasks = tasks.filter((task: any) => 
+    !task.completed && 
+    new Date(task.dueDate) <= new Date() &&
+    task.title.toLowerCase().includes('follow')
+  );
+
+  if (dueTasks.length === 0) {
+    console.log(`📅 No due follow-up tasks for lead ${lead.id}`);
+    return;
+  }
+
+  // 4. Process each due task
+  for (const task of dueTasks) {
+    console.log(`📋 Processing task: ${task.title}`);
+    
+    // Generate AI message based on task and lead context
+    const aiMessage = await generateFollowUpMessage(lead, task);
+    
+    // Update task with AI-generated talking points
+    await updateGHLTaskWithAI(task.id, aiMessage, accessToken);
   }
   
-  // 4. Mark follow-up as completed
-  await markFollowUpCompleted(lead.id);
-  
-  console.log(`✅ Completed follow-up for lead ${lead.id}`);
+  console.log(`✅ Completed follow-up processing for lead ${lead.id}`);
 }
 
 const PROPERTY_LEAD_TABLE = process.env.AMPLIFY_DATA_PropertyLead_TABLE_NAME;
@@ -267,34 +371,35 @@ async function updateRateLimitCounters(integration: GhlIntegration) {
   console.log(`📊 Rate limits updated: ${hourlyCount}/${MAX_MESSAGES_PER_HOUR} hourly, ${dailyCount}/${MAX_MESSAGES_PER_DAY} daily`);
 }
 
-async function generateFollowUpMessage(lead: Lead): Promise<string> {
+async function generateFollowUpMessage(lead: Lead, task: any): Promise<string> {
   const context = {
     leadName: `${lead.ownerFirstName || ''} ${lead.ownerLastName || ''}`.trim() || 'there',
-    taskDescription: lead.followUpTask?.description || '',
-    taskType: lead.followUpTask?.taskType || 'text',
+    taskTitle: task.title || '',
+    taskDescription: task.body || '',
     recentNotes: (lead.notes || []).slice(-3).map(note => `${note.createdBy}: ${note.text}`).join('\n'),
-    leadType: 'real estate lead' // You can enhance this with actual lead type
+    leadType: 'real estate lead'
   };
   
-  const prompt = `You are a professional real estate agent following up with a lead. Generate a ${context.taskType === 'call' ? 'call script with talking points' : 'text message'} based on this context:
+  const prompt = `You are a professional real estate agent following up with a lead. Generate talking points and suggestions based on this GHL task:
 
 Lead Name: ${context.leadName}
-Follow-up Task: ${context.taskDescription}
+Task Title: ${context.taskTitle}
+Task Description: ${context.taskDescription}
 Recent Notes:
 ${context.recentNotes}
 
 Requirements:
-- Be professional and personable
-- Reference the specific follow-up task
-- Keep it concise (${context.taskType === 'text' ? '160 characters max' : '2-3 key talking points'})
-- Include a clear call-to-action
-- Sound natural and conversational
+- Generate helpful talking points and suggestions for this task
+- Be professional and actionable
+- Include specific next steps or questions to ask
+- Keep it concise but comprehensive
+- Focus on moving the lead forward
 
-${context.taskType === 'call' ? 'Call Script:' : 'Text Message:'}`;
+AI Suggestions:`;
 
   const modelInput = {
     anthropic_version: "bedrock-2023-05-31",
-    max_tokens: 200,
+    max_tokens: 300,
     messages: [
       {
         role: "user",
@@ -315,40 +420,15 @@ ${context.taskType === 'call' ? 'Call Script:' : 'Text Message:'}`;
   return responseBody.content[0].text;
 }
 
-async function sendGHLMessage(contactId: string, message: string, accessToken: string) {
-  const ghlResponse = await axios.post(
-    `https://services.leadconnectorhq.com/conversations/messages`,
-    {
-      type: 'SMS',
-      contactId: contactId,
-      message: message
-    },
-    {
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
-        'Version': '2021-07-28'
-      }
-    }
-  );
-  
-  console.log(`📱 Sent SMS to contact ${contactId}`);
-  return ghlResponse.data;
-}
-
-async function createGHLTask(contactId: string, talkingPoints: string, task: FollowUpTask, accessToken: string) {
-  // Create a task in GHL for the agent to make the call
-  const taskData = {
-    title: `Follow-up Call: ${task.description}`,
-    body: `AI-Generated Talking Points:\n\n${talkingPoints}`,
-    contactId: contactId,
-    dueDate: new Date().toISOString(), // Due now
-    completed: false
+async function updateGHLTaskWithAI(taskId: string, aiSuggestions: string, accessToken: string) {
+  // Update the existing task with AI-generated suggestions
+  const updateData = {
+    body: `${aiSuggestions}\n\n--- Original Task ---\n[Task content preserved by AI agent]`
   };
   
-  const ghlResponse = await axios.post(
-    `https://services.leadconnectorhq.com/contacts/${contactId}/tasks`,
-    taskData,
+  const ghlResponse = await axios.put(
+    `https://services.leadconnectorhq.com/tasks/${taskId}`,
+    updateData,
     {
       headers: {
         'Authorization': `Bearer ${accessToken}`,
@@ -358,20 +438,6 @@ async function createGHLTask(contactId: string, talkingPoints: string, task: Fol
     }
   );
   
-  console.log(`📞 Created call task for contact ${contactId}`);
+  console.log(`🤖 Updated task ${taskId} with AI suggestions`);
   return ghlResponse.data;
-}
-
-async function markFollowUpCompleted(leadId: string) {
-  await docClient.send(new UpdateCommand({
-    TableName: PROPERTY_LEAD_TABLE,
-    Key: { id: leadId },
-    UpdateExpression: 'SET followUpTask.#status = :completed',
-    ExpressionAttributeNames: {
-      '#status': 'status'
-    },
-    ExpressionAttributeValues: {
-      ':completed': 'completed'
-    }
-  }));
 }
