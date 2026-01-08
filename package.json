@@ -20,7 +20,7 @@
     "@googlemaps/addressvalidation": "^3.2.1",
     "@googlemaps/google-maps-services-js": "^3.4.2",
     "@react-google-maps/api": "^2.20.7",
-    "aws-amplify": "^6.15.7",
+    "aws-amplify": "^6.15.9",
     "axios": "^1.12.2",
     "csv-parse": "^6.1.0",
     "formidable": "^3.4",
