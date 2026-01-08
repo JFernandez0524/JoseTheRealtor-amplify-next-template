@@ -3,6 +3,28 @@ import { skipTraceLeads } from '../functions/skiptraceLeads/resource';
 import { manualGhlSync } from '../functions/manualGhlSync/resource';
 
 const schema = a.schema({
+  GhlIntegration: a
+    .model({
+      userId: a.string().required(),
+      locationId: a.string().required(),
+      accessToken: a.string().required(),
+      refreshToken: a.string(),
+      tokenType: a.string().default('Bearer'),
+      expiresAt: a.datetime().required(),
+      scope: a.string(),
+      isActive: a.boolean().default(true),
+      // 🚦 RATE LIMITING FIELDS
+      dailyMessageCount: a.integer().default(0),
+      hourlyMessageCount: a.integer().default(0),
+      lastMessageSent: a.datetime(),
+      lastHourReset: a.datetime(),
+      lastDayReset: a.datetime(),
+    })
+    .authorization((allow) => [
+      allow.owner().to(['create', 'read', 'update', 'delete']),
+      allow.groups(['ADMINS']).to(['create', 'read', 'update', 'delete']),
+    ]),
+
   PropertyLead: a
     .model({
       // 🔒 Security: Make 'owner' read-only so it can't be reassigned
@@ -19,6 +41,10 @@ const schema = a.schema({
 
       // 💥 FIX 1: ADD NOTES FIELD for user-edited data (SOT: DynamoDB)
       notes: a.json().array(), // Array of {text: string, createdAt: string, createdBy: string}
+      
+      // 🎯 FOLLOW-UP TASK MANAGEMENT (Optional fields)
+      followUpTask: a.json(), // {taskDate: string, taskTime: string, taskType: 'call'|'text', description: string, status: 'pending'|'completed', ghlTaskId?: string}
+      followUpDueAt: a.datetime(), // ISO datetime for easy querying/sorting
 
       // --- Admin/Executor Info (Probate) ---
       adminFirstName: a.string(),

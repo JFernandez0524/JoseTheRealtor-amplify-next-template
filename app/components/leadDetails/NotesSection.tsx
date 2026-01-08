@@ -1,7 +1,7 @@
 // app/components/leadDetails/NotesSection.tsx
 
 import { useState, useEffect } from 'react';
-import { getFrontEndUser } from '@/app/utils/aws/auth/amplifyFrontEndUser';
+import { fetchUserAttributes } from 'aws-amplify/auth';
 
 interface Note {
   text: string;
@@ -23,10 +23,10 @@ export function NotesSection({ notes, onNotesUpdate, isEditing }: NotesSectionPr
   useEffect(() => {
     async function loadUser() {
       try {
-        const user = await getFrontEndUser();
-        if (user?.email) {
+        const attributes = await fetchUserAttributes();
+        if (attributes.email) {
           // Use email prefix as display name (e.g., "john@example.com" -> "john")
-          const displayName = user.email.split('@')[0];
+          const displayName = attributes.email.split('@')[0];
           setCurrentUser(displayName);
         }
       } catch (error) {

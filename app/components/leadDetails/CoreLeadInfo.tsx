@@ -4,9 +4,12 @@ import { useState, useEffect } from 'react';
 import { Loader } from '@aws-amplify/ui-react';
 import { type Schema } from '@/amplify/data/resource';
 import { NotesSection } from './NotesSection';
+import { FollowUpTask } from './FollowUpTask';
 
 type Lead = Schema['PropertyLead']['type'] & {
   notes?: Array<{text: string, createdAt: string, createdBy?: string}> | null;
+  followUpTask?: {taskDate: string, taskTime: string, taskType: 'call'|'text', description: string, status: 'pending'|'completed', ghlTaskId?: string} | null;
+  followUpDueAt?: string | null;
   ghlSyncStatus?: 'PENDING' | 'SUCCESS' | 'FAILED' | 'SKIPPED' | null;
   ghlContactId?: string | null;
   ghlSyncDate?: string | null;
@@ -32,6 +35,8 @@ export function CoreLeadInfo({
     ownerFirstName: lead.ownerFirstName || '',
     ownerLastName: lead.ownerLastName || '',
     notes: lead.notes || [],
+    followUpTask: lead.followUpTask || null,
+    followUpDueAt: lead.followUpDueAt || null,
     mailingAddress: lead.mailingAddress || '',
     mailingCity: lead.mailingCity || '',
     mailingState: lead.mailingState || '',
@@ -214,6 +219,17 @@ export function CoreLeadInfo({
         <NotesSection 
           notes={formData.notes}
           onNotesUpdate={(notes) => setFormData(prev => ({ ...prev, notes }))}
+          isEditing={isEditing}
+        />
+      </div>
+
+      <div className='pt-4 border-t border-gray-100'>
+        <FollowUpTask 
+          followUpTask={formData.followUpTask}
+          onTaskUpdate={(task) => {
+            const followUpDueAt = task ? `${task.taskDate}T${task.taskTime}:00.000Z` : null;
+            setFormData(prev => ({ ...prev, followUpTask: task, followUpDueAt }));
+          }}
           isEditing={isEditing}
         />
       </div>

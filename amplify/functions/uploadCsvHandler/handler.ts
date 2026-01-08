@@ -79,6 +79,7 @@ export const handler: S3Handler = async (event) => {
 
     let currentRow = 0;
     let successCount = 0;
+    let duplicateCount = 0;
     let ownerId = '';
 
     try {
@@ -228,7 +229,35 @@ export const handler: S3Handler = async (event) => {
 
           const preSkiptracedPhone = formatPhoneNumber(row['phone']);
 
-          // --- 💾 SAVE TO DYNAMODB ---
+          // --- 💾 CHECK FOR DUPLICATES BEFORE SAVING ---
+          // For probate: Check by admin address (since that's who we contact)
+          // For preforeclosure: Check by property address
+          const duplicateCheckAddress = leadType === 'PROBATE' 
+            ? `${finalMailAddr || ''} ${finalMailCity || ''} ${finalMailZip || ''}`.trim()
+            : `${finalPropAddr} ${finalPropCity} ${finalPropZip}`.trim();
+
+          if (duplicateCheckAddress) {
+            const existingLeadScan = await docClient.send(new ScanCommand({
+              TableName: propertyLeadTableName,
+              FilterExpression: leadType === 'PROBATE' 
+                ? 'contains(mailingAddress, :addr) AND mailingZip = :zip AND #owner = :owner'
+                : 'contains(ownerAddress, :addr) AND ownerZip = :zip AND #owner = :owner',
+              ExpressionAttributeNames: {
+                '#owner': 'owner'
+              },
+              ExpressionAttributeValues: {
+                ':addr': leadType === 'PROBATE' ? (finalMailAddr || '') : finalPropAddr,
+                ':zip': leadType === 'PROBATE' ? (finalMailZip || '') : finalPropZip,
+                ':owner': ownerId
+              }
+            }));
+
+            if (existingLeadScan.Items && existingLeadScan.Items.length > 0) {
+              console.log(`⏭️ Skipping duplicate lead: ${duplicateCheckAddress}`);
+              duplicateCount++;
+              continue; // Skip this lead
+            }
+          }
           const leadItem = {
             id: randomUUID(),
             owner: ownerId,
@@ -279,7 +308,7 @@ export const handler: S3Handler = async (event) => {
         new DeleteObjectCommand({ Bucket: autoBucketName, Key: decodedKey })
       );
       console.log(
-        `✅ Finished: Processed ${successCount} leads for ${ownerId}`
+        `✅ Finished: Processed ${successCount} leads, skipped ${duplicateCount} duplicates for ${ownerId}`
       );
     } catch (err: any) {
       console.error('❌ Critical Processing Error:', err);

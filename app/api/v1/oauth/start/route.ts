@@ -2,7 +2,10 @@ import { NextResponse } from 'next/server';
 import { randomBytes } from 'crypto';
 
 const GHL_CLIENT_ID = process.env.GHL_CLIENT_ID;
-const GHL_REDIRECT_URI = 'https://JoseTheRealtor.com/api/v1/oauth/callback';
+const GHL_REDIRECT_URI = process.env.GHL_REDIRECT_URI || 
+  (process.env.NODE_ENV === 'development' 
+    ? 'http://localhost:3000/api/v1/oauth/callback'
+    : 'https://leads.josetherealtor.com/api/v1/oauth/callback');
 
 // Required scopes for your app
 const SCOPES = [

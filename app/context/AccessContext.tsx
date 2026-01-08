@@ -60,10 +60,14 @@ export function AccessProvider({ children }: { children: ReactNode }) {
       // 1. Check if the UserAccount exists by BOTH userId AND email
       const [
         { data: accountsByOwner },
+        { data: accountsByOwnerContains },
         { data: accountsByEmail }
       ] = await Promise.all([
         client.models.UserAccount.list({
           filter: { owner: { eq: userId } },
+        }),
+        client.models.UserAccount.list({
+          filter: { owner: { contains: userId } },
         }),
         client.models.UserAccount.list({
           filter: { email: { eq: userEmail } },
@@ -71,11 +75,12 @@ export function AccessProvider({ children }: { children: ReactNode }) {
       ]);
 
       console.log('🔍 Found accounts:', { 
-        byOwner: accountsByOwner?.length || 0, 
+        byOwner: accountsByOwner?.length || 0,
+        byOwnerContains: accountsByOwnerContains?.length || 0,
         byEmail: accountsByEmail?.length || 0 
       });
 
-      const accounts = accountsByOwner || [];
+      const accounts = accountsByOwner?.length > 0 ? accountsByOwner : (accountsByOwnerContains || []);
       const existingAccountByEmail = accountsByEmail?.[0];
 
       // 2. Create DB record if missing (Handles Social Logins)

@@ -6,6 +6,7 @@ import { client } from '@/app/utils/aws/data/frontEndClient';
 import { useAccess } from '@/app/context/AccessContext';
 import { LeadTable } from './LeadTable';
 import { DashboardFilters } from './DashboardFilters';
+import { GhlConnection } from './GhlConnection';
 import { getFrontEndUser } from '@/app/utils/aws/auth/amplifyFrontEndUser';
 import type { Schema } from '@/amplify/data/resource';
 
@@ -210,6 +211,9 @@ export default function LeadDashboardClient({ initialLeads }: Props) {
         handleDelete={handleDeleteLeads}
         handleExport={() => alert('Exporting leads to CSV...')}
       />
+
+      {/* GHL Connection Status */}
+      <GhlConnection />
 
       {/* Wallet Status Bar */}
       <div className='flex justify-end items-center gap-4 px-2'>

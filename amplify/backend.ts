@@ -6,9 +6,11 @@ import { storage } from './storage/resource';
 import { uploadCsvHandler } from './functions/uploadCsvHandler/resource';
 import { skipTraceLeads } from './functions/skiptraceLeads/resource';
 import { manualGhlSync } from './functions/manualGhlSync/resource';
+import { aiFollowUpAgent } from './functions/aiFollowUpAgent/resource';
 import { addUserToGroup } from './data/add-user-to-group/resource';
 import { EventType } from 'aws-cdk-lib/aws-s3';
 import { LambdaDestination } from 'aws-cdk-lib/aws-s3-notifications';
+import { PolicyStatement, Effect } from 'aws-cdk-lib/aws-iam';
 
 const backend = defineBackend({
   auth,
@@ -17,6 +19,7 @@ const backend = defineBackend({
   uploadCsvHandler,
   skipTraceLeads,
   manualGhlSync,
+  aiFollowUpAgent,
   addUserToGroup,
 });
 
@@ -67,6 +70,16 @@ backend.manualGhlSync.addEnvironment(
   backend.data.resources.tables['UserAccount'].tableName
 );
 
+// 🤖 Add AI Follow-Up Agent environment variables
+backend.aiFollowUpAgent.addEnvironment(
+  'AMPLIFY_DATA_PropertyLead_TABLE_NAME',
+  backend.data.resources.tables['PropertyLead'].tableName
+);
+backend.aiFollowUpAgent.addEnvironment(
+  'AMPLIFY_DATA_GhlIntegration_TABLE_NAME',
+  backend.data.resources.tables['GhlIntegration'].tableName
+);
+
 // 🛡️ Grant DynamoDB permissions to data stack functions
 backend.data.resources.tables['PropertyLead'].grantReadWriteData(
   backend.skipTraceLeads.resources.lambda
@@ -81,9 +94,26 @@ backend.data.resources.tables['UserAccount'].grantReadWriteData(
   backend.manualGhlSync.resources.lambda
 );
 
+// 🤖 Grant DynamoDB permissions to AI Follow-Up Agent
+backend.data.resources.tables['PropertyLead'].grantReadWriteData(
+  backend.aiFollowUpAgent.resources.lambda
+);
+backend.data.resources.tables['GhlIntegration'].grantReadData(
+  backend.aiFollowUpAgent.resources.lambda
+);
+
 // 🛡️ Auth Permissions for uploadCsvHandler
 backend.auth.resources.userPool.grant(
   backend.uploadCsvHandler.resources.lambda,
   'cognito-idp:AdminAddUserToGroup',
   'cognito-idp:AdminGetUser'
+);
+
+// 🤖 Grant Bedrock permissions to AI Follow-Up Agent
+backend.aiFollowUpAgent.resources.lambda.addToRolePolicy(
+  new PolicyStatement({
+    effect: Effect.ALLOW,
+    actions: ['bedrock:InvokeModel'],
+    resources: ['arn:aws:bedrock:*::foundation-model/anthropic.claude-3-5-sonnet-20241022-v2:0']
+  })
 );

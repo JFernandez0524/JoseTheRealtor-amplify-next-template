@@ -1,9 +1,14 @@
 import { NextResponse } from 'next/server';
 import axios from 'axios';
+import { client } from '@/app/utils/aws/data/frontEndClient';
+import { getFrontEndUser } from '@/app/utils/aws/auth/amplifyFrontEndUser';
 
 const GHL_CLIENT_ID = process.env.GHL_CLIENT_ID;
 const GHL_CLIENT_SECRET = process.env.GHL_CLIENT_SECRET;
-const GHL_REDIRECT_URI = 'https://JoseTheRealtor.com/api/v1/oauth/callback';
+const GHL_REDIRECT_URI = process.env.GHL_REDIRECT_URI || 
+  (process.env.NODE_ENV === 'development' 
+    ? 'http://localhost:3000/api/v1/oauth/callback'
+    : 'https://leads.josetherealtor.com/api/v1/oauth/callback');
 
 export async function GET(req: Request) {
   try {
@@ -15,17 +20,17 @@ export async function GET(req: Request) {
     // Handle OAuth errors
     if (error) {
       console.error('OAuth error:', error);
-      return NextResponse.redirect('https://JoseTheRealtor.com/oauth/error?error=' + error);
+      return NextResponse.redirect('https://leads.josetherealtor.com/oauth/error?error=' + error);
     }
 
     if (!code) {
       console.error('No authorization code received');
-      return NextResponse.redirect('https://JoseTheRealtor.com/oauth/error?error=no_code');
+      return NextResponse.redirect('https://leads.josetherealtor.com/oauth/error?error=no_code');
     }
 
     // TODO: Verify state parameter for security
     // if (!verifyState(state)) {
-    //   return NextResponse.redirect('https://JoseTheRealtor.com/oauth/error?error=invalid_state');
+    //   return NextResponse.redirect('https://leads.josetherealtor.com/oauth/error?error=invalid_state');
     // }
 
     // Exchange code for tokens
@@ -59,28 +64,29 @@ export async function GET(req: Request) {
 
     console.log('OAuth success for location:', locationId);
 
-    // TODO: Store tokens in database
-    // await storeTokens({
-    //   locationId,
-    //   companyId,
-    //   accessToken: access_token,
-    //   refreshToken: refresh_token,
-    //   expiresAt: new Date(Date.now() + expires_in * 1000)
-    // });
+    // Get current user for token storage
+    const user = await getFrontEndUser();
+    if (!user) {
+      console.error('No authenticated user found');
+      return NextResponse.redirect('https://leads.josetherealtor.com/oauth/error?error=user_not_authenticated');
+    }
 
-    // For now, log the tokens (remove in production)
-    console.log('Tokens received:', {
-      locationId,
-      companyId,
-      userId,
-      userType,
-      hasAccessToken: !!access_token,
-      hasRefreshToken: !!refresh_token,
-      expiresIn: expires_in
+    // Store tokens in database
+    await client.models.GhlIntegration.create({
+      userId: user.userId,
+      locationId: locationId || 'default',
+      accessToken: access_token,
+      refreshToken: refresh_token,
+      tokenType: 'Bearer',
+      expiresAt: new Date(Date.now() + (expires_in * 1000)).toISOString(),
+      scope: 'contacts.readonly contacts.write locations/tags.write conversations/message.readonly conversations/message.write',
+      isActive: true,
     });
 
+    console.log('✅ Tokens stored successfully for user:', user.userId);
+
     // Redirect to success page
-    return NextResponse.redirect('https://JoseTheRealtor.com/oauth/success?locationId=' + locationId);
+    return NextResponse.redirect('https://leads.josetherealtor.com/oauth/success?locationId=' + locationId);
 
   } catch (error: any) {
     console.error('OAuth callback error:', error);
@@ -90,6 +96,6 @@ export async function GET(req: Request) {
       console.error('GHL API Error:', error.response.status, error.response.data);
     }
 
-    return NextResponse.redirect('https://JoseTheRealtor.com/oauth/error?error=token_exchange_failed');
+    return NextResponse.redirect('https://leads.josetherealtor.com/oauth/error?error=token_exchange_failed');
   }
 }
