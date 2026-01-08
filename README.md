@@ -161,16 +161,16 @@ The platform provides REST APIs for integration:
 
 ### Environment Variables
 
-Required environment variables:
+Required environment variables for local development (`.env.local`):
 
 ```env
 # Google Maps (Address Validation)
-GOOGLE_MAPS_API_KEY=your_key
-NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=your_key
+GOOGLE_MAPS_API_KEY=your_google_maps_key
+NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=your_google_maps_key
 
 # GoHighLevel Integration
-GHL_CLIENT_ID=your_client_id
-GHL_CLIENT_SECRET=your_client_secret
+GHL_CLIENT_ID=your_ghl_client_id
+GHL_CLIENT_SECRET=your_ghl_client_secret
 
 # Skip Tracing Service
 BRIDGE_API_KEY=your_bridge_key
@@ -178,6 +178,26 @@ BRIDGE_API_KEY=your_bridge_key
 # AI Services
 OPENAI_API_KEY=your_openai_key
 ```
+
+**Production Deployment:**
+
+For production on AWS Amplify, environment variables are handled using the official AWS approach:
+
+1. **Set in Amplify Console**: Go to your Amplify app → App Settings → Environment variables
+2. **Add all required variables** (same names as above)
+3. **Build process**: The `amplify.yml` uses `env | grep` to write variables to `.env.production`
+4. **Runtime access**: API routes access them via `process.env.VARIABLE_NAME`
+
+The build process automatically:
+- Writes server-side variables (GHL_CLIENT_ID, API keys, etc.) to `.env.production`
+- Writes all `NEXT_PUBLIC_` prefixed variables for client-side access
+- Only includes variables that actually exist in the build environment
+
+**Security Notes:**
+- Never commit actual API keys to GitHub
+- Server-side variables (without `NEXT_PUBLIC_`) remain secure and server-only
+- Use `.env.example` as a template for other developers
+- Amplify Console variables are encrypted and only available during build/runtime
 
 ### Local Development
 
