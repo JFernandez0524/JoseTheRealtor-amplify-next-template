@@ -41,7 +41,7 @@ export function GhlConnection() {
   };
 
   const handleConnect = () => {
-    window.location.href = '/api/auth/ghl/authorize';
+    window.location.href = '/api/v1/oauth/start';
   };
 
   const handleDisconnect = async () => {
