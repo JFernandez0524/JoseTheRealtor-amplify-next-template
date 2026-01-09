@@ -213,6 +213,12 @@ const schema = a.schema({
       creditsExpiresAt: a.datetime(),
       registrationIP: a.string(),
       lastLoginIP: a.string(),
+      
+      // GHL Integration Type
+      ghlIntegrationType: a.enum(['OAUTH', 'SUB_ACCOUNT', 'NONE']),
+      ghlSubAccountId: a.string(), // For managed sub-accounts
+      ghlSubAccountStatus: a.enum(['ACTIVE', 'SUSPENDED', 'CANCELLED']),
+      
       crmLocationId: a.string(),
       crmApiKey: a.string(),
       totalLeadsSynced: a.integer().default(0),

@@ -202,20 +202,24 @@ export const handler: Handler = async (event) => {
     }));
     const userAccount = accounts?.[0];
     const isAdmin = groups.includes('ADMINS');
+    const isPro = groups.includes('PRO');
 
-    // Check if credits are expired
-    if (!isAdmin && userAccount?.creditsExpiresAt) {
-      const expirationDate = new Date(userAccount.creditsExpiresAt);
-      const now = new Date();
-      if (now > expirationDate) {
-        throw new Error('Credits have expired. Please upgrade to continue using skip tracing.');
+    // All users (FREE and PRO) need credits for skip tracing, except ADMIN
+    if (!isAdmin) {
+      // Check credit expiration for FREE users only
+      if (!isPro && userAccount?.creditsExpiresAt) {
+        const expirationDate = new Date(userAccount.creditsExpiresAt);
+        const now = new Date();
+        if (now > expirationDate) {
+          throw new Error('Credits have expired. Please upgrade to PRO or purchase more credits.');
+        }
       }
-    }
 
-    if (!isAdmin && (!userAccount || (userAccount.credits || 0) < leadIds.length)) {
-      throw new Error(
-        `Insufficient Credits: Need ${leadIds.length}, have ${userAccount?.credits || 0}.`
-      );
+      if (!userAccount || (userAccount.credits || 0) < leadIds.length) {
+        throw new Error(
+          `Insufficient Credits: Need ${leadIds.length}, have ${userAccount?.credits || 0}. Purchase skip tracing credits to continue.`
+        );
+      }
     }
 
     const results = [];
@@ -281,7 +285,7 @@ export const handler: Handler = async (event) => {
       results.push({ id: leadId, status: 'SUCCESS', phones: newPhones.length });
     }
 
-    // 💰 6. Deduct Credits (skip for admins)
+    // 💰 6. Deduct Credits (all users except ADMIN)
     if (processedSuccessfully > 0 && !isAdmin && userAccount) {
       await docClient.send(new UpdateCommand({
         TableName: userAccountTableName,

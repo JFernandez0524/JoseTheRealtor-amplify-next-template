@@ -75,7 +75,8 @@ Your CSV should include these columns:
 ### User Roles
 
 - **FREE**: Basic lead management (5 starter skip tracing credits, 30-day expiration, 1 account per IP)
-- **PRO**: Unlimited skip tracing and CRM sync
+- **PRO**: Unlimited skip tracing and CRM sync (bring your own GHL account)
+- **PRO + Managed GHL**: Everything in PRO plus fully managed GoHighLevel sub-account ($97/month)
 - **AI_PLAN**: AI assistant and automated follow-ups
 - **ADMIN**: Full platform access and user management
 

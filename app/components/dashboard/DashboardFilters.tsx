@@ -55,8 +55,8 @@ export function DashboardFilters({
           className='border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none'
         >
           <option value=''>All Lead Types</option>
-          <option value='preforeclosure'>Pre-Foreclosure</option>
-          <option value='probate'>Probate</option>
+          <option value='PREFORECLOSURE'>Pre-Foreclosure</option>
+          <option value='PROBATE'>Probate</option>
         </select>
 
         {/* 2. Skip Trace Status Filter */}

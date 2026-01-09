@@ -21,9 +21,11 @@ export async function GET(req: Request) {
     const state = searchParams.get('state');
     const error = searchParams.get('error');
 
+    console.log('OAuth callback received:', { code: !!code, state, error });
+
     // Handle OAuth errors
     if (error) {
-      console.error('OAuth error:', error);
+      console.error('OAuth error from GHL:', error);
       return NextResponse.redirect('https://leads.josetherealtor.com/oauth/error?error=' + error);
     }
 
@@ -32,25 +34,27 @@ export async function GET(req: Request) {
       return NextResponse.redirect('https://leads.josetherealtor.com/oauth/error?error=no_code');
     }
 
-    // TODO: Verify state parameter for security
-    // if (!verifyState(state)) {
-    //   return NextResponse.redirect('https://leads.josetherealtor.com/oauth/error?error=invalid_state');
-    // }
+    if (!GHL_CLIENT_ID || !GHL_CLIENT_SECRET) {
+      console.error('Missing GHL credentials');
+      return NextResponse.redirect('https://leads.josetherealtor.com/oauth/error?error=missing_credentials');
+    }
+
+    console.log('Attempting token exchange with GHL...');
 
     // Exchange code for tokens
     const tokenResponse = await axios.post(
       'https://services.leadconnectorhq.com/oauth/token',
-      {
-        client_id: GHL_CLIENT_ID,
-        client_secret: GHL_CLIENT_SECRET,
+      new URLSearchParams({
+        client_id: GHL_CLIENT_ID!,
+        client_secret: GHL_CLIENT_SECRET!,
         grant_type: 'authorization_code',
         code: code,
-        user_type: 'Location', // Request Location-level token
+        user_type: 'Location',
         redirect_uri: GHL_REDIRECT_URI
-      },
+      }),
       {
         headers: {
-          'Content-Type': 'application/json', // Use JSON, not form-encoded
+          'Content-Type': 'application/x-www-form-urlencoded',
           'Accept': 'application/json'
         }
       }

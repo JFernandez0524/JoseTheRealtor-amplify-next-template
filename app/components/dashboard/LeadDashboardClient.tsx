@@ -23,10 +23,15 @@ export default function LeadDashboardClient({ initialLeads }: Props) {
 
   // --- State ---
   const [leads, setLeads] = useState<Lead[]>(initialLeads);
+  const [allLeads, setAllLeads] = useState<Lead[]>(initialLeads); // Store all leads
   const [userAccount, setUserAccount] = useState<UserAccount | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isSynced, setIsSynced] = useState(false);
+  
+  // Pagination State
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(100); // Show 100 leads per page
 
   // Filter States
   const [searchQuery, setSearchQuery] = useState('');
@@ -40,7 +45,7 @@ export default function LeadDashboardClient({ initialLeads }: Props) {
   useEffect(() => {
     const sub = client.models.PropertyLead.observeQuery().subscribe({
       next: ({ items, isSynced }) => {
-        setLeads([...items]);
+        setAllLeads([...items]); // Store all leads
         setIsSynced(isSynced);
       },
       error: (err) => console.error('Subscription error:', err),
@@ -73,7 +78,7 @@ export default function LeadDashboardClient({ initialLeads }: Props) {
 
   // --- Filter Logic ---
   const filteredLeads = useMemo(() => {
-    return leads.filter((lead) => {
+    return allLeads.filter((lead) => {
       const search = searchQuery.toLowerCase();
       const matchesSearch =
         lead.ownerAddress?.toLowerCase().includes(search) ||
@@ -91,7 +96,18 @@ export default function LeadDashboardClient({ initialLeads }: Props) {
 
       return matchesSearch && matchesType && matchesStatus && matchesCrm;
     });
-  }, [leads, searchQuery, filterType, filterStatus, filterCrmStatus]);
+  }, [allLeads, searchQuery, filterType, filterStatus, filterCrmStatus]);
+
+  // --- Pagination Logic ---
+  const totalPages = Math.ceil(filteredLeads.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedLeads = filteredLeads.slice(startIndex, endIndex);
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, filterType, filterStatus, filterCrmStatus]);
 
   // --- Action Handlers ---
 
@@ -232,15 +248,93 @@ export default function LeadDashboardClient({ initialLeads }: Props) {
         </div>
       </div>
 
+      {/* Lead Count and Pagination Controls */}
+      <div className='flex justify-between items-center bg-white border border-gray-200 rounded-lg px-4 py-3'>
+        <div className='flex items-center gap-4'>
+          <div className='text-sm text-gray-700'>
+            <span className='font-semibold'>{filteredLeads.length}</span> total leads
+            {filteredLeads.length !== allLeads.length && (
+              <span className='text-gray-500'> (filtered from {allLeads.length})</span>
+            )}
+          </div>
+          <div className='text-sm text-gray-500'>
+            Showing {startIndex + 1}-{Math.min(endIndex, filteredLeads.length)} of {filteredLeads.length}
+          </div>
+        </div>
+
+        {totalPages > 1 && (
+          <div className='flex items-center gap-2'>
+            <button
+              onClick={() => setCurrentPage(1)}
+              disabled={currentPage === 1}
+              className='px-3 py-1 text-sm border border-gray-300 rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50'
+            >
+              First
+            </button>
+            <button
+              onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+              disabled={currentPage === 1}
+              className='px-3 py-1 text-sm border border-gray-300 rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50'
+            >
+              ← Prev
+            </button>
+            
+            <div className='flex items-center gap-1'>
+              {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                let pageNum;
+                if (totalPages <= 5) {
+                  pageNum = i + 1;
+                } else if (currentPage <= 3) {
+                  pageNum = i + 1;
+                } else if (currentPage >= totalPages - 2) {
+                  pageNum = totalPages - 4 + i;
+                } else {
+                  pageNum = currentPage - 2 + i;
+                }
+                
+                return (
+                  <button
+                    key={pageNum}
+                    onClick={() => setCurrentPage(pageNum)}
+                    className={`px-3 py-1 text-sm border rounded ${
+                      currentPage === pageNum
+                        ? 'bg-blue-500 text-white border-blue-500'
+                        : 'border-gray-300 hover:bg-gray-50'
+                    }`}
+                  >
+                    {pageNum}
+                  </button>
+                );
+              })}
+            </div>
+
+            <button
+              onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+              disabled={currentPage === totalPages}
+              className='px-3 py-1 text-sm border border-gray-300 rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50'
+            >
+              Next →
+            </button>
+            <button
+              onClick={() => setCurrentPage(totalPages)}
+              disabled={currentPage === totalPages}
+              className='px-3 py-1 text-sm border border-gray-300 rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50'
+            >
+              Last
+            </button>
+          </div>
+        )}
+      </div>
+
       <LeadTable
-        leads={filteredLeads}
+        leads={paginatedLeads}
         selectedIds={selectedIds}
         isLoading={false}
         onToggleAll={() => {
           setSelectedIds(
-            selectedIds.length === filteredLeads.length
+            selectedIds.length === paginatedLeads.length
               ? []
-              : filteredLeads.map((l) => l.id)
+              : paginatedLeads.map((l) => l.id)
           );
         }}
         onToggleOne={(id) => {
