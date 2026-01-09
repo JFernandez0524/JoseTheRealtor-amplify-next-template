@@ -50,8 +50,7 @@ export function GhlConnection() {
                 id: integration.id,
                 accessToken: refreshData.access_token,
                 refreshToken: refreshData.refresh_token,
-                expiresAt: new Date(Date.now() + (refreshData.expires_in * 1000)).toISOString(),
-                updatedAt: new Date().toISOString()
+                expiresAt: new Date(Date.now() + (refreshData.expires_in * 1000)).toISOString()
               });
 
               setIsConnected(true);
