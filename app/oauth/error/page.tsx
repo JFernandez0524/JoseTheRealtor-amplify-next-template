@@ -31,6 +31,21 @@ export default function OAuthErrorPage() {
       title: 'Access Denied',
       description: 'You denied access to your GoHighLevel account.',
       action: 'To use CRM features, you need to grant access to your GHL account.'
+    },
+    invalid_request: {
+      title: 'Invalid Request',
+      description: 'The authorization request was invalid or malformed.',
+      action: 'Please try connecting again.'
+    },
+    unauthorized: {
+      title: 'Unauthorized',
+      description: 'The application is not authorized to access GoHighLevel.',
+      action: 'Please contact support to resolve this configuration issue.'
+    },
+    user_error: {
+      title: 'User Authentication Error',
+      description: 'There was an issue with your user authentication.',
+      action: 'Please log out, log back in, and try connecting again.'
     }
   };
 

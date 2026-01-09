@@ -114,6 +114,12 @@ export async function GET(req: Request) {
 
   } catch (error: any) {
     console.error('OAuth callback error:', error);
+    console.error('Error details:', {
+      message: error.message,
+      response: error.response?.data,
+      status: error.response?.status,
+      stack: error.stack
+    });
     
     // Log detailed error for debugging
     if (error.response) {
