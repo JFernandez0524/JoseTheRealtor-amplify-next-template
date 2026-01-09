@@ -10,6 +10,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    // Get user email from attributes
+    const userEmail = user.signInDetails?.loginId || user.username || 'user@example.com';
+
     const { businessName, phone } = await req.json();
 
     // Create GHL Sub-Account
@@ -22,7 +25,7 @@ export async function POST(req: NextRequest) {
       },
       body: JSON.stringify({
         name: businessName,
-        email: user.email,
+        email: userEmail,
         phone: phone,
         address: '',
         city: '',

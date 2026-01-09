@@ -10,7 +10,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { plan } = await req.json(); // 'pro' or 'ghl-managed'
+    // Get user email from attributes
+    const userEmail = user.signInDetails?.loginId || user.username || 'user@example.com';
+
+    const { plan } = await req.json(); // 'sync-plan' or 'ai-outreach'
 
     const priceIds = {
       'sync-plan': process.env.STRIPE_SYNC_PLAN_PRICE_ID, // $97/month
@@ -36,7 +39,7 @@ export async function POST(req: NextRequest) {
         'mode': 'subscription',
         'line_items[0][price]': priceId,
         'line_items[0][quantity]': '1',
-        'customer_email': user.email,
+        'customer_email': userEmail,
         'metadata[userId]': user.userId,
         'metadata[plan]': plan,
       }),
