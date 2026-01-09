@@ -58,42 +58,23 @@ async function handleCheckoutCompleted(session: any) {
 
       console.log(`✅ Added ${creditsToAdd} credits to user ${userId}`);
       
-    } else if (plan === 'ghl-managed') {
-      // Handle GHL managed subscription
-      const subAccountResponse = await fetch('https://services.leadconnectorhq.com/locations/', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${GHL_AGENCY_TOKEN}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          name: `${customer_email} Real Estate`,
-          email: customer_email,
-          timezone: 'America/New_York',
-          country: 'US',
-        })
-      });
-
-      const subAccount = await subAccountResponse.json();
-
+    } else if (plan === 'sync-plan') {
+      // Handle SYNC PLAN subscription
       await cookiesClient.models.UserAccount.update({
         id: userAccount.id,
-        ghlIntegrationType: 'SUB_ACCOUNT',
-        ghlSubAccountId: subAccount.id,
-        ghlSubAccountStatus: 'ACTIVE',
-        crmLocationId: subAccount.id,
+        ghlIntegrationType: 'OAUTH', // User connects their own GHL
       });
 
-      console.log(`✅ Created GHL sub-account for user ${userId}`);
+      console.log(`✅ Activated SYNC PLAN for user ${userId}`);
       
-    } else {
-      // Handle PRO subscription
+    } else if (plan === 'ai-outreach') {
+      // Handle AI OUTREACH PLAN subscription
       await cookiesClient.models.UserAccount.update({
         id: userAccount.id,
-        ghlIntegrationType: 'OAUTH',
+        ghlIntegrationType: 'OAUTH', // User connects their own GHL
       });
 
-      console.log(`✅ Activated PRO subscription for user ${userId}`);
+      console.log(`✅ Activated AI OUTREACH PLAN for user ${userId}`);
     }
 
   } catch (error) {

@@ -10,6 +10,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    // Get user email from attributes
+    const userEmail = user.signInDetails?.loginId || user.username || 'user@example.com';
+
     const { package: packageType } = await req.json(); // '100', '250', '500'
 
     const creditPackages = {
@@ -52,7 +55,7 @@ export async function POST(req: NextRequest) {
         'line_items[0][price_data][product_data][description]': `${selectedPackage.credits} skip tracing credits at $0.10 each`,
         'line_items[0][price_data][unit_amount]': selectedPackage.price.toString(),
         'line_items[0][quantity]': '1',
-        'customer_email': user.email,
+        'customer_email': userEmail,
         'metadata[userId]': user.userId,
         'metadata[credits]': selectedPackage.credits.toString(),
         'metadata[type]': 'credits',

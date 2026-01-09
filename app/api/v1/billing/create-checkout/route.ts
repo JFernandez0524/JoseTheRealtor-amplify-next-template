@@ -13,8 +13,8 @@ export async function POST(req: NextRequest) {
     const { plan } = await req.json(); // 'pro' or 'ghl-managed'
 
     const priceIds = {
-      pro: process.env.STRIPE_PRO_PRICE_ID, // $47/month
-      'ghl-managed': process.env.STRIPE_GHL_MANAGED_PRICE_ID, // $97/month
+      'sync-plan': process.env.STRIPE_SYNC_PLAN_PRICE_ID, // $97/month
+      'ai-outreach': process.env.STRIPE_AI_OUTREACH_PRICE_ID, // $250/month
     };
 
     const priceId = priceIds[plan as keyof typeof priceIds];

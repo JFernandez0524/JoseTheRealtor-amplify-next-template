@@ -5,11 +5,11 @@ A comprehensive real estate lead management platform built with AWS Amplify Gen2
 ## Features
 
 - **Lead Management**: Import and analyze property leads (preforeclosure, probate)
-- **Skip Tracing**: Automated contact lookup with phone and email discovery
-- **CRM Integration**: Seamless GoHighLevel synchronization
+- **Skip Tracing**: Pay-per-use contact lookup at $0.10 per skip
+- **CRM Integration**: Seamless GoHighLevel synchronization with workflows
 - **AI Assistant**: Claude 3.5 Sonnet for lead analysis and follow-ups
 - **Address Validation**: Google Maps API integration for property verification
-- **Role-Based Access**: FREE, PRO, AI_PLAN, and ADMIN user tiers
+- **Role-Based Access**: FREE, SYNC PLAN, AI OUTREACH PLAN, and ADMIN tiers
 
 ## Quick Start
 
@@ -72,13 +72,12 @@ Your CSV should include these columns:
 - `type` (PREFORECLOSURE or PROBATE)
 - Optional: `estimatedValue`, `foreclosureAuctionDate`
 
-### User Roles
+### Pricing Structure
 
-- **FREE**: Basic lead management (5 starter skip tracing credits, 30-day expiration, 1 account per IP)
-- **PRO**: Unlimited skip tracing and CRM sync (bring your own GHL account)
-- **PRO + Managed GHL**: Everything in PRO plus fully managed GoHighLevel sub-account ($97/month)
-- **AI_PLAN**: AI assistant and automated follow-ups
-- **ADMIN**: Full platform access and user management
+- **FREE**: 5 starter credits + ability to purchase more at $0.10/skip
+- **SYNC PLAN**: $97/month for GHL integration with manual outreach workflows
+- **AI OUTREACH PLAN**: $250/month for automated AI text agent + all SYNC features
+- **Skip Credits**: Available to all users at $0.10 per skip (packages: 100/$10, 250/$25, 500/$50)
 
 ## Deployment to Production
 

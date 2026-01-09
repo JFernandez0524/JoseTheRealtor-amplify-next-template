@@ -13,49 +13,40 @@ export default function PricingPage() {
         'Basic lead management',
         'Property analyzer',
         'CSV lead import',
+        'Purchase additional skip credits',
         '30-day credit expiration',
         '1 account per IP'
       ]
     },
     {
-      title: 'PRO',
-      price: '$47',
-      planId: 'pro',
+      title: 'SYNC PLAN',
+      price: '$97',
+      planId: 'sync-plan',
+      popular: true,
       features: [
         'Advanced lead management',
         'Connect your GHL account',
-        'Automated lead sync',
+        'Automated lead sync to GHL',
+        'Manual outreach workflows (call/text)',
+        'Direct mail workflow automation',
         'Advanced filtering & export',
         'Priority support',
         'Buy skip credits separately'
       ]
     },
     {
-      title: 'PRO + Managed GHL',
-      price: '$97',
-      planId: 'ghl-managed',
-      popular: true,
-      ghlIncluded: true,
+      title: 'AI OUTREACH PLAN',
+      price: '$250',
+      planId: 'ai-outreach',
       features: [
-        'Everything in PRO',
-        'Fully managed GHL sub-account',
-        'Pre-built real estate workflows',
-        'Automated follow-up sequences',
-        'White-label CRM experience',
-        'No separate GHL subscription needed'
-      ]
-    },
-    {
-      title: 'AI PLAN',
-      price: '$147',
-      planId: 'ai-plan',
-      features: [
-        'Everything in PRO + Managed GHL',
-        'AI assistant for lead analysis',
-        'Automated follow-up generation',
-        'Smart lead scoring',
-        'Predictive analytics',
-        'Custom AI workflows'
+        'Everything in SYNC PLAN',
+        'Automated text agent outreach',
+        'AI-powered lead follow-ups',
+        'Smart conversation management',
+        'Automated response handling',
+        'Advanced AI analytics',
+        'Custom AI workflows',
+        'Dedicated account management'
       ]
     }
   ];
@@ -79,7 +70,7 @@ export default function PricingPage() {
           </p>
         </div>
 
-        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8 max-w-6xl mx-auto">
+        <div className="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">
           {plans.map((plan) => (
             <PricingCard key={plan.planId} {...plan} />
           ))}
@@ -119,30 +110,32 @@ export default function PricingPage() {
         <div className="mt-16 text-center">
           <div className="bg-white rounded-lg p-8 max-w-4xl mx-auto">
             <h2 className="text-2xl font-bold text-gray-900 mb-6">
-              GoHighLevel Integration Options
+              Plan Comparison
             </h2>
             
             <div className="grid md:grid-cols-2 gap-8 text-left">
               <div className="border-l-4 border-blue-500 pl-6">
                 <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                  Have GoHighLevel Already?
+                  SYNC PLAN ($97/month)
                 </h3>
                 <p className="text-gray-600 mb-4">
-                  Connect your existing GHL account with our PRO plan. Keep your current 
-                  setup and workflows while adding powerful lead management capabilities.
+                  Perfect for agents who want to manage their own outreach. Connect your 
+                  GoHighLevel account and get pre-built workflows for manual calling, 
+                  texting, and direct mail campaigns.
                 </p>
-                <div className="text-blue-600 font-medium">✓ Use your existing GHL subscription</div>
+                <div className="text-blue-600 font-medium">✓ Manual outreach workflows included</div>
               </div>
               
               <div className="border-l-4 border-purple-500 pl-6">
                 <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                  Need GoHighLevel?
+                  AI OUTREACH PLAN ($250/month)
                 </h3>
                 <p className="text-gray-600 mb-4">
-                  Get a fully managed GHL sub-account with our PRO + Managed GHL plan. 
-                  Pre-configured for real estate with automated workflows.
+                  Fully automated lead outreach with our AI text agent. Set it and 
+                  forget it - our AI handles conversations, follow-ups, and lead 
+                  qualification automatically.
                 </p>
-                <div className="text-purple-600 font-medium">✓ No separate GHL subscription needed</div>
+                <div className="text-purple-600 font-medium">✓ Automated AI text agent included</div>
               </div>
             </div>
           </div>
