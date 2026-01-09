@@ -63,6 +63,7 @@ const schema = a.schema({
 
       // Statuses
       skipTraceStatus: a.enum(['PENDING', 'COMPLETED', 'FAILED', 'NO_MATCH']),
+      skipTraceCompletedAt: a.datetime(),
       validationStatus: a.enum(['VALID', 'INVALID']),
 
       // 💥 NEW: GHL Sync Status Fields

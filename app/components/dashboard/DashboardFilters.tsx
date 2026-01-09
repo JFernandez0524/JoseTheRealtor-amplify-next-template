@@ -14,6 +14,10 @@ type Props = {
   setFilterGhlStatus: (val: string) => void;
   filterHasPhone: string;
   setFilterHasPhone: (val: string) => void;
+  skipTraceFromDate: string;
+  setSkipTraceFromDate: (val: string) => void;
+  skipTraceToDate: string;
+  setSkipTraceToDate: (val: string) => void;
 
   // Bulk Action Props
   selectedLeadsCount: number;
@@ -21,6 +25,7 @@ type Props = {
   handleBulkGHLSync: () => Promise<void>;
   handleDelete: () => Promise<void>;
   handleExport: () => void;
+  handleDownloadSkipTraced: () => void;
   isSkipTracing: boolean;
   isGhlSyncing: boolean;
 };
@@ -36,11 +41,16 @@ export function DashboardFilters({
   setFilterGhlStatus,
   filterHasPhone,
   setFilterHasPhone,
+  skipTraceFromDate,
+  setSkipTraceFromDate,
+  skipTraceToDate,
+  setSkipTraceToDate,
   selectedLeadsCount,
   handleBulkSkipTrace,
   handleBulkGHLSync,
   handleDelete,
   handleExport,
+  handleDownloadSkipTraced,
   isSkipTracing,
   isGhlSyncing,
 }: Props) {
@@ -100,16 +110,38 @@ export function DashboardFilters({
             <option value='HAS_PHONE'>Has Phone Numbers</option>
             <option value='NO_PHONE'>No Phone Numbers</option>
           </select>
+
+          {/* 5. SKIP TRACE DATE FILTERS */}
+          <div className='flex flex-col sm:flex-row gap-2 items-center'>
+            <label className='text-xs text-gray-600 whitespace-nowrap'>Skip Traced:</label>
+            <input
+              type='date'
+              value={skipTraceFromDate}
+              onChange={(e) => setSkipTraceFromDate(e.target.value)}
+              className='border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none w-full sm:w-auto'
+              placeholder='From Date'
+            />
+            <span className='text-gray-400 text-xs'>to</span>
+            <input
+              type='date'
+              value={skipTraceToDate}
+              onChange={(e) => setSkipTraceToDate(e.target.value)}
+              className='border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none w-full sm:w-auto'
+              placeholder='To Date'
+            />
+          </div>
         </div>
 
         {/* Clear All Button */}
-        {(filterType || filterStatus || searchQuery || filterGhlStatus || filterHasPhone) && (
+        {(filterType || filterStatus || searchQuery || filterGhlStatus || filterHasPhone || skipTraceFromDate || skipTraceToDate) && (
           <button
             onClick={() => {
               setFilterType('');
               setFilterStatus('');
               setFilterGhlStatus('');
               setFilterHasPhone('');
+              setSkipTraceFromDate('');
+              setSkipTraceToDate('');
               setSearchQuery('');
             }}
             className='text-sm text-blue-600 hover:underline whitespace-nowrap'
@@ -117,6 +149,14 @@ export function DashboardFilters({
             Clear All
           </button>
         )}
+
+        {/* Download Skip Traced Button */}
+        <button
+          onClick={handleDownloadSkipTraced}
+          className='text-sm px-3 py-1.5 rounded bg-green-600 text-white hover:bg-green-700 transition shadow-sm whitespace-nowrap'
+        >
+          📥 Download Skip Traced
+        </button>
       </div>
 
       {/* Search Bar */}

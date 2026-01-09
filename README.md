@@ -111,13 +111,19 @@ For detailed deployment instructions, see the [Amplify documentation](https://do
    - Select leads from dashboard
    - Click "Skip Trace" to find contact information
    - Review discovered phone numbers and emails
+   - Filter by skip trace completion date for targeted downloads
 
-3. **CRM Integration**
+3. **Download Skip Traced Data**
+   - Use date range filters to target specific time periods
+   - Click "Download Skip Traced" to export leads with contact information
+   - CSV includes owner details, property info, phone numbers, emails, and completion dates
+
+4. **CRM Integration**
    - Connect GoHighLevel account in Profile settings (connection persists across sessions)
    - Select qualified leads for sync
    - Leads automatically appear in your GHL pipeline with Zestimate data
 
-4. **AI Analysis**
+5. **AI Analysis**
    - Use Chat feature for property insights
    - Get automated follow-up suggestions
    - Analyze market conditions and equity potential

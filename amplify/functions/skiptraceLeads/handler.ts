@@ -269,7 +269,7 @@ export const handler: Handler = async (event) => {
       await docClient.send(new UpdateCommand({
         TableName: propertyLeadTableName,
         Key: { id: leadId },
-        UpdateExpression: 'SET phones = :phones, emails = :emails, mailingAddress = :mailingAddress, mailingCity = :mailingCity, mailingState = :mailingState, mailingZip = :mailingZip, skipTraceStatus = :status',
+        UpdateExpression: 'SET phones = :phones, emails = :emails, mailingAddress = :mailingAddress, mailingCity = :mailingCity, mailingState = :mailingState, mailingZip = :mailingZip, skipTraceStatus = :status, skipTraceCompletedAt = :completedAt',
         ExpressionAttributeValues: {
           ':phones': newPhones,
           ':emails': newEmails,
@@ -277,7 +277,8 @@ export const handler: Handler = async (event) => {
           ':mailingCity': enrichedData.mailingData?.mailingCity || lead.ownerCity,
           ':mailingState': enrichedData.mailingData?.mailingState || lead.ownerState,
           ':mailingZip': enrichedData.mailingData?.mailingZip || lead.ownerZip,
-          ':status': 'COMPLETED'
+          ':status': 'COMPLETED',
+          ':completedAt': new Date().toISOString()
         }
       }));
 

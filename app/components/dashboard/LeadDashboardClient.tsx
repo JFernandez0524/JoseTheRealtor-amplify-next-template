@@ -39,6 +39,8 @@ export default function LeadDashboardClient({ initialLeads }: Props) {
   const [filterStatus, setFilterStatus] = useState('');
   const [filterCrmStatus, setFilterCrmStatus] = useState('');
   const [filterHasPhone, setFilterHasPhone] = useState('');
+  const [skipTraceFromDate, setSkipTraceFromDate] = useState('');
+  const [skipTraceToDate, setSkipTraceToDate] = useState('');
 
   // --- Effects ---
 
@@ -102,9 +104,21 @@ export default function LeadDashboardClient({ initialLeads }: Props) {
           ? !lead.phones || lead.phones.length === 0
           : true);
 
-      return matchesSearch && matchesType && matchesStatus && matchesCrm && matchesPhone;
+      // Date filtering for skip trace completion
+      const matchesDateRange = (() => {
+        if (!skipTraceFromDate && !skipTraceToDate) return true;
+        if (!lead.skipTraceCompletedAt) return false;
+        
+        const completedDate = new Date(lead.skipTraceCompletedAt).toISOString().split('T')[0];
+        const fromMatch = !skipTraceFromDate || completedDate >= skipTraceFromDate;
+        const toMatch = !skipTraceToDate || completedDate <= skipTraceToDate;
+        
+        return fromMatch && toMatch;
+      })();
+
+      return matchesSearch && matchesType && matchesStatus && matchesCrm && matchesPhone && matchesDateRange;
     });
-  }, [allLeads, searchQuery, filterType, filterStatus, filterCrmStatus, filterHasPhone]);
+  }, [allLeads, searchQuery, filterType, filterStatus, filterCrmStatus, filterHasPhone, skipTraceFromDate, skipTraceToDate]);
 
   // --- Pagination Logic ---
   const totalPages = Math.ceil(filteredLeads.length / itemsPerPage);
@@ -115,7 +129,7 @@ export default function LeadDashboardClient({ initialLeads }: Props) {
   // Reset to page 1 when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, filterType, filterStatus, filterCrmStatus, filterHasPhone]);
+  }, [searchQuery, filterType, filterStatus, filterCrmStatus, filterHasPhone, skipTraceFromDate, skipTraceToDate]);
 
   // --- Action Handlers ---
 
@@ -216,6 +230,56 @@ export default function LeadDashboardClient({ initialLeads }: Props) {
     }
   };
 
+  const handleDownloadSkipTraced = () => {
+    // Filter for skip traced leads only
+    const skipTracedLeads = filteredLeads.filter(lead => 
+      lead.skipTraceStatus === 'COMPLETED' && 
+      lead.phones && lead.phones.length > 0
+    );
+
+    if (skipTracedLeads.length === 0) {
+      alert('No skip traced leads found with the current filters.');
+      return;
+    }
+
+    // Create CSV content
+    const headers = [
+      'Owner Name', 'Property Address', 'City', 'State', 'Zip',
+      'Phone Numbers', 'Email Addresses', 'Skip Traced Date',
+      'Lead Type', 'Estimated Value', 'Zestimate'
+    ];
+
+    const csvContent = [
+      headers.join(','),
+      ...skipTracedLeads.map(lead => [
+        `"${lead.ownerFirstName || ''} ${lead.ownerLastName || ''}"`.trim(),
+        `"${lead.ownerAddress || ''}"`,
+        `"${lead.ownerCity || ''}"`,
+        `"${lead.ownerState || ''}"`,
+        `"${lead.ownerZip || ''}"`,
+        `"${(lead.phones || []).join('; ')}"`,
+        `"${(lead.emails || []).join('; ')}"`,
+        `"${lead.skipTraceCompletedAt ? new Date(lead.skipTraceCompletedAt).toLocaleDateString() : ''}"`,
+        `"${lead.type || ''}"`,
+        `"${lead.estimatedValue || ''}"`,
+        `"${lead.zestimate || ''}"`
+      ].join(','))
+    ].join('\n');
+
+    // Download CSV
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `skip-traced-leads-${new Date().toISOString().split('T')[0]}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
+
+    alert(`Downloaded ${skipTracedLeads.length} skip traced leads to CSV.`);
+  };
+
   return (
     <div className='space-y-4'>
       <DashboardFilters
@@ -229,6 +293,10 @@ export default function LeadDashboardClient({ initialLeads }: Props) {
         setFilterGhlStatus={setFilterCrmStatus}
         filterHasPhone={filterHasPhone}
         setFilterHasPhone={setFilterHasPhone}
+        skipTraceFromDate={skipTraceFromDate}
+        setSkipTraceFromDate={setSkipTraceFromDate}
+        skipTraceToDate={skipTraceToDate}
+        setSkipTraceToDate={setSkipTraceToDate}
         selectedLeadsCount={selectedIds.length}
         isSkipTracing={isProcessing}
         isGhlSyncing={isProcessing}
@@ -236,6 +304,7 @@ export default function LeadDashboardClient({ initialLeads }: Props) {
         handleBulkGHLSync={handleBulkGHLSync}
         handleDelete={handleDeleteLeads}
         handleExport={() => alert('Exporting leads to CSV...')}
+        handleDownloadSkipTraced={handleDownloadSkipTraced}
       />
 
       {/* GHL Connection Status */}
