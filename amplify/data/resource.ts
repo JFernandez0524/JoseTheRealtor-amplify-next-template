@@ -80,6 +80,21 @@ const schema = a.schema({
 
       // --- 🟢 Financials (Market Intel) ---
       estimatedValue: a.float(),
+      zestimate: a.float(),
+      zestimateDate: a.date(),
+      zestimateSource: a.string(), // 'ZILLOW', 'MANUAL', 'CSV'
+      
+      // Zillow API Response Data (to avoid re-fetching)
+      zillowZpid: a.string(), // Zillow Property ID
+      zillowUrl: a.string(), // Zillow property URL
+      rentZestimate: a.float(), // Rental estimate
+      priceHistory: a.json(), // Array of price history
+      taxHistory: a.json(), // Array of tax history
+      homeDetails: a.json(), // Bedrooms, bathrooms, sqft, etc.
+      neighborhoodData: a.json(), // Neighborhood stats
+      comparableProperties: a.json(), // Recent comps
+      zillowLastUpdated: a.datetime(), // When Zillow data was last fetched
+      
       estimatedEquity: a.float(),
       mortgageBalance: a.float(),
       lastSaleDate: a.date(),

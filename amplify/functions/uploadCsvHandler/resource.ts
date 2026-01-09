@@ -8,5 +8,6 @@ export const uploadCsvHandler = defineFunction({
   memoryMB: 512,
   environment: {
     GOOGLE_MAPS_API_KEY: secret('GOOGLE_MAPS_API_KEY'),
+    BRIDGE_API_KEY: secret('BRIDGE_API_KEY'),
   },
 });

@@ -13,7 +13,7 @@ export default async function HomePage() {
   const user = await AuthGetCurrentUserServer();
 
   return (
-    <main className='flex flex-col items-center min-h-screen bg-gray-50 px-6 py-12'>
+    <main className='flex flex-col items-center min-h-screen bg-gray-50 px-4 sm:px-6 py-6 sm:py-12'>
       {/* 3. Wrap your client components in the Provider */}
       <FormFocusProvider>
         {/* Pass the server-fetched user as a prop */}
@@ -23,7 +23,7 @@ export default async function HomePage() {
         <PropertyAnalyzer user={user} />
       </FormFocusProvider>
 
-      <footer className='mt-12 text-sm text-gray-500'>
+      <footer className='mt-8 sm:mt-12 text-xs sm:text-sm text-gray-500 text-center px-4'>
         © {new Date().getFullYear()} JoseTheRealtor.com
       </footer>
     </main>

@@ -14,6 +14,7 @@ const GHL_CUSTOM_FIELD_ID_MAP: Record<string, string> = {
   lead_type: 'oaf4wCuM3Ub9eGpiddrO',
   contact_type: 'pGfgxcdFaYAkdq0Vp53j', // Phone Contact vs Direct Mail
   skiptracestatus: 'HrnY1GUZ7P6d6r7J0ZRc',
+  zestimate: '7wIe1cRbZYXUnc3WOVb2', // Property value estimate
   phone_2: 'LkmfM0Va5PylJFsJYjCu',
   phone_3: 'Cu6zwsuWrxoVWdxySc6t',
   phone_4: 'hxwJG0lYeV18IxxWh09H',
@@ -121,6 +122,7 @@ export async function syncToGoHighLevel(
       contact_type: specificPhone ? 'Phone Contact' : 'Direct Mail',
       skiptracestatus: lead.skipTraceStatus?.toUpperCase() || 'PENDING',
       lead_source_id: lead.id, // 🎯 Shared Lead ID for suppression workflows
+      zestimate: lead.zestimate || lead.estimatedValue, // Use zestimate or fallback to estimatedValue
       // 🆕 APP CONTROL FIELDS
       app_user_id: userId,
       app_plan: appPlan,

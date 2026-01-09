@@ -38,6 +38,7 @@ export default function LeadDashboardClient({ initialLeads }: Props) {
   const [filterType, setFilterType] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
   const [filterCrmStatus, setFilterCrmStatus] = useState('');
+  const [filterHasPhone, setFilterHasPhone] = useState('');
 
   // --- Effects ---
 
@@ -94,9 +95,16 @@ export default function LeadDashboardClient({ initialLeads }: Props) {
           ? !lead.ghlSyncStatus
           : lead.ghlSyncStatus === filterCrmStatus);
 
-      return matchesSearch && matchesType && matchesStatus && matchesCrm;
+      const matchesPhone = !filterHasPhone || 
+        (filterHasPhone === 'HAS_PHONE' 
+          ? lead.phones && lead.phones.length > 0
+          : filterHasPhone === 'NO_PHONE'
+          ? !lead.phones || lead.phones.length === 0
+          : true);
+
+      return matchesSearch && matchesType && matchesStatus && matchesCrm && matchesPhone;
     });
-  }, [allLeads, searchQuery, filterType, filterStatus, filterCrmStatus]);
+  }, [allLeads, searchQuery, filterType, filterStatus, filterCrmStatus, filterHasPhone]);
 
   // --- Pagination Logic ---
   const totalPages = Math.ceil(filteredLeads.length / itemsPerPage);
@@ -107,7 +115,7 @@ export default function LeadDashboardClient({ initialLeads }: Props) {
   // Reset to page 1 when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, filterType, filterStatus, filterCrmStatus]);
+  }, [searchQuery, filterType, filterStatus, filterCrmStatus, filterHasPhone]);
 
   // --- Action Handlers ---
 
@@ -219,6 +227,8 @@ export default function LeadDashboardClient({ initialLeads }: Props) {
         setSearchQuery={setSearchQuery}
         filterGhlStatus={filterCrmStatus}
         setFilterGhlStatus={setFilterCrmStatus}
+        filterHasPhone={filterHasPhone}
+        setFilterHasPhone={setFilterHasPhone}
         selectedLeadsCount={selectedIds.length}
         isSkipTracing={isProcessing}
         isGhlSyncing={isProcessing}
@@ -249,54 +259,54 @@ export default function LeadDashboardClient({ initialLeads }: Props) {
       </div>
 
       {/* Lead Count and Pagination Controls */}
-      <div className='flex justify-between items-center bg-white border border-gray-200 rounded-lg px-4 py-3'>
-        <div className='flex items-center gap-4'>
+      <div className='flex flex-col sm:flex-row sm:justify-between sm:items-center bg-white border border-gray-200 rounded-lg px-3 sm:px-4 py-3 gap-3 sm:gap-4'>
+        <div className='flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4'>
           <div className='text-sm text-gray-700'>
             <span className='font-semibold'>{filteredLeads.length}</span> total leads
             {filteredLeads.length !== allLeads.length && (
               <span className='text-gray-500'> (filtered from {allLeads.length})</span>
             )}
           </div>
-          <div className='text-sm text-gray-500'>
+          <div className='text-xs sm:text-sm text-gray-500'>
             Showing {startIndex + 1}-{Math.min(endIndex, filteredLeads.length)} of {filteredLeads.length}
           </div>
         </div>
 
         {totalPages > 1 && (
-          <div className='flex items-center gap-2'>
+          <div className='flex items-center justify-center sm:justify-end gap-1 sm:gap-2 overflow-x-auto'>
             <button
               onClick={() => setCurrentPage(1)}
               disabled={currentPage === 1}
-              className='px-3 py-1 text-sm border border-gray-300 rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50'
+              className='px-2 sm:px-3 py-1 text-xs sm:text-sm border border-gray-300 rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 whitespace-nowrap'
             >
               First
             </button>
             <button
               onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
               disabled={currentPage === 1}
-              className='px-3 py-1 text-sm border border-gray-300 rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50'
+              className='px-2 sm:px-3 py-1 text-xs sm:text-sm border border-gray-300 rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50'
             >
-              ← Prev
+              ←
             </button>
             
             <div className='flex items-center gap-1'>
-              {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+              {Array.from({ length: Math.min(3, totalPages) }, (_, i) => {
                 let pageNum;
-                if (totalPages <= 5) {
+                if (totalPages <= 3) {
                   pageNum = i + 1;
-                } else if (currentPage <= 3) {
+                } else if (currentPage <= 2) {
                   pageNum = i + 1;
-                } else if (currentPage >= totalPages - 2) {
-                  pageNum = totalPages - 4 + i;
+                } else if (currentPage >= totalPages - 1) {
+                  pageNum = totalPages - 2 + i;
                 } else {
-                  pageNum = currentPage - 2 + i;
+                  pageNum = currentPage - 1 + i;
                 }
                 
                 return (
                   <button
                     key={pageNum}
                     onClick={() => setCurrentPage(pageNum)}
-                    className={`px-3 py-1 text-sm border rounded ${
+                    className={`px-2 sm:px-3 py-1 text-xs sm:text-sm border rounded ${
                       currentPage === pageNum
                         ? 'bg-blue-500 text-white border-blue-500'
                         : 'border-gray-300 hover:bg-gray-50'
@@ -311,14 +321,14 @@ export default function LeadDashboardClient({ initialLeads }: Props) {
             <button
               onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
               disabled={currentPage === totalPages}
-              className='px-3 py-1 text-sm border border-gray-300 rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50'
+              className='px-2 sm:px-3 py-1 text-xs sm:text-sm border border-gray-300 rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50'
             >
-              Next →
+              →
             </button>
             <button
               onClick={() => setCurrentPage(totalPages)}
               disabled={currentPage === totalPages}
-              className='px-3 py-1 text-sm border border-gray-300 rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50'
+              className='px-2 sm:px-3 py-1 text-xs sm:text-sm border border-gray-300 rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 whitespace-nowrap'
             >
               Last
             </button>
@@ -353,6 +363,84 @@ export default function LeadDashboardClient({ initialLeads }: Props) {
           router.push(`/lead/${id}`);
         }}
       />
+
+      {/* Bottom Pagination Controls */}
+      {totalPages > 1 && (
+        <div className='flex flex-col sm:flex-row sm:justify-between sm:items-center bg-white border border-gray-200 rounded-lg px-3 sm:px-4 py-3 gap-3 sm:gap-4'>
+          <div className='flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4'>
+            <div className='text-sm text-gray-700'>
+              <span className='font-semibold'>{filteredLeads.length}</span> total leads
+              {filteredLeads.length !== allLeads.length && (
+                <span className='text-gray-500'> (filtered from {allLeads.length})</span>
+              )}
+            </div>
+            <div className='text-xs sm:text-sm text-gray-500'>
+              Showing {startIndex + 1}-{Math.min(endIndex, filteredLeads.length)} of {filteredLeads.length}
+            </div>
+          </div>
+
+          <div className='flex items-center justify-center sm:justify-end gap-1 sm:gap-2 overflow-x-auto'>
+            <button
+              onClick={() => setCurrentPage(1)}
+              disabled={currentPage === 1}
+              className='px-2 sm:px-3 py-1 text-xs sm:text-sm border border-gray-300 rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 whitespace-nowrap'
+            >
+              First
+            </button>
+            <button
+              onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+              disabled={currentPage === 1}
+              className='px-2 sm:px-3 py-1 text-xs sm:text-sm border border-gray-300 rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50'
+            >
+              ←
+            </button>
+            
+            <div className='flex items-center gap-1'>
+              {Array.from({ length: Math.min(3, totalPages) }, (_, i) => {
+                let pageNum;
+                if (totalPages <= 3) {
+                  pageNum = i + 1;
+                } else if (currentPage <= 2) {
+                  pageNum = i + 1;
+                } else if (currentPage >= totalPages - 1) {
+                  pageNum = totalPages - 2 + i;
+                } else {
+                  pageNum = currentPage - 1 + i;
+                }
+                
+                return (
+                  <button
+                    key={pageNum}
+                    onClick={() => setCurrentPage(pageNum)}
+                    className={`px-2 sm:px-3 py-1 text-xs sm:text-sm border rounded ${
+                      currentPage === pageNum
+                        ? 'bg-blue-500 text-white border-blue-500'
+                        : 'border-gray-300 hover:bg-gray-50'
+                    }`}
+                  >
+                    {pageNum}
+                  </button>
+                );
+              })}
+            </div>
+
+            <button
+              onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+              disabled={currentPage === totalPages}
+              className='px-2 sm:px-3 py-1 text-xs sm:text-sm border border-gray-300 rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50'
+            >
+              →
+            </button>
+            <button
+              onClick={() => setCurrentPage(totalPages)}
+              disabled={currentPage === totalPages}
+              className='px-2 sm:px-3 py-1 text-xs sm:text-sm border border-gray-300 rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 whitespace-nowrap'
+            >
+              Last
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

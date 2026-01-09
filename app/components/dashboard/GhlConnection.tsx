@@ -30,6 +30,39 @@ export function GhlConnection() {
         const integration = integrations[0];
         const isExpired = new Date(integration.expiresAt) < new Date();
         
+        if (isExpired && integration.refreshToken) {
+          // Try to refresh the token automatically
+          try {
+            const refreshResponse = await fetch('/api/v1/oauth/refresh', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ 
+                refreshToken: integration.refreshToken,
+                userType: 'Location'
+              })
+            });
+
+            if (refreshResponse.ok) {
+              const refreshData = await refreshResponse.json();
+              
+              // Update the integration with new tokens
+              await client.models.GhlIntegration.update({
+                id: integration.id,
+                accessToken: refreshData.access_token,
+                refreshToken: refreshData.refresh_token,
+                expiresAt: new Date(Date.now() + (refreshData.expires_in * 1000)).toISOString(),
+                updatedAt: new Date().toISOString()
+              });
+
+              setIsConnected(true);
+              setConnectionInfo({...integration, accessToken: refreshData.access_token});
+              return;
+            }
+          } catch (refreshError) {
+            console.error('Token refresh failed:', refreshError);
+          }
+        }
+        
         setIsConnected(!isExpired);
         setConnectionInfo(integration);
       }

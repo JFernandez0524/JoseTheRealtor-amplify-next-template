@@ -86,9 +86,51 @@ export function LeadTable({
   onToggleOne,
   onRowClick,
 }: Props) {
+  const tableRef = React.useRef<HTMLDivElement>(null);
+
+  const scrollLeft = () => {
+    if (tableRef.current) {
+      tableRef.current.scrollBy({ left: -200, behavior: 'smooth' });
+    }
+  };
+
+  const scrollRight = () => {
+    if (tableRef.current) {
+      tableRef.current.scrollBy({ left: 200, behavior: 'smooth' });
+    }
+  };
+
   return (
     <div className='bg-white shadow-lg rounded-lg overflow-hidden border border-gray-200'>
-      <div className='overflow-x-auto'>
+      {/* Horizontal Scroll Controls */}
+      <div className='flex justify-between items-center px-4 py-2 bg-gray-50 border-b border-gray-200'>
+        <div className='text-sm text-gray-600'>
+          {leads.length} leads on this page
+        </div>
+        <div className='flex items-center gap-2'>
+          <button
+            onClick={scrollLeft}
+            className='p-1 rounded border border-gray-300 hover:bg-gray-100 transition-colors'
+            title='Scroll left'
+          >
+            <svg className='w-4 h-4 text-gray-600' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+              <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M15 19l-7-7 7-7' />
+            </svg>
+          </button>
+          <span className='text-xs text-gray-500'>Scroll table</span>
+          <button
+            onClick={scrollRight}
+            className='p-1 rounded border border-gray-300 hover:bg-gray-100 transition-colors'
+            title='Scroll right'
+          >
+            <svg className='w-4 h-4 text-gray-600' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+              <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M9 5l7 7-7 7' />
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <div className='overflow-x-auto' ref={tableRef}>
         <table className='min-w-full divide-y divide-gray-200'>
           {/* 💥 FIX: Removed whitespace between <thead> and <tr> */}
           <thead className='bg-gray-50'>
@@ -122,6 +164,9 @@ export function LeadTable({
               <th className='px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider whitespace-nowrap bg-blue-50'>
                 Address
               </th>
+              <th className='px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider whitespace-nowrap bg-green-50'>
+                Phone
+              </th>
               <th className='px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider whitespace-nowrap bg-blue-50'>
                 City/State/Zip
               </th>
@@ -141,7 +186,7 @@ export function LeadTable({
             {isLoading ? (
               <tr>
                 <td
-                  colSpan={11}
+                  colSpan={12}
                   className='px-6 py-10 text-center text-gray-500'
                 >
                   <div className='flex flex-col items-center'>
@@ -153,7 +198,7 @@ export function LeadTable({
             ) : leads.length === 0 ? (
               <tr>
                 <td
-                  colSpan={11}
+                  colSpan={12}
                   className='px-6 py-10 text-center text-gray-500'
                 >
                   <div className='text-lg mb-2'>📭 No leads found</div>
@@ -220,6 +265,27 @@ export function LeadTable({
                         </span>
                       )}
                     </div>
+                  </td>
+
+                  {/* Phone Column */}
+                  <td className='px-4 py-4 whitespace-nowrap text-sm text-gray-900 bg-green-50/30'>
+                    {lead.phones && lead.phones.length > 0 ? (
+                      <div className='flex items-center gap-1'>
+                        <span className='font-mono text-xs'>
+                          {lead.phones[0]}
+                        </span>
+                        {lead.phones.length > 1 && (
+                          <span 
+                            className='text-xs bg-green-600 text-white px-1.5 py-0.5 rounded-full font-bold cursor-help'
+                            title={`${lead.phones.length} phone numbers total: ${lead.phones.join(', ')}`}
+                          >
+                            +{lead.phones.length - 1}
+                          </span>
+                        )}
+                      </div>
+                    ) : (
+                      <span className='text-gray-400 text-xs'>No phone</span>
+                    )}
                   </td>
 
                   <td className='px-4 py-4 whitespace-nowrap text-sm text-gray-900 bg-blue-50/30'>

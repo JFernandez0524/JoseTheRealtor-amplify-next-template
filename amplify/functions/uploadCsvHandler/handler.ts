@@ -258,6 +258,16 @@ export const handler: S3Handler = async (event) => {
               continue; // Skip this lead
             }
           }
+          // 🏠 Fetch Zestimate data during upload
+          let zillowData = null;
+          try {
+            // Import the Zillow utility (you'll need to add this import at the top)
+            const { fetchZillowData } = await import('../../../app/utils/zillow.server');
+            zillowData = await fetchZillowData(finalPropAddr, finalPropCity, finalPropState, finalPropZip);
+          } catch (zillowError) {
+            console.log('Zillow fetch failed (non-critical):', zillowError);
+          }
+
           const leadItem = {
             id: randomUUID(),
             owner: ownerId,
@@ -288,6 +298,22 @@ export const handler: S3Handler = async (event) => {
             skipTraceStatus: preSkiptracedPhone ? 'COMPLETED' : 'PENDING',
             ghlSyncStatus: 'PENDING',
             validationStatus: propValidation ? 'VALID' : 'INVALID',
+            
+            // 🏠 Zestimate and Zillow data
+            estimatedValue: parseFloat(row['estimatedValue'] || row['Estimated Value']) || null,
+            zestimate: zillowData?.zestimate || parseFloat(row['estimatedValue'] || row['Estimated Value']) || null,
+            zestimateDate: zillowData ? new Date().toISOString() : null,
+            zestimateSource: zillowData ? 'ZILLOW' : (row['estimatedValue'] ? 'CSV' : null),
+            zillowZpid: zillowData?.zpid || null,
+            zillowUrl: zillowData?.url || null,
+            rentZestimate: zillowData?.rentZestimate || null,
+            priceHistory: zillowData?.priceHistory || null,
+            taxHistory: zillowData?.taxHistory || null,
+            homeDetails: zillowData?.homeDetails || null,
+            neighborhoodData: zillowData?.neighborhoodData || null,
+            comparableProperties: zillowData?.comparableProperties || null,
+            zillowLastUpdated: zillowData ? new Date().toISOString() : null,
+            
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
           };

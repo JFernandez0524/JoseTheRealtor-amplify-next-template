@@ -12,6 +12,8 @@ type Props = {
   setSearchQuery: (val: string) => void;
   filterGhlStatus: string;
   setFilterGhlStatus: (val: string) => void;
+  filterHasPhone: string;
+  setFilterHasPhone: (val: string) => void;
 
   // Bulk Action Props
   selectedLeadsCount: number;
@@ -32,6 +34,8 @@ export function DashboardFilters({
   setSearchQuery,
   filterGhlStatus,
   setFilterGhlStatus,
+  filterHasPhone,
+  setFilterHasPhone,
   selectedLeadsCount,
   handleBulkSkipTrace,
   handleBulkGHLSync,
@@ -41,106 +45,117 @@ export function DashboardFilters({
   isGhlSyncing,
 }: Props) {
   return (
-    // 💥 FIX 1: Ensure the main container is flexible horizontally on MD screens
-    // Removed unnecessary flex-wrap on md:
-    <div className='bg-white p-4 rounded-lg shadow-sm border border-gray-200 mb-6 flex flex-wrap md:flex-nowrap gap-4 items-start justify-between'>
-      {/* Left Side: Filters and Statuses (Ensures filters wrap together) */}
-      <div className='flex flex-wrap gap-4 items-center flex-grow'>
-        <span className='text-sm font-semibold text-gray-600'>Filter By:</span>
+    <div className='bg-white p-3 sm:p-4 rounded-lg shadow-sm border border-gray-200 mb-4 sm:mb-6 space-y-4'>
+      {/* Filters Section */}
+      <div className='flex flex-col sm:flex-row sm:flex-wrap gap-3 sm:gap-4 items-start sm:items-center'>
+        <span className='text-sm font-semibold text-gray-600 whitespace-nowrap'>Filter By:</span>
 
-        {/* 1. Lead Type Filter */}
-        <select
-          value={filterType}
-          onChange={(e) => setFilterType(e.target.value)}
-          className='border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none'
-        >
-          <option value=''>All Lead Types</option>
-          <option value='PREFORECLOSURE'>Pre-Foreclosure</option>
-          <option value='PROBATE'>Probate</option>
-        </select>
+        {/* Filter Controls - Stack on mobile, inline on larger screens */}
+        <div className='flex flex-col sm:flex-row gap-3 sm:gap-4 w-full sm:w-auto'>
+          {/* 1. Lead Type Filter */}
+          <select
+            value={filterType}
+            onChange={(e) => setFilterType(e.target.value)}
+            className='border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none w-full sm:w-auto'
+          >
+            <option value=''>All Lead Types</option>
+            <option value='PREFORECLOSURE'>Pre-Foreclosure</option>
+            <option value='PROBATE'>Probate</option>
+          </select>
 
-        {/* 2. Skip Trace Status Filter */}
-        <select
-          value={filterStatus}
-          onChange={(e) => setFilterStatus(e.target.value)}
-          className='border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none'
-        >
-          <option value=''>All Trace Statuses</option>
-          <option value='PENDING'>Pending Trace</option>
-          <option value='COMPLETED'>Completed Trace</option>
-          <option value='FAILED'>Failed/Error</option>
-          <option value='NO_MATCH'>No Match</option>
-        </select>
+          {/* 2. Skip Trace Status Filter */}
+          <select
+            value={filterStatus}
+            onChange={(e) => setFilterStatus(e.target.value)}
+            className='border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none w-full sm:w-auto'
+          >
+            <option value=''>All Trace Statuses</option>
+            <option value='PENDING'>Pending Trace</option>
+            <option value='COMPLETED'>Completed Trace</option>
+            <option value='FAILED'>Failed/Error</option>
+            <option value='NO_MATCH'>No Match</option>
+          </select>
 
-        {/* 3. GHL SYNC STATUS FILTER */}
-        <select
-          value={filterGhlStatus}
-          onChange={(e) => setFilterGhlStatus(e.target.value)}
-          className='border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:ring-2 focus:ring-purple-500 outline-none'
-        >
-          <option value=''>All GHL Statuses</option>
-          <option value='SUCCESS'>GHL Synced</option>
-          <option value='PENDING'>GHL Pending</option>
-          <option value='FAILED'>GHL Failed</option>
-          <option value='SKIPPED'>GHL Skipped</option>
-          <option value='NULL'>Needs GHL Sync</option>
-        </select>
+          {/* 3. GHL SYNC STATUS FILTER */}
+          <select
+            value={filterGhlStatus}
+            onChange={(e) => setFilterGhlStatus(e.target.value)}
+            className='border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:ring-2 focus:ring-purple-500 outline-none w-full sm:w-auto'
+          >
+            <option value=''>All GHL Statuses</option>
+            <option value='SUCCESS'>GHL Synced</option>
+            <option value='PENDING'>GHL Pending</option>
+            <option value='FAILED'>GHL Failed</option>
+            <option value='SKIPPED'>GHL Skipped</option>
+            <option value='NULL'>Needs GHL Sync</option>
+          </select>
+
+          {/* 4. PHONE STATUS FILTER */}
+          <select
+            value={filterHasPhone}
+            onChange={(e) => setFilterHasPhone(e.target.value)}
+            className='border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:ring-2 focus:ring-green-500 outline-none w-full sm:w-auto'
+          >
+            <option value=''>All Phone Statuses</option>
+            <option value='HAS_PHONE'>Has Phone Numbers</option>
+            <option value='NO_PHONE'>No Phone Numbers</option>
+          </select>
+        </div>
 
         {/* Clear All Button */}
-        {(filterType || filterStatus || searchQuery || filterGhlStatus) && (
+        {(filterType || filterStatus || searchQuery || filterGhlStatus || filterHasPhone) && (
           <button
             onClick={() => {
               setFilterType('');
               setFilterStatus('');
               setFilterGhlStatus('');
+              setFilterHasPhone('');
               setSearchQuery('');
             }}
-            className='text-sm text-blue-600 hover:underline'
+            className='text-sm text-blue-600 hover:underline whitespace-nowrap'
           >
             Clear All
           </button>
         )}
       </div>
 
-      {/* Right Side: Search Bar and Bulk Actions (Pushed to the right) */}
-      <div className='flex flex-col md:flex-row gap-4 items-center w-full md:w-auto'>
-        {/* Search Bar */}
-        {/* 💥 FIX 2: Added margin bottom on small screens so it separates from buttons */}
-        <div className='relative w-full md:w-64 mb-4 md:mb-0'>
-          <div className='absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none'>
-            <svg
-              className='h-5 w-5 text-gray-400'
-              fill='currentColor'
-              viewBox='0 0 20 20'
-            >
-              <path
-                fillRule='evenodd'
-                d='M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z'
-                clipRule='evenodd'
-              />
-            </svg>
-          </div>
-          <input
-            type='text'
-            placeholder='Search Address...'
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className='pl-10 block w-full border border-gray-300 rounded-md py-1.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none'
-          />
+      {/* Search Bar */}
+      <div className='relative w-full sm:max-w-md'>
+        <div className='absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none'>
+          <svg
+            className='h-5 w-5 text-gray-400'
+            fill='currentColor'
+            viewBox='0 0 20 20'
+          >
+            <path
+              fillRule='evenodd'
+              d='M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z'
+              clipRule='evenodd'
+            />
+          </svg>
         </div>
+        <input
+          type='text'
+          placeholder='Search Address...'
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className='pl-10 block w-full border border-gray-300 rounded-md py-1.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none'
+        />
+      </div>
 
-        {/* BULK ACTIONS MENU */}
-        {selectedLeadsCount > 0 && (
-          <div className='flex space-x-2'>
-            <span className='text-sm font-semibold self-center whitespace-nowrap text-gray-700'>
-              {selectedLeadsCount} Selected:
-            </span>
+      {/* BULK ACTIONS MENU */}
+      {selectedLeadsCount > 0 && (
+        <div className='flex flex-col sm:flex-row gap-3 sm:gap-2 pt-3 sm:pt-0 border-t sm:border-t-0'>
+          <span className='text-sm font-semibold text-gray-700 sm:self-center'>
+            {selectedLeadsCount} Selected:
+          </span>
 
+          <div className='flex flex-col sm:flex-row gap-2'>
             {/* Skip Trace Button */}
             <button
               onClick={handleBulkSkipTrace}
               disabled={isSkipTracing || isGhlSyncing}
-              className={`text-sm px-3 py-1.5 rounded transition-colors flex items-center gap-1.5 shadow-sm
+              className={`text-sm px-3 py-1.5 rounded transition-colors flex items-center justify-center gap-1.5 shadow-sm w-full sm:w-auto
                                 ${isSkipTracing ? 'bg-indigo-300 text-white cursor-not-allowed' : 'bg-indigo-600 text-white hover:bg-indigo-700'}`}
             >
               {isSkipTracing ? (
@@ -156,7 +171,7 @@ export function DashboardFilters({
             <button
               onClick={handleBulkGHLSync}
               disabled={isGhlSyncing || isSkipTracing}
-              className={`text-sm px-3 py-1.5 rounded transition-colors flex items-center gap-1.5 shadow-sm
+              className={`text-sm px-3 py-1.5 rounded transition-colors flex items-center justify-center gap-1.5 shadow-sm w-full sm:w-auto
                                 ${isGhlSyncing ? 'bg-purple-300 text-white cursor-not-allowed' : 'bg-purple-600 text-white hover:bg-purple-700'}`}
             >
               {isGhlSyncing ? (
@@ -172,7 +187,7 @@ export function DashboardFilters({
             <button
               onClick={handleExport}
               disabled={isGhlSyncing || isSkipTracing}
-              className='text-sm px-3 py-1.5 rounded bg-gray-200 text-gray-700 hover:bg-gray-300 transition shadow-sm'
+              className='text-sm px-3 py-1.5 rounded bg-gray-200 text-gray-700 hover:bg-gray-300 transition shadow-sm w-full sm:w-auto'
             >
               Export
             </button>
@@ -181,13 +196,13 @@ export function DashboardFilters({
             <button
               onClick={handleDelete}
               disabled={isGhlSyncing || isSkipTracing}
-              className='text-sm px-3 py-1.5 rounded bg-red-100 text-red-600 hover:bg-red-200 transition shadow-sm'
+              className='text-sm px-3 py-1.5 rounded bg-red-100 text-red-600 hover:bg-red-200 transition shadow-sm w-full sm:w-auto'
             >
               Delete
             </button>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }

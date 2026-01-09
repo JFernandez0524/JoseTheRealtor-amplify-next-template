@@ -9,6 +9,7 @@ A comprehensive real estate lead management platform built with AWS Amplify Gen2
 - **CRM Integration**: Seamless GoHighLevel synchronization with workflows
 - **AI Assistant**: Claude 3.5 Sonnet for lead analysis and follow-ups
 - **Address Validation**: Google Maps API integration for property verification
+- **Zestimate Integration**: Automatic Zillow property valuation and market data
 - **Role-Based Access**: FREE, SYNC PLAN, AI OUTREACH PLAN, and ADMIN tiers
 
 ## Quick Start
@@ -104,7 +105,7 @@ For detailed deployment instructions, see the [Amplify documentation](https://do
 1. **Import Leads**
    - Navigate to Upload page
    - Select CSV file with property data
-   - System automatically validates addresses and processes leads
+   - System automatically validates addresses, fetches Zestimate data, and processes leads
 
 2. **Skip Trace Contacts**
    - Select leads from dashboard
@@ -112,9 +113,9 @@ For detailed deployment instructions, see the [Amplify documentation](https://do
    - Review discovered phone numbers and emails
 
 3. **CRM Integration**
-   - Connect GoHighLevel account in Profile settings
+   - Connect GoHighLevel account in Profile settings (connection persists across sessions)
    - Select qualified leads for sync
-   - Leads automatically appear in your GHL pipeline
+   - Leads automatically appear in your GHL pipeline with Zestimate data
 
 4. **AI Analysis**
    - Use Chat feature for property insights
@@ -172,7 +173,7 @@ NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=your_google_maps_key
 GHL_CLIENT_ID=your_ghl_client_id
 GHL_CLIENT_SECRET=your_ghl_client_secret
 
-# Skip Tracing Service
+# Skip Tracing Service (also provides Zestimate data)
 BRIDGE_API_KEY=your_bridge_key
 
 # AI Services
