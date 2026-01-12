@@ -99,12 +99,12 @@ export function AccessProvider({ children }: { children: ReactNode }) {
           });
           
           if (updatedAccounts && updatedAccounts.length > 0) {
-            const account = updatedAccounts[0];
+            // Use groups from Cognito, not tier from database
             setAccess({
-              isPro: account.tier === 'PRO' || account.tier === 'AI_PLAN',
-              isAdmin: account.tier === 'ADMIN',
-              isAI: account.tier === 'AI_PLAN',
-              hasPaidPlan: ['PRO', 'AI_PLAN', 'ADMIN'].includes(account.tier || ''),
+              isPro: groups.includes('PRO') || groups.includes('AI_PLAN'),
+              isAdmin: groups.includes('ADMINS'),
+              isAI: groups.includes('AI_PLAN'),
+              hasPaidPlan: groups.some(g => ['PRO', 'AI_PLAN', 'ADMINS'].includes(g)),
               isLoading: false,
             });
             return;
