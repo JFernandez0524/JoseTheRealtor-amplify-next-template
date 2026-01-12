@@ -40,20 +40,22 @@ export async function GET(req: Request) {
     }
 
     // Extract user ID from state parameter
+    if (!state) {
+      console.error('No state parameter provided');
+      return NextResponse.redirect('https://leads.josetherealtor.com/oauth/error?error=invalid_state');
+    }
+
     let userId: string;
     try {
-      if (!state) {
-        throw new Error('No state parameter provided');
-      }
-      
       console.log('Raw state parameter:', state);
       const stateData = JSON.parse(Buffer.from(state, 'base64').toString());
       console.log('Parsed state data:', stateData);
       
-      userId = stateData.userId;
-      if (!userId) {
+      if (!stateData.userId) {
         throw new Error('No user ID in state');
       }
+      
+      userId = stateData.userId;
       console.log('Extracted user ID from state:', userId);
     } catch (stateError) {
       console.error('State parsing error:', stateError);
