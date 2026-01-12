@@ -89,7 +89,7 @@ export async function GET(req: Request) {
       refresh_token,
       locationId,
       companyId,
-      userId,
+      userId: ghlUserId,
       userType,
       expires_in
     } = tokenResponse.data;
