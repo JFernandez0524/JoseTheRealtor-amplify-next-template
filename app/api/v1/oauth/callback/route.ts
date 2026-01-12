@@ -39,6 +39,28 @@ export async function GET(req: Request) {
       return NextResponse.redirect('https://leads.josetherealtor.com/oauth/error?error=missing_credentials');
     }
 
+    // Extract user ID from state parameter
+    let userId: string;
+    try {
+      if (!state) {
+        throw new Error('No state parameter provided');
+      }
+      
+      console.log('Raw state parameter:', state);
+      const stateData = JSON.parse(Buffer.from(state, 'base64').toString());
+      console.log('Parsed state data:', stateData);
+      
+      userId = stateData.userId;
+      if (!userId) {
+        throw new Error('No user ID in state');
+      }
+      console.log('Extracted user ID from state:', userId);
+    } catch (stateError) {
+      console.error('State parsing error:', stateError);
+      console.error('State value was:', state);
+      return NextResponse.redirect('https://leads.josetherealtor.com/oauth/error?error=invalid_state');
+    }
+
     console.log('Attempting token exchange with GHL...');
 
     // Exchange code for tokens
@@ -72,19 +94,14 @@ export async function GET(req: Request) {
 
     console.log('OAuth success for location:', locationId);
 
-    // Get current user for token storage
+    // Use user ID from state parameter instead of server auth
     try {
-      const user = await AuthGetCurrentUserServer();
-      
-      if (!user) {
-        console.error('No authenticated user found');
-        return NextResponse.redirect('https://leads.josetherealtor.com/oauth/error?error=user_not_authenticated');
-      }
+      console.log('Using user ID from state:', userId);
 
       // Store tokens in database using DynamoDB client
       const ghlIntegration = {
-        id: `${user.userId}-${locationId || 'default'}`,
-        userId: user.userId,
+        id: `${userId}-${locationId || 'default'}`,
+        userId: userId,
         locationId: locationId || 'default',
         accessToken: access_token,
         refreshToken: refresh_token,
@@ -103,10 +120,10 @@ export async function GET(req: Request) {
         Item: ghlIntegration
       }));
 
-      console.log('✅ Tokens stored successfully for user:', user.userId);
-    } catch (userError) {
-      console.error('Error getting user or storing tokens:', userError);
-      return NextResponse.redirect('https://leads.josetherealtor.com/oauth/error?error=user_error');
+      console.log('✅ Tokens stored successfully for user:', userId);
+    } catch (storageError) {
+      console.error('Error storing tokens:', storageError);
+      return NextResponse.redirect('https://leads.josetherealtor.com/oauth/error?error=storage_error');
     }
 
     // Redirect to success page

@@ -46,6 +46,16 @@ export default function OAuthErrorPage() {
       title: 'User Authentication Error',
       description: 'There was an issue with your user authentication.',
       action: 'Please log out, log back in, and try connecting again.'
+    },
+    invalid_state: {
+      title: 'Invalid Request State',
+      description: 'The OAuth request state is invalid or corrupted.',
+      action: 'Please try connecting again.'
+    },
+    storage_error: {
+      title: 'Storage Error',
+      description: 'Unable to save your GoHighLevel connection.',
+      action: 'Please try connecting again or contact support.'
     }
   };
 

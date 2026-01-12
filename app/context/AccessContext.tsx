@@ -83,7 +83,38 @@ export function AccessProvider({ children }: { children: ReactNode }) {
       const accounts = accountsByOwner?.length > 0 ? accountsByOwner : (accountsByOwnerContains || []);
       const existingAccountByEmail = accountsByEmail?.[0];
 
-      // 2. Create DB record if missing (Handles Social Logins)
+      // 2. Fix owner field if account exists by email but not by owner
+      if (accounts.length === 0 && existingAccountByEmail) {
+        console.log('🔧 Fixing owner field for existing account...');
+        try {
+          await client.models.UserAccount.update({
+            id: existingAccountByEmail.id,
+            owner: userId
+          });
+          console.log('✅ Fixed owner field for account:', existingAccountByEmail.id);
+          
+          // Re-fetch the account
+          const { data: updatedAccounts } = await client.models.UserAccount.list({
+            filter: { owner: { eq: userId } },
+          });
+          
+          if (updatedAccounts && updatedAccounts.length > 0) {
+            const account = updatedAccounts[0];
+            setAccess({
+              isPro: account.tier === 'PRO' || account.tier === 'AI_PLAN',
+              isAdmin: account.tier === 'ADMIN',
+              isAI: account.tier === 'AI_PLAN',
+              hasPaidPlan: ['PRO', 'AI_PLAN', 'ADMIN'].includes(account.tier || ''),
+              isLoading: false,
+            });
+            return;
+          }
+        } catch (updateError) {
+          console.error('Failed to fix owner field:', updateError);
+        }
+      }
+
+      // 3. Create DB record if missing (Handles Social Logins)
       if (accounts.length === 0) {
         // If there's already an account with this email but different userId, don't create another
         if (existingAccountByEmail) {

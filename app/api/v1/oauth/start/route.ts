@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { randomBytes } from 'crypto';
+import { AuthGetCurrentUserServer } from '@/app/utils/aws/auth/amplifyServerUtils.server';
 
 const GHL_CLIENT_ID = process.env.GHL_CLIENT_ID;
 const GHL_REDIRECT_URI = process.env.GHL_REDIRECT_URI || 
@@ -22,11 +23,18 @@ export async function GET(req: Request) {
       throw new Error('GHL_CLIENT_ID is missing');
     }
 
-    // Generate state for security
-    const state = randomBytes(32).toString('hex');
-    
-    // Store state in session/database for verification (simplified for now)
-    // TODO: Store state properly for production
+    // Get current user to include in state
+    const user = await AuthGetCurrentUserServer();
+    if (!user) {
+      return NextResponse.redirect('https://leads.josetherealtor.com/oauth/error?error=user_not_authenticated');
+    }
+
+    // Generate state with user ID encoded
+    const stateData = {
+      userId: user.userId,
+      nonce: randomBytes(16).toString('hex')
+    };
+    const state = Buffer.from(JSON.stringify(stateData)).toString('base64');
     
     // Build GHL authorization URL
     const authUrl = new URL('https://marketplace.leadconnectorhq.com/oauth/chooselocation');
@@ -36,7 +44,9 @@ export async function GET(req: Request) {
     authUrl.searchParams.set('scope', SCOPES);
     authUrl.searchParams.set('state', state);
 
-    console.log('Redirecting to GHL OAuth:', authUrl.toString());
+    console.log('Redirecting to GHL OAuth for user:', user.userId);
+    console.log('OAuth URL:', authUrl.toString());
+    console.log('Redirect URI being used:', GHL_REDIRECT_URI);
 
     // Redirect user to GHL for authorization
     return NextResponse.redirect(authUrl.toString());
