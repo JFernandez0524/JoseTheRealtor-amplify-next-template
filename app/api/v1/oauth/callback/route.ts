@@ -1,11 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import axios from 'axios';
-import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, PutCommand } from '@aws-sdk/lib-dynamodb';
-import { AuthGetCurrentUserServer } from '@/app/utils/aws/auth/amplifyServerUtils.server';
-
-const dynamoClient = new DynamoDBClient({ region: process.env.AWS_REGION });
-const docClient = DynamoDBDocumentClient.from(dynamoClient);
+import { cookiesClient } from '@/app/utils/aws/auth/amplifyServerUtils.server';
 
 const GHL_CLIENT_ID = process.env.GHL_CLIENT_ID;
 const GHL_CLIENT_SECRET = process.env.GHL_CLIENT_SECRET;
@@ -100,9 +95,8 @@ export async function GET(req: Request) {
     try {
       console.log('Using user ID from state:', userId);
 
-      // Store tokens in database using DynamoDB client
-      const ghlIntegration = {
-        id: `${userId}-${locationId || 'default'}`,
+      // Store tokens using existing cookiesClient
+      await cookiesClient.models.GhlIntegration.create({
         userId: userId,
         locationId: locationId || 'default',
         accessToken: access_token,
@@ -113,14 +107,7 @@ export async function GET(req: Request) {
         isActive: true,
         dailyMessageCount: 0,
         hourlyMessageCount: 0,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-
-      await docClient.send(new PutCommand({
-        TableName: process.env.AMPLIFY_DATA_GhlIntegration_TABLE_NAME,
-        Item: ghlIntegration
-      }));
+      });
 
       console.log('✅ Tokens stored successfully for user:', userId);
     } catch (storageError) {
