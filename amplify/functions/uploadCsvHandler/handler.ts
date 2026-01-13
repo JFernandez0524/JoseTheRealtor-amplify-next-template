@@ -11,6 +11,7 @@ import { parse } from 'csv-parse';
 import { Readable } from 'stream';
 import { randomUUID } from 'crypto';
 import { validateAddressWithGoogle } from '../../../app/utils/google.server';
+import { fetchZillowData } from '../../../app/utils/zillow.server';
 
 const s3 = new S3Client({});
 const dynamoClient = new DynamoDBClient({});
@@ -263,8 +264,6 @@ export const handler: S3Handler = async (event) => {
           // 🏠 Fetch Zestimate data during upload
           let zillowData = null;
           try {
-            // Import the Zillow utility (you'll need to add this import at the top)
-            const { fetchZillowData } = await import('../../../app/utils/zillow.server');
             zillowData = await fetchZillowData(finalPropAddr, finalPropCity, finalPropState, finalPropZip);
           } catch (zillowError) {
             console.log('Zillow fetch failed (non-critical):', zillowError);

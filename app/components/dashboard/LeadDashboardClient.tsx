@@ -45,7 +45,7 @@ export default function LeadDashboardClient({ initialLeads }: Props) {
   const [skipTraceToDate, setSkipTraceToDate] = useState('');
 
   // Sort States
-  const [sortField, setSortField] = useState<'createdAt' | 'updatedAt' | 'ownerLastName' | 'ownerCounty' | 'zestimate'>('createdAt');
+  const [sortField, setSortField] = useState<'createdAt' | 'updatedAt' | 'ownerLastName' | 'ownerCounty' | 'zestimate' | 'skipTraceCompletedAt'>('createdAt');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
 
   // --- Effects ---
@@ -155,7 +155,7 @@ export default function LeadDashboardClient({ initialLeads }: Props) {
       let bValue: any = b[sortField];
 
       // Handle date sorting
-      if (sortField === 'createdAt' || sortField === 'updatedAt') {
+      if (sortField === 'createdAt' || sortField === 'updatedAt' || sortField === 'skipTraceCompletedAt') {
         aValue = new Date(aValue || 0).getTime();
         bValue = new Date(bValue || 0).getTime();
       }
@@ -192,7 +192,7 @@ export default function LeadDashboardClient({ initialLeads }: Props) {
   }, [searchQuery, filterType, filterStatus, filterCrmStatus, filterHasPhone, skipTraceFromDate, skipTraceToDate, sortField, sortDirection]);
 
   // --- Sort Handler ---
-  const handleSort = (field: 'createdAt' | 'updatedAt' | 'ownerLastName' | 'ownerCounty' | 'zestimate') => {
+  const handleSort = (field: 'createdAt' | 'updatedAt' | 'ownerLastName' | 'ownerCounty' | 'zestimate' | 'skipTraceCompletedAt') => {
     if (sortField === field) {
       setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
     } else {
@@ -312,38 +312,46 @@ export default function LeadDashboardClient({ initialLeads }: Props) {
   };
 
   const handleDownloadSkipTraced = () => {
-    // Filter for skip traced leads only
-    const skipTracedLeads = filteredLeads.filter(lead => 
-      lead.skipTraceStatus === 'COMPLETED' && 
-      lead.phones && lead.phones.length > 0
-    );
+    // Only download selected leads
+    if (selectedIds.length === 0) {
+      alert('Please select leads to download.');
+      return;
+    }
+    
+    const selectedLeads = filteredLeads.filter(lead => selectedIds.includes(lead.id));
 
-    if (skipTracedLeads.length === 0) {
-      alert('No skip traced leads found with the current filters.');
+    if (selectedLeads.length === 0) {
+      alert('No selected leads found.');
       return;
     }
 
-    // Create CSV content
+    // Create CSV content with all dashboard columns
     const headers = [
-      'Owner Name', 'Property Address', 'City', 'State', 'Zip',
-      'Phone Numbers', 'Email Addresses', 'Skip Traced Date',
-      'Lead Type', 'Estimated Value', 'Zestimate'
+      'Type', 'Status', 'GHL Sync', 'Owner Name', 'Address', 'Phone', 'County', 
+      'City', 'State', 'Zip', 'Zestimate', 'Admin Name', 'Admin Address', 'Created At',
+      'Email Addresses', 'Skip Traced Date', 'Estimated Value'
     ];
 
     const csvContent = [
       headers.join(','),
-      ...skipTracedLeads.map(lead => [
+      ...selectedLeads.map(lead => [
+        `"${lead.type || ''}"`,
+        `"${lead.skipTraceStatus || ''}"`,
+        `"${lead.ghlSyncStatus || ''}"`,
         `"${lead.ownerFirstName || ''} ${lead.ownerLastName || ''}"`.trim(),
         `"${lead.ownerAddress || ''}"`,
+        `"${(lead.phones || []).join('; ')}"`,
+        `"${lead.ownerCounty || ''}"`,
         `"${lead.ownerCity || ''}"`,
         `"${lead.ownerState || ''}"`,
         `"${lead.ownerZip || ''}"`,
-        `"${(lead.phones || []).join('; ')}"`,
+        `"${lead.zestimate || ''}"`,
+        `"${lead.adminFirstName || ''} ${lead.adminLastName || ''}"`.trim(),
+        `"${lead.adminAddress || ''}"`,
+        `"${lead.createdAt ? new Date(lead.createdAt).toLocaleDateString() : ''}"`,
         `"${(lead.emails || []).join('; ')}"`,
         `"${lead.skipTraceCompletedAt ? new Date(lead.skipTraceCompletedAt).toLocaleDateString() : ''}"`,
-        `"${lead.type || ''}"`,
         `"${lead.estimatedValue || ''}"`,
-        `"${lead.zestimate || ''}"`
       ].join(','))
     ].join('\n');
 
@@ -352,13 +360,14 @@ export default function LeadDashboardClient({ initialLeads }: Props) {
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `skip-traced-leads-${new Date().toISOString().split('T')[0]}.csv`;
+    a.download = `selected-leads-${new Date().toISOString().split('T')[0]}.csv`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     window.URL.revokeObjectURL(url);
 
-    alert(`Downloaded ${skipTracedLeads.length} skip traced leads to CSV.`);
+    alert(`Downloaded ${selectedLeads.length} selected leads to CSV.`);
+  };
   };
 
   return (

@@ -232,6 +232,7 @@ export function LeadTable({
               <th className='px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider whitespace-nowrap bg-green-50'>
                 Phone
               </th>
+              {renderSortableHeader('skipTraceCompletedAt', 'Skip Traced', 'bg-green-50')}
               {renderSortableHeader('ownerCounty', 'County', 'bg-blue-50')}
               <th className='px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider whitespace-nowrap bg-blue-50'>
                 City/State/Zip
@@ -350,6 +351,17 @@ export function LeadTable({
                       </div>
                     ) : (
                       <span className='text-gray-400 text-xs'>No phone</span>
+                    )}
+                  </td>
+
+                  {/* Skip Trace Date Column */}
+                  <td className='px-4 py-4 whitespace-nowrap text-sm text-gray-900 bg-green-50/30'>
+                    {lead.skipTraceCompletedAt ? (
+                      <span className='text-xs font-mono'>
+                        {new Date(lead.skipTraceCompletedAt).toLocaleDateString()}
+                      </span>
+                    ) : (
+                      <span className='text-gray-400 text-xs'>-</span>
                     )}
                   </td>
 

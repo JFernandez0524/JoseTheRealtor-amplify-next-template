@@ -150,13 +150,15 @@ export function DashboardFilters({
           </button>
         )}
 
-        {/* Download Skip Traced Button */}
-        <button
-          onClick={handleDownloadSkipTraced}
-          className='text-sm px-3 py-1.5 rounded bg-green-600 text-white hover:bg-green-700 transition shadow-sm whitespace-nowrap'
-        >
-          📥 Download Skip Traced
-        </button>
+        {/* Download Selected Leads Button - Only show when leads are selected */}
+        {selectedLeadsCount > 0 && (
+          <button
+            onClick={handleDownloadSkipTraced}
+            className='text-sm px-3 py-1.5 rounded bg-green-600 text-white hover:bg-green-700 transition shadow-sm whitespace-nowrap'
+          >
+            📥 Download Selected ({selectedLeadsCount})
+          </button>
+        )}
       </div>
 
       {/* Search Bar */}
