@@ -13,6 +13,8 @@ export async function middleware(request: NextRequest) {
     '/pricing', 
     '/about', 
     '/services', 
+    '/contact',
+    '/docs',
     '/logout',
     '/forgot-password'
   ];

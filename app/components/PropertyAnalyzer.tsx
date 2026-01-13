@@ -91,7 +91,7 @@ export default function PropertyAnalyzer({ user }: PropertyAnalyzerProps) {
     );
 
   return (
-    <div className='w-full max-w-6xl flex flex-col items-center min-h-[600px]'>
+    <div className='w-full max-w-6xl flex flex-col items-center'>
       <div className='w-full max-w-2xl bg-white p-8 rounded-[2.5rem] shadow-2xl border border-slate-100 mb-12 transform transition-all hover:shadow-indigo-100/50'>
         <AnalyzerForm
           address={address}
@@ -102,13 +102,13 @@ export default function PropertyAnalyzer({ user }: PropertyAnalyzerProps) {
       </div>
 
       {error && (
-        <div className='p-6 bg-red-50 text-red-600 rounded-2xl border border-red-100 font-bold uppercase text-[10px] tracking-widest flex items-center gap-3'>
+        <div className='p-6 bg-red-50 text-red-600 rounded-2xl border border-red-100 font-bold uppercase text-[10px] tracking-widest flex items-center gap-3 mb-8'>
           <span className='text-lg'>⚠️</span> {error}
         </div>
       )}
 
       {isLoading && (
-        <div className='flex flex-col items-center gap-6 py-20'>
+        <div className='flex flex-col items-center gap-6 py-20 mb-8'>
           <Loader size='large' />
           <div className='text-center'>
             <p className='text-slate-900 font-black uppercase text-xs tracking-[0.3em] mb-2'>

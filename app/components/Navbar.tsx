@@ -102,6 +102,14 @@ const Navbar = () => {
           >
             Services
           </Link>
+          <Link
+            href='/contact'
+            className={
+              pathname === '/contact' ? activeLinkClass : baseLinkClass
+            }
+          >
+            Contact
+          </Link>
 
           {isAuthenticated && (
             <>
@@ -217,6 +225,14 @@ const Navbar = () => {
             }
           >
             Services
+          </Link>
+          <Link
+            href='/contact'
+            className={
+              pathname === '/contact' ? mobileActiveLinkClass : mobileLinkClass
+            }
+          >
+            Contact
           </Link>
 
           {isAuthenticated && (

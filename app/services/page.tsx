@@ -1,49 +1,99 @@
-// amplify/services/page.tsx
+import { FeatureCard } from '../components/shared/FeatureCard';
+import { Section } from '../components/shared/Section';
+import { CTAButton } from '../components/shared/CTAButton';
 
 export default async function ServicesPage() {
   return (
-    <main className='max-w-4xl mx-auto py-20 px-6'>
-      <div className='text-center mb-16'>
-        <h1 className='text-5xl font-black text-slate-900 mb-4 tracking-tight'>
-          Our Services
-        </h1>
-        <p className='text-slate-600 font-medium'>
-          Professional lead management and data enrichment for real estate
-          investors.
-        </p>
-      </div>
-
-      <div className='grid grid-cols-1 md:grid-cols-3 gap-8'>
-        <div className='bg-white p-8 rounded-3xl border border-slate-200 shadow-sm'>
-          <h3 className='font-bold text-xl mb-3 text-indigo-600'>
-            Lead Management
-          </h3>
-          <p className='text-slate-600 text-sm leading-relaxed'>
-            Upload and organize your leads. Our system handles probate and
-            pre-foreclosure data processing automatically.
+    <main className='min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50'>
+      {/* Hero Section */}
+      <section className='py-20 px-6'>
+        <div className='max-w-4xl mx-auto text-center'>
+          <h1 className='text-5xl font-black text-slate-900 mb-6 tracking-tight'>
+            Comprehensive Real Estate
+            <span className='text-blue-600'> Lead Solutions</span>
+          </h1>
+          <p className='text-xl text-slate-600 font-medium max-w-2xl mx-auto leading-relaxed'>
+            From lead import to CRM integration, we provide everything you need to streamline your real estate investment workflow
           </p>
         </div>
+      </section>
 
-        <div className='bg-white p-8 rounded-3xl border border-slate-200 shadow-sm'>
-          <h3 className='font-bold text-xl mb-3 text-blue-600'>
-            Data Validation
-          </h3>
-          <p className='text-slate-600 text-sm leading-relaxed'>
-            Automated address validation ensures your mailers and outreach hit
-            the right targets every time.
-          </p>
+      {/* Main Services */}
+      <Section>
+        <div className='grid grid-cols-1 lg:grid-cols-2 gap-12'>
+          <FeatureCard
+            icon="📊"
+            title="Smart Lead Management"
+            description="Upload CSV files and watch our system automatically validate addresses, fetch property values, and organize your leads with intelligent categorization."
+            features={[
+              "Automatic address validation",
+              "Property value estimation", 
+              "County detection",
+              "Duplicate prevention"
+            ]}
+            gradient="from-blue-500 to-blue-600"
+          />
+          
+          <FeatureCard
+            icon="🔍"
+            title="Professional Skip Tracing"
+            description="Find accurate contact information for property owners at industry-leading rates. Download results with completion tracking for targeted campaigns."
+            features={[
+              "$0.10 per successful trace",
+              "Phone numbers & email addresses",
+              "Date-filtered downloads", 
+              "Bulk processing available"
+            ]}
+            gradient="from-green-500 to-green-600"
+          />
+          
+          <FeatureCard
+            icon="🔗"
+            title="GoHighLevel Integration"
+            description="Seamlessly sync qualified leads to your GoHighLevel CRM with property values, contact information, and custom tags for workflow automation."
+            features={[
+              "One-click lead sync",
+              "Custom tag management",
+              "Persistent connection",
+              "Workflow automation ready"
+            ]}
+            gradient="from-purple-500 to-purple-600"
+          />
+          
+          <FeatureCard
+            icon="🤖"
+            title="AI-Powered Analysis"
+            description="Get intelligent insights on your leads with our AI assistant. Analyze market conditions, equity potential, and receive follow-up suggestions."
+            features={[
+              "Property analysis",
+              "Market insights",
+              "Follow-up suggestions",
+              "24/7 availability"
+            ]}
+            gradient="from-orange-500 to-orange-600"
+          />
         </div>
+      </Section>
 
-        <div className='bg-white p-8 rounded-3xl border border-slate-200 shadow-sm'>
-          <h3 className='font-bold text-xl mb-3 text-purple-600'>
-            Skip Tracing
-          </h3>
-          <p className='text-slate-600 text-sm leading-relaxed'>
-            Unlock owner contact information with our integrated skip-tracing
-            service at competitive rates.
+      {/* CTA Section */}
+      <Section>
+        <div className='text-center'>
+          <h2 className='text-4xl font-bold text-slate-900 mb-6'>
+            Ready to Transform Your Lead Management?
+          </h2>
+          <p className='text-xl text-slate-600 mb-8 max-w-2xl mx-auto'>
+            Join thousands of real estate professionals who are closing more deals with our comprehensive platform
           </p>
+          <div className='flex flex-col sm:flex-row gap-4 justify-center'>
+            <CTAButton href='/pricing' variant='primary'>
+              View Pricing Plans
+            </CTAButton>
+            <CTAButton href='/dashboard' variant='secondary'>
+              Try Free Demo
+            </CTAButton>
+          </div>
         </div>
-      </div>
+      </Section>
     </main>
   );
 }
