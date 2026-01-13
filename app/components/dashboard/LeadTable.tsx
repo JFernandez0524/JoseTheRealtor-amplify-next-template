@@ -106,16 +106,11 @@ export function LeadTable({
     }
   };
 
-  // Helper function for sortable column headers
-  const SortableHeader = ({ 
-    field, 
-    children, 
-    className = '' 
-  }: { 
-    field: 'createdAt' | 'updatedAt' | 'ownerLastName' | 'ownerCounty' | 'zestimate';
-    children: React.ReactNode;
-    className?: string;
-  }) => (
+  const renderSortableHeader = (
+    field: 'createdAt' | 'updatedAt' | 'ownerLastName' | 'ownerCounty' | 'zestimate',
+    children: React.ReactNode,
+    className: string = ''
+  ) => (
     <th 
       className={`px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider whitespace-nowrap cursor-pointer hover:bg-gray-100 ${className}`}
       onClick={() => onSort(field)}
@@ -189,33 +184,25 @@ export function LeadTable({
               <th className='px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider whitespace-nowrap bg-purple-50'>
                 GHL Sync
               </th>
-              <SortableHeader field="ownerLastName" className="bg-blue-50">
-                Owner Name
-              </SortableHeader>
+              {renderSortableHeader("ownerLastName", "Owner Name", "bg-blue-50")}
               <th className='px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider whitespace-nowrap bg-blue-50'>
                 Address
               </th>
               <th className='px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider whitespace-nowrap bg-green-50'>
                 Phone
               </th>
-              <SortableHeader field="ownerCounty" className="bg-blue-50">
-                County
-              </SortableHeader>
+              {renderSortableHeader("ownerCounty", "County", "bg-blue-50")}
               <th className='px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider whitespace-nowrap bg-blue-50'>
                 City/State/Zip
               </th>
-              <SortableHeader field="zestimate" className="bg-yellow-50">
-                Zestimate
-              </SortableHeader>
+              {renderSortableHeader("zestimate", "Zestimate", "bg-yellow-50")}
               <th className='px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider whitespace-nowrap bg-purple-50'>
                 Admin Name
               </th>
               <th className='px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider whitespace-nowrap bg-purple-50'>
                 Admin Address
               </th>
-              <SortableHeader field="createdAt">
-                Created At
-              </SortableHeader>
+              {renderSortableHeader("createdAt", "Created At")}
               </th>
             </tr>
           </thead>
