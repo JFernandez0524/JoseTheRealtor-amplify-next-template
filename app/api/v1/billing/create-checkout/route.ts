@@ -16,8 +16,8 @@ export async function POST(req: NextRequest) {
     const { plan } = await req.json(); // 'sync-plan' or 'ai-outreach'
 
     const priceIds = {
-      'sync-plan': process.env.STRIPE_SYNC_PLAN_PRICE_ID, // $97/month
-      'ai-outreach': process.env.STRIPE_AI_OUTREACH_PRICE_ID, // $250/month
+      'sync-plan': 'price_1SovIMR59rm8qzIqF0JJwvf0', // $97/month
+      'ai-outreach': 'price_1SovIxR59rm8qzIqJZ6jruwi', // $250/month
     };
 
     const priceId = priceIds[plan as keyof typeof priceIds];
