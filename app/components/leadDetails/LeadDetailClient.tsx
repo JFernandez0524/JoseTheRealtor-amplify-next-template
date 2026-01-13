@@ -32,7 +32,7 @@ import { getFrontEndAuthSession } from '@/app/utils/aws/auth/amplifyFrontEndUser
 import { type Schema } from '@/amplify/data/resource';
 
 type Lead = Schema['PropertyLead']['type'] & {
-  notes?: Array<{text: string, createdAt: string, createdBy?: string}> | null;
+  notes?: Array<{ text: string; createdAt: string; createdBy?: string }> | null;
   ghlSyncStatus?: 'PENDING' | 'SUCCESS' | 'FAILED' | 'SKIPPED' | null;
   ghlContactId?: string | null;
   ghlSyncDate?: string | null;
@@ -76,7 +76,7 @@ export function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
   const refreshLeadData = async () => {
     try {
       const { data: updatedLead } = await client.models.PropertyLead.get({
-        id: lead.id
+        id: lead.id,
       });
       if (updatedLead) {
         setLead(updatedLead as Lead);
@@ -398,9 +398,9 @@ export function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
             </CardWrapper>
 
             {/* Tags Management */}
-            <TagsManager 
-              lead={lead} 
-              onUpdate={(updatedLead) => setLead(updatedLead)} 
+            <TagsManager
+              lead={lead}
+              onUpdate={(updatedLead) => setLead(updatedLead as any)}
             />
           </div>
 

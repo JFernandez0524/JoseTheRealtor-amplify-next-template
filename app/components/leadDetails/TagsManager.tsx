@@ -4,11 +4,11 @@ import { useState } from 'react';
 import { client } from '@/app/utils/aws/data/frontEndClient';
 import type { Schema } from '@/amplify/data/resource';
 
-type Lead = Schema['PropertyLead']['type'];
+type PropertyLead = Schema['PropertyLead']['type'];
 
 interface Props {
-  lead: Lead;
-  onUpdate: (updatedLead: Lead) => void;
+  lead: PropertyLead;
+  onUpdate: (updatedLead: PropertyLead) => void;
 }
 
 export function TagsManager({ lead, onUpdate }: Props) {
@@ -16,7 +16,7 @@ export function TagsManager({ lead, onUpdate }: Props) {
   const [newTag, setNewTag] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
-  const currentTags = lead.customTags || [];
+  const currentTags: string[] = (lead as any).customTags || [];
 
   const addTag = async () => {
     if (!newTag.trim()) return;

@@ -30,10 +30,8 @@ export function CardWrapper({
 
   return (
     <div className='bg-white shadow border rounded-lg p-6'>
-           {' '}
       <div className='flex justify-between items-center mb-4'>
-                <h2 className='text-xl font-semibold text-gray-800'>{title}</h2>
-               {' '}
+        <h2 className='text-xl font-semibold text-gray-800'>{title}</h2>
         {isEditable && (
           <button
             onClick={toggleEdit}
@@ -44,14 +42,12 @@ export function CardWrapper({
             }`}
             title={isEditing ? 'Exit Edit Mode' : 'Edit This Section'}
           >
-                        <FaPencilAlt className='h-5 w-5' />         {' '}
+            <FaPencilAlt className='h-5 w-5' />
           </button>
         )}
-             {' '}
       </div>
-           {' '}
       {/* FIX: Render children directly, relying on parent to pass props correctly. */}
-            {children}   {' '}
+      {children}
     </div>
   );
 }

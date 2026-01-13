@@ -97,9 +97,9 @@ export default function LeadDashboardClient({ initialLeads }: Props) {
         lead.ownerCounty?.toLowerCase().includes(search) ||
         lead.adminFirstName?.toLowerCase().includes(search) ||
         lead.adminLastName?.toLowerCase().includes(search) ||
-        (lead.phones && lead.phones.some(phone => phone.includes(search))) ||
-        (lead.emails && lead.emails.some(email => email.toLowerCase().includes(search))) ||
-        (lead.customTags && lead.customTags.some(tag => tag.toLowerCase().includes(search)));
+        (lead.phones && lead.phones.some(phone => phone?.includes(search))) ||
+        (lead.emails && lead.emails.some(email => email?.toLowerCase().includes(search))) ||
+        (lead.customTags && lead.customTags.some(tag => tag?.toLowerCase().includes(search)));
 
       const matchesType = !filterType || lead.type === filterType;
       const matchesStatus =
