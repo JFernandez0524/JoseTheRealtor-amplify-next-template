@@ -19,9 +19,21 @@ type Props = {
   onToggleAll: () => void;
   onToggleOne: (id: string) => void;
   onRowClick: (id: string) => void;
-  sortField: 'createdAt' | 'updatedAt' | 'ownerLastName' | 'ownerCounty' | 'zestimate';
+  sortField:
+    | 'createdAt'
+    | 'updatedAt'
+    | 'ownerLastName'
+    | 'ownerCounty'
+    | 'zestimate';
   sortDirection: 'asc' | 'desc';
-  onSort: (field: 'createdAt' | 'updatedAt' | 'ownerLastName' | 'ownerCounty' | 'zestimate') => void;
+  onSort: (
+    field:
+      | 'createdAt'
+      | 'updatedAt'
+      | 'ownerLastName'
+      | 'ownerCounty'
+      | 'zestimate'
+  ) => void;
 };
 
 // ---------------------------------------------------------
@@ -107,18 +119,23 @@ export function LeadTable({
   };
 
   const renderSortableHeader = (
-    field: 'createdAt' | 'updatedAt' | 'ownerLastName' | 'ownerCounty' | 'zestimate',
+    field:
+      | 'createdAt'
+      | 'updatedAt'
+      | 'ownerLastName'
+      | 'ownerCounty'
+      | 'zestimate',
     children: React.ReactNode,
     className: string = ''
   ) => (
-    <th 
+    <th
       className={`px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider whitespace-nowrap cursor-pointer hover:bg-gray-100 ${className}`}
       onClick={() => onSort(field)}
     >
-      <div className="flex items-center gap-1">
+      <div className='flex items-center gap-1'>
         {children}
         {sortField === field && (
-          <span className="text-blue-500">
+          <span className='text-blue-500'>
             {sortDirection === 'asc' ? '↑' : '↓'}
           </span>
         )}
@@ -139,8 +156,18 @@ export function LeadTable({
             className='p-1 rounded border border-gray-300 hover:bg-gray-100 transition-colors'
             title='Scroll left'
           >
-            <svg className='w-4 h-4 text-gray-600' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
-              <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M15 19l-7-7 7-7' />
+            <svg
+              className='w-4 h-4 text-gray-600'
+              fill='none'
+              stroke='currentColor'
+              viewBox='0 0 24 24'
+            >
+              <path
+                strokeLinecap='round'
+                strokeLinejoin='round'
+                strokeWidth={2}
+                d='M15 19l-7-7 7-7'
+              />
             </svg>
           </button>
           <span className='text-xs text-gray-500'>Scroll table</span>
@@ -149,8 +176,18 @@ export function LeadTable({
             className='p-1 rounded border border-gray-300 hover:bg-gray-100 transition-colors'
             title='Scroll right'
           >
-            <svg className='w-4 h-4 text-gray-600' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
-              <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M9 5l7 7-7 7' />
+            <svg
+              className='w-4 h-4 text-gray-600'
+              fill='none'
+              stroke='currentColor'
+              viewBox='0 0 24 24'
+            >
+              <path
+                strokeLinecap='round'
+                strokeLinejoin='round'
+                strokeWidth={2}
+                d='M9 5l7 7-7 7'
+              />
             </svg>
           </button>
         </div>
@@ -184,26 +221,29 @@ export function LeadTable({
               <th className='px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider whitespace-nowrap bg-purple-50'>
                 GHL Sync
               </th>
-              {renderSortableHeader("ownerLastName", "Owner Name", "bg-blue-50")}
+              {renderSortableHeader(
+                'ownerLastName',
+                'Owner Name',
+                'bg-blue-50'
+              )}
               <th className='px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider whitespace-nowrap bg-blue-50'>
                 Address
               </th>
               <th className='px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider whitespace-nowrap bg-green-50'>
                 Phone
               </th>
-              {renderSortableHeader("ownerCounty", "County", "bg-blue-50")}
+              {renderSortableHeader('ownerCounty', 'County', 'bg-blue-50')}
               <th className='px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider whitespace-nowrap bg-blue-50'>
                 City/State/Zip
               </th>
-              {renderSortableHeader("zestimate", "Zestimate", "bg-yellow-50")}
+              {renderSortableHeader('zestimate', 'Zestimate', 'bg-yellow-50')}
               <th className='px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider whitespace-nowrap bg-purple-50'>
                 Admin Name
               </th>
               <th className='px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider whitespace-nowrap bg-purple-50'>
                 Admin Address
               </th>
-              {renderSortableHeader("createdAt", "Created At")}
-              </th>
+              <th>{renderSortableHeader('createdAt', 'Created At')}</th>
             </tr>
           </thead>
           {/* 💥 FIX: Removed whitespace before and after <tbody> content */}
@@ -300,7 +340,7 @@ export function LeadTable({
                           {lead.phones[0]}
                         </span>
                         {lead.phones.length > 1 && (
-                          <span 
+                          <span
                             className='text-xs bg-green-600 text-white px-1.5 py-0.5 rounded-full font-bold cursor-help'
                             title={`${lead.phones.length} phone numbers total: ${lead.phones.join(', ')}`}
                           >
