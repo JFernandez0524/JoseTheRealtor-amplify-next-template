@@ -39,11 +39,11 @@ export default function PropertyReportView({
   const building = parcel?.building?.[0] || {};
   const legal = parcel?.legal || {};
 
-  // 🎯 Intercept premium actions to trigger the Sales Modal for unauthenticated users
+  // 🎯 Intercept premium actions to redirect to pricing page for unauthenticated users
   const handlePremiumAction = (action?: () => void) => {
     if (!isPremium) {
-      // Show the sales modal if user is not logged in
-      setIsAuthModalOpen(true);
+      // Redirect to pricing page for signup
+      window.location.href = '/pricing';
     } else if (action) {
       action();
     }

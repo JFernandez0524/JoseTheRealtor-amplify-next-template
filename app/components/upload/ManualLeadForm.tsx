@@ -173,7 +173,7 @@ export function ManualLeadForm() {
 
       setMessage('✅ Uploaded! Moving to Dashboard...');
       setTimeout(() => {
-        router.push('/dashboard');
+        router.push('/dashboard?refresh=true');
       }, 1500);
     } catch (err: any) {
       setMessage(`❌ Error: ${err.message}`);

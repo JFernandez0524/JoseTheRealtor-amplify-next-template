@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { client } from '@/app/utils/aws/data/frontEndClient';
 import { useAccess } from '@/app/context/AccessContext';
 import { LeadTable } from './LeadTable';
@@ -18,6 +18,8 @@ interface Props {
 }
 
 export default function LeadDashboardClient({ initialLeads }: Props) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const router = useRouter();
   const { hasPaidPlan, isAdmin } = useAccess();
 
@@ -82,6 +84,22 @@ export default function LeadDashboardClient({ initialLeads }: Props) {
     }
     syncUserAccount();
   }, []);
+
+  // 3. Handle refresh parameter from upload redirect
+  useEffect(() => {
+    const refresh = searchParams.get('refresh');
+    if (refresh === 'true') {
+      // Clear the refresh parameter from URL
+      router.replace('/dashboard', { scroll: false });
+      
+      // Force a small delay to ensure backend processing is complete
+      setTimeout(() => {
+        // The observeQuery subscription should automatically pick up new data
+        // but we can add a manual refresh if needed
+        console.log('Dashboard refreshed after upload');
+      }, 1000);
+    }
+  }, [searchParams, router]);
 
   // --- Filter Logic ---
   const filteredLeads = useMemo(() => {
@@ -204,6 +222,17 @@ export default function LeadDashboardClient({ initialLeads }: Props) {
       );
       alert(`Successfully initiated CRM sync for ${selectedIds.length} leads.`);
       setSelectedIds([]);
+      
+      // Force refresh after a delay to show updated GHL sync status
+      setTimeout(async () => {
+        try {
+          const { data: refreshedLeads } = await client.models.PropertyLead.list();
+          setAllLeads([...refreshedLeads]);
+          console.log('Dashboard refreshed after GHL sync');
+        } catch (error) {
+          console.error('Error refreshing leads after GHL sync:', error);
+        }
+      }, 3000);
     } catch (err) {
       console.error('Sync error:', err);
       alert('Error initiating CRM sync. Ensure leads are skip-traced first.');
