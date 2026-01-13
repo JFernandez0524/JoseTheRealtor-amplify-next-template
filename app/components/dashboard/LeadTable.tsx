@@ -1,4 +1,5 @@
 // app/components/dashboard/LeadTable.tsx
+/** @jsxImportSource react */
 
 import React from 'react';
 import { StatusBadge } from '../shared/StatusBadge';
@@ -24,7 +25,8 @@ type Props = {
     | 'updatedAt'
     | 'ownerLastName'
     | 'ownerCounty'
-    | 'zestimate';
+    | 'zestimate'
+    | 'skipTraceCompletedAt';
   sortDirection: 'asc' | 'desc';
   onSort: (
     field:
@@ -33,6 +35,7 @@ type Props = {
       | 'ownerLastName'
       | 'ownerCounty'
       | 'zestimate'
+      | 'skipTraceCompletedAt'
   ) => void;
 };
 
@@ -124,7 +127,8 @@ export function LeadTable({
       | 'updatedAt'
       | 'ownerLastName'
       | 'ownerCounty'
-      | 'zestimate',
+      | 'zestimate'
+      | 'skipTraceCompletedAt',
     children: React.ReactNode,
     className: string = ''
   ) => (
