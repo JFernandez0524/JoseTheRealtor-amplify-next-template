@@ -19,6 +19,9 @@ type Props = {
   onToggleAll: () => void;
   onToggleOne: (id: string) => void;
   onRowClick: (id: string) => void;
+  sortField: 'createdAt' | 'updatedAt' | 'ownerLastName' | 'ownerCounty' | 'zestimate';
+  sortDirection: 'asc' | 'desc';
+  onSort: (field: 'createdAt' | 'updatedAt' | 'ownerLastName' | 'ownerCounty' | 'zestimate') => void;
 };
 
 // ---------------------------------------------------------
@@ -85,6 +88,9 @@ export function LeadTable({
   onToggleAll,
   onToggleOne,
   onRowClick,
+  sortField,
+  sortDirection,
+  onSort,
 }: Props) {
   const tableRef = React.useRef<HTMLDivElement>(null);
 
@@ -99,6 +105,31 @@ export function LeadTable({
       tableRef.current.scrollBy({ left: 200, behavior: 'smooth' });
     }
   };
+
+  // Helper function for sortable column headers
+  const SortableHeader = ({ 
+    field, 
+    children, 
+    className = '' 
+  }: { 
+    field: 'createdAt' | 'updatedAt' | 'ownerLastName' | 'ownerCounty' | 'zestimate';
+    children: React.ReactNode;
+    className?: string;
+  }) => (
+    <th 
+      className={`px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider whitespace-nowrap cursor-pointer hover:bg-gray-100 ${className}`}
+      onClick={() => onSort(field)}
+    >
+      <div className="flex items-center gap-1">
+        {children}
+        {sortField === field && (
+          <span className="text-blue-500">
+            {sortDirection === 'asc' ? '↑' : '↓'}
+          </span>
+        )}
+      </div>
+    </th>
+  );
 
   return (
     <div className='bg-white shadow-lg rounded-lg overflow-hidden border border-gray-200'>
@@ -158,26 +189,33 @@ export function LeadTable({
               <th className='px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider whitespace-nowrap bg-purple-50'>
                 GHL Sync
               </th>
-              <th className='px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider whitespace-nowrap bg-blue-50'>
+              <SortableHeader field="ownerLastName" className="bg-blue-50">
                 Owner Name
-              </th>
+              </SortableHeader>
               <th className='px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider whitespace-nowrap bg-blue-50'>
                 Address
               </th>
               <th className='px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider whitespace-nowrap bg-green-50'>
                 Phone
               </th>
+              <SortableHeader field="ownerCounty" className="bg-blue-50">
+                County
+              </SortableHeader>
               <th className='px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider whitespace-nowrap bg-blue-50'>
                 City/State/Zip
               </th>
+              <SortableHeader field="zestimate" className="bg-yellow-50">
+                Zestimate
+              </SortableHeader>
               <th className='px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider whitespace-nowrap bg-purple-50'>
                 Admin Name
               </th>
               <th className='px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider whitespace-nowrap bg-purple-50'>
                 Admin Address
               </th>
-              <th className='px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider whitespace-nowrap'>
+              <SortableHeader field="createdAt">
                 Created At
+              </SortableHeader>
               </th>
             </tr>
           </thead>
@@ -186,7 +224,7 @@ export function LeadTable({
             {isLoading ? (
               <tr>
                 <td
-                  colSpan={12}
+                  colSpan={14}
                   className='px-6 py-10 text-center text-gray-500'
                 >
                   <div className='flex flex-col items-center'>
@@ -198,7 +236,7 @@ export function LeadTable({
             ) : leads.length === 0 ? (
               <tr>
                 <td
-                  colSpan={12}
+                  colSpan={14}
                   className='px-6 py-10 text-center text-gray-500'
                 >
                   <div className='text-lg mb-2'>📭 No leads found</div>
@@ -211,7 +249,7 @@ export function LeadTable({
               leads.map((lead) => (
                 <tr
                   key={lead.id}
-                  onClick={() => onRowClick(lead.id)}
+                  onDoubleClick={() => onRowClick(lead.id)}
                   className='hover:bg-gray-50 transition cursor-pointer'
                 >
                   <td className='px-4 py-4 whitespace-nowrap'>
@@ -288,8 +326,28 @@ export function LeadTable({
                     )}
                   </td>
 
+                  {/* County Column */}
+                  <td className='px-4 py-4 whitespace-nowrap text-sm text-gray-900 bg-blue-50/30'>
+                    {lead.ownerCounty || '-'}
+                  </td>
+
                   <td className='px-4 py-4 whitespace-nowrap text-sm text-gray-900 bg-blue-50/30'>
                     {lead.ownerCity}, {lead.ownerState} {lead.ownerZip}
+                  </td>
+
+                  {/* Zestimate Column */}
+                  <td className='px-4 py-4 whitespace-nowrap text-sm text-gray-900 bg-yellow-50/30'>
+                    {lead.zestimate ? (
+                      <span className='font-semibold text-green-700'>
+                        ${lead.zestimate.toLocaleString()}
+                      </span>
+                    ) : lead.estimatedValue ? (
+                      <span className='text-gray-600'>
+                        ${lead.estimatedValue.toLocaleString()}
+                      </span>
+                    ) : (
+                      <span className='text-gray-400'>-</span>
+                    )}
                   </td>
 
                   <td className='px-4 py-4 whitespace-nowrap text-sm text-gray-900 bg-purple-50/30'>

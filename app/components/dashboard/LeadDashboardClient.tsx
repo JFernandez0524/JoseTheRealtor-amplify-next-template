@@ -42,6 +42,10 @@ export default function LeadDashboardClient({ initialLeads }: Props) {
   const [skipTraceFromDate, setSkipTraceFromDate] = useState('');
   const [skipTraceToDate, setSkipTraceToDate] = useState('');
 
+  // Sort States
+  const [sortField, setSortField] = useState<'createdAt' | 'updatedAt' | 'ownerLastName' | 'ownerCounty' | 'zestimate'>('createdAt');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
+
   // --- Effects ---
 
   // 1. Listen for Real-time Lead updates
@@ -85,7 +89,17 @@ export default function LeadDashboardClient({ initialLeads }: Props) {
       const search = searchQuery.toLowerCase();
       const matchesSearch =
         lead.ownerAddress?.toLowerCase().includes(search) ||
-        lead.ownerLastName?.toLowerCase().includes(search);
+        lead.ownerLastName?.toLowerCase().includes(search) ||
+        lead.ownerFirstName?.toLowerCase().includes(search) ||
+        lead.ownerCity?.toLowerCase().includes(search) ||
+        lead.ownerState?.toLowerCase().includes(search) ||
+        lead.ownerZip?.includes(search) ||
+        lead.ownerCounty?.toLowerCase().includes(search) ||
+        lead.adminFirstName?.toLowerCase().includes(search) ||
+        lead.adminLastName?.toLowerCase().includes(search) ||
+        (lead.phones && lead.phones.some(phone => phone.includes(search))) ||
+        (lead.emails && lead.emails.some(email => email.toLowerCase().includes(search))) ||
+        (lead.customTags && lead.customTags.some(tag => tag.toLowerCase().includes(search)));
 
       const matchesType = !filterType || lead.type === filterType;
       const matchesStatus =
@@ -117,8 +131,36 @@ export default function LeadDashboardClient({ initialLeads }: Props) {
       })();
 
       return matchesSearch && matchesType && matchesStatus && matchesCrm && matchesPhone && matchesDateRange;
+    }).sort((a, b) => {
+      // Sort the filtered results
+      let aValue: any = a[sortField];
+      let bValue: any = b[sortField];
+
+      // Handle date sorting
+      if (sortField === 'createdAt' || sortField === 'updatedAt') {
+        aValue = new Date(aValue || 0).getTime();
+        bValue = new Date(bValue || 0).getTime();
+      }
+
+      // Handle number sorting
+      if (sortField === 'zestimate') {
+        aValue = parseFloat(aValue || 0);
+        bValue = parseFloat(bValue || 0);
+      }
+
+      // Handle string sorting
+      if (typeof aValue === 'string') {
+        aValue = aValue.toLowerCase();
+        bValue = (bValue || '').toLowerCase();
+      }
+
+      if (sortDirection === 'asc') {
+        return aValue > bValue ? 1 : -1;
+      } else {
+        return aValue < bValue ? 1 : -1;
+      }
     });
-  }, [allLeads, searchQuery, filterType, filterStatus, filterCrmStatus, filterHasPhone, skipTraceFromDate, skipTraceToDate]);
+  }, [allLeads, searchQuery, filterType, filterStatus, filterCrmStatus, filterHasPhone, skipTraceFromDate, skipTraceToDate, sortField, sortDirection]);
 
   // --- Pagination Logic ---
   const totalPages = Math.ceil(filteredLeads.length / itemsPerPage);
@@ -129,7 +171,17 @@ export default function LeadDashboardClient({ initialLeads }: Props) {
   // Reset to page 1 when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, filterType, filterStatus, filterCrmStatus, filterHasPhone, skipTraceFromDate, skipTraceToDate]);
+  }, [searchQuery, filterType, filterStatus, filterCrmStatus, filterHasPhone, skipTraceFromDate, skipTraceToDate, sortField, sortDirection]);
+
+  // --- Sort Handler ---
+  const handleSort = (field: 'createdAt' | 'updatedAt' | 'ownerLastName' | 'ownerCounty' | 'zestimate') => {
+    if (sortField === field) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDirection('desc');
+    }
+  };
 
   // --- Action Handlers ---
 
@@ -431,6 +483,9 @@ export default function LeadDashboardClient({ initialLeads }: Props) {
           sessionStorage.setItem('leadNavContext', JSON.stringify(navContext));
           router.push(`/lead/${id}`);
         }}
+        sortField={sortField}
+        sortDirection={sortDirection}
+        onSort={handleSort}
       />
 
       {/* Bottom Pagination Controls */}

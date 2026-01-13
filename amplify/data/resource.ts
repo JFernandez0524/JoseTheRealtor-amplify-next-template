@@ -38,9 +38,13 @@ const schema = a.schema({
       ownerCity: a.string().required(),
       ownerState: a.string().required(),
       ownerZip: a.string().required(),
+      ownerCounty: a.string(),
 
       // 💥 FIX 1: ADD NOTES FIELD for user-edited data (SOT: DynamoDB)
       notes: a.json().array(), // Array of {text: string, createdAt: string, createdBy: string}
+      
+      // Manual tags for custom workflows
+      customTags: a.string().array(),
 
       // --- Admin/Executor Info (Probate) ---
       adminFirstName: a.string(),

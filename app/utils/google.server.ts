@@ -35,6 +35,7 @@ function parseAddressComponents(components: AddressComponent[]) {
   return {
     street: `${result.street_number || ''} ${result.route || ''}`.trim(),
     city: result.locality || result.administrative_area_level_2 || '',
+    county: result.administrative_area_level_2 || '', // County information
     state: result.administrative_area_level_1 || '', // Will now contain 'NJ'
     zip: result.postal_code || '',
   };

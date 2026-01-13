@@ -179,6 +179,7 @@ export const handler: S3Handler = async (event) => {
           const finalPropCity = std?.city || rawPropCity;
           const finalPropState = std?.state || rawPropState;
           const finalPropZip = std?.zip || rawPropZip;
+          const finalPropCounty = std?.county || null;
 
           const standardizedAddress = propValidation
             ? {
@@ -186,6 +187,7 @@ export const handler: S3Handler = async (event) => {
                 city: finalPropCity,
                 state: finalPropState,
                 zip: finalPropZip,
+                county: finalPropCounty,
               }
             : null;
 
@@ -278,6 +280,7 @@ export const handler: S3Handler = async (event) => {
             ownerCity: finalPropCity,
             ownerState: finalPropState,
             ownerZip: finalPropZip,
+            ownerCounty: finalPropCounty,
             adminFirstName,
             adminLastName,
             adminAddress: finalMailAddr,
