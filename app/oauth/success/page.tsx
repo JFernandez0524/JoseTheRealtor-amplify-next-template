@@ -1,36 +1,64 @@
-export default function OAuthSuccess({
-  searchParams,
-}: {
-  searchParams: { locationId?: string }
-}) {
+'use client';
+
+import { useSearchParams } from 'next/navigation';
+import { useEffect, useState } from 'react';
+
+export default function OAuthSuccessPage() {
+  const searchParams = useSearchParams();
+  const locationId = searchParams.get('locationId');
+  const [countdown, setCountdown] = useState(5);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCountdown((prev) => {
+        if (prev <= 1) {
+          window.location.href = '/dashboard';
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, []);
+
   return (
-    <div className="min-h-screen flex items-center justify-center bg-green-50">
-      <div className="max-w-md w-full bg-white rounded-lg shadow-md p-6">
-        <div className="text-center">
-          <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-green-100">
-            <svg className="h-6 w-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
-            </svg>
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
+      <div className="max-w-md w-full bg-white rounded-lg shadow-lg p-8 text-center">
+        <div className="text-green-500 text-6xl mb-6">✅</div>
+        
+        <h1 className="text-2xl font-bold text-gray-900 mb-4">
+          Connection Successful!
+        </h1>
+        
+        <p className="text-gray-600 mb-6">
+          Your GoHighLevel account has been successfully connected.
+        </p>
+
+        {locationId && (
+          <div className="bg-gray-100 rounded-lg p-4 mb-6">
+            <p className="text-sm text-gray-600">Connected Location:</p>
+            <p className="font-mono text-sm text-gray-800">{locationId}</p>
           </div>
-          <h3 className="mt-2 text-lg font-medium text-gray-900">Integration Successful!</h3>
-          <p className="mt-1 text-sm text-gray-500">
-            Your GoHighLevel account has been successfully connected.
+        )}
+        
+        <p className="text-sm text-gray-500 mb-8">
+          You can now sync your qualified leads to GoHighLevel automatically.
+        </p>
+
+        <div className="space-y-3">
+          <button
+            onClick={() => window.location.href = '/dashboard'}
+            className="w-full bg-blue-500 text-white py-3 px-4 rounded-lg font-semibold hover:bg-blue-600 transition-colors"
+          >
+            Go to Dashboard
+          </button>
+          
+          <p className="text-xs text-gray-400">
+            Redirecting automatically in {countdown} seconds...
           </p>
-          {searchParams.locationId && (
-            <p className="mt-2 text-xs text-gray-400">
-              Location ID: {searchParams.locationId}
-            </p>
-          )}
-          <div className="mt-6">
-            <button
-              onClick={() => window.close()}
-              className="inline-flex justify-center px-4 py-2 text-sm font-medium text-white bg-green-600 border border-transparent rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
-            >
-              Close Window
-            </button>
-          </div>
         </div>
       </div>
     </div>
-  )
+  );
 }
