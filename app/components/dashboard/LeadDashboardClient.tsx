@@ -20,7 +20,6 @@ interface Props {
 export default function LeadDashboardClient({ initialLeads }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const router = useRouter();
   const { hasPaidPlan, isAdmin } = useAccess();
 
   // --- State ---
@@ -367,7 +366,6 @@ export default function LeadDashboardClient({ initialLeads }: Props) {
     window.URL.revokeObjectURL(url);
 
     alert(`Downloaded ${selectedLeads.length} selected leads to CSV.`);
-  };
   };
 
   return (
