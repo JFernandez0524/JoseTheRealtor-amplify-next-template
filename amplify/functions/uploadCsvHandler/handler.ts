@@ -282,14 +282,20 @@ export const handler: S3Handler = async (event) => {
                 }
               });
               
-              const zestimateRecord = response.data.bundle?.[0];
-              if (zestimateRecord) {
+              const z = response.data.bundle?.[0];
+              if (z) {
                 zillowData = {
-                  zpid: zestimateRecord.zpid || null,
-                  zestimate: zestimateRecord.zestimate || 0,
-                  rentZestimate: zestimateRecord.rentalZestimate || 0,
-                  url: zestimateRecord.zillowUrl || null,
-                  lastUpdated: zestimateRecord.timestamp || new Date().toISOString()
+                  zpid: z.zpid,
+                  zestimate: z.zestimate,
+                  rentZestimate: z.rentalZestimate,
+                  url: z.zillowUrl,
+                  lastUpdated: z.timestamp,
+                  address: z.address,
+                  city: z.city,
+                  state: z.state,
+                  postalCode: z.postalCode,
+                  latitude: z.Latitude,
+                  longitude: z.Longitude
                 };
               }
               break; // Success, exit retry loop
@@ -343,11 +349,11 @@ export const handler: S3Handler = async (event) => {
             zillowZpid: zillowData?.zpid || null,
             zillowUrl: zillowData?.url || null,
             rentZestimate: zillowData?.rentZestimate || null,
-            priceHistory: zillowData?.priceHistory || null,
-            taxHistory: zillowData?.taxHistory || null,
-            homeDetails: zillowData?.homeDetails || null,
-            neighborhoodData: zillowData?.neighborhoodData || null,
-            comparableProperties: zillowData?.comparableProperties || null,
+            priceHistory: null,
+            taxHistory: null,
+            homeDetails: null,
+            neighborhoodData: null,
+            comparableProperties: null,
             zillowLastUpdated: zillowData ? new Date().toISOString() : null,
             
             createdAt: new Date().toISOString(),
