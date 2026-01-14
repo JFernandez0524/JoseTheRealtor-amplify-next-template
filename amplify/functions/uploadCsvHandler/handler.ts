@@ -271,13 +271,14 @@ export const handler: S3Handler = async (event) => {
           }
           // 🏠 Fetch Zestimate data during upload with retry logic
           let zillowData = null;
-          const maxRetries = 2;
-          for (let attempt = 0; attempt <= maxRetries; attempt++) {
+          
+          // Try coordinate-based search first (more reliable)
+          if (latitude && longitude) {
             try {
-              const fullAddress = `${finalPropAddr}, ${finalPropCity}, ${finalPropState} ${finalPropZip}`;
               const response = await bridgeClient.get('/zestimates_v2/zestimates', {
                 params: {
-                  address: fullAddress,
+                  near: `${longitude},${latitude}`,
+                  radius: '0.05mi',
                   limit: 1
                 }
               });
@@ -297,16 +298,15 @@ export const handler: S3Handler = async (event) => {
                   latitude: z.Latitude,
                   longitude: z.Longitude
                 };
-              }
-              break; // Success, exit retry loop
-            } catch (zillowError: any) {
-              if (attempt === maxRetries) {
-                console.log(`Bridge API Zestimate fetch failed after ${maxRetries + 1} attempts (non-critical):`, zillowError.message);
+                console.log('✅ Zestimate fetched via coords:', { zpid: zillowData.zpid, zestimate: zillowData.zestimate });
               } else {
-                // Wait before retrying (exponential backoff: 1s, 2s)
-                await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1)));
+                console.log('❌ No Zestimate data for coords:', { lat: latitude, lng: longitude });
               }
+            } catch (error: any) {
+              console.log('Bridge API error:', error.message);
             }
+          } else {
+            console.log('⚠️ No coordinates available for Zestimate lookup');
           }
 
           const leadItem = {
