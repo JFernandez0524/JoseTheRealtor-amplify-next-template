@@ -69,6 +69,7 @@ const schema = a.schema({
       skipTraceStatus: a.enum(['PENDING', 'COMPLETED', 'FAILED', 'NO_MATCH']),
       skipTraceCompletedAt: a.datetime(),
       validationStatus: a.enum(['VALID', 'INVALID']),
+      manualStatus: a.enum(['ACTIVE', 'SOLD', 'PENDING', 'OFF_MARKET', 'SKIP']), // Manual override
 
       // 💥 NEW: GHL Sync Status Fields
       ghlSyncStatus: a.enum(['PENDING', 'SUCCESS', 'FAILED', 'SKIPPED']),
@@ -93,6 +94,8 @@ const schema = a.schema({
       zillowZpid: a.string(), // Zillow Property ID
       zillowUrl: a.string(), // Zillow property URL
       rentZestimate: a.float(), // Rental estimate
+      listingStatus: a.string(), // MLS Status: Active, Sold, Pending, etc.
+      listingStatusDate: a.date(), // When status last changed
       priceHistory: a.json(), // Array of price history
       taxHistory: a.json(), // Array of tax history
       homeDetails: a.json(), // Bedrooms, bathrooms, sqft, etc.

@@ -279,11 +279,24 @@ export const handler: S3Handler = async (event) => {
                 params: {
                   near: `${longitude},${latitude}`,
                   radius: '0.05mi',
-                  limit: 1
+                  limit: 5  // Get multiple to find the main house
                 }
               });
               
-              const z = response.data.bundle?.[0];
+              const bundle = response.data.bundle || [];
+              
+              // Pick the best Zestimate: Priority 1 = No Unit Number (Main House), Priority 2 = Newest Date
+              const sortedBundle = bundle.sort((a: any, b: any) => {
+                const aIsMain = !a.unitNumber;
+                const bIsMain = !b.unitNumber;
+                if (aIsMain && !bIsMain) return -1;
+                if (!aIsMain && bIsMain) return 1;
+                const dateA = new Date(a.timestamp).getTime();
+                const dateB = new Date(b.timestamp).getTime();
+                return dateB - dateA;
+              });
+              
+              const z = sortedBundle[0];
               if (z) {
                 zillowData = {
                   zpid: z.zpid,

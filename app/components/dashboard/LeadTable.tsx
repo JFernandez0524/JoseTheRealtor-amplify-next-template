@@ -242,6 +242,9 @@ export function LeadTable({
                 City/State/Zip
               </th>
               {renderSortableHeader('zestimate', 'Zestimate', 'bg-yellow-50')}
+              <th className='px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider whitespace-nowrap bg-yellow-50'>
+                Status
+              </th>
               <th className='px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider whitespace-nowrap bg-purple-50'>
                 Admin Name
               </th>
@@ -381,9 +384,14 @@ export function LeadTable({
                   {/* Zestimate Column */}
                   <td className='px-4 py-4 whitespace-nowrap text-sm text-gray-900 bg-yellow-50/30'>
                     {lead.zestimate && typeof lead.zestimate === 'number' ? (
-                      <span className='font-semibold text-green-700'>
+                      <a 
+                        href={lead.zillowUrl || `https://www.zillow.com/homes/${lead.ownerAddress}-${lead.ownerCity}-${lead.ownerState}-${lead.ownerZip}_rb/`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className='font-semibold text-green-700 hover:text-green-900 hover:underline'
+                      >
                         ${lead.zestimate.toLocaleString()}
-                      </span>
+                      </a>
                     ) : lead.estimatedValue && typeof lead.estimatedValue === 'number' ? (
                       <span className='text-gray-600'>
                         ${lead.estimatedValue.toLocaleString()}
@@ -391,6 +399,41 @@ export function LeadTable({
                     ) : (
                       <span className='text-gray-400'>-</span>
                     )}
+                  </td>
+
+                  {/* Manual Status Column */}
+                  <td className='px-4 py-4 whitespace-nowrap text-xs bg-yellow-50/30'>
+                    <select
+                      value={lead.manualStatus || ''}
+                      onChange={async (e) => {
+                        const newStatus = e.target.value as 'ACTIVE' | 'SOLD' | 'PENDING' | 'OFF_MARKET' | 'SKIP' | '';
+                        try {
+                          const { client } = await import('@/app/utils/aws/data/frontEndClient');
+                          await client.models.PropertyLead.update({
+                            id: lead.id,
+                            manualStatus: newStatus || null
+                          });
+                        } catch (err) {
+                          console.error('Failed to update status:', err);
+                        }
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                      className={`text-xs font-semibold px-2 py-1 rounded border-0 cursor-pointer ${
+                        lead.manualStatus === 'ACTIVE' ? 'bg-green-100 text-green-800' :
+                        lead.manualStatus === 'SOLD' ? 'bg-red-100 text-red-800' :
+                        lead.manualStatus === 'PENDING' ? 'bg-yellow-100 text-yellow-800' :
+                        lead.manualStatus === 'OFF_MARKET' ? 'bg-gray-100 text-gray-800' :
+                        lead.manualStatus === 'SKIP' ? 'bg-orange-100 text-orange-800' :
+                        'bg-white text-gray-500'
+                      }`}
+                    >
+                      <option value="">-</option>
+                      <option value="ACTIVE">Active</option>
+                      <option value="SOLD">Sold</option>
+                      <option value="PENDING">Pending</option>
+                      <option value="OFF_MARKET">Off Market</option>
+                      <option value="SKIP">Skip</option>
+                    </select>
                   </td>
 
                   <td className='px-4 py-4 whitespace-nowrap text-sm text-gray-900 bg-purple-50/30'>
