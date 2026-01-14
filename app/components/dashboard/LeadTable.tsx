@@ -309,7 +309,7 @@ export function LeadTable({
 
                   {/* AI Score Column */}
                   <td className='px-4 py-4 whitespace-nowrap text-sm bg-purple-50/30'>
-                    {lead.aiScore ? (
+                    {lead.aiScore !== null && lead.aiScore !== undefined ? (
                       <div className='flex items-center gap-2'>
                         <span className={`px-2 py-1 rounded-full text-xs font-bold ${
                           lead.aiPriority === 'HIGH' ? 'bg-red-100 text-red-800' :

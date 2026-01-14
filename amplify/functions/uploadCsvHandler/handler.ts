@@ -11,6 +11,7 @@ import { parse } from 'csv-parse';
 import { Readable } from 'stream';
 import { randomUUID } from 'crypto';
 import { validateAddressWithGoogle } from '../../../app/utils/google.server';
+import { calculateLeadScore } from '../../../app/utils/ai/leadScoring';
 import axios from 'axios';
 
 const BRIDGE_API_KEY = process.env.BRIDGE_API_KEY;
@@ -383,6 +384,20 @@ export const handler: S3Handler = async (event) => {
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
           };
+
+          // Calculate AI score ONLY for preforeclosure leads (we have/will get equity data)
+          if ((leadItem.zestimate || leadItem.estimatedValue) && leadType === 'PREFORECLOSURE') {
+            try {
+              const scoreData = calculateLeadScore(leadItem as any);
+              leadItem.aiScore = scoreData.score;
+              leadItem.aiPriority = scoreData.priority;
+              leadItem.aiInsights = scoreData.insights;
+              leadItem.aiLastCalculated = new Date().toISOString();
+              console.log(`✅ AI Score calculated for preforeclosure lead: ${scoreData.score} (${scoreData.priority})`);
+            } catch (scoreError) {
+              console.error('Failed to calculate AI score:', scoreError);
+            }
+          }
 
           await docClient.send(new PutCommand({
             TableName: propertyLeadTableName,

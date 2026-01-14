@@ -56,6 +56,7 @@ export default function LeadDashboardClient({ initialLeads }: Props) {
   useEffect(() => {
     const sub = client.models.PropertyLead.observeQuery().subscribe({
       next: ({ items, isSynced }) => {
+        console.log('📡 Subscription update:', items.length, 'leads, synced:', isSynced);
         setAllLeads([...items]); // Store all leads
         setIsSynced(isSynced);
       },
@@ -91,21 +92,49 @@ export default function LeadDashboardClient({ initialLeads }: Props) {
   useEffect(() => {
     const refresh = searchParams.get('refresh');
     if (refresh === 'true') {
+      console.log('🔄 Upload redirect detected, forcing refresh...');
       // Clear the refresh parameter from URL
       router.replace('/dashboard', { scroll: false });
       
       // Force a manual data refresh after upload
-      setTimeout(async () => {
+      const refreshData = async () => {
         try {
+          console.log('📥 Fetching fresh leads from database...');
           const { data: refreshedLeads } = await client.models.PropertyLead.list();
+          console.log('✅ Loaded', refreshedLeads.length, 'leads after upload');
           setAllLeads([...refreshedLeads]);
-          console.log('Dashboard refreshed after upload - loaded', refreshedLeads.length, 'leads');
         } catch (error) {
-          console.error('Error refreshing leads after upload:', error);
+          console.error('❌ Error refreshing leads after upload:', error);
         }
-      }, 2000); // Increased delay to ensure backend processing completes
+      };
+      
+      // Try multiple times to ensure data is loaded
+      refreshData(); // Immediate
+      setTimeout(refreshData, 1000); // After 1s
+      setTimeout(refreshData, 3000); // After 3s
     }
   }, [searchParams, router]);
+
+  // 4. Refresh when tab becomes visible (handles background uploads)
+  useEffect(() => {
+    const handleVisibilityChange = async () => {
+      if (document.visibilityState === 'visible') {
+        console.log('👁️ Tab visible, checking for new leads...');
+        try {
+          const { data: refreshedLeads } = await client.models.PropertyLead.list();
+          if (refreshedLeads.length !== allLeads.length) {
+            console.log('🔄 Lead count changed, updating:', refreshedLeads.length);
+            setAllLeads([...refreshedLeads]);
+          }
+        } catch (error) {
+          console.error('Error refreshing on visibility change:', error);
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [allLeads.length]);
 
   // --- Filter Logic ---
   const filteredLeads = useMemo(() => {
@@ -349,21 +378,30 @@ export default function LeadDashboardClient({ initialLeads }: Props) {
   const handleBulkAIScore = async () => {
     if (selectedIds.length === 0) return;
 
-    if (!confirm(`Calculate AI scores for ${selectedIds.length} leads?`)) return;
+    // Filter to preforeclosure only
+    const selectedLeads = allLeads.filter(lead => selectedIds.includes(lead.id));
+    const preforeclosureLeads = selectedLeads.filter(lead => lead.type === 'PREFORECLOSURE');
+    
+    if (preforeclosureLeads.length === 0) {
+      alert('AI scoring is only for preforeclosure leads (where we have equity data).');
+      return;
+    }
+
+    if (!confirm(`Calculate AI scores for ${preforeclosureLeads.length} preforeclosure leads?`)) return;
 
     setIsProcessing(true);
     try {
       const response = await fetch('/api/v1/ai/score-leads', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ leadIds: selectedIds }),
+        body: JSON.stringify({ leadIds: preforeclosureLeads.map(l => l.id) }),
       });
 
       const result = await response.json();
 
       if (!response.ok) throw new Error(result.error);
 
-      alert(`✅ AI Scoring Complete!\nScored: ${result.scored}/${result.total} leads`);
+      alert(`✅ AI Scoring Complete!\nScored: ${result.scored}/${result.total} preforeclosure leads`);
       setSelectedIds([]);
 
       // Refresh leads to show new scores
