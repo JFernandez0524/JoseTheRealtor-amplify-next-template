@@ -14,6 +14,8 @@ type Props = {
   setFilterGhlStatus: (val: string) => void;
   filterHasPhone: string;
   setFilterHasPhone: (val: string) => void;
+  filterManualStatus: string;
+  setFilterManualStatus: (val: string) => void;
   skipTraceFromDate: string;
   setSkipTraceFromDate: (val: string) => void;
   skipTraceToDate: string;
@@ -23,6 +25,7 @@ type Props = {
   selectedLeadsCount: number;
   handleBulkSkipTrace: () => Promise<void>;
   handleBulkGHLSync: () => Promise<void>;
+  handleBulkStatusUpdate: (status: string) => Promise<void>;
   handleDelete: () => Promise<void>;
   handleExport: () => void;
   handleDownloadSkipTraced: () => void;
@@ -41,6 +44,8 @@ export function DashboardFilters({
   setFilterGhlStatus,
   filterHasPhone,
   setFilterHasPhone,
+  filterManualStatus,
+  setFilterManualStatus,
   skipTraceFromDate,
   setSkipTraceFromDate,
   skipTraceToDate,
@@ -48,6 +53,7 @@ export function DashboardFilters({
   selectedLeadsCount,
   handleBulkSkipTrace,
   handleBulkGHLSync,
+  handleBulkStatusUpdate,
   handleDelete,
   handleExport,
   handleDownloadSkipTraced,
@@ -111,7 +117,21 @@ export function DashboardFilters({
             <option value='NO_PHONE'>No Phone Numbers</option>
           </select>
 
-          {/* 5. SKIP TRACE DATE FILTERS */}
+          {/* 5. MANUAL STATUS FILTER */}
+          <select
+            value={filterManualStatus}
+            onChange={(e) => setFilterManualStatus(e.target.value)}
+            className='border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:ring-2 focus:ring-yellow-500 outline-none w-full sm:w-auto'
+          >
+            <option value=''>All Statuses</option>
+            <option value='ACTIVE'>Active Only</option>
+            <option value='SOLD'>Sold</option>
+            <option value='PENDING'>Pending</option>
+            <option value='OFF_MARKET'>Off Market</option>
+            <option value='SKIP'>Skip</option>
+          </select>
+
+          {/* 6. SKIP TRACE DATE FILTERS */}
           <div className='flex flex-col sm:flex-row gap-2 items-center'>
             <label className='text-xs text-gray-600 whitespace-nowrap'>Skip Traced:</label>
             <input
@@ -133,13 +153,14 @@ export function DashboardFilters({
         </div>
 
         {/* Clear All Button */}
-        {(filterType || filterStatus || searchQuery || filterGhlStatus || filterHasPhone || skipTraceFromDate || skipTraceToDate) && (
+        {(filterType || filterStatus || searchQuery || filterGhlStatus || filterHasPhone || filterManualStatus || skipTraceFromDate || skipTraceToDate) && (
           <button
             onClick={() => {
               setFilterType('');
               setFilterStatus('');
               setFilterGhlStatus('');
               setFilterHasPhone('');
+              setFilterManualStatus('');
               setSkipTraceFromDate('');
               setSkipTraceToDate('');
               setSearchQuery('');
@@ -189,16 +210,41 @@ export function DashboardFilters({
       {selectedLeadsCount > 0 && (
         <div className='flex flex-col sm:flex-row gap-3 sm:gap-2 pt-3 sm:pt-0 border-t sm:border-t-0'>
           <span className='text-sm font-semibold text-gray-700 sm:self-center'>
-            {selectedLeadsCount} Selected:
+            {selectedLeadsCount} Selected
+            {selectedLeadsCount > 0 && (
+              <span className='text-xs text-gray-500 ml-2'>
+                (Cost: ${(selectedLeadsCount * 0.10).toFixed(2)})
+              </span>
+            )}
           </span>
 
           <div className='flex flex-col sm:flex-row gap-2'>
+            {/* Bulk Status Update Dropdown */}
+            <select
+              onChange={(e) => {
+                if (e.target.value) {
+                  handleBulkStatusUpdate(e.target.value);
+                  e.target.value = ''; // Reset dropdown
+                }
+              }}
+              disabled={isSkipTracing || isGhlSyncing}
+              className='text-sm px-3 py-1.5 rounded bg-blue-600 text-white hover:bg-blue-700 transition shadow-sm w-full sm:w-auto cursor-pointer'
+            >
+              <option value="">Set Status...</option>
+              <option value="ACTIVE">Active</option>
+              <option value="SOLD">Sold</option>
+              <option value="PENDING">Pending</option>
+              <option value="OFF_MARKET">Off Market</option>
+              <option value="SKIP">Skip</option>
+            </select>
+
             {/* Skip Trace Button */}
             <button
               onClick={handleBulkSkipTrace}
               disabled={isSkipTracing || isGhlSyncing}
               className={`text-sm px-3 py-1.5 rounded transition-colors flex items-center justify-center gap-1.5 shadow-sm w-full sm:w-auto
                                 ${isSkipTracing ? 'bg-indigo-300 text-white cursor-not-allowed' : 'bg-indigo-600 text-white hover:bg-indigo-700'}`}
+              title={selectedLeadsCount > 0 ? `Cost: $${(selectedLeadsCount * 0.10).toFixed(2)}` : ''}
             >
               {isSkipTracing ? (
                 <>

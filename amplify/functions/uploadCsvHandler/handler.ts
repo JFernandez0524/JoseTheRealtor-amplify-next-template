@@ -26,6 +26,12 @@ const dynamoClient = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
 
 // ---------------------------------------------------------
+// 🚦 RATE LIMITING
+// ---------------------------------------------------------
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+const BRIDGE_API_DELAY_MS = 200; // 334/min = ~180ms, use 200ms to be safe
+
+// ---------------------------------------------------------
 // 🛠️ FORMATTING HELPERS
 // ---------------------------------------------------------
 
@@ -243,11 +249,13 @@ export const handler: S3Handler = async (event) => {
           // --- 💾 CHECK FOR DUPLICATES BEFORE SAVING ---
           // For probate: Check by admin address (since that's who we contact)
           // For preforeclosure: Check by property address
+          // ⚠️ IMPORTANT: User-scoped only - each user can have the same property
           const duplicateCheckAddress = leadType === 'PROBATE' 
             ? `${finalMailAddr || ''} ${finalMailCity || ''} ${finalMailZip || ''}`.trim()
             : `${finalPropAddr} ${finalPropCity} ${finalPropZip}`.trim();
 
           if (duplicateCheckAddress) {
+            // 👤 User-scoped duplicate check (prevents same user uploading twice)
             const existingLeadScan = await docClient.send(new ScanCommand({
               TableName: propertyLeadTableName,
               FilterExpression: leadType === 'PROBATE' 
@@ -264,7 +272,7 @@ export const handler: S3Handler = async (event) => {
             }));
 
             if (existingLeadScan.Items && existingLeadScan.Items.length > 0) {
-              console.log(`⏭️ Skipping duplicate lead: ${duplicateCheckAddress}`);
+              console.log(`⏭️ Skipping duplicate lead for user ${ownerId}: ${duplicateCheckAddress}`);
               duplicateCount++;
               continue; // Skip this lead
             }
@@ -275,6 +283,9 @@ export const handler: S3Handler = async (event) => {
           // Try coordinate-based search first (more reliable)
           if (latitude && longitude) {
             try {
+              // 🚦 Rate limit: Wait before API call
+              await delay(BRIDGE_API_DELAY_MS);
+              
               const response = await bridgeClient.get('/zestimates_v2/zestimates', {
                 params: {
                   near: `${longitude},${latitude}`,

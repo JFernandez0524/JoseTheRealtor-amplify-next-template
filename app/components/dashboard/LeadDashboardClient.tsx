@@ -40,6 +40,7 @@ export default function LeadDashboardClient({ initialLeads }: Props) {
   const [filterStatus, setFilterStatus] = useState('');
   const [filterCrmStatus, setFilterCrmStatus] = useState('');
   const [filterHasPhone, setFilterHasPhone] = useState('');
+  const [filterManualStatus, setFilterManualStatus] = useState('');
   const [skipTraceFromDate, setSkipTraceFromDate] = useState('');
   const [skipTraceToDate, setSkipTraceToDate] = useState('');
 
@@ -139,6 +140,8 @@ export default function LeadDashboardClient({ initialLeads }: Props) {
           ? !lead.phones || lead.phones.length === 0
           : true);
 
+      const matchesManualStatus = !filterManualStatus || lead.manualStatus === filterManualStatus;
+
       // Date filtering for skip trace completion
       const matchesDateRange = (() => {
         if (!skipTraceFromDate && !skipTraceToDate) return true;
@@ -151,7 +154,7 @@ export default function LeadDashboardClient({ initialLeads }: Props) {
         return fromMatch && toMatch;
       })();
 
-      return matchesSearch && matchesType && matchesStatus && matchesCrm && matchesPhone && matchesDateRange;
+      return matchesSearch && matchesType && matchesStatus && matchesCrm && matchesPhone && matchesManualStatus && matchesDateRange;
     }).sort((a, b) => {
       // Sort the filtered results
       let aValue: any = a[sortField];
@@ -314,6 +317,31 @@ export default function LeadDashboardClient({ initialLeads }: Props) {
     }
   };
 
+  const handleBulkStatusUpdate = async (status: string) => {
+    if (selectedIds.length === 0) return;
+    
+    if (!confirm(`Set ${selectedIds.length} leads to ${status}?`)) return;
+
+    setIsProcessing(true);
+    try {
+      await Promise.all(
+        selectedIds.map((id) =>
+          client.models.PropertyLead.update({
+            id,
+            manualStatus: status as 'ACTIVE' | 'SOLD' | 'PENDING' | 'OFF_MARKET' | 'SKIP',
+          })
+        )
+      );
+      alert(`Successfully updated ${selectedIds.length} leads to ${status}`);
+      setSelectedIds([]);
+    } catch (err) {
+      console.error('Bulk status update error:', err);
+      alert('Error updating lead statuses');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   const handleDownloadSkipTraced = () => {
     // Only download selected leads
     if (selectedIds.length === 0) {
@@ -330,7 +358,7 @@ export default function LeadDashboardClient({ initialLeads }: Props) {
 
     // Create CSV content with all dashboard columns
     const headers = [
-      'Type', 'Status', 'GHL Sync', 'Owner Name', 'Address', 'Phone', 'County', 
+      'Type', 'Manual Status', 'Status', 'GHL Sync', 'Owner Name', 'Address', 'Phone', 'County', 
       'City', 'State', 'Zip', 'Zestimate', 'Admin Name', 'Admin Address', 'Created At',
       'Email Addresses', 'Skip Traced Date', 'Estimated Value'
     ];
@@ -339,6 +367,7 @@ export default function LeadDashboardClient({ initialLeads }: Props) {
       headers.join(','),
       ...selectedLeads.map(lead => [
         `"${lead.type || ''}"`,
+        `"${lead.manualStatus || ''}"`,
         `"${lead.skipTraceStatus || ''}"`,
         `"${lead.ghlSyncStatus || ''}"`,
         `"${lead.ownerFirstName || ''} ${lead.ownerLastName || ''}"`.trim(),
@@ -385,6 +414,8 @@ export default function LeadDashboardClient({ initialLeads }: Props) {
         setFilterGhlStatus={setFilterCrmStatus}
         filterHasPhone={filterHasPhone}
         setFilterHasPhone={setFilterHasPhone}
+        filterManualStatus={filterManualStatus}
+        setFilterManualStatus={setFilterManualStatus}
         skipTraceFromDate={skipTraceFromDate}
         setSkipTraceFromDate={setSkipTraceFromDate}
         skipTraceToDate={skipTraceToDate}
@@ -394,6 +425,7 @@ export default function LeadDashboardClient({ initialLeads }: Props) {
         isGhlSyncing={isProcessing}
         handleBulkSkipTrace={handleBulkSkipTrace}
         handleBulkGHLSync={handleBulkGHLSync}
+        handleBulkStatusUpdate={handleBulkStatusUpdate}
         handleDelete={handleDeleteLeads}
         handleExport={() => alert('Exporting leads to CSV...')}
         handleDownloadSkipTraced={handleDownloadSkipTraced}

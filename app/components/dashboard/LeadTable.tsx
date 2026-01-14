@@ -383,22 +383,64 @@ export function LeadTable({
 
                   {/* Zestimate Column */}
                   <td className='px-4 py-4 whitespace-nowrap text-sm text-gray-900 bg-yellow-50/30'>
-                    {lead.zestimate && typeof lead.zestimate === 'number' ? (
-                      <a 
-                        href={lead.zillowUrl || `https://www.zillow.com/homes/${lead.ownerAddress}-${lead.ownerCity}-${lead.ownerState}-${lead.ownerZip}_rb/`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className='font-semibold text-green-700 hover:text-green-900 hover:underline'
-                      >
-                        ${lead.zestimate.toLocaleString()}
-                      </a>
-                    ) : lead.estimatedValue && typeof lead.estimatedValue === 'number' ? (
-                      <span className='text-gray-600'>
-                        ${lead.estimatedValue.toLocaleString()}
-                      </span>
-                    ) : (
-                      <span className='text-gray-400'>-</span>
-                    )}
+                    <div className="flex items-center gap-2">
+                      <div className="flex flex-col">
+                        {lead.zestimate && typeof lead.zestimate === 'number' ? (
+                          <>
+                            <a 
+                              href={lead.zillowUrl || `https://www.zillow.com/homes/${lead.ownerAddress}-${lead.ownerCity}-${lead.ownerState}-${lead.ownerZip}_rb/`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className='font-semibold text-green-700 hover:text-green-900 hover:underline'
+                            >
+                              ${lead.zestimate.toLocaleString()}
+                            </a>
+                            {lead.zillowLastUpdated && (() => {
+                              const ageInDays = Math.floor((Date.now() - new Date(lead.zillowLastUpdated).getTime()) / (1000 * 60 * 60 * 24));
+                              const isStale = ageInDays > 180;
+                              return (
+                                <span className={`text-xs ${isStale ? 'text-red-600 font-semibold' : 'text-gray-500'}`}>
+                                  {isStale && '⚠️ '}{ageInDays}d old
+                                </span>
+                              );
+                            })()}
+                          </>
+                        ) : lead.estimatedValue && typeof lead.estimatedValue === 'number' ? (
+                          <span className='text-gray-600'>
+                            ${lead.estimatedValue.toLocaleString()}
+                          </span>
+                        ) : (
+                          <span className='text-gray-400'>-</span>
+                        )}
+                      </div>
+                      {lead.latitude && lead.longitude && (
+                        <button
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            try {
+                              const res = await fetch('/api/v1/refresh-zestimate', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                  leadId: lead.id,
+                                  latitude: lead.latitude,
+                                  longitude: lead.longitude,
+                                }),
+                              });
+                              if (res.ok) {
+                                window.location.reload();
+                              }
+                            } catch (err) {
+                              console.error('Refresh failed:', err);
+                            }
+                          }}
+                          className="text-gray-400 hover:text-green-600"
+                          title="Refresh Zestimate"
+                        >
+                          ↻
+                        </button>
+                      )}
+                    </div>
                   </td>
 
                   {/* Manual Status Column */}

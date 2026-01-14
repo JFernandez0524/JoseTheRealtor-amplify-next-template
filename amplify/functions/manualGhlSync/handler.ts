@@ -34,6 +34,53 @@ async function processGhlSync(lead: any, groups: string[] = [], ownerId: string 
     return { status: 'FAILED', message };
   }
 
+  // 🚦 Check GHL rate limits before syncing
+  try {
+    const { Items: accounts } = await docClient.send(new ScanCommand({
+      TableName: userAccountTableName,
+      FilterExpression: '#owner = :ownerId',
+      ExpressionAttributeNames: {
+        '#owner': 'owner'
+      },
+      ExpressionAttributeValues: {
+        ':ownerId': ownerId
+      }
+    }));
+
+    if (accounts && accounts[0]) {
+      const account = accounts[0];
+      const now = Date.now();
+      const lastHourReset = account.lastHourReset || 0;
+      const lastDayReset = account.lastDayReset || 0;
+      const hourlyCount = account.hourlyMessageCount || 0;
+      const dailyCount = account.dailyMessageCount || 0;
+
+      // Reset counters if needed
+      const hoursSinceReset = (now - lastHourReset) / (1000 * 60 * 60);
+      const daysSinceReset = (now - lastDayReset) / (1000 * 60 * 60 * 24);
+
+      const currentHourlyCount = hoursSinceReset >= 1 ? 0 : hourlyCount;
+      const currentDailyCount = daysSinceReset >= 1 ? 0 : dailyCount;
+
+      // GHL limits: 100/hour, 1000/day (conservative estimates)
+      if (currentHourlyCount >= 100) {
+        return {
+          status: 'FAILED',
+          message: 'GHL hourly rate limit reached (100/hour). Try again later.',
+        };
+      }
+
+      if (currentDailyCount >= 1000) {
+        return {
+          status: 'FAILED',
+          message: 'GHL daily rate limit reached (1000/day). Try again tomorrow.',
+        };
+      }
+    }
+  } catch (err) {
+    console.error('Rate limit check failed (non-critical):', err);
+  }
+
   const currentSkipStatus = lead.skipTraceStatus?.toUpperCase();
   console.log(`🔍 Lead ${lead.id} skipTraceStatus: ${currentSkipStatus}`);
   
@@ -201,12 +248,32 @@ export const handler: Handler = async (event) => {
         }));
 
         if (accounts && accounts[0]) {
+          const account = accounts[0];
+          const now = Date.now();
+          const lastHourReset = account.lastHourReset || 0;
+          const lastDayReset = account.lastDayReset || 0;
+          const hourlyCount = account.hourlyMessageCount || 0;
+          const dailyCount = account.dailyMessageCount || 0;
+
+          // Reset counters if needed
+          const hoursSinceReset = (now - lastHourReset) / (1000 * 60 * 60);
+          const daysSinceReset = (now - lastDayReset) / (1000 * 60 * 60 * 24);
+
+          const newHourlyCount = hoursSinceReset >= 1 ? 1 : hourlyCount + 1;
+          const newDailyCount = daysSinceReset >= 1 ? 1 : dailyCount + 1;
+          const newHourReset = hoursSinceReset >= 1 ? now : lastHourReset;
+          const newDayReset = daysSinceReset >= 1 ? now : lastDayReset;
+
           await docClient.send(new UpdateCommand({
             TableName: userAccountTableName,
             Key: { id: accounts[0].id },
-            UpdateExpression: 'SET totalLeadsSynced = :newTotal',
+            UpdateExpression: 'SET totalLeadsSynced = :newTotal, hourlyMessageCount = :hourly, dailyMessageCount = :daily, lastHourReset = :hourReset, lastDayReset = :dayReset',
             ExpressionAttributeValues: {
-              ':newTotal': (accounts[0].totalLeadsSynced || 0) + 1
+              ':newTotal': (accounts[0].totalLeadsSynced || 0) + 1,
+              ':hourly': newHourlyCount,
+              ':daily': newDailyCount,
+              ':hourReset': newHourReset,
+              ':dayReset': newDayReset,
             }
           }));
         }

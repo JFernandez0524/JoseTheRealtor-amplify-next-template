@@ -241,6 +241,13 @@ export const handler: Handler = async (event) => {
         continue;
       }
 
+      // 🚫 Skip leads marked as SOLD or SKIP
+      if (lead.manualStatus === 'SOLD' || lead.manualStatus === 'SKIP') {
+        console.log(`⏭️ Skipping lead ${leadId} - marked as ${lead.manualStatus}`);
+        results.push({ id: leadId, status: 'SKIPPED', reason: `Marked as ${lead.manualStatus}` });
+        continue;
+      }
+
       const enrichedData = await callBatchDataV3(lead);
 
       if (enrichedData.status !== 'SUCCESS') {
