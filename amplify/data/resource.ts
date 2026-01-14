@@ -113,6 +113,13 @@ const schema = a.schema({
       mortgageBalance: a.float(),
       lastSaleDate: a.date(),
       lastSaleAmount: a.float(),
+      
+      // 🏦 BatchData Enrichment Fields (Preforeclosure only)
+      equityPercent: a.float(), // Real equity % from BatchData
+      ownerOccupied: a.boolean(), // Lives in property vs investor
+      freeAndClear: a.boolean(), // No mortgage
+      batchDataEnriched: a.boolean(), // Has been enriched
+      batchDataEnrichedAt: a.datetime(), // When enriched
 
       // --- 🟢 Foreclosure Specifics ---
       foreclosureStatus: a.string(), // e.g. "Pre-Foreclosure"

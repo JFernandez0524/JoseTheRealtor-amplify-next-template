@@ -29,6 +29,7 @@ type Props = {
   handleBulkGHLSync: () => Promise<void>;
   handleBulkStatusUpdate: (status: string) => Promise<void>;
   handleBulkAIScore: () => Promise<void>;
+  handleBulkEnrichLeads: () => Promise<void>;
   handleBulkDirectMail: () => Promise<void>;
   handleDelete: () => Promise<void>;
   handleExport: () => void;
@@ -36,6 +37,7 @@ type Props = {
   isSkipTracing: boolean;
   isGhlSyncing: boolean;
   isAiScoring: boolean;
+  isEnriching: boolean;
   isGeneratingLetters: boolean;
 };
 
@@ -63,6 +65,7 @@ export function DashboardFilters({
   handleBulkGHLSync,
   handleBulkStatusUpdate,
   handleBulkAIScore,
+  handleBulkEnrichLeads,
   handleBulkDirectMail,
   handleDelete,
   handleExport,
@@ -70,6 +73,7 @@ export function DashboardFilters({
   isSkipTracing,
   isGhlSyncing,
   isAiScoring,
+  isEnriching,
   isGeneratingLetters,
 }: Props) {
   return (
@@ -310,6 +314,23 @@ export function DashboardFilters({
                 </>
               ) : (
                 <>🤖 Calculate AI Scores</>
+              )}
+            </button>
+
+            {/* Enrich Leads Button (Preforeclosure only) */}
+            <button
+              onClick={handleBulkEnrichLeads}
+              disabled={isEnriching || isSkipTracing || isGhlSyncing || isAiScoring}
+              className={`text-sm px-3 py-1.5 rounded transition-colors flex items-center justify-center gap-1.5 shadow-sm w-full sm:w-auto
+                                ${isEnriching ? 'bg-orange-300 text-white cursor-not-allowed' : 'bg-gradient-to-r from-orange-600 to-red-600 text-white hover:from-orange-700 hover:to-red-700'}`}
+              title={selectedLeadsCount > 0 ? `Cost: $${(selectedLeadsCount * 0.29).toFixed(2)} (Preforeclosure only)` : ''}
+            >
+              {isEnriching ? (
+                <>
+                  <Loader size='small' variation='linear' /> Enriching...
+                </>
+              ) : (
+                <>🏦 Enrich Leads</>
               )}
             </button>
 

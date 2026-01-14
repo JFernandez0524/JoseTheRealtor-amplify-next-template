@@ -147,6 +147,19 @@ export async function getLead(id: string): Promise<DBLead | null> {
 }
 
 /**
+ * GET multiple Leads by IDs
+ */
+export async function getLeadsByIds(ids: string[]): Promise<DBLead[]> {
+  try {
+    const leads = await Promise.all(ids.map(id => getLead(id)));
+    return leads.filter((lead): lead is DBLead => lead !== null);
+  } catch (error: any) {
+    console.error('❌ getLeadsByIds error:', error.message);
+    return [];
+  }
+}
+
+/**
  * UPDATE an existing Lead (HYBRID IMPLEMENTATION)
  * 💥 4. Updated return type and casting
  */

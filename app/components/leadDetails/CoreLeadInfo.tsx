@@ -10,6 +10,13 @@ type Lead = Schema['PropertyLead']['type'] & {
   ghlSyncStatus?: 'PENDING' | 'SUCCESS' | 'FAILED' | 'SKIPPED' | null;
   ghlContactId?: string | null;
   ghlSyncDate?: string | null;
+  equityPercent?: number | null;
+  estimatedValue?: number | null;
+  mortgageBalance?: number | null;
+  ownerOccupied?: boolean | null;
+  freeAndClear?: boolean | null;
+  batchDataEnriched?: boolean | null;
+  batchDataEnrichedAt?: string | null;
 };
 
 interface CoreLeadInfoProps {
@@ -170,6 +177,59 @@ export function CoreLeadInfo({
           )}
         </div>
       </div>
+
+      {/* 🏦 BATCHDATA ENRICHMENT (Preforeclosure Only) */}
+      {lead.type === 'PREFORECLOSURE' && lead.batchDataEnriched && (
+        <div className='pt-4 border-t border-gray-100'>
+          <label className='block text-xs font-bold text-gray-400 uppercase tracking-wider mb-3'>
+            🏦 Property Enrichment Data
+          </label>
+          <div className='grid grid-cols-2 gap-4 bg-blue-50 p-4 rounded-lg border border-blue-200'>
+            {/* Equity Info */}
+            <div>
+              <p className='text-xs text-gray-500 mb-1'>Equity Percentage</p>
+              <p className='text-lg font-bold text-blue-900'>
+                {lead.equityPercent ? `${lead.equityPercent}%` : 'N/A'}
+              </p>
+            </div>
+            <div>
+              <p className='text-xs text-gray-500 mb-1'>Estimated Value</p>
+              <p className='text-lg font-bold text-blue-900'>
+                {lead.estimatedValue ? `$${lead.estimatedValue.toLocaleString()}` : 'N/A'}
+              </p>
+            </div>
+            <div>
+              <p className='text-xs text-gray-500 mb-1'>Mortgage Balance</p>
+              <p className='text-lg font-bold text-blue-900'>
+                {lead.mortgageBalance ? `$${lead.mortgageBalance.toLocaleString()}` : 'N/A'}
+              </p>
+            </div>
+            <div>
+              <p className='text-xs text-gray-500 mb-1'>Property Status</p>
+              <div className='flex gap-2 flex-wrap'>
+                {lead.ownerOccupied && (
+                  <span className='px-2 py-1 bg-green-100 text-green-800 text-xs font-bold rounded'>
+                    Owner Occupied
+                  </span>
+                )}
+                {lead.freeAndClear && (
+                  <span className='px-2 py-1 bg-purple-100 text-purple-800 text-xs font-bold rounded'>
+                    Free & Clear
+                  </span>
+                )}
+                {lead.equityPercent && lead.equityPercent >= 50 && (
+                  <span className='px-2 py-1 bg-blue-100 text-blue-800 text-xs font-bold rounded'>
+                    High Equity
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+          <p className='text-xs text-gray-400 mt-2'>
+            Enriched on {lead.batchDataEnrichedAt ? new Date(lead.batchDataEnrichedAt).toLocaleDateString() : 'N/A'}
+          </p>
+        </div>
+      )}
 
       <div className='pt-4 border-t border-gray-100'>
         <div className='flex justify-between items-center mb-3'>

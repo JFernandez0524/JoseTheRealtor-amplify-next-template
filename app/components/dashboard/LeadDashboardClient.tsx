@@ -383,6 +383,66 @@ export default function LeadDashboardClient({ initialLeads }: Props) {
     }
   };
 
+  const handleBulkEnrichLeads = async () => {
+    if (selectedIds.length === 0) return;
+
+    // Filter to preforeclosure only
+    const selectedLeads = allLeads.filter(lead => selectedIds.includes(lead.id));
+    const preforeclosureLeads = selectedLeads.filter(lead => lead.type === 'PREFORECLOSURE');
+    
+    if (preforeclosureLeads.length === 0) {
+      alert('No preforeclosure leads selected. BatchData enrichment is only for preforeclosure leads.');
+      return;
+    }
+
+    const cost = preforeclosureLeads.length * 0.29;
+    if (!confirm(
+      `Enrich ${preforeclosureLeads.length} preforeclosure leads with BatchData?\n\n` +
+      `Cost: $${cost.toFixed(2)}\n\n` +
+      `You'll get:\n` +
+      `• Real equity % and mortgage balances\n` +
+      `• Owner emails and phone numbers\n` +
+      `• Property flags (owner occupied, high equity, etc.)`
+    )) return;
+
+    setIsProcessing(true);
+    try {
+      const response = await fetch('/api/v1/enrich-leads', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ leadIds: selectedIds }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) throw new Error(result.error);
+
+      alert(
+        `✅ Enrichment Complete!\n\n` +
+        `Enriched: ${result.enriched} leads\n` +
+        `Skipped: ${result.skipped} (already enriched)\n` +
+        `Failed: ${result.failed}\n` +
+        `Cost: $${result.cost.toFixed(2)}`
+      );
+      setSelectedIds([]);
+
+      // Refresh leads to show enrichment data
+      setTimeout(async () => {
+        try {
+          const { data: refreshedLeads } = await client.models.PropertyLead.list();
+          setAllLeads([...refreshedLeads]);
+        } catch (error) {
+          console.error('Error refreshing leads after enrichment:', error);
+        }
+      }, 1000);
+    } catch (err) {
+      console.error('Enrichment error:', err);
+      alert('Error enriching leads: ' + (err instanceof Error ? err.message : String(err)));
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   const handleBulkDirectMail = async () => {
     if (selectedIds.length === 0) return;
 
@@ -521,11 +581,13 @@ export default function LeadDashboardClient({ initialLeads }: Props) {
         isSkipTracing={isProcessing}
         isGhlSyncing={isProcessing}
         isAiScoring={isProcessing}
+        isEnriching={isProcessing}
         isGeneratingLetters={isProcessing}
         handleBulkSkipTrace={handleBulkSkipTrace}
         handleBulkGHLSync={handleBulkGHLSync}
         handleBulkStatusUpdate={handleBulkStatusUpdate}
         handleBulkAIScore={handleBulkAIScore}
+        handleBulkEnrichLeads={handleBulkEnrichLeads}
         handleBulkDirectMail={handleBulkDirectMail}
         handleDelete={handleDeleteLeads}
         handleExport={() => alert('Exporting leads to CSV...')}
