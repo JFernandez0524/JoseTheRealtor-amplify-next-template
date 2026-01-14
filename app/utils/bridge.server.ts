@@ -13,138 +13,153 @@ const bridgeClient = axios.create({
   headers: { Authorization: `Bearer ${BRIDGE_API_KEY}` },
 });
 
-// --- HELPER: Logic to pick the "Main House" vs "Apartment Units" ---
-type ZestimateRecord = {
-  zestimate: number;
-  rentalZestimate: number;
-  timestamp: string;
-  unitNumber: string | null;
-  address: string;
-  [key: string]: any;
+const cleanCityName = (city: string) => {
+  if (!city) return '';
+  return city.replace(/\b(city|town|borough|township|village)\s+of\s+/i, '').trim();
 };
 
-const getBestZestimate = (bundle: ZestimateRecord[]) => {
-  if (!bundle || bundle.length === 0) return null;
+const generateAddressVariations = (street: string) => {
+  if (!street) return [street];
+  const variations = new Set<string>();
+  variations.add(street);
 
-  // Sort: Priority 1 = No Unit Number (Main House), Priority 2 = Newest Date
-  const sortedBundle = bundle.sort((a, b) => {
-    const aIsMain = !a.unitNumber; // true if null/undefined/empty
-    const bIsMain = !b.unitNumber;
+  const transform = (addr: string, options: { directionStyle: 'full' | 'usps' | 'zillow'; removeOrdinals?: boolean; unitStyle?: 'abbreviated' | 'full' }) => {
+    let result = addr;
+    if (options.removeOrdinals) {
+      result = result.replace(/^(\d+)(st|nd|rd|th)\b/gi, '$1');
+    }
+    if (options.directionStyle === 'usps') {
+      result = result.replace(/\bNorth\b/gi, 'N').replace(/\bSouth\b/gi, 'S').replace(/\bEast\b/gi, 'E').replace(/\bWest\b/gi, 'W');
+    } else if (options.directionStyle === 'zillow') {
+      result = result.replace(/\bNorth\b/gi, 'No').replace(/\bSouth\b/gi, 'So').replace(/\bEast\b/gi, 'E').replace(/\bWest\b/gi, 'W');
+    }
+    result = result.replace(/\bStreet\b/gi, 'St').replace(/\bAvenue\b/gi, 'Ave').replace(/\bBoulevard\b/gi, 'Blvd').replace(/\bDrive\b/gi, 'Dr').replace(/\bRoad\b/gi, 'Rd').replace(/\bLane\b/gi, 'Ln').replace(/\bCourt\b/gi, 'Ct').replace(/\bCircle\b/gi, 'Cir').replace(/\bPlace\b/gi, 'Pl').replace(/\bTerrace\b/gi, 'Ter').replace(/\bParkway\b/gi, 'Pkwy');
+    if (options.unitStyle === 'abbreviated') {
+      result = result.replace(/\bApartment\b/gi, 'Apt').replace(/\bUnit\b/gi, 'Unit').replace(/\bSuite\b/gi, 'Ste').replace(/\b#\s*/g, '#');
+    }
+    return result.trim();
+  };
 
-    if (aIsMain && !bIsMain) return -1; // a comes first
-    if (!aIsMain && bIsMain) return 1; // b comes first
+  const configs = [
+    { directionStyle: 'full' as const, removeOrdinals: false },
+    { directionStyle: 'usps' as const, removeOrdinals: false },
+    { directionStyle: 'zillow' as const, removeOrdinals: false },
+    { directionStyle: 'full' as const, removeOrdinals: true },
+    { directionStyle: 'usps' as const, removeOrdinals: true },
+    { directionStyle: 'zillow' as const, removeOrdinals: true },
+  ];
 
-    // If both are main (or both are units), pick newest
-    const dateA = new Date(a.timestamp).getTime();
-    const dateB = new Date(b.timestamp).getTime();
-    return dateB - dateA;
+  configs.forEach((config) => {
+    variations.add(transform(street, config));
+    variations.add(transform(street, { ...config, unitStyle: 'abbreviated' }));
   });
 
-  return sortedBundle[0];
+  return Array.from(variations).filter((v) => v);
 };
 
 /**
- * Enriches Lead Data using ONLY Latitude and Longitude.
- * Uses the 'near' parameter (Long,Lat) to find the closest property.
+ * Analyzes property using Bridge API - matches /api/v1/analyze-property behavior
  */
-export async function analyzeBridgeProperty(lat: number, lng: number) {
-  // Bridge API format for 'near' is "longitude,latitude"
-  const nearParam = `${lng},${lat}`;
-  // We use a very small radius (0.05 miles) to ensure we get the specific house
-  const radius = '0.05mi';
+export async function analyzeBridgeProperty(params: {
+  street?: string;
+  city?: string;
+  state?: string;
+  zip?: string;
+  lat?: number;
+  lng?: number;
+}) {
+  const { street: rawStreet, city: rawCity, state, zip, lat, lng } = params;
+  const city = cleanCityName(rawCity || '');
+  const streetVariations = generateAddressVariations(rawStreet || '');
 
-  // --- 1. Fetch Zestimates & Assessments (Parallel) ---
-  // NOTE: We request limit: 5 for Zestimates to handle the "Multiple Units" issue
-  const [zestimateResp, assessmentResp] = await Promise.all([
-    bridgeClient.get('/zestimates_v2/zestimates', {
-      params: { near: nearParam, radius: radius, limit: 5 },
-    }),
-    bridgeClient.get('/pub/assessments', {
-      params: {
-        near: nearParam,
-        radius: radius,
-        limit: 1,
-        sortBy: 'year',
-        order: 'desc',
-      },
-    }),
-  ]).catch((err) => {
-    console.error('Bridge Initial Fetch Error:', err.message);
-    return [{ data: { bundle: [] } }, { data: { bundle: [] } }];
-  });
+  let valuation = null;
+  let successfulVariation = null;
 
-  // Apply our Logic to pick the best Zestimate from the bundle
-  const rawZestimateBundle = zestimateResp.data.bundle || [];
-  const zestimateData = getBestZestimate(rawZestimateBundle);
-
-  const assessmentData = assessmentResp.data.bundle?.[0];
-
-  // --- 2. Fetch Transactions (Requires Parcel ID from Assessment) ---
-  // Even though we search by coords, getting the Parcel ID allows us to get the EXACT sales history
-  let lastTransaction = null;
-  const parcelId = assessmentData?.parcelId || assessmentData?.id;
-
-  if (parcelId) {
+  // Try address variations
+  for (const street of streetVariations) {
     try {
-      const transactionResp = await bridgeClient.get(
-        `/pub/parcels/${parcelId}/transactions`,
-        {
-          params: { limit: 1, sortBy: 'recordingDate', order: 'desc' },
+      const res = await bridgeClient.get('/zestimates_v2/zestimates', {
+        params: { limit: 3, address: street, city, state, postalCode: zip },
+      });
+      if (res.data.bundle?.[0]) {
+        valuation = res.data.bundle[0];
+        successfulVariation = street;
+        break;
+      }
+    } catch (err) {}
+  }
+
+  // Coordinate fallback
+  if (!valuation && lat && lng) {
+    const radii = ['0.01', '0.05', '0.1', '0.25'];
+    for (const radius of radii) {
+      try {
+        const res = await bridgeClient.get('/zestimates_v2/zestimates', {
+          params: { limit: 10, near: `${lng},${lat}`, radius },
+        });
+        if (res.data.bundle?.[0]) {
+          valuation = res.data.bundle[0];
+          break;
         }
-      );
-      lastTransaction = transactionResp.data.bundle?.[0];
-    } catch (error: any) {
-      console.warn('Failed to fetch transactions:', error.message);
+      } catch (err) {}
     }
   }
 
-  // --- 3. Parse Data ---
-  const zestimate = zestimateData?.zestimate || 0;
-  const rentZestimate = zestimateData?.rentalZestimate || 0;
-  const lastSoldPrice =
-    lastTransaction?.document?.amount || lastTransaction?.salesPrice || 0;
+  const zpid = valuation?.zpid;
+  const targetState = valuation?.state || state;
 
-  // Building/Assessment Data
-  const building = assessmentData?.building?.[0] || {};
-  const yearBuilt = assessmentData?.yearBuilt || building.yearBuilt;
-  const sqFt = assessmentData?.livingArea || building.finishedLivingArea;
+  // Assessment waterfall
+  let assessment = null;
 
-  // --- 4. Biz Logic ---
-  let fixAndFlipAnalysis = 'N/A: Missing Zestimate or Sold Price';
-  if (zestimate > 0 && lastSoldPrice > 0) {
-    const estimatedEquity = zestimate - lastSoldPrice;
-    fixAndFlipAnalysis = `Potential Gross Equity: $${estimatedEquity.toLocaleString()}`;
+  if (zpid) {
+    try {
+      const res = await bridgeClient.get('/pub/assessments', {
+        params: { zpid, limit: 1, 'address.state': targetState },
+      });
+      assessment = res.data.bundle?.[0];
+    } catch (err) {}
   }
 
-  let buyAndHoldAnalysis = 'N/A: Missing Rent or Price data';
-  if (rentZestimate > 0 && zestimate > 0) {
-    const rentToPriceRatio = (rentZestimate / zestimate) * 100;
-    buyAndHoldAnalysis = `Rent/Price Ratio: ${rentToPriceRatio.toFixed(2)}%`;
+  if (!assessment && lat && lng) {
+    const radii = ['0.01', '0.05', '0.1'];
+    for (const radius of radii) {
+      try {
+        const res = await bridgeClient.get('/pub/assessments', {
+          params: { near: `${lng},${lat}`, radius: `${radius}mi`, limit: 5, 'address.state': targetState },
+        });
+        const stateMatch = res.data.bundle?.find((a: any) => a.address?.state === targetState);
+        if (stateMatch) {
+          assessment = stateMatch;
+          break;
+        }
+      } catch (err) {}
+    }
   }
 
-  let cashOffer = null;
-  if (zestimate > 0) {
-    cashOffer = zestimate * 0.75;
+  if (!assessment && streetVariations.length > 0) {
+    for (const street of streetVariations) {
+      try {
+        const res = await bridgeClient.get('/pub/assessments', {
+          params: { 'address.full': street, 'address.city': city, 'address.state': targetState, limit: 3 },
+        });
+        const stateMatch = res.data.bundle?.find((a: any) => a.address?.state === targetState);
+        if (stateMatch) {
+          assessment = stateMatch;
+          break;
+        }
+      } catch (err) {}
+    }
   }
 
   return {
-    location: { lat, lng },
-    zestimate,
-    rentZestimate,
-    lastSoldPrice,
-    lastSoldDate: lastTransaction?.recordingDate || null,
-    details: {
-      yearBuilt,
-      sqFt,
-      bedrooms: assessmentData?.bedrooms,
-      bathrooms: assessmentData?.bathrooms,
-      taxAmount: assessmentData?.taxAmount,
-      taxYear: assessmentData?.year,
+    success: true,
+    valuation: valuation || null,
+    assessment: assessment || null,
+    parcel: assessment || null,
+    history: [],
+    debug: {
+      searched: { originalStreet: rawStreet, variations: streetVariations, successfulVariation, city, state, zip, lat, lng },
+      found: { valuation: !!valuation, assessment: !!assessment, zpid: zpid || null },
     },
-    fixAndFlipAnalysis,
-    buyAndHoldAnalysis,
-    cashOffer,
-    // Return raw address from Bridge in case you want to verify it matches your DB
-    bridgeAddress: assessmentData?.address?.full || zestimateData?.address,
   };
 }
