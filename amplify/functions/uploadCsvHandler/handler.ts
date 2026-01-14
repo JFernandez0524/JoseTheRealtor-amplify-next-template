@@ -11,7 +11,15 @@ import { parse } from 'csv-parse';
 import { Readable } from 'stream';
 import { randomUUID } from 'crypto';
 import { validateAddressWithGoogle } from '../../../app/utils/google.server';
-import { fetchBestZestimate } from '../shared/bridgeUtils';
+import axios from 'axios';
+
+const BRIDGE_API_KEY = process.env.BRIDGE_API_KEY;
+const BRIDGE_BASE_URL = 'https://api.bridgedataoutput.com/api/v2';
+
+const bridgeClient = axios.create({
+  baseURL: BRIDGE_BASE_URL,
+  headers: { Authorization: `Bearer ${BRIDGE_API_KEY}` },
+});
 
 const s3 = new S3Client({});
 const dynamoClient = new DynamoDBClient({});
