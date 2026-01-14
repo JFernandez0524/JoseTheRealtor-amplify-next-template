@@ -389,10 +389,10 @@ export const handler: S3Handler = async (event) => {
           if ((leadItem.zestimate || leadItem.estimatedValue) && leadType === 'PREFORECLOSURE') {
             try {
               const scoreData = calculateLeadScore(leadItem as any);
-              leadItem.aiScore = scoreData.score;
-              leadItem.aiPriority = scoreData.priority;
-              leadItem.aiInsights = scoreData.insights;
-              leadItem.aiLastCalculated = new Date().toISOString();
+              (leadItem as any).aiScore = scoreData.score;
+              (leadItem as any).aiPriority = scoreData.priority;
+              (leadItem as any).aiInsights = scoreData.insights;
+              (leadItem as any).aiLastCalculated = new Date().toISOString();
               console.log(`✅ AI Score calculated for preforeclosure lead: ${scoreData.score} (${scoreData.priority})`);
             } catch (scoreError) {
               console.error('Failed to calculate AI score:', scoreError);

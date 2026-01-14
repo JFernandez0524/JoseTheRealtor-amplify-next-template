@@ -1,5 +1,5 @@
 // app/utils/ai/leadScoring.ts
-import type { Schema } from '@/amplify/data/resource';
+import type { Schema } from '../../../amplify/data/resource';
 
 type Lead = Schema['PropertyLead']['type'];
 
