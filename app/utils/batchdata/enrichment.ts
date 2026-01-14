@@ -188,6 +188,7 @@ export async function enrichPreforeclosureLead(lead: DBLead): Promise<Partial<DB
 
   // Filter phones: Mobile only, score 90+, not DNC
   const bestPhone = getBestPhone(property.owner.phoneNumbers);
+  const bestEmail = property.owner.emails?.[0];
 
   // Extract enrichment data
   const enrichment: Partial<DBLead> = {
@@ -196,9 +197,9 @@ export async function enrichPreforeclosureLead(lead: DBLead): Promise<Partial<DB
     estimatedValue: property.valuation.estimatedValue,
     mortgageBalance: property.openLien.totalOpenLienBalance,
     
-    // Contact information (filtered for quality)
-    ownerEmail: property.owner.emails?.[0] || lead.ownerEmail,
-    ownerPhone: bestPhone || lead.ownerPhone,
+    // Contact information (filtered for quality) - update arrays
+    emails: bestEmail ? [bestEmail, ...(lead.emails || [])].filter((e, i, arr) => arr.indexOf(e) === i) : lead.emails,
+    phones: bestPhone ? [bestPhone, ...(lead.phones || [])].filter((p, i, arr) => arr.indexOf(p) === i) : lead.phones,
     
     // Calculated property flags
     ownerOccupied,
@@ -217,9 +218,12 @@ export async function enrichPreforeclosureLead(lead: DBLead): Promise<Partial<DB
   // Store additional enrichment data in notes for reference
   const enrichmentNotes = buildEnrichmentNotes(property, ownerOccupied, freeAndClear, highEquity);
   if (enrichmentNotes) {
-    enrichment.notes = lead.notes 
-      ? `${lead.notes}\n\n${enrichmentNotes}`
-      : enrichmentNotes;
+    const noteEntry = {
+      text: enrichmentNotes,
+      createdAt: new Date().toISOString(),
+      createdBy: 'BatchData Enrichment'
+    };
+    enrichment.notes = [...(lead.notes || []), noteEntry];
   }
 
   return enrichment;
@@ -314,13 +318,14 @@ export async function enrichPreforeclosureLeads(leads: DBLead[]): Promise<Map<st
           
           // Filter phones for quality
           const bestPhone = getBestPhone(property.owner.phoneNumbers);
+          const bestEmail = property.owner.emails?.[0];
           
           const enrichment: Partial<DBLead> = {
             equityPercent: property.valuation.equityPercent,
             estimatedValue: property.valuation.estimatedValue,
             mortgageBalance: property.openLien.totalOpenLienBalance,
-            ownerEmail: property.owner.emails?.[0] || lead.ownerEmail,
-            ownerPhone: bestPhone || lead.ownerPhone,
+            emails: bestEmail ? [bestEmail, ...(lead.emails || [])].filter((e, i, arr) => arr.indexOf(e) === i) : lead.emails,
+            phones: bestPhone ? [bestPhone, ...(lead.phones || [])].filter((p, i, arr) => arr.indexOf(p) === i) : lead.phones,
             ownerOccupied,
             freeAndClear,
             foreclosureAuctionDate: property.foreclosure?.auctionDate 
@@ -332,9 +337,12 @@ export async function enrichPreforeclosureLeads(leads: DBLead[]): Promise<Map<st
 
           const enrichmentNotes = buildEnrichmentNotes(property, ownerOccupied, freeAndClear, highEquity);
           if (enrichmentNotes) {
-            enrichment.notes = lead.notes 
-              ? `${lead.notes}\n\n${enrichmentNotes}`
-              : enrichmentNotes;
+            const noteEntry = {
+              text: enrichmentNotes,
+              createdAt: new Date().toISOString(),
+              createdBy: 'BatchData Enrichment'
+            };
+            enrichment.notes = [...(lead.notes || []), noteEntry];
           }
 
           results.set(lead.id, enrichment);
