@@ -448,7 +448,7 @@ export function LeadTable({
                     <select
                       value={lead.manualStatus || ''}
                       onChange={async (e) => {
-                        const newStatus = e.target.value as 'ACTIVE' | 'SOLD' | 'PENDING' | 'OFF_MARKET' | 'SKIP' | '';
+                        const newStatus = e.target.value as 'ACTIVE' | 'SOLD' | 'PENDING' | 'OFF_MARKET' | 'SKIP' | 'DIRECT_MAIL' | '';
                         try {
                           const { client } = await import('@/app/utils/aws/data/frontEndClient');
                           await client.models.PropertyLead.update({
@@ -466,6 +466,7 @@ export function LeadTable({
                         lead.manualStatus === 'PENDING' ? 'bg-yellow-100 text-yellow-800' :
                         lead.manualStatus === 'OFF_MARKET' ? 'bg-gray-100 text-gray-800' :
                         lead.manualStatus === 'SKIP' ? 'bg-orange-100 text-orange-800' :
+                        lead.manualStatus === 'DIRECT_MAIL' ? 'bg-blue-100 text-blue-800' :
                         'bg-white text-gray-500'
                       }`}
                     >
@@ -475,6 +476,7 @@ export function LeadTable({
                       <option value="PENDING">Pending</option>
                       <option value="OFF_MARKET">Off Market</option>
                       <option value="SKIP">Skip</option>
+                      <option value="DIRECT_MAIL">Direct Mail</option>
                     </select>
                   </td>
 

@@ -328,7 +328,7 @@ export default function LeadDashboardClient({ initialLeads }: Props) {
         selectedIds.map((id) =>
           client.models.PropertyLead.update({
             id,
-            manualStatus: status as 'ACTIVE' | 'SOLD' | 'PENDING' | 'OFF_MARKET' | 'SKIP',
+            manualStatus: status as 'ACTIVE' | 'SOLD' | 'PENDING' | 'OFF_MARKET' | 'SKIP' | 'DIRECT_MAIL',
           })
         )
       );

@@ -129,6 +129,7 @@ export function DashboardFilters({
             <option value='PENDING'>Pending</option>
             <option value='OFF_MARKET'>Off Market</option>
             <option value='SKIP'>Skip</option>
+            <option value='DIRECT_MAIL'>Direct Mail</option>
           </select>
 
           {/* 6. SKIP TRACE DATE FILTERS */}
@@ -236,6 +237,7 @@ export function DashboardFilters({
               <option value="PENDING">Pending</option>
               <option value="OFF_MARKET">Off Market</option>
               <option value="SKIP">Skip</option>
+              <option value="DIRECT_MAIL">Direct Mail</option>
             </select>
 
             {/* Skip Trace Button */}

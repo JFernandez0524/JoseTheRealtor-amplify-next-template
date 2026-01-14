@@ -69,7 +69,7 @@ const schema = a.schema({
       skipTraceStatus: a.enum(['PENDING', 'COMPLETED', 'FAILED', 'NO_MATCH']),
       skipTraceCompletedAt: a.datetime(),
       validationStatus: a.enum(['VALID', 'INVALID']),
-      manualStatus: a.enum(['ACTIVE', 'SOLD', 'PENDING', 'OFF_MARKET', 'SKIP']), // Manual override
+      manualStatus: a.enum(['ACTIVE', 'SOLD', 'PENDING', 'OFF_MARKET', 'SKIP', 'DIRECT_MAIL']), // Manual override
 
       // 💥 NEW: GHL Sync Status Fields
       ghlSyncStatus: a.enum(['PENDING', 'SUCCESS', 'FAILED', 'SKIPPED']),
