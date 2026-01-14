@@ -91,12 +91,16 @@ export default function LeadDashboardClient({ initialLeads }: Props) {
       // Clear the refresh parameter from URL
       router.replace('/dashboard', { scroll: false });
       
-      // Force a small delay to ensure backend processing is complete
-      setTimeout(() => {
-        // The observeQuery subscription should automatically pick up new data
-        // but we can add a manual refresh if needed
-        console.log('Dashboard refreshed after upload');
-      }, 1000);
+      // Force a manual data refresh after upload
+      setTimeout(async () => {
+        try {
+          const { data: refreshedLeads } = await client.models.PropertyLead.list();
+          setAllLeads([...refreshedLeads]);
+          console.log('Dashboard refreshed after upload - loaded', refreshedLeads.length, 'leads');
+        } catch (error) {
+          console.error('Error refreshing leads after upload:', error);
+        }
+      }, 2000); // Increased delay to ensure backend processing completes
     }
   }, [searchParams, router]);
 

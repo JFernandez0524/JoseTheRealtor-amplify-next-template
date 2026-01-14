@@ -46,14 +46,14 @@ export async function fetchZillowData(
   const fullAddress = `${address}, ${city}, ${state} ${zipCode}`;
   
   try {
-    // Use Bridge API for Zestimate data
-    const response = await axios.get('https://api.bridge-api.com/api/v2/zestimates_v2/zestimates', {
+    // Use Bridge API for Zestimate data - matching working bridge.server.ts format
+    const response = await axios.get('https://api.bridgedataoutput.com/api/v2/zestimates_v2/zestimates', {
       headers: {
-        'Authorization': `Bearer ${process.env.BRIDGE_API_KEY}`,
-        'Content-Type': 'application/json'
+        'Authorization': `Bearer ${process.env.BRIDGE_API_KEY}`
       },
       params: {
-        address: fullAddress
+        address: fullAddress,
+        limit: 1
       }
     });
 

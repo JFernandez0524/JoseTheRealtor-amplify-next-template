@@ -380,11 +380,11 @@ export function LeadTable({
 
                   {/* Zestimate Column */}
                   <td className='px-4 py-4 whitespace-nowrap text-sm text-gray-900 bg-yellow-50/30'>
-                    {lead.zestimate ? (
+                    {lead.zestimate && typeof lead.zestimate === 'number' ? (
                       <span className='font-semibold text-green-700'>
                         ${lead.zestimate.toLocaleString()}
                       </span>
-                    ) : lead.estimatedValue ? (
+                    ) : lead.estimatedValue && typeof lead.estimatedValue === 'number' ? (
                       <span className='text-gray-600'>
                         ${lead.estimatedValue.toLocaleString()}
                       </span>

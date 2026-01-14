@@ -11,7 +11,15 @@ import { parse } from 'csv-parse';
 import { Readable } from 'stream';
 import { randomUUID } from 'crypto';
 import { validateAddressWithGoogle } from '../../../app/utils/google.server';
-import { fetchZillowData } from '../../../app/utils/zillow.server';
+import axios from 'axios';
+
+const BRIDGE_API_KEY = process.env.BRIDGE_API_KEY;
+const BRIDGE_BASE_URL = 'https://api.bridgedataoutput.com/api/v2';
+
+const bridgeClient = axios.create({
+  baseURL: BRIDGE_BASE_URL,
+  headers: { Authorization: `Bearer ${BRIDGE_API_KEY}` },
+});
 
 const s3 = new S3Client({});
 const dynamoClient = new DynamoDBClient({});
@@ -261,12 +269,38 @@ export const handler: S3Handler = async (event) => {
               continue; // Skip this lead
             }
           }
-          // 🏠 Fetch Zestimate data during upload
+          // 🏠 Fetch Zestimate data during upload with retry logic
           let zillowData = null;
-          try {
-            zillowData = await fetchZillowData(finalPropAddr, finalPropCity, finalPropState, finalPropZip);
-          } catch (zillowError) {
-            console.log('Zillow fetch failed (non-critical):', zillowError);
+          const maxRetries = 2;
+          for (let attempt = 0; attempt <= maxRetries; attempt++) {
+            try {
+              const fullAddress = `${finalPropAddr}, ${finalPropCity}, ${finalPropState} ${finalPropZip}`;
+              const response = await bridgeClient.get('/zestimates_v2/zestimates', {
+                params: {
+                  address: fullAddress,
+                  limit: 1
+                }
+              });
+              
+              const zestimateRecord = response.data.bundle?.[0];
+              if (zestimateRecord) {
+                zillowData = {
+                  zpid: zestimateRecord.zpid || null,
+                  zestimate: zestimateRecord.zestimate || 0,
+                  rentZestimate: zestimateRecord.rentalZestimate || 0,
+                  url: zestimateRecord.zillowUrl || null,
+                  lastUpdated: zestimateRecord.timestamp || new Date().toISOString()
+                };
+              }
+              break; // Success, exit retry loop
+            } catch (zillowError: any) {
+              if (attempt === maxRetries) {
+                console.log(`Bridge API Zestimate fetch failed after ${maxRetries + 1} attempts (non-critical):`, zillowError.message);
+              } else {
+                // Wait before retrying (exponential backoff: 1s, 2s)
+                await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1)));
+              }
+            }
           }
 
           const leadItem = {
