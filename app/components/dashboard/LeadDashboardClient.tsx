@@ -52,51 +52,16 @@ export default function LeadDashboardClient({ initialLeads }: Props) {
 
   // --- Effects ---
 
-  // 1. Listen for Real-time Lead updates - fetch ALL leads with pagination
+  // 1. Listen for Real-time Lead updates - observeQuery handles pagination automatically
   useEffect(() => {
-    const fetchAllLeads = async () => {
-      let allItems: any[] = [];
-      let nextToken: string | null | undefined = undefined;
-      
-      try {
-        do {
-          const response = await client.models.PropertyLead.list({
-            limit: 1000,
-            nextToken: nextToken as any
-          });
-          
-          if (response.data) {
-            allItems = [...allItems, ...response.data];
-          }
-          
-          nextToken = response.nextToken;
-        } while (nextToken);
-        
-        console.log('📡 Fetched all leads:', allItems.length);
-        setAllLeads(allItems);
-        setIsSynced(true);
-      } catch (error) {
-        console.error('Error fetching leads:', error);
-      }
-    };
-
-    fetchAllLeads();
-
-    // Also subscribe to real-time updates
-    const sub = client.models.PropertyLead.observeQuery({
-      limit: 1000
-    }).subscribe({
+    const sub = client.models.PropertyLead.observeQuery().subscribe({
       next: ({ items, isSynced }) => {
         console.log('📡 Subscription update:', items.length, 'leads, synced:', isSynced);
-        // Only update if we get more items than current (handles real-time additions)
-        if (items.length >= allLeads.length) {
-          setAllLeads([...items]);
-        }
+        setAllLeads([...items]); // Store all leads
         setIsSynced(isSynced);
       },
       error: (err) => console.error('Subscription error:', err),
     });
-    
     return () => sub.unsubscribe();
   }, []);
 
@@ -135,7 +100,7 @@ export default function LeadDashboardClient({ initialLeads }: Props) {
       const refreshData = async () => {
         try {
           console.log('📥 Fetching fresh leads from database...');
-          const { data: refreshedLeads } = await client.models.PropertyLead.list({ limit: 1000 });
+          const { data: refreshedLeads } = await client.models.PropertyLead.list();
           console.log('✅ Loaded', refreshedLeads.length, 'leads after upload');
           setAllLeads([...refreshedLeads]);
         } catch (error) {
@@ -156,7 +121,7 @@ export default function LeadDashboardClient({ initialLeads }: Props) {
       if (document.visibilityState === 'visible') {
         console.log('👁️ Tab visible, checking for new leads...');
         try {
-          const { data: refreshedLeads } = await client.models.PropertyLead.list({ limit: 1000 });
+          const { data: refreshedLeads } = await client.models.PropertyLead.list();
           if (refreshedLeads.length !== allLeads.length) {
             console.log('🔄 Lead count changed, updating:', refreshedLeads.length);
             setAllLeads([...refreshedLeads]);
@@ -309,7 +274,7 @@ export default function LeadDashboardClient({ initialLeads }: Props) {
       // Force refresh after a delay to show updated GHL sync status
       setTimeout(async () => {
         try {
-          const { data: refreshedLeads } = await client.models.PropertyLead.list({ limit: 1000 });
+          const { data: refreshedLeads } = await client.models.PropertyLead.list();
           setAllLeads([...refreshedLeads]);
           console.log('Dashboard refreshed after GHL sync');
         } catch (error) {
@@ -451,7 +416,7 @@ export default function LeadDashboardClient({ initialLeads }: Props) {
       // Refresh leads to show new scores
       setTimeout(async () => {
         try {
-          const { data: refreshedLeads } = await client.models.PropertyLead.list({ limit: 1000 });
+          const { data: refreshedLeads } = await client.models.PropertyLead.list();
           setAllLeads([...refreshedLeads]);
         } catch (error) {
           console.error('Error refreshing leads after AI scoring:', error);
@@ -511,7 +476,7 @@ export default function LeadDashboardClient({ initialLeads }: Props) {
       // Refresh leads to show enrichment data
       setTimeout(async () => {
         try {
-          const { data: refreshedLeads } = await client.models.PropertyLead.list({ limit: 1000 });
+          const { data: refreshedLeads } = await client.models.PropertyLead.list();
           setAllLeads([...refreshedLeads]);
         } catch (error) {
           console.error('Error refreshing leads after enrichment:', error);
