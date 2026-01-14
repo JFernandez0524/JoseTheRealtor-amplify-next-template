@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAuthenticatedUser } from '@/app/utils/aws/auth/amplifyServerUtils.server';
+import { AuthIsUserAuthenticatedServer } from '@/app/utils/aws/auth/amplifyServerUtils.server';
 import { enrichPreforeclosureLeads } from '@/app/utils/batchdata/enrichment';
 import { getLeadsByIds, updateLead } from '@/app/utils/aws/data/lead.server';
 
@@ -10,8 +10,8 @@ import { getLeadsByIds, updateLead } from '@/app/utils/aws/data/lead.server';
 export async function POST(request: NextRequest) {
   try {
     // Authenticate user
-    const user = await getAuthenticatedUser();
-    if (!user) {
+    const isAuthenticated = await AuthIsUserAuthenticatedServer();
+    if (!isAuthenticated) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -28,10 +28,12 @@ export async function POST(request: NextRequest) {
 
     // Fetch leads
     const leads = await getLeadsByIds(leadIds);
-    
+
     // Filter to preforeclosure only
-    const preforeclosureLeads = leads.filter(lead => lead.type === 'PREFORECLOSURE');
-    
+    const preforeclosureLeads = leads.filter(
+      (lead) => lead.type === 'PREFORECLOSURE'
+    );
+
     if (preforeclosureLeads.length === 0) {
       return NextResponse.json(
         { error: 'No preforeclosure leads found in selection' },
@@ -40,8 +42,12 @@ export async function POST(request: NextRequest) {
     }
 
     // Check for already enriched leads
-    const alreadyEnriched = preforeclosureLeads.filter(lead => lead.batchDataEnriched);
-    const toEnrich = preforeclosureLeads.filter(lead => !lead.batchDataEnriched);
+    const alreadyEnriched = preforeclosureLeads.filter(
+      (lead) => lead.batchDataEnriched
+    );
+    const toEnrich = preforeclosureLeads.filter(
+      (lead) => !lead.batchDataEnriched
+    );
 
     if (toEnrich.length === 0) {
       return NextResponse.json({
@@ -53,7 +59,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Calculate cost ($0.30 per lead)
-    const costPerLead = 0.30;
+    const costPerLead = 0.3;
     const totalCost = toEnrich.length * costPerLead;
 
     // Enrich leads
@@ -63,7 +69,7 @@ export async function POST(request: NextRequest) {
     const updatePromises = Array.from(enrichmentResults.entries()).map(
       async ([leadId, enrichment]) => {
         try {
-          await updateLead(leadId, enrichment);
+          await updateLead({ id: leadId, ...enrichment } as any);
           return { leadId, success: true };
         } catch (error) {
           console.error(`Failed to update lead ${leadId}:`, error);
@@ -73,8 +79,8 @@ export async function POST(request: NextRequest) {
     );
 
     const updateResults = await Promise.all(updatePromises);
-    const successCount = updateResults.filter(r => r.success).length;
-    const failedCount = updateResults.filter(r => !r.success).length;
+    const successCount = updateResults.filter((r) => r.success).length;
+    const failedCount = updateResults.filter((r) => !r.success).length;
 
     return NextResponse.json({
       message: `Enriched ${successCount} preforeclosure leads`,
