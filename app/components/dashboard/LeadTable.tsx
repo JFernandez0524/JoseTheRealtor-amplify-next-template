@@ -26,7 +26,8 @@ type Props = {
     | 'ownerLastName'
     | 'ownerCounty'
     | 'zestimate'
-    | 'skipTraceCompletedAt';
+    | 'skipTraceCompletedAt'
+    | 'aiScore';
   sortDirection: 'asc' | 'desc';
   onSort: (
     field:
@@ -36,6 +37,7 @@ type Props = {
       | 'ownerCounty'
       | 'zestimate'
       | 'skipTraceCompletedAt'
+      | 'aiScore'
   ) => void;
 };
 
@@ -128,7 +130,8 @@ export function LeadTable({
       | 'ownerLastName'
       | 'ownerCounty'
       | 'zestimate'
-      | 'skipTraceCompletedAt',
+      | 'skipTraceCompletedAt'
+      | 'aiScore',
     children: React.ReactNode,
     className: string = ''
   ) => (
@@ -215,6 +218,7 @@ export function LeadTable({
               <th className='px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider whitespace-nowrap'>
                 Type
               </th>
+              {renderSortableHeader('aiScore', 'AI Score', 'bg-purple-50')}
               <th className='px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider whitespace-nowrap'>
                 Status
               </th>
@@ -259,7 +263,7 @@ export function LeadTable({
             {isLoading ? (
               <tr>
                 <td
-                  colSpan={14}
+                  colSpan={15}
                   className='px-6 py-10 text-center text-gray-500'
                 >
                   <div className='flex flex-col items-center'>
@@ -271,7 +275,7 @@ export function LeadTable({
             ) : leads.length === 0 ? (
               <tr>
                 <td
-                  colSpan={14}
+                  colSpan={15}
                   className='px-6 py-10 text-center text-gray-500'
                 >
                   <div className='text-lg mb-2'>📭 No leads found</div>
@@ -301,6 +305,24 @@ export function LeadTable({
                     <span className='px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800 capitalize'>
                       {lead.type}
                     </span>
+                  </td>
+
+                  {/* AI Score Column */}
+                  <td className='px-4 py-4 whitespace-nowrap text-sm bg-purple-50/30'>
+                    {lead.aiScore ? (
+                      <div className='flex items-center gap-2'>
+                        <span className={`px-2 py-1 rounded-full text-xs font-bold ${
+                          lead.aiPriority === 'HIGH' ? 'bg-red-100 text-red-800' :
+                          lead.aiPriority === 'MEDIUM' ? 'bg-yellow-100 text-yellow-800' :
+                          'bg-gray-100 text-gray-800'
+                        }`}>
+                          {lead.aiScore}
+                        </span>
+                        {lead.aiPriority === 'HIGH' && <span>🔥</span>}
+                      </div>
+                    ) : (
+                      <span className='text-gray-400 text-xs'>-</span>
+                    )}
                   </td>
 
                   <td className='px-4 py-4 whitespace-nowrap text-sm'>

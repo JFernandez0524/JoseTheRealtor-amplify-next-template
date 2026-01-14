@@ -14,7 +14,8 @@ const GHL_CUSTOM_FIELD_ID_MAP: Record<string, string> = {
   lead_type: 'oaf4wCuM3Ub9eGpiddrO',
   contact_type: 'pGfgxcdFaYAkdq0Vp53j', // Phone Contact vs Direct Mail
   skiptracestatus: 'HrnY1GUZ7P6d6r7J0ZRc',
-  zestimate: '7wIe1cRbZYXUnc3WOVb2', // Property value estimate
+  zestimate: '7wIe1cRbZYXUnc3WOVb2', // Property value estimate (listing value)
+  cash_offer: 'sM3hEOHCJFoPyWhj1Vc8', // 70% cash offer (as-is value)
   phone_2: 'LkmfM0Va5PylJFsJYjCu',
   phone_3: 'Cu6zwsuWrxoVWdxySc6t',
   phone_4: 'hxwJG0lYeV18IxxWh09H',
@@ -109,6 +110,9 @@ export async function syncToGoHighLevel(
     const appAccountStatus = 'active'; // TODO: Add billing status check for 'past_due'/'canceled'
 
     // 🎯 Construct Custom Field Values
+    const zestimateValue = lead.zestimate || lead.estimatedValue || 0;
+    const cashOfferValue = Math.round(zestimateValue * 0.70); // 70% rule for cash offer
+
     const customFieldValues: Record<string, any> = {
       property_address: lead.ownerAddress,
       property_city: lead.ownerCity,
@@ -122,7 +126,8 @@ export async function syncToGoHighLevel(
       contact_type: specificPhone ? 'Phone Contact' : 'Direct Mail',
       skiptracestatus: lead.skipTraceStatus?.toUpperCase() || 'PENDING',
       lead_source_id: lead.id, // 🎯 Shared Lead ID for suppression workflows
-      zestimate: lead.zestimate || lead.estimatedValue, // Use zestimate or fallback to estimatedValue
+      zestimate: zestimateValue, // Full market value (listing value)
+      cash_offer: cashOfferValue, // 70% cash offer (as-is value)
       // 🆕 APP CONTROL FIELDS
       app_user_id: userId,
       app_plan: appPlan,

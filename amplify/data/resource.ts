@@ -103,6 +103,12 @@ const schema = a.schema({
       comparableProperties: a.json(), // Recent comps
       zillowLastUpdated: a.datetime(), // When Zillow data was last fetched
       
+      // 🤖 AI-Powered Fields
+      aiScore: a.integer(), // 0-100 lead score
+      aiPriority: a.enum(['HIGH', 'MEDIUM', 'LOW']), // AI-calculated priority
+      aiInsights: a.string().array(), // AI-generated insights
+      aiLastCalculated: a.datetime(), // When AI score was last calculated
+      
       estimatedEquity: a.float(),
       mortgageBalance: a.float(),
       lastSaleDate: a.date(),

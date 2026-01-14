@@ -156,6 +156,18 @@ export default function DocsPage() {
                 </ul>
               </div>
 
+              <div className="bg-purple-50 p-4 rounded-lg">
+                <h4 className="font-medium text-purple-800 mb-2">🤖 AI Lead Scoring</h4>
+                <ul className="list-disc list-inside space-y-1 text-purple-700 text-sm">
+                  <li>Select leads and click "🤖 Calculate AI Scores"</li>
+                  <li>AI analyzes: equity, value, timeline, location, contact availability</li>
+                  <li>Scores 0-100 with priority: HIGH (70+), MEDIUM (40-69), LOW (&lt;40)</li>
+                  <li>Filter by AI Priority to focus on hottest leads</li>
+                  <li>View AI Insights Dashboard for top leads and urgent items</li>
+                  <li>Sort by AI Score column to prioritize outreach</li>
+                </ul>
+              </div>
+
               <div className="bg-blue-50 p-4 rounded-lg">
                 <h4 className="font-medium text-blue-800 mb-2">⚡ Bulk Operations</h4>
                 <p className="text-sm text-blue-700 mb-2">Manage multiple leads efficiently:</p>
@@ -263,10 +275,24 @@ export default function DocsPage() {
                 <h4 className="font-medium text-purple-800 mb-2">🔄 Automatic Sync Features</h4>
                 <ul className="list-disc list-inside space-y-1 text-purple-700 text-sm">
                   <li>Syncs lead contact information and property details</li>
-                  <li>Includes Zestimate data for better qualification</li>
+                  <li>Includes Zestimate data (full market value for listing)</li>
+                  <li>Includes Cash Offer (70% of Zestimate for as-is purchase)</li>
                   <li>Maps to your GHL custom fields automatically</li>
+                  <li>Tags leads for direct mail or phone campaigns</li>
                   <li>Updates lead status to track sync progress</li>
                   <li>Bulk sync multiple leads at once</li>
+                </ul>
+              </div>
+
+              <div className="bg-indigo-50 p-4 rounded-lg">
+                <h4 className="font-medium text-indigo-800 mb-2">📬 Direct Mail Automation</h4>
+                <ul className="list-disc list-inside space-y-1 text-indigo-700 text-sm">
+                  <li>Zestimate and Cash Offer automatically sent to GHL</li>
+                  <li>Leads tagged as "Direct-Mail-Only" or "Direct_Mail_Eligible"</li>
+                  <li>GHL automation triggers Click2Mail webhook</li>
+                  <li>Mail merge inserts property values into letter template</li>
+                  <li>Letters show both listing and cash purchase options</li>
+                  <li>No manual letter generation needed - fully automated</li>
                 </ul>
               </div>
 

@@ -7,6 +7,7 @@ import { useAccess } from '@/app/context/AccessContext';
 import { LeadTable } from './LeadTable';
 import { DashboardFilters } from './DashboardFilters';
 import { GhlConnection } from './GhlConnection';
+import { AIInsightsDashboard } from './AIInsightsDashboard';
 import { getFrontEndUser } from '@/app/utils/aws/auth/amplifyFrontEndUser';
 import type { Schema } from '@/amplify/data/resource';
 
@@ -41,11 +42,12 @@ export default function LeadDashboardClient({ initialLeads }: Props) {
   const [filterCrmStatus, setFilterCrmStatus] = useState('');
   const [filterHasPhone, setFilterHasPhone] = useState('');
   const [filterManualStatus, setFilterManualStatus] = useState('');
+  const [filterAiPriority, setFilterAiPriority] = useState('');
   const [skipTraceFromDate, setSkipTraceFromDate] = useState('');
   const [skipTraceToDate, setSkipTraceToDate] = useState('');
 
   // Sort States
-  const [sortField, setSortField] = useState<'createdAt' | 'updatedAt' | 'ownerLastName' | 'ownerCounty' | 'zestimate' | 'skipTraceCompletedAt'>('createdAt');
+  const [sortField, setSortField] = useState<'createdAt' | 'updatedAt' | 'ownerLastName' | 'ownerCounty' | 'zestimate' | 'skipTraceCompletedAt' | 'aiScore'>('createdAt');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
 
   // --- Effects ---
@@ -142,6 +144,8 @@ export default function LeadDashboardClient({ initialLeads }: Props) {
 
       const matchesManualStatus = !filterManualStatus || lead.manualStatus === filterManualStatus;
 
+      const matchesAiPriority = !filterAiPriority || lead.aiPriority === filterAiPriority;
+
       // Date filtering for skip trace completion
       const matchesDateRange = (() => {
         if (!skipTraceFromDate && !skipTraceToDate) return true;
@@ -154,7 +158,7 @@ export default function LeadDashboardClient({ initialLeads }: Props) {
         return fromMatch && toMatch;
       })();
 
-      return matchesSearch && matchesType && matchesStatus && matchesCrm && matchesPhone && matchesManualStatus && matchesDateRange;
+      return matchesSearch && matchesType && matchesStatus && matchesCrm && matchesPhone && matchesManualStatus && matchesAiPriority && matchesDateRange;
     }).sort((a, b) => {
       // Sort the filtered results
       let aValue: any = a[sortField];
@@ -167,7 +171,7 @@ export default function LeadDashboardClient({ initialLeads }: Props) {
       }
 
       // Handle number sorting
-      if (sortField === 'zestimate') {
+      if (sortField === 'zestimate' || sortField === 'aiScore') {
         aValue = parseFloat(aValue || 0);
         bValue = parseFloat(bValue || 0);
       }
@@ -195,10 +199,10 @@ export default function LeadDashboardClient({ initialLeads }: Props) {
   // Reset to page 1 when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, filterType, filterStatus, filterCrmStatus, filterHasPhone, skipTraceFromDate, skipTraceToDate, sortField, sortDirection]);
+  }, [searchQuery, filterType, filterStatus, filterCrmStatus, filterHasPhone, filterManualStatus, filterAiPriority, skipTraceFromDate, skipTraceToDate, sortField, sortDirection]);
 
   // --- Sort Handler ---
-  const handleSort = (field: 'createdAt' | 'updatedAt' | 'ownerLastName' | 'ownerCounty' | 'zestimate' | 'skipTraceCompletedAt') => {
+  const handleSort = (field: 'createdAt' | 'updatedAt' | 'ownerLastName' | 'ownerCounty' | 'zestimate' | 'skipTraceCompletedAt' | 'aiScore') => {
     if (sortField === field) {
       setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
     } else {
@@ -342,6 +346,83 @@ export default function LeadDashboardClient({ initialLeads }: Props) {
     }
   };
 
+  const handleBulkAIScore = async () => {
+    if (selectedIds.length === 0) return;
+
+    if (!confirm(`Calculate AI scores for ${selectedIds.length} leads?`)) return;
+
+    setIsProcessing(true);
+    try {
+      const response = await fetch('/api/v1/ai/score-leads', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ leadIds: selectedIds }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) throw new Error(result.error);
+
+      alert(`✅ AI Scoring Complete!\nScored: ${result.scored}/${result.total} leads`);
+      setSelectedIds([]);
+
+      // Refresh leads to show new scores
+      setTimeout(async () => {
+        try {
+          const { data: refreshedLeads } = await client.models.PropertyLead.list();
+          setAllLeads([...refreshedLeads]);
+        } catch (error) {
+          console.error('Error refreshing leads after AI scoring:', error);
+        }
+      }, 1000);
+    } catch (err) {
+      console.error('AI scoring error:', err);
+      alert('Error calculating AI scores');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleBulkDirectMail = async () => {
+    if (selectedIds.length === 0) return;
+
+    const cost = selectedIds.length * 1.00; // ~$1 per letter
+    if (!confirm(`Generate and send ${selectedIds.length} letters via Click2Mail?\n\nEstimated cost: $${cost.toFixed(2)}\n\nLetters will be sent automatically.`)) return;
+
+    setIsProcessing(true);
+    try {
+      const response = await fetch('/api/v1/ai/generate-bulk-letters', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          leadIds: selectedIds,
+          options: {
+            includeListingOption: true,
+            includeCashOption: true,
+            productId: 1, // First Class Letter
+            color: false,
+          },
+          sendNow: true, // Send immediately via Click2Mail
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) throw new Error(result.error);
+
+      const { sent, failed } = result.mailResults;
+      
+      alert(`✅ Direct Mail Campaign Complete!\n\nSent: ${sent}/${result.generated} letters\nFailed: ${failed}\n\nTracking numbers saved to leads.\nExpected delivery: 3-5 business days`);
+      
+      setSelectedIds([]);
+    } catch (err) {
+      console.error('Direct mail generation error:', err);
+      alert('Error sending letters via Click2Mail');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   const handleDownloadSkipTraced = () => {
     // Only download selected leads
     if (selectedIds.length === 0) {
@@ -403,6 +484,20 @@ export default function LeadDashboardClient({ initialLeads }: Props) {
 
   return (
     <div className='space-y-4'>
+      {/* AI Insights Dashboard */}
+      <AIInsightsDashboard 
+        leads={filteredLeads} 
+        onLeadClick={(leadId) => {
+          const leadIds = filteredLeads.map(lead => lead.id);
+          const navContext = {
+            ids: leadIds,
+            filterType: filterType || null
+          };
+          sessionStorage.setItem('leadNavContext', JSON.stringify(navContext));
+          router.push(`/lead/${leadId}`);
+        }}
+      />
+
       <DashboardFilters
         filterType={filterType}
         setFilterType={setFilterType}
@@ -416,6 +511,8 @@ export default function LeadDashboardClient({ initialLeads }: Props) {
         setFilterHasPhone={setFilterHasPhone}
         filterManualStatus={filterManualStatus}
         setFilterManualStatus={setFilterManualStatus}
+        filterAiPriority={filterAiPriority}
+        setFilterAiPriority={setFilterAiPriority}
         skipTraceFromDate={skipTraceFromDate}
         setSkipTraceFromDate={setSkipTraceFromDate}
         skipTraceToDate={skipTraceToDate}
@@ -423,9 +520,13 @@ export default function LeadDashboardClient({ initialLeads }: Props) {
         selectedLeadsCount={selectedIds.length}
         isSkipTracing={isProcessing}
         isGhlSyncing={isProcessing}
+        isAiScoring={isProcessing}
+        isGeneratingLetters={isProcessing}
         handleBulkSkipTrace={handleBulkSkipTrace}
         handleBulkGHLSync={handleBulkGHLSync}
         handleBulkStatusUpdate={handleBulkStatusUpdate}
+        handleBulkAIScore={handleBulkAIScore}
+        handleBulkDirectMail={handleBulkDirectMail}
         handleDelete={handleDeleteLeads}
         handleExport={() => alert('Exporting leads to CSV...')}
         handleDownloadSkipTraced={handleDownloadSkipTraced}

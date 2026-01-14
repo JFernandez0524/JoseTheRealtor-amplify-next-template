@@ -5,11 +5,14 @@ A comprehensive real estate lead management platform built with AWS Amplify Gen2
 ## Features
 
 - **Lead Management**: Import and analyze property leads (preforeclosure, probate)
+- **AI Lead Scoring**: Intelligent prioritization with 0-100 scores based on equity, value, timeline, location, and contact availability
+- **AI Insights Dashboard**: View top hottest leads, urgent attention items, and best ROI opportunities
 - **Skip Tracing**: Pay-per-use contact lookup at $0.10 per skip
-- **Bulk Operations**: Update multiple lead statuses, skip trace, and sync in one click
-- **Smart Filtering**: Filter by manual status, skip trace date, and property type
+- **Bulk Operations**: Update multiple lead statuses, skip trace, calculate AI scores, and sync in one click
+- **Smart Filtering**: Filter by manual status, AI priority, skip trace date, and property type
 - **Property Valuation**: Real-time Zestimate data with refresh capability and age indicators
 - **CRM Integration**: Seamless GoHighLevel synchronization with rate limiting protection
+- **Direct Mail Automation**: Automatic Zestimate and cash offer calculation for GHL Click2Mail campaigns
 - **AI Assistant**: Claude 3.5 Sonnet for lead analysis and follow-ups
 - **Address Validation**: Google Maps API integration for property verification
 - **Role-Based Access**: FREE, SYNC PLAN, AI OUTREACH PLAN, and ADMIN tiers
@@ -110,37 +113,48 @@ For detailed deployment instructions, see the [Amplify documentation](https://do
    - System automatically validates addresses, fetches Zestimate data, and processes leads
    - Rate-limited API calls prevent service interruptions during large uploads
 
-2. **Manage Lead Status**
-   - Use manual status dropdown to mark leads as ACTIVE, SOLD, PENDING, OFF_MARKET, or SKIP
+2. **AI Lead Scoring**
+   - Select leads from dashboard
+   - Click "🤖 Calculate AI Scores" to analyze leads
+   - AI scores (0-100) based on equity, value, timeline, location, and contact availability
+   - Filter by AI Priority (HIGH/MEDIUM/LOW) to focus on hottest leads
+   - View AI Insights Dashboard for top leads, urgent items, and best ROI opportunities
+
+3. **Manage Lead Status**
+   - Use manual status dropdown to mark leads as ACTIVE, SOLD, PENDING, OFF_MARKET, SKIP, or DIRECT_MAIL
    - Bulk update multiple leads at once using "Set Status..." dropdown
    - Filter dashboard by status to focus on active opportunities
    - Leads marked as SOLD or SKIP are automatically excluded from skip tracing
 
-3. **Monitor Property Values**
+4. **Monitor Property Values**
    - View Zestimate data with age indicator (shows days since last update)
    - Red warning appears for data older than 180 days
    - Click refresh button (↻) next to any Zestimate to fetch current value
    - Click Zestimate amount to view property on Zillow
 
-4. **Skip Trace Contacts**
+5. **Skip Trace Contacts**
    - Select leads from dashboard
    - View cost preview before skip tracing (shows $0.10 per lead)
    - Click "Skip Trace" to find contact information
    - Review discovered phone numbers and emails
    - Filter by skip trace completion date for targeted downloads
 
-5. **Download Skip Traced Data**
+6. **Download Skip Traced Data**
    - Use date range filters to target specific time periods
    - Click "Download Skip Traced" to export leads with contact information
    - CSV includes owner details, property info, phone numbers, emails, manual status, and completion dates
 
-6. **CRM Integration**
+7. **CRM Integration & Direct Mail**
    - Connect GoHighLevel account in Profile settings (connection persists across sessions)
    - Select qualified leads for sync
    - Rate limiting prevents API blocks (100/hour, 1000/day limits enforced)
-   - Leads automatically appear in your GHL pipeline with Zestimate data
+   - Leads automatically appear in your GHL pipeline with:
+     - Zestimate data (full market value for listing option)
+     - Cash offer (70% of Zestimate for as-is purchase option)
+     - Appropriate tags for direct mail or phone campaigns
+   - GHL automations handle Click2Mail integration with mail merge
 
-7. **AI Analysis**
+8. **AI Analysis**
    - Use Chat feature for property insights
    - Get automated follow-up suggestions
    - Analyze market conditions and equity potential

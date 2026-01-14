@@ -16,6 +16,8 @@ type Props = {
   setFilterHasPhone: (val: string) => void;
   filterManualStatus: string;
   setFilterManualStatus: (val: string) => void;
+  filterAiPriority: string;
+  setFilterAiPriority: (val: string) => void;
   skipTraceFromDate: string;
   setSkipTraceFromDate: (val: string) => void;
   skipTraceToDate: string;
@@ -26,11 +28,15 @@ type Props = {
   handleBulkSkipTrace: () => Promise<void>;
   handleBulkGHLSync: () => Promise<void>;
   handleBulkStatusUpdate: (status: string) => Promise<void>;
+  handleBulkAIScore: () => Promise<void>;
+  handleBulkDirectMail: () => Promise<void>;
   handleDelete: () => Promise<void>;
   handleExport: () => void;
   handleDownloadSkipTraced: () => void;
   isSkipTracing: boolean;
   isGhlSyncing: boolean;
+  isAiScoring: boolean;
+  isGeneratingLetters: boolean;
 };
 
 export function DashboardFilters({
@@ -46,6 +52,8 @@ export function DashboardFilters({
   setFilterHasPhone,
   filterManualStatus,
   setFilterManualStatus,
+  filterAiPriority,
+  setFilterAiPriority,
   skipTraceFromDate,
   setSkipTraceFromDate,
   skipTraceToDate,
@@ -54,11 +62,15 @@ export function DashboardFilters({
   handleBulkSkipTrace,
   handleBulkGHLSync,
   handleBulkStatusUpdate,
+  handleBulkAIScore,
+  handleBulkDirectMail,
   handleDelete,
   handleExport,
   handleDownloadSkipTraced,
   isSkipTracing,
   isGhlSyncing,
+  isAiScoring,
+  isGeneratingLetters,
 }: Props) {
   return (
     <div className='bg-white p-3 sm:p-4 rounded-lg shadow-sm border border-gray-200 mb-4 sm:mb-6 space-y-4'>
@@ -132,7 +144,19 @@ export function DashboardFilters({
             <option value='DIRECT_MAIL'>Direct Mail</option>
           </select>
 
-          {/* 6. SKIP TRACE DATE FILTERS */}
+          {/* 6. AI PRIORITY FILTER */}
+          <select
+            value={filterAiPriority}
+            onChange={(e) => setFilterAiPriority(e.target.value)}
+            className='border border-purple-300 rounded-md px-3 py-1.5 text-sm focus:ring-2 focus:ring-purple-500 outline-none w-full sm:w-auto bg-purple-50'
+          >
+            <option value=''>All AI Priorities</option>
+            <option value='HIGH'>🔥 High Priority</option>
+            <option value='MEDIUM'>⚡ Medium Priority</option>
+            <option value='LOW'>📊 Low Priority</option>
+          </select>
+
+          {/* 7. SKIP TRACE DATE FILTERS */}
           <div className='flex flex-col sm:flex-row gap-2 items-center'>
             <label className='text-xs text-gray-600 whitespace-nowrap'>Skip Traced:</label>
             <input
@@ -270,6 +294,38 @@ export function DashboardFilters({
                 </>
               ) : (
                 'Sync GHL'
+              )}
+            </button>
+
+            {/* AI Score Button */}
+            <button
+              onClick={handleBulkAIScore}
+              disabled={isAiScoring || isSkipTracing || isGhlSyncing}
+              className={`text-sm px-3 py-1.5 rounded transition-colors flex items-center justify-center gap-1.5 shadow-sm w-full sm:w-auto
+                                ${isAiScoring ? 'bg-purple-300 text-white cursor-not-allowed' : 'bg-gradient-to-r from-purple-600 to-blue-600 text-white hover:from-purple-700 hover:to-blue-700'}`}
+            >
+              {isAiScoring ? (
+                <>
+                  <Loader size='small' variation='linear' /> Scoring...
+                </>
+              ) : (
+                <>🤖 Calculate AI Scores</>
+              )}
+            </button>
+
+            {/* Direct Mail Button */}
+            <button
+              onClick={handleBulkDirectMail}
+              disabled={isGeneratingLetters || isSkipTracing || isGhlSyncing || isAiScoring}
+              className={`text-sm px-3 py-1.5 rounded transition-colors flex items-center justify-center gap-1.5 shadow-sm w-full sm:w-auto
+                                ${isGeneratingLetters ? 'bg-green-300 text-white cursor-not-allowed' : 'bg-gradient-to-r from-green-600 to-teal-600 text-white hover:from-green-700 hover:to-teal-700'}`}
+            >
+              {isGeneratingLetters ? (
+                <>
+                  <Loader size='small' variation='linear' /> Generating...
+                </>
+              ) : (
+                <>📬 Generate Letters</>
               )}
             </button>
 
