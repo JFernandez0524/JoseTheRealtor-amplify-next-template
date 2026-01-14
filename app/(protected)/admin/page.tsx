@@ -30,8 +30,18 @@ export default async function AdminPage() {
   if (userErrors) console.error('User Fetch Error:', userErrors);
   if (leadErrors) console.error('Lead Fetch Error:', leadErrors);
 
+  // Deduplicate users by email (keep most recent)
+  const userMap = new Map<string, UserAccount>();
+  (users || []).forEach(user => {
+    const existing = userMap.get(user.email);
+    if (!existing || new Date(user.updatedAt) > new Date(existing.updatedAt)) {
+      userMap.set(user.email, user);
+    }
+  });
+  const deduplicatedUsers = Array.from(userMap.values());
+
   // Serialize for client component
-  const initialUsers: UserAccount[] = JSON.parse(JSON.stringify(users || []));
+  const initialUsers: UserAccount[] = JSON.parse(JSON.stringify(deduplicatedUsers));
   const initialLeads: PropertyLead[] = JSON.parse(JSON.stringify(leads || []));
 
   return (

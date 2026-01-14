@@ -52,16 +52,51 @@ export default function LeadDashboardClient({ initialLeads }: Props) {
 
   // --- Effects ---
 
-  // 1. Listen for Real-time Lead updates
+  // 1. Listen for Real-time Lead updates - fetch ALL leads with pagination
   useEffect(() => {
-    const sub = client.models.PropertyLead.observeQuery().subscribe({
+    const fetchAllLeads = async () => {
+      let allItems: any[] = [];
+      let nextToken: string | null | undefined = undefined;
+      
+      try {
+        do {
+          const response = await client.models.PropertyLead.list({
+            limit: 1000,
+            nextToken: nextToken as any
+          });
+          
+          if (response.data) {
+            allItems = [...allItems, ...response.data];
+          }
+          
+          nextToken = response.nextToken;
+        } while (nextToken);
+        
+        console.log('📡 Fetched all leads:', allItems.length);
+        setAllLeads(allItems);
+        setIsSynced(true);
+      } catch (error) {
+        console.error('Error fetching leads:', error);
+      }
+    };
+
+    fetchAllLeads();
+
+    // Also subscribe to real-time updates
+    const sub = client.models.PropertyLead.observeQuery({
+      limit: 1000
+    }).subscribe({
       next: ({ items, isSynced }) => {
         console.log('📡 Subscription update:', items.length, 'leads, synced:', isSynced);
-        setAllLeads([...items]); // Store all leads
+        // Only update if we get more items than current (handles real-time additions)
+        if (items.length >= allLeads.length) {
+          setAllLeads([...items]);
+        }
         setIsSynced(isSynced);
       },
       error: (err) => console.error('Subscription error:', err),
     });
+    
     return () => sub.unsubscribe();
   }, []);
 
@@ -100,7 +135,7 @@ export default function LeadDashboardClient({ initialLeads }: Props) {
       const refreshData = async () => {
         try {
           console.log('📥 Fetching fresh leads from database...');
-          const { data: refreshedLeads } = await client.models.PropertyLead.list();
+          const { data: refreshedLeads } = await client.models.PropertyLead.list({ limit: 1000 });
           console.log('✅ Loaded', refreshedLeads.length, 'leads after upload');
           setAllLeads([...refreshedLeads]);
         } catch (error) {
@@ -121,7 +156,7 @@ export default function LeadDashboardClient({ initialLeads }: Props) {
       if (document.visibilityState === 'visible') {
         console.log('👁️ Tab visible, checking for new leads...');
         try {
-          const { data: refreshedLeads } = await client.models.PropertyLead.list();
+          const { data: refreshedLeads } = await client.models.PropertyLead.list({ limit: 1000 });
           if (refreshedLeads.length !== allLeads.length) {
             console.log('🔄 Lead count changed, updating:', refreshedLeads.length);
             setAllLeads([...refreshedLeads]);
@@ -225,6 +260,15 @@ export default function LeadDashboardClient({ initialLeads }: Props) {
   const endIndex = startIndex + itemsPerPage;
   const paginatedLeads = filteredLeads.slice(startIndex, endIndex);
 
+  // Debug pagination
+  console.log('📄 Pagination:', {
+    totalLeads: filteredLeads.length,
+    itemsPerPage,
+    totalPages,
+    currentPage,
+    showing: `${startIndex + 1}-${Math.min(endIndex, filteredLeads.length)}`
+  });
+
   // Reset to page 1 when filters change
   useEffect(() => {
     setCurrentPage(1);
@@ -265,7 +309,7 @@ export default function LeadDashboardClient({ initialLeads }: Props) {
       // Force refresh after a delay to show updated GHL sync status
       setTimeout(async () => {
         try {
-          const { data: refreshedLeads } = await client.models.PropertyLead.list();
+          const { data: refreshedLeads } = await client.models.PropertyLead.list({ limit: 1000 });
           setAllLeads([...refreshedLeads]);
           console.log('Dashboard refreshed after GHL sync');
         } catch (error) {
@@ -407,7 +451,7 @@ export default function LeadDashboardClient({ initialLeads }: Props) {
       // Refresh leads to show new scores
       setTimeout(async () => {
         try {
-          const { data: refreshedLeads } = await client.models.PropertyLead.list();
+          const { data: refreshedLeads } = await client.models.PropertyLead.list({ limit: 1000 });
           setAllLeads([...refreshedLeads]);
         } catch (error) {
           console.error('Error refreshing leads after AI scoring:', error);
@@ -467,7 +511,7 @@ export default function LeadDashboardClient({ initialLeads }: Props) {
       // Refresh leads to show enrichment data
       setTimeout(async () => {
         try {
-          const { data: refreshedLeads } = await client.models.PropertyLead.list();
+          const { data: refreshedLeads } = await client.models.PropertyLead.list({ limit: 1000 });
           setAllLeads([...refreshedLeads]);
         } catch (error) {
           console.error('Error refreshing leads after enrichment:', error);
@@ -666,15 +710,20 @@ export default function LeadDashboardClient({ initialLeads }: Props) {
           </div>
         </div>
 
-        {totalPages > 1 && (
-          <div className='flex items-center justify-center sm:justify-end gap-1 sm:gap-2 overflow-x-auto'>
-            <button
-              onClick={() => setCurrentPage(1)}
-              disabled={currentPage === 1}
-              className='px-2 sm:px-3 py-1 text-xs sm:text-sm border border-gray-300 rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 whitespace-nowrap'
-            >
-              First
-            </button>
+        {/* Always show pagination info for debugging */}
+        <div className='flex items-center justify-center sm:justify-end gap-1 sm:gap-2 overflow-x-auto'>
+          <span className='text-xs text-gray-500 mr-2'>
+            Page {currentPage} of {totalPages}
+          </span>
+          {totalPages > 1 && (
+            <>
+              <button
+                onClick={() => setCurrentPage(1)}
+                disabled={currentPage === 1}
+                className='px-2 sm:px-3 py-1 text-xs sm:text-sm border border-gray-300 rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 whitespace-nowrap'
+              >
+                First
+              </button>
             <button
               onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
               disabled={currentPage === 1}
@@ -726,8 +775,9 @@ export default function LeadDashboardClient({ initialLeads }: Props) {
             >
               Last
             </button>
-          </div>
-        )}
+            </>
+          )}
+        </div>
       </div>
 
       <LeadTable
