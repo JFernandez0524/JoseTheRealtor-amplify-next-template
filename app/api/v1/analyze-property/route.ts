@@ -100,33 +100,13 @@ const generateAddressVariations = (street: string) => {
 
 export async function POST(req: Request) {
   try {
-    // 🛡️ 1. AUTHENTICATION GUARD
+    // 🛡️ 1. AUTHENTICATION GUARD (Optional - allows public access)
     const isAuthenticated = await AuthIsUserAuthenticatedServer();
-    if (!isAuthenticated) {
-      return NextResponse.json(
-        { success: false, error: 'Unauthorized: Please log in.' },
-        { status: 401 }
-      );
-    }
+    
+    // 🛡️ 2. MEMBERSHIP TIER CHECK (Optional - for premium features)
+    const groups = isAuthenticated ? await AuthGetUserGroupsServer() : [];
+    const isPremium = groups.includes('PRO') || groups.includes('AI_PLAN') || groups.includes('ADMINS');
 
-    // 🛡️ 2. MEMBERSHIP TIER GUARD
-    const groups = await AuthGetUserGroupsServer();
-    const isAuthorized =
-      groups.includes('PRO') ||
-      groups.includes('AI_PLAN') ||
-      groups.includes('ADMINS');
-
-    if (!isAuthorized) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'Forbidden: Property analysis requires a membership.',
-        },
-        { status: 403 }
-      );
-    }
-
-    // --- START ORIGINAL LOGIC ---
     const body = await req.json();
 
     const {

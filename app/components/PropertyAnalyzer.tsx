@@ -66,9 +66,13 @@ export default function PropertyAnalyzer({ user }: PropertyAnalyzerProps) {
 
       const data = await response.json();
 
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to analyze property');
+      }
+
       if (!data.success || (!data.valuation && !data.assessment)) {
         throw new Error(
-          'Property not found. Please verify the address and try again.'
+          data.error || 'Property not found. Please verify the address and try again.'
         );
       }
 
