@@ -110,6 +110,7 @@ export default function DocsPage() {
                   <ul className="text-sm text-gray-700 space-y-1">
                     <li>• Search by name, address, phone, email, tags</li>
                     <li>• Filter by lead type (Probate/Preforeclosure)</li>
+                    <li>• Filter by manual status (ACTIVE, SOLD, PENDING, etc.)</li>
                     <li>• Filter by skip trace status</li>
                     <li>• Filter by GHL sync status</li>
                     <li>• Filter by phone availability</li>
@@ -124,10 +125,47 @@ export default function DocsPage() {
                     <li>• Sort by Owner Name (alphabetical)</li>
                     <li>• Sort by County (alphabetical)</li>
                     <li>• Sort by Zestimate (highest first)</li>
+                    <li>• Sort by Skip Trace Date</li>
                     <li>• Click column headers to sort</li>
                     <li>• Click again to reverse order</li>
                   </ul>
                 </div>
+              </div>
+
+              <div className="bg-purple-50 p-4 rounded-lg">
+                <h4 className="font-medium text-purple-800 mb-2">🏷️ Manual Status Management</h4>
+                <p className="text-sm text-purple-700 mb-2">Track your lead pipeline with status labels:</p>
+                <ul className="list-disc list-inside space-y-1 text-purple-700 text-sm">
+                  <li><strong>ACTIVE</strong> - Currently pursuing this lead</li>
+                  <li><strong>SOLD</strong> - Deal closed (auto-excluded from skip tracing)</li>
+                  <li><strong>PENDING</strong> - Under contract or in negotiation</li>
+                  <li><strong>OFF_MARKET</strong> - Property not currently available</li>
+                  <li><strong>SKIP</strong> - Not interested (auto-excluded from skip tracing)</li>
+                </ul>
+                <p className="text-sm text-purple-600 mt-2">💡 Use "Set Status..." dropdown for bulk updates</p>
+              </div>
+
+              <div className="bg-green-50 p-4 rounded-lg">
+                <h4 className="font-medium text-green-800 mb-2">💰 Property Valuations</h4>
+                <ul className="list-disc list-inside space-y-1 text-green-700 text-sm">
+                  <li>Click Zestimate amount to view property on Zillow</li>
+                  <li>Age indicator shows days since last update (e.g., "45d old")</li>
+                  <li>⚠️ Red warning appears for data older than 180 days</li>
+                  <li>Click refresh button (↻) to fetch current property value</li>
+                  <li>Automatic rate limiting prevents API failures</li>
+                </ul>
+              </div>
+
+              <div className="bg-blue-50 p-4 rounded-lg">
+                <h4 className="font-medium text-blue-800 mb-2">⚡ Bulk Operations</h4>
+                <p className="text-sm text-blue-700 mb-2">Manage multiple leads efficiently:</p>
+                <ul className="list-disc list-inside space-y-1 text-blue-700 text-sm">
+                  <li><strong>Set Status</strong> - Update status for all selected leads at once</li>
+                  <li><strong>Skip Trace</strong> - Find contact info with cost preview ($0.10/lead)</li>
+                  <li><strong>Sync to GHL</strong> - Push to CRM (rate limited: 100/hour, 1000/day)</li>
+                  <li><strong>Export CSV</strong> - Download with all data including manual status</li>
+                  <li><strong>Delete</strong> - Remove selected leads (admin only)</li>
+                </ul>
               </div>
 
               <div className="bg-blue-50 p-4 rounded-lg">
@@ -151,11 +189,23 @@ export default function DocsPage() {
                 <h3 className="text-lg font-medium text-gray-900 mb-2">How It Works</h3>
                 <ol className="list-decimal list-inside space-y-2 text-gray-700">
                   <li>Select leads from dashboard (use checkboxes)</li>
+                  <li>View cost preview (e.g., "50 Selected - Cost: $5.00")</li>
                   <li>Click "Skip Trace" button</li>
                   <li>System finds phone numbers and emails</li>
                   <li>Results appear in Phone and Email columns</li>
                   <li>Status updates to "COMPLETED"</li>
                 </ol>
+              </div>
+
+              <div className="bg-yellow-50 p-4 rounded-lg">
+                <h4 className="font-medium text-yellow-800 mb-2">💰 Cost Savings</h4>
+                <p className="text-sm text-yellow-700 mb-2">Leads marked as SOLD or SKIP are automatically excluded from skip tracing to prevent wasted credits.</p>
+                <ul className="list-disc list-inside space-y-1 text-yellow-700 text-sm">
+                  <li>Cost preview shows before you commit</li>
+                  <li>Only charged for successful skip traces</li>
+                  <li>Duplicate prevention within your account</li>
+                  <li>Each user maintains independent lead lists</li>
+                </ul>
               </div>
 
               <div className="grid md:grid-cols-2 gap-6">
@@ -175,7 +225,7 @@ export default function DocsPage() {
                     <li>• Filter by skip trace completion date</li>
                     <li>• Click "Download Skip Traced" button</li>
                     <li>• CSV includes all contact information</li>
-                    <li>• Includes completion dates and property values</li>
+                    <li>• Includes manual status and completion dates</li>
                   </ul>
                 </div>
               </div>
@@ -196,6 +246,17 @@ export default function DocsPage() {
                   <li>Select your location/sub-account</li>
                   <li>Connection persists across login sessions</li>
                 </ol>
+              </div>
+
+              <div className="bg-green-50 p-4 rounded-lg">
+                <h4 className="font-medium text-green-800 mb-2">🚦 Rate Limiting Protection</h4>
+                <p className="text-sm text-green-700 mb-2">System enforces API limits to prevent service interruptions:</p>
+                <ul className="list-disc list-inside space-y-1 text-green-700 text-sm">
+                  <li><strong>100 syncs per hour</strong> - Prevents hourly rate limit blocks</li>
+                  <li><strong>1,000 syncs per day</strong> - Prevents daily rate limit blocks</li>
+                  <li>Automatic counter reset after time window expires</li>
+                  <li>Error message if limit reached with retry guidance</li>
+                </ul>
               </div>
 
               <div className="bg-purple-50 p-4 rounded-lg">
@@ -292,7 +353,7 @@ export default function DocsPage() {
                 <div className="space-y-4 text-sm">
                   <div>
                     <strong className="text-red-700">CSV Upload Fails:</strong>
-                    <p className="text-red-600">Ensure required columns are present and properly formatted. Check for special characters in addresses.</p>
+                    <p className="text-red-600">Ensure required columns are present and properly formatted. Check for special characters in addresses. Large uploads are automatically rate-limited to prevent API failures.</p>
                   </div>
                   <div>
                     <strong className="text-red-700">Skip Trace No Results:</strong>
@@ -300,7 +361,11 @@ export default function DocsPage() {
                   </div>
                   <div>
                     <strong className="text-red-700">GHL Sync Errors:</strong>
-                    <p className="text-red-600">Check OAuth connection in Profile settings. Reconnect if the connection shows as expired.</p>
+                    <p className="text-red-600">Check OAuth connection in Profile settings. Reconnect if the connection shows as expired. Rate limits: 100/hour, 1000/day.</p>
+                  </div>
+                  <div>
+                    <strong className="text-red-700">Stale Zestimate Data:</strong>
+                    <p className="text-red-600">Click the refresh button (↻) next to any Zestimate showing a red warning (&gt;180 days old) to fetch current values.</p>
                   </div>
                   <div>
                     <strong className="text-red-700">Missing Credits:</strong>
@@ -313,7 +378,10 @@ export default function DocsPage() {
                 <h4 className="font-medium text-green-800 mb-2">💡 Best Practices</h4>
                 <ul className="list-disc list-inside space-y-1 text-green-700 text-sm">
                   <li>Clean your CSV data before uploading for better results</li>
-                  <li>Use custom tags to organize leads by priority or status</li>
+                  <li>Use manual status labels to organize and track your pipeline</li>
+                  <li>Mark leads as SOLD or SKIP to prevent wasted skip trace credits</li>
+                  <li>Use bulk status updates to manage large lead lists efficiently</li>
+                  <li>Refresh stale Zestimates (&gt;180 days) before making offers</li>
                   <li>Filter by skip trace completion date for targeted downloads</li>
                   <li>Connect GHL early to streamline your workflow</li>
                   <li>Use double-click to navigate to avoid accidental clicks</li>
