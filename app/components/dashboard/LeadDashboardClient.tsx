@@ -24,11 +24,11 @@ export default function LeadDashboardClient({ initialLeads }: Props) {
   const { hasPaidPlan, isAdmin } = useAccess();
 
   // --- State ---
-  const [leads, setLeads] = useState<Lead[]>([]);
+  const [leads, setLeads] = useState<Lead[]>(initialLeads);
   const [userAccount, setUserAccount] = useState<UserAccount | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
-  
+
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(100); // Show 100 leads per page
@@ -45,19 +45,43 @@ export default function LeadDashboardClient({ initialLeads }: Props) {
   const [skipTraceToDate, setSkipTraceToDate] = useState('');
 
   // Sort States
-  const [sortField, setSortField] = useState<'createdAt' | 'updatedAt' | 'ownerLastName' | 'ownerCounty' | 'zestimate' | 'skipTraceCompletedAt' | 'aiScore'>('createdAt');
+  const [sortField, setSortField] = useState<
+    | 'createdAt'
+    | 'updatedAt'
+    | 'ownerLastName'
+    | 'ownerCounty'
+    | 'zestimate'
+    | 'skipTraceCompletedAt'
+    | 'aiScore'
+  >('createdAt');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
 
   // --- Effects ---
 
-  // Subscribe to real-time updates
+  // Subscribe to real-time updates only
   useEffect(() => {
-    const sub = client.models.PropertyLead.observeQuery().subscribe({
-      next: ({ items }) => {
-        setLeads([...items]);
+    const sub = client.models.PropertyLead.onCreate().subscribe({
+      next: () => {
+        // Refresh page to get new data from server
+        window.location.reload();
       },
     });
-    return () => sub.unsubscribe();
+    const sub2 = client.models.PropertyLead.onUpdate().subscribe({
+      next: () => {
+        window.location.reload();
+      },
+    });
+    const sub3 = client.models.PropertyLead.onDelete().subscribe({
+      next: () => {
+        window.location.reload();
+      },
+    });
+
+    return () => {
+      sub.unsubscribe();
+      sub2.unsubscribe();
+      sub3.unsubscribe();
+    };
   }, []);
 
   // 2. Ensure UserAccount exists (Wallet Initialization)
@@ -87,7 +111,9 @@ export default function LeadDashboardClient({ initialLeads }: Props) {
   useEffect(() => {
     const refresh = searchParams.get('refresh');
     if (refresh === 'true') {
-      console.log('🔄 Upload redirect detected, observeQuery will sync automatically');
+      console.log(
+        '🔄 Upload redirect detected, observeQuery will sync automatically'
+      );
       router.replace('/dashboard', { scroll: false });
     }
   }, [searchParams, router]);
@@ -97,86 +123,123 @@ export default function LeadDashboardClient({ initialLeads }: Props) {
 
   // --- Filter Logic ---
   const filteredLeads = useMemo(() => {
-    return leads.filter((lead) => {
-      const search = searchQuery.toLowerCase();
-      const matchesSearch =
-        lead.ownerAddress?.toLowerCase().includes(search) ||
-        lead.ownerLastName?.toLowerCase().includes(search) ||
-        lead.ownerFirstName?.toLowerCase().includes(search) ||
-        lead.ownerCity?.toLowerCase().includes(search) ||
-        lead.ownerState?.toLowerCase().includes(search) ||
-        lead.ownerZip?.includes(search) ||
-        lead.ownerCounty?.toLowerCase().includes(search) ||
-        lead.adminFirstName?.toLowerCase().includes(search) ||
-        lead.adminLastName?.toLowerCase().includes(search) ||
-        (lead.phones && lead.phones.some(phone => phone?.includes(search))) ||
-        (lead.emails && lead.emails.some(email => email?.toLowerCase().includes(search))) ||
-        (lead.customTags && lead.customTags.some(tag => tag?.toLowerCase().includes(search)));
+    return leads
+      .filter((lead) => {
+        const search = searchQuery.toLowerCase();
+        const matchesSearch =
+          lead.ownerAddress?.toLowerCase().includes(search) ||
+          lead.ownerLastName?.toLowerCase().includes(search) ||
+          lead.ownerFirstName?.toLowerCase().includes(search) ||
+          lead.ownerCity?.toLowerCase().includes(search) ||
+          lead.ownerState?.toLowerCase().includes(search) ||
+          lead.ownerZip?.includes(search) ||
+          lead.ownerCounty?.toLowerCase().includes(search) ||
+          lead.adminFirstName?.toLowerCase().includes(search) ||
+          lead.adminLastName?.toLowerCase().includes(search) ||
+          (lead.phones &&
+            lead.phones.some((phone) => phone?.includes(search))) ||
+          (lead.emails &&
+            lead.emails.some((email) =>
+              email?.toLowerCase().includes(search)
+            )) ||
+          (lead.customTags &&
+            lead.customTags.some((tag) => tag?.toLowerCase().includes(search)));
 
-      const matchesType = !filterType || lead.type === filterType;
-      const matchesStatus =
-        !filterStatus || lead.skipTraceStatus === filterStatus;
+        const matchesType = !filterType || lead.type === filterType;
+        const matchesStatus =
+          !filterStatus || lead.skipTraceStatus === filterStatus;
 
-      const matchesCrm =
-        !filterCrmStatus ||
-        (filterCrmStatus === 'NULL'
-          ? !lead.ghlSyncStatus
-          : lead.ghlSyncStatus === filterCrmStatus);
+        const matchesCrm =
+          !filterCrmStatus ||
+          (filterCrmStatus === 'NULL'
+            ? !lead.ghlSyncStatus
+            : lead.ghlSyncStatus === filterCrmStatus);
 
-      const matchesPhone = !filterHasPhone || 
-        (filterHasPhone === 'HAS_PHONE' 
-          ? lead.phones && lead.phones.length > 0
-          : filterHasPhone === 'NO_PHONE'
-          ? !lead.phones || lead.phones.length === 0
-          : true);
+        const matchesPhone =
+          !filterHasPhone ||
+          (filterHasPhone === 'HAS_PHONE'
+            ? lead.phones && lead.phones.length > 0
+            : filterHasPhone === 'NO_PHONE'
+              ? !lead.phones || lead.phones.length === 0
+              : true);
 
-      const matchesManualStatus = !filterManualStatus || lead.manualStatus === filterManualStatus;
+        const matchesManualStatus =
+          !filterManualStatus || lead.manualStatus === filterManualStatus;
 
-      const matchesAiPriority = !filterAiPriority || lead.aiPriority === filterAiPriority;
+        const matchesAiPriority =
+          !filterAiPriority || lead.aiPriority === filterAiPriority;
 
-      // Date filtering for skip trace completion
-      const matchesDateRange = (() => {
-        if (!skipTraceFromDate && !skipTraceToDate) return true;
-        if (!lead.skipTraceCompletedAt) return false;
-        
-        const completedDate = new Date(lead.skipTraceCompletedAt).toISOString().split('T')[0];
-        const fromMatch = !skipTraceFromDate || completedDate >= skipTraceFromDate;
-        const toMatch = !skipTraceToDate || completedDate <= skipTraceToDate;
-        
-        return fromMatch && toMatch;
-      })();
+        // Date filtering for skip trace completion
+        const matchesDateRange = (() => {
+          if (!skipTraceFromDate && !skipTraceToDate) return true;
+          if (!lead.skipTraceCompletedAt) return false;
 
-      return matchesSearch && matchesType && matchesStatus && matchesCrm && matchesPhone && matchesManualStatus && matchesAiPriority && matchesDateRange;
-    }).sort((a, b) => {
-      // Sort the filtered results
-      let aValue: any = a[sortField];
-      let bValue: any = b[sortField];
+          const completedDate = new Date(lead.skipTraceCompletedAt)
+            .toISOString()
+            .split('T')[0];
+          const fromMatch =
+            !skipTraceFromDate || completedDate >= skipTraceFromDate;
+          const toMatch = !skipTraceToDate || completedDate <= skipTraceToDate;
 
-      // Handle date sorting
-      if (sortField === 'createdAt' || sortField === 'updatedAt' || sortField === 'skipTraceCompletedAt') {
-        aValue = new Date(aValue || 0).getTime();
-        bValue = new Date(bValue || 0).getTime();
-      }
+          return fromMatch && toMatch;
+        })();
 
-      // Handle number sorting
-      if (sortField === 'zestimate' || sortField === 'aiScore') {
-        aValue = parseFloat(aValue || 0);
-        bValue = parseFloat(bValue || 0);
-      }
+        return (
+          matchesSearch &&
+          matchesType &&
+          matchesStatus &&
+          matchesCrm &&
+          matchesPhone &&
+          matchesManualStatus &&
+          matchesAiPriority &&
+          matchesDateRange
+        );
+      })
+      .sort((a, b) => {
+        // Sort the filtered results
+        let aValue: any = a[sortField];
+        let bValue: any = b[sortField];
 
-      // Handle string sorting
-      if (typeof aValue === 'string') {
-        aValue = aValue.toLowerCase();
-        bValue = (bValue || '').toLowerCase();
-      }
+        // Handle date sorting
+        if (
+          sortField === 'createdAt' ||
+          sortField === 'updatedAt' ||
+          sortField === 'skipTraceCompletedAt'
+        ) {
+          aValue = new Date(aValue || 0).getTime();
+          bValue = new Date(bValue || 0).getTime();
+        }
 
-      if (sortDirection === 'asc') {
-        return aValue > bValue ? 1 : -1;
-      } else {
-        return aValue < bValue ? 1 : -1;
-      }
-    });
-  }, [leads, searchQuery, filterType, filterStatus, filterCrmStatus, filterHasPhone, skipTraceFromDate, skipTraceToDate, sortField, sortDirection]);
+        // Handle number sorting
+        if (sortField === 'zestimate' || sortField === 'aiScore') {
+          aValue = parseFloat(aValue || 0);
+          bValue = parseFloat(bValue || 0);
+        }
+
+        // Handle string sorting
+        if (typeof aValue === 'string') {
+          aValue = aValue.toLowerCase();
+          bValue = (bValue || '').toLowerCase();
+        }
+
+        if (sortDirection === 'asc') {
+          return aValue > bValue ? 1 : -1;
+        } else {
+          return aValue < bValue ? 1 : -1;
+        }
+      });
+  }, [
+    leads,
+    searchQuery,
+    filterType,
+    filterStatus,
+    filterCrmStatus,
+    filterHasPhone,
+    skipTraceFromDate,
+    skipTraceToDate,
+    sortField,
+    sortDirection,
+  ]);
 
   // --- Pagination Logic ---
   const totalPages = Math.ceil(filteredLeads.length / itemsPerPage);
@@ -190,16 +253,37 @@ export default function LeadDashboardClient({ initialLeads }: Props) {
     itemsPerPage,
     totalPages,
     currentPage,
-    showing: `${startIndex + 1}-${Math.min(endIndex, filteredLeads.length)}`
+    showing: `${startIndex + 1}-${Math.min(endIndex, filteredLeads.length)}`,
   });
 
   // Reset to page 1 when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, filterType, filterStatus, filterCrmStatus, filterHasPhone, filterManualStatus, filterAiPriority, skipTraceFromDate, skipTraceToDate, sortField, sortDirection]);
+  }, [
+    searchQuery,
+    filterType,
+    filterStatus,
+    filterCrmStatus,
+    filterHasPhone,
+    filterManualStatus,
+    filterAiPriority,
+    skipTraceFromDate,
+    skipTraceToDate,
+    sortField,
+    sortDirection,
+  ]);
 
   // --- Sort Handler ---
-  const handleSort = (field: 'createdAt' | 'updatedAt' | 'ownerLastName' | 'ownerCounty' | 'zestimate' | 'skipTraceCompletedAt' | 'aiScore') => {
+  const handleSort = (
+    field:
+      | 'createdAt'
+      | 'updatedAt'
+      | 'ownerLastName'
+      | 'ownerCounty'
+      | 'zestimate'
+      | 'skipTraceCompletedAt'
+      | 'aiScore'
+  ) => {
     if (sortField === field) {
       setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
     } else {
@@ -309,7 +393,7 @@ export default function LeadDashboardClient({ initialLeads }: Props) {
 
   const handleBulkStatusUpdate = async (status: string) => {
     if (selectedIds.length === 0) return;
-    
+
     if (!confirm(`Set ${selectedIds.length} leads to ${status}?`)) return;
 
     setIsProcessing(true);
@@ -318,7 +402,13 @@ export default function LeadDashboardClient({ initialLeads }: Props) {
         selectedIds.map((id) =>
           client.models.PropertyLead.update({
             id,
-            manualStatus: status as 'ACTIVE' | 'SOLD' | 'PENDING' | 'OFF_MARKET' | 'SKIP' | 'DIRECT_MAIL',
+            manualStatus: status as
+              | 'ACTIVE'
+              | 'SOLD'
+              | 'PENDING'
+              | 'OFF_MARKET'
+              | 'SKIP'
+              | 'DIRECT_MAIL',
           })
         )
       );
@@ -336,29 +426,40 @@ export default function LeadDashboardClient({ initialLeads }: Props) {
     if (selectedIds.length === 0) return;
 
     // Filter to preforeclosure only
-    const selectedLeads = leads.filter(lead => selectedIds.includes(lead.id));
-    const preforeclosureLeads = selectedLeads.filter(lead => lead.type === 'PREFORECLOSURE');
-    
+    const selectedLeads = leads.filter((lead) => selectedIds.includes(lead.id));
+    const preforeclosureLeads = selectedLeads.filter(
+      (lead) => lead.type === 'PREFORECLOSURE'
+    );
+
     if (preforeclosureLeads.length === 0) {
-      alert('AI scoring is only for preforeclosure leads (where we have equity data).');
+      alert(
+        'AI scoring is only for preforeclosure leads (where we have equity data).'
+      );
       return;
     }
 
-    if (!confirm(`Calculate AI scores for ${preforeclosureLeads.length} preforeclosure leads?`)) return;
+    if (
+      !confirm(
+        `Calculate AI scores for ${preforeclosureLeads.length} preforeclosure leads?`
+      )
+    )
+      return;
 
     setIsProcessing(true);
     try {
       const response = await fetch('/api/v1/ai/score-leads', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ leadIds: preforeclosureLeads.map(l => l.id) }),
+        body: JSON.stringify({ leadIds: preforeclosureLeads.map((l) => l.id) }),
       });
 
       const result = await response.json();
 
       if (!response.ok) throw new Error(result.error);
 
-      alert(`✅ AI Scoring Complete!\nScored: ${result.scored}/${result.total} preforeclosure leads`);
+      alert(
+        `✅ AI Scoring Complete!\nScored: ${result.scored}/${result.total} preforeclosure leads`
+      );
       setSelectedIds([]);
     } catch (err) {
       console.error('AI scoring error:', err);
@@ -372,23 +473,30 @@ export default function LeadDashboardClient({ initialLeads }: Props) {
     if (selectedIds.length === 0) return;
 
     // Filter to preforeclosure only
-    const selectedLeads = leads.filter(lead => selectedIds.includes(lead.id));
-    const preforeclosureLeads = selectedLeads.filter(lead => lead.type === 'PREFORECLOSURE');
-    
+    const selectedLeads = leads.filter((lead) => selectedIds.includes(lead.id));
+    const preforeclosureLeads = selectedLeads.filter(
+      (lead) => lead.type === 'PREFORECLOSURE'
+    );
+
     if (preforeclosureLeads.length === 0) {
-      alert('No preforeclosure leads selected. BatchData enrichment is only for preforeclosure leads.');
+      alert(
+        'No preforeclosure leads selected. BatchData enrichment is only for preforeclosure leads.'
+      );
       return;
     }
 
     const cost = preforeclosureLeads.length * 0.29;
-    if (!confirm(
-      `Enrich ${preforeclosureLeads.length} preforeclosure leads with BatchData?\n\n` +
-      `Cost: $${cost.toFixed(2)}\n\n` +
-      `You'll get:\n` +
-      `• Real equity % and mortgage balances\n` +
-      `• Owner emails and phone numbers\n` +
-      `• Property flags (owner occupied, high equity, etc.)`
-    )) return;
+    if (
+      !confirm(
+        `Enrich ${preforeclosureLeads.length} preforeclosure leads with BatchData?\n\n` +
+          `Cost: $${cost.toFixed(2)}\n\n` +
+          `You'll get:\n` +
+          `• Real equity % and mortgage balances\n` +
+          `• Owner emails and phone numbers\n` +
+          `• Property flags (owner occupied, high equity, etc.)`
+      )
+    )
+      return;
 
     setIsProcessing(true);
     try {
@@ -404,15 +512,18 @@ export default function LeadDashboardClient({ initialLeads }: Props) {
 
       alert(
         `✅ Enrichment Complete!\n\n` +
-        `Enriched: ${result.enriched} leads\n` +
-        `Skipped: ${result.skipped} (already enriched)\n` +
-        `Failed: ${result.failed}\n` +
-        `Cost: $${result.cost.toFixed(2)}`
+          `Enriched: ${result.enriched} leads\n` +
+          `Skipped: ${result.skipped} (already enriched)\n` +
+          `Failed: ${result.failed}\n` +
+          `Cost: $${result.cost.toFixed(2)}`
       );
       setSelectedIds([]);
     } catch (err) {
       console.error('Enrichment error:', err);
-      alert('Error enriching leads: ' + (err instanceof Error ? err.message : String(err)));
+      alert(
+        'Error enriching leads: ' +
+          (err instanceof Error ? err.message : String(err))
+      );
     } finally {
       setIsProcessing(false);
     }
@@ -421,15 +532,20 @@ export default function LeadDashboardClient({ initialLeads }: Props) {
   const handleBulkDirectMail = async () => {
     if (selectedIds.length === 0) return;
 
-    const cost = selectedIds.length * 1.00; // ~$1 per letter
-    if (!confirm(`Generate and send ${selectedIds.length} letters via Click2Mail?\n\nEstimated cost: $${cost.toFixed(2)}\n\nLetters will be sent automatically.`)) return;
+    const cost = selectedIds.length * 1.0; // ~$1 per letter
+    if (
+      !confirm(
+        `Generate and send ${selectedIds.length} letters via Click2Mail?\n\nEstimated cost: $${cost.toFixed(2)}\n\nLetters will be sent automatically.`
+      )
+    )
+      return;
 
     setIsProcessing(true);
     try {
       const response = await fetch('/api/v1/ai/generate-bulk-letters', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           leadIds: selectedIds,
           options: {
             includeListingOption: true,
@@ -446,9 +562,11 @@ export default function LeadDashboardClient({ initialLeads }: Props) {
       if (!response.ok) throw new Error(result.error);
 
       const { sent, failed } = result.mailResults;
-      
-      alert(`✅ Direct Mail Campaign Complete!\n\nSent: ${sent}/${result.generated} letters\nFailed: ${failed}\n\nTracking numbers saved to leads.\nExpected delivery: 3-5 business days`);
-      
+
+      alert(
+        `✅ Direct Mail Campaign Complete!\n\nSent: ${sent}/${result.generated} letters\nFailed: ${failed}\n\nTracking numbers saved to leads.\nExpected delivery: 3-5 business days`
+      );
+
       setSelectedIds([]);
     } catch (err) {
       console.error('Direct mail generation error:', err);
@@ -464,8 +582,10 @@ export default function LeadDashboardClient({ initialLeads }: Props) {
       alert('Please select leads to download.');
       return;
     }
-    
-    const selectedLeads = filteredLeads.filter(lead => selectedIds.includes(lead.id));
+
+    const selectedLeads = filteredLeads.filter((lead) =>
+      selectedIds.includes(lead.id)
+    );
 
     if (selectedLeads.length === 0) {
       alert('No selected leads found.');
@@ -474,33 +594,50 @@ export default function LeadDashboardClient({ initialLeads }: Props) {
 
     // Create CSV content with all dashboard columns
     const headers = [
-      'Type', 'Manual Status', 'Status', 'GHL Sync', 'Owner Name', 'Address', 'Phone', 'County', 
-      'City', 'State', 'Zip', 'Zestimate', 'Admin Name', 'Admin Address', 'Created At',
-      'Email Addresses', 'Skip Traced Date', 'Estimated Value'
+      'Type',
+      'Manual Status',
+      'Status',
+      'GHL Sync',
+      'Owner Name',
+      'Address',
+      'Phone',
+      'County',
+      'City',
+      'State',
+      'Zip',
+      'Zestimate',
+      'Admin Name',
+      'Admin Address',
+      'Created At',
+      'Email Addresses',
+      'Skip Traced Date',
+      'Estimated Value',
     ];
 
     const csvContent = [
       headers.join(','),
-      ...selectedLeads.map(lead => [
-        `"${lead.type || ''}"`,
-        `"${lead.manualStatus || ''}"`,
-        `"${lead.skipTraceStatus || ''}"`,
-        `"${lead.ghlSyncStatus || ''}"`,
-        `"${lead.ownerFirstName || ''} ${lead.ownerLastName || ''}"`.trim(),
-        `"${lead.ownerAddress || ''}"`,
-        `"${(lead.phones || []).join('; ')}"`,
-        `"${lead.ownerCounty || ''}"`,
-        `"${lead.ownerCity || ''}"`,
-        `"${lead.ownerState || ''}"`,
-        `"${lead.ownerZip || ''}"`,
-        `"${lead.zestimate || ''}"`,
-        `"${lead.adminFirstName || ''} ${lead.adminLastName || ''}"`.trim(),
-        `"${lead.adminAddress || ''}"`,
-        `"${lead.createdAt ? new Date(lead.createdAt).toLocaleDateString() : ''}"`,
-        `"${(lead.emails || []).join('; ')}"`,
-        `"${lead.skipTraceCompletedAt ? new Date(lead.skipTraceCompletedAt).toLocaleDateString() : ''}"`,
-        `"${lead.estimatedValue || ''}"`,
-      ].join(','))
+      ...selectedLeads.map((lead) =>
+        [
+          `"${lead.type || ''}"`,
+          `"${lead.manualStatus || ''}"`,
+          `"${lead.skipTraceStatus || ''}"`,
+          `"${lead.ghlSyncStatus || ''}"`,
+          `"${lead.ownerFirstName || ''} ${lead.ownerLastName || ''}"`.trim(),
+          `"${lead.ownerAddress || ''}"`,
+          `"${(lead.phones || []).join('; ')}"`,
+          `"${lead.ownerCounty || ''}"`,
+          `"${lead.ownerCity || ''}"`,
+          `"${lead.ownerState || ''}"`,
+          `"${lead.ownerZip || ''}"`,
+          `"${lead.zestimate || ''}"`,
+          `"${lead.adminFirstName || ''} ${lead.adminLastName || ''}"`.trim(),
+          `"${lead.adminAddress || ''}"`,
+          `"${lead.createdAt ? new Date(lead.createdAt).toLocaleDateString() : ''}"`,
+          `"${(lead.emails || []).join('; ')}"`,
+          `"${lead.skipTraceCompletedAt ? new Date(lead.skipTraceCompletedAt).toLocaleDateString() : ''}"`,
+          `"${lead.estimatedValue || ''}"`,
+        ].join(',')
+      ),
     ].join('\n');
 
     // Download CSV
@@ -520,13 +657,13 @@ export default function LeadDashboardClient({ initialLeads }: Props) {
   return (
     <div className='space-y-4'>
       {/* AI Insights Dashboard */}
-      <AIInsightsDashboard 
-        leads={filteredLeads} 
+      <AIInsightsDashboard
+        leads={filteredLeads}
         onLeadClick={(leadId) => {
-          const leadIds = filteredLeads.map(lead => lead.id);
+          const leadIds = filteredLeads.map((lead) => lead.id);
           const navContext = {
             ids: leadIds,
-            filterType: filterType || null
+            filterType: filterType || null,
           };
           sessionStorage.setItem('leadNavContext', JSON.stringify(navContext));
           router.push(`/lead/${leadId}`);
@@ -587,13 +724,18 @@ export default function LeadDashboardClient({ initialLeads }: Props) {
       <div className='flex flex-col sm:flex-row sm:justify-between sm:items-center bg-white border border-gray-200 rounded-lg px-3 sm:px-4 py-3 gap-3 sm:gap-4'>
         <div className='flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4'>
           <div className='text-sm text-gray-700'>
-            <span className='font-semibold'>{filteredLeads.length}</span> total leads
+            <span className='font-semibold'>{filteredLeads.length}</span> total
+            leads
             {filteredLeads.length !== leads.length && (
-              <span className='text-gray-500'> (filtered from {leads.length})</span>
+              <span className='text-gray-500'>
+                {' '}
+                (filtered from {leads.length})
+              </span>
             )}
           </div>
           <div className='text-xs sm:text-sm text-gray-500'>
-            Showing {startIndex + 1}-{Math.min(endIndex, filteredLeads.length)} of {filteredLeads.length}
+            Showing {startIndex + 1}-{Math.min(endIndex, filteredLeads.length)}{' '}
+            of {filteredLeads.length}
           </div>
         </div>
 
@@ -611,57 +753,59 @@ export default function LeadDashboardClient({ initialLeads }: Props) {
               >
                 First
               </button>
-            <button
-              onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-              disabled={currentPage === 1}
-              className='px-2 sm:px-3 py-1 text-xs sm:text-sm border border-gray-300 rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50'
-            >
-              ←
-            </button>
-            
-            <div className='flex items-center gap-1'>
-              {Array.from({ length: Math.min(3, totalPages) }, (_, i) => {
-                let pageNum;
-                if (totalPages <= 3) {
-                  pageNum = i + 1;
-                } else if (currentPage <= 2) {
-                  pageNum = i + 1;
-                } else if (currentPage >= totalPages - 1) {
-                  pageNum = totalPages - 2 + i;
-                } else {
-                  pageNum = currentPage - 1 + i;
-                }
-                
-                return (
-                  <button
-                    key={pageNum}
-                    onClick={() => setCurrentPage(pageNum)}
-                    className={`px-2 sm:px-3 py-1 text-xs sm:text-sm border rounded ${
-                      currentPage === pageNum
-                        ? 'bg-blue-500 text-white border-blue-500'
-                        : 'border-gray-300 hover:bg-gray-50'
-                    }`}
-                  >
-                    {pageNum}
-                  </button>
-                );
-              })}
-            </div>
+              <button
+                onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+                disabled={currentPage === 1}
+                className='px-2 sm:px-3 py-1 text-xs sm:text-sm border border-gray-300 rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50'
+              >
+                ←
+              </button>
 
-            <button
-              onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-              disabled={currentPage === totalPages}
-              className='px-2 sm:px-3 py-1 text-xs sm:text-sm border border-gray-300 rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50'
-            >
-              →
-            </button>
-            <button
-              onClick={() => setCurrentPage(totalPages)}
-              disabled={currentPage === totalPages}
-              className='px-2 sm:px-3 py-1 text-xs sm:text-sm border border-gray-300 rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 whitespace-nowrap'
-            >
-              Last
-            </button>
+              <div className='flex items-center gap-1'>
+                {Array.from({ length: Math.min(3, totalPages) }, (_, i) => {
+                  let pageNum;
+                  if (totalPages <= 3) {
+                    pageNum = i + 1;
+                  } else if (currentPage <= 2) {
+                    pageNum = i + 1;
+                  } else if (currentPage >= totalPages - 1) {
+                    pageNum = totalPages - 2 + i;
+                  } else {
+                    pageNum = currentPage - 1 + i;
+                  }
+
+                  return (
+                    <button
+                      key={pageNum}
+                      onClick={() => setCurrentPage(pageNum)}
+                      className={`px-2 sm:px-3 py-1 text-xs sm:text-sm border rounded ${
+                        currentPage === pageNum
+                          ? 'bg-blue-500 text-white border-blue-500'
+                          : 'border-gray-300 hover:bg-gray-50'
+                      }`}
+                    >
+                      {pageNum}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <button
+                onClick={() =>
+                  setCurrentPage((prev) => Math.min(totalPages, prev + 1))
+                }
+                disabled={currentPage === totalPages}
+                className='px-2 sm:px-3 py-1 text-xs sm:text-sm border border-gray-300 rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50'
+              >
+                →
+              </button>
+              <button
+                onClick={() => setCurrentPage(totalPages)}
+                disabled={currentPage === totalPages}
+                className='px-2 sm:px-3 py-1 text-xs sm:text-sm border border-gray-300 rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 whitespace-nowrap'
+              >
+                Last
+              </button>
             </>
           )}
         </div>
@@ -685,10 +829,10 @@ export default function LeadDashboardClient({ initialLeads }: Props) {
         }}
         onRowClick={(id) => {
           // Set navigation context for lead details page
-          const leadIds = filteredLeads.map(lead => lead.id);
+          const leadIds = filteredLeads.map((lead) => lead.id);
           const navContext = {
             ids: leadIds,
-            filterType: filterType || null
+            filterType: filterType || null,
           };
           sessionStorage.setItem('leadNavContext', JSON.stringify(navContext));
           router.push(`/lead/${id}`);
@@ -703,13 +847,19 @@ export default function LeadDashboardClient({ initialLeads }: Props) {
         <div className='flex flex-col sm:flex-row sm:justify-between sm:items-center bg-white border border-gray-200 rounded-lg px-3 sm:px-4 py-3 gap-3 sm:gap-4'>
           <div className='flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4'>
             <div className='text-sm text-gray-700'>
-              <span className='font-semibold'>{filteredLeads.length}</span> total leads
+              <span className='font-semibold'>{filteredLeads.length}</span>{' '}
+              total leads
               {filteredLeads.length !== leads.length && (
-                <span className='text-gray-500'> (filtered from {leads.length})</span>
+                <span className='text-gray-500'>
+                  {' '}
+                  (filtered from {leads.length})
+                </span>
               )}
             </div>
             <div className='text-xs sm:text-sm text-gray-500'>
-              Showing {startIndex + 1}-{Math.min(endIndex, filteredLeads.length)} of {filteredLeads.length}
+              Showing {startIndex + 1}-
+              {Math.min(endIndex, filteredLeads.length)} of{' '}
+              {filteredLeads.length}
             </div>
           </div>
 
@@ -722,13 +872,13 @@ export default function LeadDashboardClient({ initialLeads }: Props) {
               First
             </button>
             <button
-              onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+              onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
               disabled={currentPage === 1}
               className='px-2 sm:px-3 py-1 text-xs sm:text-sm border border-gray-300 rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50'
             >
               ←
             </button>
-            
+
             <div className='flex items-center gap-1'>
               {Array.from({ length: Math.min(3, totalPages) }, (_, i) => {
                 let pageNum;
@@ -741,7 +891,7 @@ export default function LeadDashboardClient({ initialLeads }: Props) {
                 } else {
                   pageNum = currentPage - 1 + i;
                 }
-                
+
                 return (
                   <button
                     key={pageNum}
@@ -759,7 +909,9 @@ export default function LeadDashboardClient({ initialLeads }: Props) {
             </div>
 
             <button
-              onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+              onClick={() =>
+                setCurrentPage((prev) => Math.min(totalPages, prev + 1))
+              }
               disabled={currentPage === totalPages}
               className='px-2 sm:px-3 py-1 text-xs sm:text-sm border border-gray-300 rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50'
             >

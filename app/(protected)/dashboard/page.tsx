@@ -5,13 +5,23 @@ import { type Schema } from '@/amplify/data/resource';
 type PropertyLead = Schema['PropertyLead']['type'];
 
 export default async function DashboardPage() {
-  // 1. Fetch initial data - observeQuery will handle full sync on client
-  const { data: leads, errors } = await cookiesClient.models.PropertyLead.list();
+  // 1. Fetch ALL data with pagination on server
+  let allLeads: PropertyLead[] = [];
+  let token: string | null | undefined = undefined;
 
-  if (errors) console.error('Data Fetch Error:', errors);
+  do {
+    const { data, errors, nextToken } =
+      await cookiesClient.models.PropertyLead.list();
+
+    if (errors) console.error('Data Fetch Error:', errors);
+    if (data) allLeads = allLeads.concat(data);
+    token = nextToken;
+  } while (token);
+
+  console.log('Server fetched all leads:', allLeads.length);
 
   // 2. Serialize for Client Component
-  const initialLeads: PropertyLead[] = JSON.parse(JSON.stringify(leads || []));
+  const initialLeads: PropertyLead[] = JSON.parse(JSON.stringify(allLeads));
 
   return (
     <div className='p-6'>
