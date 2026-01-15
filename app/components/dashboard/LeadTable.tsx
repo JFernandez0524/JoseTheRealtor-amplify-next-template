@@ -255,7 +255,7 @@ export function LeadTable({
               <th className='px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider whitespace-nowrap bg-purple-50'>
                 Admin Address
               </th>
-              <th>{renderSortableHeader('createdAt', 'Created At')}</th>
+              {renderSortableHeader('createdAt', 'Created At')}
             </tr>
           </thead>
           {/* 💥 FIX: Removed whitespace before and after <tbody> content */}

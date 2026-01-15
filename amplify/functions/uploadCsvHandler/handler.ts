@@ -278,6 +278,8 @@ export const handler: S3Handler = async (event) => {
             await delay(BRIDGE_API_DELAY_MS);
             
             zillowData = await fetchBestZestimate({
+              lat: latitude || undefined,
+              lng: longitude || undefined,
               street: finalPropAddr,
               city: finalPropCity,
               state: finalPropState,
