@@ -18,6 +18,8 @@ type Props = {
   selectedIds: string[];
   isLoading: boolean;
   onToggleAll: () => void;
+  onToggleAllFiltered: () => void;
+  totalFilteredCount: number;
   onToggleOne: (id: string) => void;
   onRowClick: (id: string) => void;
   sortField:
@@ -103,6 +105,8 @@ export function LeadTable({
   selectedIds,
   isLoading,
   onToggleAll,
+  onToggleAllFiltered,
+  totalFilteredCount,
   onToggleOne,
   onRowClick,
   sortField,
@@ -205,15 +209,27 @@ export function LeadTable({
           {/* 💥 FIX: Removed whitespace between <thead> and <tr> */}
           <thead className='bg-gray-50'>
             <tr>
-              <th scope='col' className='px-4 py-3 text-left w-10'>
-                <input
-                  type='checkbox'
-                  className='rounded border-gray-300 text-blue-600 focus:ring-blue-500 h-4 w-4'
-                  checked={
-                    leads.length > 0 && selectedIds.length === leads.length
-                  }
-                  onChange={onToggleAll}
-                />
+              <th scope='col' className='px-4 py-3 text-left w-10 sticky left-0 bg-gray-50 z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]'>
+                <div className="flex flex-col gap-1">
+                  <input
+                    type='checkbox'
+                    className='rounded border-gray-300 text-blue-600 focus:ring-blue-500 h-4 w-4'
+                    checked={
+                      leads.length > 0 && selectedIds.length === leads.length
+                    }
+                    onChange={onToggleAll}
+                    title="Select visible leads on this page"
+                  />
+                  {totalFilteredCount > leads.length && (
+                    <button
+                      onClick={onToggleAllFiltered}
+                      className="text-[9px] text-blue-600 hover:text-blue-800 whitespace-nowrap"
+                      title={`Select all ${totalFilteredCount} filtered leads`}
+                    >
+                      All {totalFilteredCount}
+                    </button>
+                  )}
+                </div>
               </th>
               <th className='px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider whitespace-nowrap'>
                 Type
@@ -291,7 +307,7 @@ export function LeadTable({
                   onDoubleClick={() => onRowClick(lead.id)}
                   className='hover:bg-gray-50 transition cursor-pointer'
                 >
-                  <td className='px-4 py-4 whitespace-nowrap'>
+                  <td className='px-4 py-4 whitespace-nowrap sticky left-0 bg-white z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]'>
                     <input
                       type='checkbox'
                       className='rounded border-gray-300 text-blue-600 focus:ring-blue-500 h-4 w-4'

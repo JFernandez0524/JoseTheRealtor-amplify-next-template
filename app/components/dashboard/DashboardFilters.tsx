@@ -25,6 +25,7 @@ type Props = {
 
   // Bulk Action Props
   selectedLeadsCount: number;
+  selectedLeadTypes: string[]; // NEW: Array of types of selected leads
   handleBulkSkipTrace: () => Promise<void>;
   handleBulkGHLSync: () => Promise<void>;
   handleBulkStatusUpdate: (status: string) => Promise<void>;
@@ -61,6 +62,7 @@ export function DashboardFilters({
   skipTraceToDate,
   setSkipTraceToDate,
   selectedLeadsCount,
+  selectedLeadTypes,
   handleBulkSkipTrace,
   handleBulkGHLSync,
   handleBulkStatusUpdate,
@@ -76,6 +78,11 @@ export function DashboardFilters({
   isEnriching,
   isGeneratingLetters,
 }: Props) {
+  // Determine if selected leads are all same type
+  const hasPreforeclosure = selectedLeadTypes.includes('PREFORECLOSURE');
+  const hasProbate = selectedLeadTypes.includes('PROBATE');
+  const isMixedTypes = hasPreforeclosure && hasProbate;
+  
   return (
     <div className='bg-white p-3 sm:p-4 rounded-lg shadow-sm border border-gray-200 mb-4 sm:mb-6 space-y-4'>
       {/* Filters Section */}
@@ -318,21 +325,23 @@ export function DashboardFilters({
             </button>
 
             {/* Enrich Leads Button (Preforeclosure only) */}
-            <button
-              onClick={handleBulkEnrichLeads}
-              disabled={isEnriching || isSkipTracing || isGhlSyncing || isAiScoring}
-              className={`text-sm px-3 py-1.5 rounded transition-colors flex items-center justify-center gap-1.5 shadow-sm w-full sm:w-auto
-                                ${isEnriching ? 'bg-orange-300 text-white cursor-not-allowed' : 'bg-gradient-to-r from-orange-600 to-red-600 text-white hover:from-orange-700 hover:to-red-700'}`}
-              title={selectedLeadsCount > 0 ? `Cost: $${(selectedLeadsCount * 0.29).toFixed(2)} (Preforeclosure only)` : ''}
-            >
-              {isEnriching ? (
-                <>
-                  <Loader size='small' variation='linear' /> Enriching...
-                </>
-              ) : (
-                <>🏦 Enrich Leads</>
-              )}
-            </button>
+            {hasPreforeclosure && !isMixedTypes && (
+              <button
+                onClick={handleBulkEnrichLeads}
+                disabled={isEnriching || isSkipTracing || isGhlSyncing || isAiScoring}
+                className={`text-sm px-3 py-1.5 rounded transition-colors flex items-center justify-center gap-1.5 shadow-sm w-full sm:w-auto
+                                  ${isEnriching ? 'bg-orange-300 text-white cursor-not-allowed' : 'bg-gradient-to-r from-orange-600 to-red-600 text-white hover:from-orange-700 hover:to-red-700'}`}
+                title={selectedLeadsCount > 0 ? `Cost: $${(selectedLeadsCount * 0.29).toFixed(2)} (Preforeclosure only)` : ''}
+              >
+                {isEnriching ? (
+                  <>
+                    <Loader size='small' variation='linear' /> Enriching...
+                  </>
+                ) : (
+                  <>🏦 Enrich Leads</>
+                )}
+              </button>
+            )}
 
             {/* Direct Mail Button */}
             <button

@@ -319,6 +319,16 @@ export default function LeadDashboardClient({}: Props) {
 
     if (!confirm(`Skip-trace ${selectedIds.length} leads?`)) return;
 
+    // Warn if batch is too large
+    if (selectedIds.length > 50) {
+      if (!confirm(
+        `⚠️ Large batch detected (${selectedIds.length} leads)\n\n` +
+        `This will take several minutes to complete.\n` +
+        `Consider processing in smaller batches of 50 or less for faster results.\n\n` +
+        `Continue anyway?`
+      )) return;
+    }
+
     setIsProcessing(true);
     try {
       // 1. Capture the data result
@@ -674,6 +684,7 @@ export default function LeadDashboardClient({}: Props) {
         skipTraceToDate={skipTraceToDate}
         setSkipTraceToDate={setSkipTraceToDate}
         selectedLeadsCount={selectedIds.length}
+        selectedLeadTypes={leads.filter(l => selectedIds.includes(l.id)).map(l => l.type)}
         isSkipTracing={isProcessing}
         isGhlSyncing={isProcessing}
         isAiScoring={isProcessing}
@@ -799,11 +810,19 @@ export default function LeadDashboardClient({}: Props) {
         leads={paginatedLeads}
         selectedIds={selectedIds}
         isLoading={false}
+        totalFilteredCount={filteredLeads.length}
         onToggleAll={() => {
           setSelectedIds(
             selectedIds.length === paginatedLeads.length
               ? []
               : paginatedLeads.map((l) => l.id)
+          );
+        }}
+        onToggleAllFiltered={() => {
+          setSelectedIds(
+            selectedIds.length === filteredLeads.length
+              ? []
+              : filteredLeads.map((l) => l.id)
           );
         }}
         onToggleOne={(id) => {

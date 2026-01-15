@@ -41,47 +41,45 @@ function cleanName(name: { first?: string | null; last?: string | null }) {
   return cleaned;
 }
 
-async function callBatchDataV3(lead: any): Promise<BatchDataResult> {
+async function callBatchDataBulk(leads: any[]): Promise<Map<string, BatchDataResult>> {
   if (!BATCH_DATA_SERVER_TOKEN) throw new Error('Missing BatchData API Key');
 
-  let targetName = { first: lead.ownerFirstName, last: lead.ownerLastName };
-  let targetAddress = {
-    street: lead.ownerAddress?.trim() || '',
-    city: lead.ownerCity?.trim() || '',
-    state: lead.ownerState?.trim().toUpperCase() || '',
-    zip: lead.ownerZip?.trim() || '',
-  };
-
-  if (lead.type?.toUpperCase() === 'PROBATE') {
-    targetName = { first: lead.adminFirstName, last: lead.adminLastName };
-    targetAddress = {
-      street: lead.adminAddress?.trim() || '',
-      city: lead.adminCity?.trim() || '',
-      state: lead.adminState?.trim().toUpperCase() || '',
-      zip: lead.adminZip?.trim() || '',
+  const requests = leads.map(lead => {
+    let targetName = { first: lead.ownerFirstName, last: lead.ownerLastName };
+    let targetAddress = {
+      street: lead.ownerAddress?.trim() || '',
+      city: lead.ownerCity?.trim() || '',
+      state: lead.ownerState?.trim().toUpperCase() || '',
+      zip: lead.ownerZip?.trim() || '',
     };
-  }
 
-  const cleanedName = cleanName(targetName);
-  const finalBatchPayload = {
-    requests: [
-      {
-        requestId: lead.id,
-        ...(Object.keys(cleanedName).length > 0 && { name: cleanedName }),
-        propertyAddress: targetAddress,
-        options: {
-          prioritizeMobilePhones: true,
-          includeTCPABlacklistedPhones: false,
-        },
+    if (lead.type?.toUpperCase() === 'PROBATE') {
+      targetName = { first: lead.adminFirstName, last: lead.adminLastName };
+      targetAddress = {
+        street: lead.adminAddress?.trim() || '',
+        city: lead.adminCity?.trim() || '',
+        state: lead.adminState?.trim().toUpperCase() || '',
+        zip: lead.adminZip?.trim() || '',
+      };
+    }
+
+    const cleanedName = cleanName(targetName);
+    return {
+      requestId: lead.id,
+      ...(Object.keys(cleanedName).length > 0 && { name: cleanedName }),
+      propertyAddress: targetAddress,
+      options: {
+        prioritizeMobilePhones: true,
+        includeTCPABlacklistedPhones: false,
       },
-    ],
-  };
+    };
+  });
 
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     try {
       const res = await axios.post(
         'https://api.batchdata.com/api/v1/property/skip-trace',
-        finalBatchPayload,
+        { requests },
         {
           headers: {
             Authorization: `Bearer ${BATCH_DATA_SERVER_TOKEN}`,
@@ -90,45 +88,54 @@ async function callBatchDataV3(lead: any): Promise<BatchDataResult> {
         }
       );
 
-      const resultsObject = res.data?.results;
-      if (!resultsObject?.persons?.length)
-        return {
-          status: 'NO_MATCH',
-          foundPhones: [],
-          foundEmails: [],
-          mailingData: null,
-        };
+      const resultMap = new Map<string, BatchDataResult>();
+      const resultsArray = res.data?.results || [];
 
-      const person = resultsObject.persons[0];
-      const foundPhones: string[] = [];
-      const foundEmails: string[] = [];
-      let mailingData = null;
+      for (const result of resultsArray) {
+        const leadId = result.requestId;
+        if (!result.persons?.length) {
+          resultMap.set(leadId, {
+            status: 'NO_MATCH',
+            foundPhones: [],
+            foundEmails: [],
+            mailingData: null,
+          });
+          continue;
+        }
 
-      if (person.mailingAddress?.street) {
-        mailingData = {
-          mailingAddress: person.mailingAddress.street,
-          mailingCity: person.mailingAddress.city,
-          mailingState: person.mailingAddress.state,
-          mailingZip: person.mailingAddress.zip,
-        };
+        const person = result.persons[0];
+        const foundPhones: string[] = [];
+        const foundEmails: string[] = [];
+        let mailingData = null;
+
+        if (person.mailingAddress?.street) {
+          mailingData = {
+            mailingAddress: person.mailingAddress.street,
+            mailingCity: person.mailingAddress.city,
+            mailingState: person.mailingAddress.state,
+            mailingZip: person.mailingAddress.zip,
+          };
+        }
+
+        person.phoneNumbers?.forEach((p: any) => {
+          if (
+            p.type === 'Mobile' &&
+            (parseFloat(p.score) || 0) >= 90 &&
+            !p.dnc &&
+            p.number
+          ) {
+            foundPhones.push(p.number);
+          }
+        });
+
+        person.emails?.forEach((e: any) => {
+          if (e.tested && e.email) foundEmails.push(e.email);
+        });
+
+        resultMap.set(leadId, { status: 'SUCCESS', foundPhones, foundEmails, mailingData });
       }
 
-      person.phoneNumbers?.forEach((p: any) => {
-        if (
-          p.type === 'Mobile' &&
-          (parseFloat(p.score) || 0) >= 90 &&
-          !p.dnc &&
-          p.number
-        ) {
-          foundPhones.push(p.number);
-        }
-      });
-
-      person.emails?.forEach((e: any) => {
-        if (e.tested && e.email) foundEmails.push(e.email);
-      });
-
-      return { status: 'SUCCESS', foundPhones, foundEmails, mailingData };
+      return resultMap;
     } catch (error: any) {
       if (
         isAxiosError(error) &&
@@ -140,20 +147,29 @@ async function callBatchDataV3(lead: any): Promise<BatchDataResult> {
         );
         continue;
       }
-      return {
-        status: 'ERROR',
-        foundPhones: [],
-        foundEmails: [],
-        mailingData: null,
-      };
+      const errorMap = new Map<string, BatchDataResult>();
+      leads.forEach(lead => {
+        errorMap.set(lead.id, {
+          status: 'ERROR',
+          foundPhones: [],
+          foundEmails: [],
+          mailingData: null,
+        });
+      });
+      return errorMap;
     }
   }
-  return {
-    status: 'ERROR',
-    foundPhones: [],
-    foundEmails: [],
-    mailingData: null,
-  };
+  
+  const errorMap = new Map<string, BatchDataResult>();
+  leads.forEach(lead => {
+    errorMap.set(lead.id, {
+      status: 'ERROR',
+      foundPhones: [],
+      foundEmails: [],
+      mailingData: null,
+    });
+  });
+  return errorMap;
 }
 
 // ---------------------------------------------------------
@@ -222,60 +238,61 @@ export const handler: Handler = async (event) => {
       }
     }
 
-    const results = [];
-    let processedSuccessfully = 0;
-
+    // 🛡️ 4. Fetch all leads upfront
+    const leads = [];
     for (const leadId of leadIds) {
-      if (!leadId) {
-        results.push({ id: 'unknown', status: 'ERROR' });
-        continue;
-      }
-      // 🛡️ 4. Ownership Lock & Fetch
+      if (!leadId) continue;
       const { Item: lead } = await docClient.send(new GetCommand({
         TableName: propertyLeadTableName,
         Key: { id: leadId }
       }));
-
-      if (!lead || (lead.owner ?? '') !== ownerId) {
-        results.push({ id: leadId, status: 'ERROR' });
-        continue;
+      if (lead && (lead.owner ?? '') === ownerId) {
+        leads.push(lead);
       }
+    }
 
-      // 🚫 Skip leads marked as SOLD or SKIP
-      if (lead.manualStatus === 'SOLD' || lead.manualStatus === 'SKIP') {
-        console.log(`⏭️ Skipping lead ${leadId} - marked as ${lead.manualStatus}`);
-        results.push({ id: leadId, status: 'SKIPPED', reason: `Marked as ${lead.manualStatus}` });
-        continue;
-      }
+    // Filter out SOLD/SKIP leads
+    const leadsToProcess = leads.filter(lead => 
+      lead.manualStatus !== 'SOLD' && lead.manualStatus !== 'SKIP'
+    );
 
-      const enrichedData = await callBatchDataV3(lead);
+    const skippedLeads = leads.filter(lead => 
+      lead.manualStatus === 'SOLD' || lead.manualStatus === 'SKIP'
+    );
 
-      if (enrichedData.status !== 'SUCCESS') {
-        const finalStatus =
-          enrichedData.status === 'ERROR' ? 'FAILED' : 'NO_MATCH';
+    const results: any[] = skippedLeads.map(lead => ({
+      id: lead.id,
+      status: 'SKIPPED',
+      reason: `Marked as ${lead.manualStatus}`
+    }));
+
+    if (leadsToProcess.length === 0) {
+      return { results, processedCount: 0 };
+    }
+
+    // 5. Call BatchData once with all leads
+    const enrichmentMap = await callBatchDataBulk(leadsToProcess);
+
+    // 6. Update all leads in parallel
+    const updatePromises = leadsToProcess.map(async (lead) => {
+      const enrichedData = enrichmentMap.get(lead.id);
+      if (!enrichedData || enrichedData.status !== 'SUCCESS') {
+        const finalStatus = enrichedData?.status === 'ERROR' ? 'FAILED' : 'NO_MATCH';
         await docClient.send(new UpdateCommand({
           TableName: propertyLeadTableName,
-          Key: { id: leadId },
+          Key: { id: lead.id },
           UpdateExpression: 'SET skipTraceStatus = :status',
-          ExpressionAttributeValues: {
-            ':status': finalStatus
-          }
+          ExpressionAttributeValues: { ':status': finalStatus }
         }));
-        results.push({ id: leadId, status: finalStatus });
-        continue;
+        return { id: lead.id, status: finalStatus };
       }
 
-      // 5. Success Logic: Update Lead
-      const newPhones = [
-        ...new Set([...(lead.phones || []), ...enrichedData.foundPhones]),
-      ];
-      const newEmails = [
-        ...new Set([...(lead.emails || []), ...enrichedData.foundEmails]),
-      ];
+      const newPhones = [...new Set([...(lead.phones || []), ...enrichedData.foundPhones])];
+      const newEmails = [...new Set([...(lead.emails || []), ...enrichedData.foundEmails])];
 
       await docClient.send(new UpdateCommand({
         TableName: propertyLeadTableName,
-        Key: { id: leadId },
+        Key: { id: lead.id },
         UpdateExpression: 'SET phones = :phones, emails = :emails, mailingAddress = :mailingAddress, mailingCity = :mailingCity, mailingState = :mailingState, mailingZip = :mailingZip, skipTraceStatus = :status, skipTraceCompletedAt = :completedAt',
         ExpressionAttributeValues: {
           ':phones': newPhones,
@@ -289,11 +306,15 @@ export const handler: Handler = async (event) => {
         }
       }));
 
-      processedSuccessfully++;
-      results.push({ id: leadId, status: 'SUCCESS', phones: newPhones.length });
-    }
+      return { id: lead.id, status: 'SUCCESS', phones: newPhones.length };
+    });
 
-    // 💰 6. Deduct Credits (all users except ADMIN)
+    const updateResults = await Promise.all(updatePromises);
+    results.push(...updateResults);
+
+    const processedSuccessfully = updateResults.filter(r => r.status === 'SUCCESS').length;
+
+    // 💰 7. Deduct Credits (all users except ADMIN)
     if (processedSuccessfully > 0 && !isAdmin && userAccount) {
       await docClient.send(new UpdateCommand({
         TableName: userAccountTableName,
