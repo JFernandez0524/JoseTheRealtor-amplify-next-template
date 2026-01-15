@@ -87,7 +87,7 @@ const schema = a.schema({
       // --- 🟢 Financials (Market Intel) ---
       estimatedValue: a.float(),
       zestimate: a.float(),
-      zestimateDate: a.date(),
+      zestimateDate: a.datetime(),
       zestimateSource: a.string(), // 'ZILLOW', 'MANUAL', 'CSV'
       
       // Zillow API Response Data (to avoid re-fetching)

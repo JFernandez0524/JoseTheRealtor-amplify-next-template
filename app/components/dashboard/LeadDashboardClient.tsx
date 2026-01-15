@@ -14,17 +14,15 @@ import type { Schema } from '@/amplify/data/resource';
 type Lead = Schema['PropertyLead']['type'];
 type UserAccount = Schema['UserAccount']['type'];
 
-interface Props {
-  initialLeads: Lead[];
-}
+interface Props {}
 
-export default function LeadDashboardClient({ initialLeads }: Props) {
+export default function LeadDashboardClient({}: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { hasPaidPlan, isAdmin } = useAccess();
 
   // --- State ---
-  const [leads, setLeads] = useState<Lead[]>(initialLeads);
+  const [leads, setLeads] = useState<Lead[]>([]);
   const [userAccount, setUserAccount] = useState<UserAccount | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -58,30 +56,16 @@ export default function LeadDashboardClient({ initialLeads }: Props) {
 
   // --- Effects ---
 
-  // Subscribe to real-time updates only
+  // Fetch leads with observeQuery
   useEffect(() => {
-    const sub = client.models.PropertyLead.onCreate().subscribe({
-      next: () => {
-        // Refresh page to get new data from server
-        window.location.reload();
-      },
-    });
-    const sub2 = client.models.PropertyLead.onUpdate().subscribe({
-      next: () => {
-        window.location.reload();
-      },
-    });
-    const sub3 = client.models.PropertyLead.onDelete().subscribe({
-      next: () => {
-        window.location.reload();
+    const sub = client.models.PropertyLead.observeQuery().subscribe({
+      next: ({ items }) => {
+        setLeads([...items]);
+        console.log('📊 Loaded leads:', items.length);
       },
     });
 
-    return () => {
-      sub.unsubscribe();
-      sub2.unsubscribe();
-      sub3.unsubscribe();
-    };
+    return () => sub.unsubscribe();
   }, []);
 
   // 2. Ensure UserAccount exists (Wallet Initialization)

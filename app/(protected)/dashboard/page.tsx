@@ -1,40 +1,8 @@
-import { cookiesClient } from '@/app/utils/aws/auth/amplifyServerUtils.server';
+'use client';
+
 import LeadDashboardClient from '@/app/components/dashboard/LeadDashboardClient';
-import { type Schema } from '@/amplify/data/resource';
 
-type PropertyLead = Schema['PropertyLead']['type'];
-
-export default async function DashboardPage() {
-  // 1. Fetch ALL data with pagination on server
-  let allLeads: PropertyLead[] = [];
-  let token: string | null | undefined = undefined;
-
-  try {
-    do {
-      const { data, errors, nextToken } =
-        await cookiesClient.models.PropertyLead.list();
-
-      if (errors) {
-        console.error('Data Fetch Error:', errors);
-        break; // Stop on error
-      }
-      
-      if (data) {
-        allLeads = allLeads.concat(data);
-        console.log('Fetched batch:', data.length, 'Total:', allLeads.length);
-      }
-      
-      token = nextToken;
-    } while (token);
-
-    console.log('Server fetched all leads:', allLeads.length);
-  } catch (error) {
-    console.error('Fatal error fetching leads:', error);
-  }
-
-  // 2. Serialize for Client Component
-  const initialLeads: PropertyLead[] = JSON.parse(JSON.stringify(allLeads));
-
+export default function DashboardPage() {
   return (
     <div className='p-6'>
       <div className='mb-6'>
@@ -46,7 +14,7 @@ export default async function DashboardPage() {
         </p>
       </div>
 
-      <LeadDashboardClient initialLeads={initialLeads} />
+      <LeadDashboardClient />
     </div>
   );
 }
