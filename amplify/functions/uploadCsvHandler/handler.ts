@@ -12,15 +12,7 @@ import { Readable } from 'stream';
 import { randomUUID } from 'crypto';
 import { validateAddressWithGoogle } from '../../../app/utils/google.server';
 import { calculateLeadScore } from '../../../app/utils/ai/leadScoring';
-import axios from 'axios';
-
-const BRIDGE_API_KEY = process.env.BRIDGE_API_KEY;
-const BRIDGE_BASE_URL = 'https://api.bridgedataoutput.com/api/v2';
-
-const bridgeClient = axios.create({
-  baseURL: BRIDGE_BASE_URL,
-  headers: { Authorization: `Bearer ${BRIDGE_API_KEY}` },
-});
+import { fetchBestZestimate } from '../shared/bridgeUtils';
 
 const s3 = new S3Client({});
 const dynamoClient = new DynamoDBClient({});
@@ -278,60 +270,27 @@ export const handler: S3Handler = async (event) => {
               continue; // Skip this lead
             }
           }
-          // 🏠 Fetch Zestimate data during upload with retry logic
+          // 🏠 Fetch Zestimate data during upload
           let zillowData = null;
           
-          // Try coordinate-based search first (more reliable)
-          if (latitude && longitude) {
-            try {
-              // 🚦 Rate limit: Wait before API call
-              await delay(BRIDGE_API_DELAY_MS);
-              
-              const response = await bridgeClient.get('/zestimates_v2/zestimates', {
-                params: {
-                  near: `${longitude},${latitude}`,
-                  radius: '0.05mi',
-                  limit: 5  // Get multiple to find the main house
-                }
-              });
-              
-              const bundle = response.data.bundle || [];
-              
-              // Pick the best Zestimate: Priority 1 = No Unit Number (Main House), Priority 2 = Newest Date
-              const sortedBundle = bundle.sort((a: any, b: any) => {
-                const aIsMain = !a.unitNumber;
-                const bIsMain = !b.unitNumber;
-                if (aIsMain && !bIsMain) return -1;
-                if (!aIsMain && bIsMain) return 1;
-                const dateA = new Date(a.timestamp).getTime();
-                const dateB = new Date(b.timestamp).getTime();
-                return dateB - dateA;
-              });
-              
-              const z = sortedBundle[0];
-              if (z) {
-                zillowData = {
-                  zpid: z.zpid,
-                  zestimate: z.zestimate,
-                  rentZestimate: z.rentalZestimate,
-                  url: z.zillowUrl,
-                  lastUpdated: z.timestamp,
-                  address: z.address,
-                  city: z.city,
-                  state: z.state,
-                  postalCode: z.postalCode,
-                  latitude: z.Latitude,
-                  longitude: z.Longitude
-                };
-                console.log('✅ Zestimate fetched via coords:', { zpid: zillowData.zpid, zestimate: zillowData.zestimate });
-              } else {
-                console.log('❌ No Zestimate data for coords:', { lat: latitude, lng: longitude });
-              }
-            } catch (error: any) {
-              console.log('Bridge API error:', error.message);
+          try {
+            // 🚦 Rate limit: Wait before API call
+            await delay(BRIDGE_API_DELAY_MS);
+            
+            zillowData = await fetchBestZestimate({
+              street: finalPropAddr,
+              city: finalPropCity,
+              state: finalPropState,
+              zip: finalPropZip,
+            });
+            
+            if (zillowData) {
+              console.log('✅ Zestimate fetched:', { zpid: zillowData.zpid, zestimate: zillowData.zestimate });
+            } else {
+              console.log('❌ No Zestimate data for address:', { address: finalPropAddr, city: finalPropCity });
             }
-          } else {
-            console.log('⚠️ No coordinates available for Zestimate lookup');
+          } catch (error: any) {
+            console.log('Bridge API error:', error.message);
           }
 
           const leadItem = {

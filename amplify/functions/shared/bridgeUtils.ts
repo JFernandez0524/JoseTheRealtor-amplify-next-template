@@ -10,25 +10,26 @@ const bridgeClient = axios.create({
 });
 
 /**
- * Fetches the best Zestimate for a property using coordinates
- * Handles multi-unit properties by prioritizing main house over apartments
+ * Fetches the best Zestimate for a property using address
  */
 export async function fetchBestZestimate(params: {
-  lat: number;
-  lng: number;
-  street?: string;
-  city?: string;
-  state?: string;
-  zip?: string;
+  lat?: number;
+  lng?: number;
+  street: string;
+  city: string;
+  state: string;
+  zip: string;
 }) {
-  const { lat, lng } = params;
+  const { street, city, state, zip } = params;
 
   try {
-    // Fetch multiple results to handle multi-unit properties
+    // Use address-based lookup for accuracy
     const response = await bridgeClient.get('/zestimates_v2/zestimates', {
       params: {
-        near: `${lng},${lat}`,
-        radius: '0.05mi',
+        address: street,
+        city: city,
+        state: state,
+        zipcode: zip,
         limit: 5,
       },
     });
@@ -52,7 +53,7 @@ export async function fetchBestZestimate(params: {
       zpid: best.zpid,
       zestimate: best.zestimate,
       rentZestimate: best.rentalZestimate,
-      url: best.zillowUrl,
+      url: best.zillowUrl || `https://www.zillow.com/homes/${best.zpid}_zpid/`,
       lastUpdated: best.timestamp,
       address: best.address,
       city: best.city,

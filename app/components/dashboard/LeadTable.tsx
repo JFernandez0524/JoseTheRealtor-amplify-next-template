@@ -410,7 +410,10 @@ export function LeadTable({
                         {lead.zestimate && typeof lead.zestimate === 'number' ? (
                           <>
                             <a 
-                              href={lead.zillowUrl || `https://www.zillow.com/homes/${lead.ownerAddress}-${lead.ownerCity}-${lead.ownerState}-${lead.ownerZip}_rb/`}
+                              href={
+                                lead.zillowUrl || 
+                                (lead.zillowZpid ? `https://www.zillow.com/homes/${lead.zillowZpid}_zpid/` : '#')
+                              }
                               target="_blank"
                               rel="noopener noreferrer"
                               className='font-semibold text-green-700 hover:text-green-900 hover:underline'
