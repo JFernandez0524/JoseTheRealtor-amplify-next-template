@@ -1,15 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { AuthIsUserAuthenticatedServer } from '@/app/utils/aws/auth/amplifyServerUtils.server';
 import { updateLead } from '@/app/utils/aws/data/lead.server';
-import { fetchBestZestimate } from '@/amplify/functions/shared/bridgeUtils';
+import { analyzeBridgeProperty } from '@/app/utils/bridge.server';
 
 export async function POST(request: NextRequest) {
   try {
-    const { leadId, latitude, longitude } = await request.json();
+    const { leadId, street, city, state, zip, latitude, longitude } = await request.json();
 
-    if (!leadId || !latitude || !longitude) {
+    if (!leadId) {
       return NextResponse.json(
-        { error: 'Missing required fields' },
+        { error: 'Missing leadId' },
         { status: 400 }
       );
     }
@@ -20,11 +20,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Fetch fresh Zestimate using shared utility
-    const zillowData = await fetchBestZestimate({
+    // Fetch fresh Zestimate using working bridge utility
+    const result = await analyzeBridgeProperty({
+      street,
+      city,
+      state,
+      zip,
       lat: latitude,
       lng: longitude,
     });
+
+    const zillowData = result.valuation;
 
     if (!zillowData) {
       return NextResponse.json(
@@ -38,8 +44,8 @@ export async function POST(request: NextRequest) {
       id: leadId,
       zestimate: zillowData.zestimate,
       zillowZpid: zillowData.zpid,
-      zillowUrl: zillowData.url,
-      rentZestimate: zillowData.rentZestimate,
+      zillowUrl: zillowData.zillowUrl || `https://www.zillow.com/homes/${zillowData.zpid}_zpid/`,
+      rentZestimate: zillowData.rentalZestimate,
       zillowLastUpdated: new Date().toISOString(),
     });
 

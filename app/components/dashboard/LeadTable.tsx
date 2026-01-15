@@ -438,7 +438,7 @@ export function LeadTable({
                           <span className='text-gray-400'>-</span>
                         )}
                       </div>
-                      {lead.latitude && lead.longitude && (
+                      {(lead.latitude && lead.longitude) || (lead.ownerAddress && lead.ownerCity && lead.ownerState && lead.ownerZip) ? (
                         <button
                           onClick={async (e) => {
                             e.stopPropagation();
@@ -448,6 +448,10 @@ export function LeadTable({
                                 headers: { 'Content-Type': 'application/json' },
                                 body: JSON.stringify({
                                   leadId: lead.id,
+                                  street: lead.ownerAddress,
+                                  city: lead.ownerCity,
+                                  state: lead.ownerState,
+                                  zip: lead.ownerZip,
                                   latitude: lead.latitude,
                                   longitude: lead.longitude,
                                 }),
