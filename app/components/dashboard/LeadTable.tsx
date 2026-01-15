@@ -204,7 +204,7 @@ export function LeadTable({
         </div>
       </div>
 
-      <div className='overflow-x-auto' ref={tableRef}>
+      <div className='overflow-x-auto relative' ref={tableRef}>
         <table className='min-w-full divide-y divide-gray-200'>
           {/* 💥 FIX: Removed whitespace between <thead> and <tr> */}
           <thead className='bg-gray-50'>
@@ -238,9 +238,6 @@ export function LeadTable({
               <th className='px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider whitespace-nowrap'>
                 Status
               </th>
-              <th className='px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider whitespace-nowrap'>
-                Enriched Data
-              </th>
               {/* NEW GHL STATUS HEADER */}
               <th className='px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider whitespace-nowrap bg-purple-50'>
                 GHL Sync
@@ -253,14 +250,10 @@ export function LeadTable({
               <th className='px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider whitespace-nowrap bg-blue-50'>
                 Address
               </th>
-              <th className='px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider whitespace-nowrap bg-green-50'>
-                Phone
-              </th>
-              {renderSortableHeader('skipTraceCompletedAt', 'Skip Traced', 'bg-green-50')}
-              {renderSortableHeader('ownerCounty', 'County', 'bg-blue-50')}
               <th className='px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider whitespace-nowrap bg-blue-50'>
                 City/State/Zip
               </th>
+              {renderSortableHeader('ownerCounty', 'County', 'bg-blue-50')}
               {renderSortableHeader('zestimate', 'Zestimate', 'bg-yellow-50')}
               <th className='px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider whitespace-nowrap bg-yellow-50'>
                 Status
@@ -270,6 +263,13 @@ export function LeadTable({
               </th>
               <th className='px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider whitespace-nowrap bg-purple-50'>
                 Admin Address
+              </th>
+              <th className='px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider whitespace-nowrap bg-green-50'>
+                Phone
+              </th>
+              {renderSortableHeader('skipTraceCompletedAt', 'Skip Traced', 'bg-green-50')}
+              <th className='px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider whitespace-nowrap'>
+                Enriched Data
               </th>
               {renderSortableHeader('createdAt', 'Created At')}
             </tr>
@@ -345,16 +345,6 @@ export function LeadTable({
                     <StatusBadge status={lead.skipTraceStatus} />
                   </td>
 
-                  <td className='px-4 py-4 whitespace-nowrap text-sm text-gray-600'>
-                    {lead.phones && lead.phones.length > 0 ? (
-                      <span className='font-semibold text-green-700'>
-                        ✓ {lead.phones.length} Phone(s)
-                      </span>
-                    ) : (
-                      <span className='text-gray-400 text-xs'>No Phones</span>
-                    )}
-                  </td>
-
                   {/* NEW GHL STATUS CELL */}
                   <td className='px-4 py-4 whitespace-nowrap text-sm'>
                     <GhlStatusBadge status={lead.ghlSyncStatus} />
@@ -378,45 +368,13 @@ export function LeadTable({
                     </div>
                   </td>
 
-                  {/* Phone Column */}
-                  <td className='px-4 py-4 whitespace-nowrap text-sm text-gray-900 bg-green-50/30'>
-                    {lead.phones && lead.phones.length > 0 ? (
-                      <div className='flex items-center gap-1'>
-                        <span className='font-mono text-xs'>
-                          {lead.phones[0]}
-                        </span>
-                        {lead.phones.length > 1 && (
-                          <span
-                            className='text-xs bg-green-600 text-white px-1.5 py-0.5 rounded-full font-bold cursor-help'
-                            title={`${lead.phones.length} phone numbers total: ${lead.phones.join(', ')}`}
-                          >
-                            +{lead.phones.length - 1}
-                          </span>
-                        )}
-                      </div>
-                    ) : (
-                      <span className='text-gray-400 text-xs'>No phone</span>
-                    )}
-                  </td>
-
-                  {/* Skip Trace Date Column */}
-                  <td className='px-4 py-4 whitespace-nowrap text-sm text-gray-900 bg-green-50/30'>
-                    {lead.skipTraceCompletedAt ? (
-                      <span className='text-xs font-mono'>
-                        {new Date(lead.skipTraceCompletedAt).toLocaleDateString()}
-                      </span>
-                    ) : (
-                      <span className='text-gray-400 text-xs'>-</span>
-                    )}
+                  <td className='px-4 py-4 whitespace-nowrap text-sm text-gray-900 bg-blue-50/30'>
+                    {lead.ownerCity}, {lead.ownerState} {lead.ownerZip}
                   </td>
 
                   {/* County Column */}
                   <td className='px-4 py-4 whitespace-nowrap text-sm text-gray-900 bg-blue-50/30'>
                     {lead.ownerCounty || '-'}
-                  </td>
-
-                  <td className='px-4 py-4 whitespace-nowrap text-sm text-gray-900 bg-blue-50/30'>
-                    {lead.ownerCity}, {lead.ownerState} {lead.ownerZip}
                   </td>
 
                   {/* Zestimate Column */}
@@ -534,6 +492,48 @@ export function LeadTable({
                     {lead.adminAddress
                       ? `${lead.adminAddress}, ${lead.adminCity}`
                       : '-'}
+                  </td>
+
+                  {/* Phone Column */}
+                  <td className='px-4 py-4 whitespace-nowrap text-sm text-gray-900 bg-green-50/30'>
+                    {lead.phones && lead.phones.length > 0 ? (
+                      <div className='flex items-center gap-1'>
+                        <span className='font-mono text-xs'>
+                          {lead.phones[0]}
+                        </span>
+                        {lead.phones.length > 1 && (
+                          <span
+                            className='text-xs bg-green-600 text-white px-1.5 py-0.5 rounded-full font-bold cursor-help'
+                            title={`${lead.phones.length} phone numbers total: ${lead.phones.join(', ')}`}
+                          >
+                            +{lead.phones.length - 1}
+                          </span>
+                        )}
+                      </div>
+                    ) : (
+                      <span className='text-gray-400 text-xs'>No phone</span>
+                    )}
+                  </td>
+
+                  {/* Skip Trace Date Column */}
+                  <td className='px-4 py-4 whitespace-nowrap text-sm text-gray-900 bg-green-50/30'>
+                    {lead.skipTraceCompletedAt ? (
+                      <span className='text-xs font-mono'>
+                        {new Date(lead.skipTraceCompletedAt).toLocaleDateString()}
+                      </span>
+                    ) : (
+                      <span className='text-gray-400 text-xs'>-</span>
+                    )}
+                  </td>
+
+                  <td className='px-4 py-4 whitespace-nowrap text-sm text-gray-600'>
+                    {lead.phones && lead.phones.length > 0 ? (
+                      <span className='font-semibold text-green-700'>
+                        ✓ {lead.phones.length} Phone(s)
+                      </span>
+                    ) : (
+                      <span className='text-gray-400 text-xs'>No Phones</span>
+                    )}
                   </td>
 
                   <td className='px-4 py-4 whitespace-nowrap text-sm text-gray-500'>
