@@ -9,16 +9,28 @@ export default async function DashboardPage() {
   let allLeads: PropertyLead[] = [];
   let token: string | null | undefined = undefined;
 
-  do {
-    const { data, errors, nextToken } =
-      await cookiesClient.models.PropertyLead.list();
+  try {
+    do {
+      const { data, errors, nextToken } =
+        await cookiesClient.models.PropertyLead.list();
 
-    if (errors) console.error('Data Fetch Error:', errors);
-    if (data) allLeads = allLeads.concat(data);
-    token = nextToken;
-  } while (token);
+      if (errors) {
+        console.error('Data Fetch Error:', errors);
+        break; // Stop on error
+      }
+      
+      if (data) {
+        allLeads = allLeads.concat(data);
+        console.log('Fetched batch:', data.length, 'Total:', allLeads.length);
+      }
+      
+      token = nextToken;
+    } while (token);
 
-  console.log('Server fetched all leads:', allLeads.length);
+    console.log('Server fetched all leads:', allLeads.length);
+  } catch (error) {
+    console.error('Fatal error fetching leads:', error);
+  }
 
   // 2. Serialize for Client Component
   const initialLeads: PropertyLead[] = JSON.parse(JSON.stringify(allLeads));
