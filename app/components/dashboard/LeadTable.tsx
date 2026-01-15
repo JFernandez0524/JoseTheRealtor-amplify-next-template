@@ -468,7 +468,7 @@ export function LeadTable({
                         >
                           ↻
                         </button>
-                      )}
+                      ) : null}
                     </div>
                   </td>
 
