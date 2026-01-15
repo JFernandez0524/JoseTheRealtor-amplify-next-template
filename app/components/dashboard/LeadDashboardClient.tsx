@@ -24,12 +24,10 @@ export default function LeadDashboardClient({ initialLeads }: Props) {
   const { hasPaidPlan, isAdmin } = useAccess();
 
   // --- State ---
-  const [leads, setLeads] = useState<Lead[]>(initialLeads);
-  const [allLeads, setAllLeads] = useState<Lead[]>(initialLeads); // Store all leads
+  const [leads, setLeads] = useState<Lead[]>([]);
   const [userAccount, setUserAccount] = useState<UserAccount | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [isSynced, setIsSynced] = useState(false);
   
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
@@ -52,15 +50,12 @@ export default function LeadDashboardClient({ initialLeads }: Props) {
 
   // --- Effects ---
 
-  // 1. Listen for Real-time Lead updates - observeQuery handles pagination automatically
+  // Subscribe to real-time updates
   useEffect(() => {
     const sub = client.models.PropertyLead.observeQuery().subscribe({
-      next: ({ items, isSynced }) => {
-        console.log('📡 Subscription update:', items.length, 'leads, synced:', isSynced);
-        setAllLeads([...items]); // Store all leads
-        setIsSynced(isSynced);
+      next: ({ items }) => {
+        setLeads([...items]);
       },
-      error: (err) => console.error('Subscription error:', err),
     });
     return () => sub.unsubscribe();
   }, []);
@@ -92,53 +87,17 @@ export default function LeadDashboardClient({ initialLeads }: Props) {
   useEffect(() => {
     const refresh = searchParams.get('refresh');
     if (refresh === 'true') {
-      console.log('🔄 Upload redirect detected, forcing refresh...');
-      // Clear the refresh parameter from URL
+      console.log('🔄 Upload redirect detected, observeQuery will sync automatically');
       router.replace('/dashboard', { scroll: false });
-      
-      // Force a manual data refresh after upload
-      const refreshData = async () => {
-        try {
-          console.log('📥 Fetching fresh leads from database...');
-          const { data: refreshedLeads } = await client.models.PropertyLead.list();
-          console.log('✅ Loaded', refreshedLeads.length, 'leads after upload');
-          setAllLeads([...refreshedLeads]);
-        } catch (error) {
-          console.error('❌ Error refreshing leads after upload:', error);
-        }
-      };
-      
-      // Try multiple times to ensure data is loaded
-      refreshData(); // Immediate
-      setTimeout(refreshData, 1000); // After 1s
-      setTimeout(refreshData, 3000); // After 3s
     }
   }, [searchParams, router]);
 
-  // 4. Refresh when tab becomes visible (handles background uploads)
-  useEffect(() => {
-    const handleVisibilityChange = async () => {
-      if (document.visibilityState === 'visible') {
-        console.log('👁️ Tab visible, checking for new leads...');
-        try {
-          const { data: refreshedLeads } = await client.models.PropertyLead.list();
-          if (refreshedLeads.length !== allLeads.length) {
-            console.log('🔄 Lead count changed, updating:', refreshedLeads.length);
-            setAllLeads([...refreshedLeads]);
-          }
-        } catch (error) {
-          console.error('Error refreshing on visibility change:', error);
-        }
-      }
-    };
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, [allLeads.length]);
+  // 4. Remove visibility change handler - observeQuery handles real-time sync
+  // (removed)
 
   // --- Filter Logic ---
   const filteredLeads = useMemo(() => {
-    return allLeads.filter((lead) => {
+    return leads.filter((lead) => {
       const search = searchQuery.toLowerCase();
       const matchesSearch =
         lead.ownerAddress?.toLowerCase().includes(search) ||
@@ -217,7 +176,7 @@ export default function LeadDashboardClient({ initialLeads }: Props) {
         return aValue < bValue ? 1 : -1;
       }
     });
-  }, [allLeads, searchQuery, filterType, filterStatus, filterCrmStatus, filterHasPhone, skipTraceFromDate, skipTraceToDate, sortField, sortDirection]);
+  }, [leads, searchQuery, filterType, filterStatus, filterCrmStatus, filterHasPhone, skipTraceFromDate, skipTraceToDate, sortField, sortDirection]);
 
   // --- Pagination Logic ---
   const totalPages = Math.ceil(filteredLeads.length / itemsPerPage);
@@ -270,17 +229,6 @@ export default function LeadDashboardClient({ initialLeads }: Props) {
       );
       alert(`Successfully initiated CRM sync for ${selectedIds.length} leads.`);
       setSelectedIds([]);
-      
-      // Force refresh after a delay to show updated GHL sync status
-      setTimeout(async () => {
-        try {
-          const { data: refreshedLeads } = await client.models.PropertyLead.list();
-          setAllLeads([...refreshedLeads]);
-          console.log('Dashboard refreshed after GHL sync');
-        } catch (error) {
-          console.error('Error refreshing leads after GHL sync:', error);
-        }
-      }, 3000);
     } catch (err) {
       console.error('Sync error:', err);
       alert('Error initiating CRM sync. Ensure leads are skip-traced first.');
@@ -388,7 +336,7 @@ export default function LeadDashboardClient({ initialLeads }: Props) {
     if (selectedIds.length === 0) return;
 
     // Filter to preforeclosure only
-    const selectedLeads = allLeads.filter(lead => selectedIds.includes(lead.id));
+    const selectedLeads = leads.filter(lead => selectedIds.includes(lead.id));
     const preforeclosureLeads = selectedLeads.filter(lead => lead.type === 'PREFORECLOSURE');
     
     if (preforeclosureLeads.length === 0) {
@@ -412,16 +360,6 @@ export default function LeadDashboardClient({ initialLeads }: Props) {
 
       alert(`✅ AI Scoring Complete!\nScored: ${result.scored}/${result.total} preforeclosure leads`);
       setSelectedIds([]);
-
-      // Refresh leads to show new scores
-      setTimeout(async () => {
-        try {
-          const { data: refreshedLeads } = await client.models.PropertyLead.list();
-          setAllLeads([...refreshedLeads]);
-        } catch (error) {
-          console.error('Error refreshing leads after AI scoring:', error);
-        }
-      }, 1000);
     } catch (err) {
       console.error('AI scoring error:', err);
       alert('Error calculating AI scores');
@@ -434,7 +372,7 @@ export default function LeadDashboardClient({ initialLeads }: Props) {
     if (selectedIds.length === 0) return;
 
     // Filter to preforeclosure only
-    const selectedLeads = allLeads.filter(lead => selectedIds.includes(lead.id));
+    const selectedLeads = leads.filter(lead => selectedIds.includes(lead.id));
     const preforeclosureLeads = selectedLeads.filter(lead => lead.type === 'PREFORECLOSURE');
     
     if (preforeclosureLeads.length === 0) {
@@ -472,16 +410,6 @@ export default function LeadDashboardClient({ initialLeads }: Props) {
         `Cost: $${result.cost.toFixed(2)}`
       );
       setSelectedIds([]);
-
-      // Refresh leads to show enrichment data
-      setTimeout(async () => {
-        try {
-          const { data: refreshedLeads } = await client.models.PropertyLead.list();
-          setAllLeads([...refreshedLeads]);
-        } catch (error) {
-          console.error('Error refreshing leads after enrichment:', error);
-        }
-      }, 1000);
     } catch (err) {
       console.error('Enrichment error:', err);
       alert('Error enriching leads: ' + (err instanceof Error ? err.message : String(err)));
@@ -646,12 +574,6 @@ export default function LeadDashboardClient({ initialLeads }: Props) {
 
       {/* Wallet Status Bar */}
       <div className='flex justify-end items-center gap-4 px-2'>
-        {!isSynced && (
-          <div className='flex items-center gap-2 text-[11px] font-bold uppercase tracking-tighter text-blue-600 bg-blue-50 border border-blue-200 px-4 py-1.5 rounded-full shadow-sm'>
-            <span className='w-2 h-2 rounded-full bg-blue-500 animate-pulse' />
-            Syncing...
-          </div>
-        )}
         <div className='flex items-center gap-2 text-[11px] font-bold uppercase tracking-tighter text-slate-500 bg-white border border-slate-200 px-4 py-1.5 rounded-full shadow-sm'>
           <span className='w-2 h-2 rounded-full bg-green-500 animate-pulse' />
           Available Wallet:{' '}
@@ -666,8 +588,8 @@ export default function LeadDashboardClient({ initialLeads }: Props) {
         <div className='flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4'>
           <div className='text-sm text-gray-700'>
             <span className='font-semibold'>{filteredLeads.length}</span> total leads
-            {filteredLeads.length !== allLeads.length && (
-              <span className='text-gray-500'> (filtered from {allLeads.length})</span>
+            {filteredLeads.length !== leads.length && (
+              <span className='text-gray-500'> (filtered from {leads.length})</span>
             )}
           </div>
           <div className='text-xs sm:text-sm text-gray-500'>
@@ -782,8 +704,8 @@ export default function LeadDashboardClient({ initialLeads }: Props) {
           <div className='flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4'>
             <div className='text-sm text-gray-700'>
               <span className='font-semibold'>{filteredLeads.length}</span> total leads
-              {filteredLeads.length !== allLeads.length && (
-                <span className='text-gray-500'> (filtered from {allLeads.length})</span>
+              {filteredLeads.length !== leads.length && (
+                <span className='text-gray-500'> (filtered from {leads.length})</span>
               )}
             </div>
             <div className='text-xs sm:text-sm text-gray-500'>

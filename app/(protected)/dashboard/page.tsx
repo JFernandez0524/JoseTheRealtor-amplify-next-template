@@ -5,14 +5,25 @@ import { type Schema } from '@/amplify/data/resource';
 type PropertyLead = Schema['PropertyLead']['type'];
 
 export default async function DashboardPage() {
-  // 1. Fetch Data (Auth check is handled by layout.tsx)
-  const { data: leads, errors } =
-    await cookiesClient.models.PropertyLead.list();
+  // 1. Fetch ALL Data with pagination
+  let allLeads: PropertyLead[] = [];
+  let nextToken: string | null = null;
 
-  if (errors) console.error('Data Fetch Error:', errors);
+  do {
+    const result = await cookiesClient.models.PropertyLead.list({
+      limit: 1000,
+      nextToken: nextToken || undefined
+    });
+    
+    if (result.errors) console.error('Data Fetch Error:', result.errors);
+    if (result.data) allLeads.push(...result.data);
+    nextToken = result.nextToken || null;
+  } while (nextToken);
+
+  const leads = allLeads;
 
   // 2. Serialize for Client Component
-  const initialLeads: PropertyLead[] = JSON.parse(JSON.stringify(leads || []));
+  const initialLeads: PropertyLead[] = JSON.parse(JSON.stringify(leads));
 
   return (
     <div className='p-6'>
