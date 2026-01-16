@@ -213,7 +213,8 @@ export const handler: S3Handler = async (event) => {
             finalMailState = null,
             finalMailZip = null;
           let adminFirstName = null,
-            adminLastName = null;
+            adminLastName = null,
+            adminStandardizedAddress = null;
           const labels: string[] = [leadType];
 
           if (leadType === 'PROBATE') {
@@ -233,6 +234,18 @@ export const handler: S3Handler = async (event) => {
               finalMailCity = aStd?.city || sanitize(row['adminCity']);
               finalMailState = aStd?.state || sanitize(row['adminState']);
               finalMailZip = aStd?.zip || rawAdminZip;
+              
+              // Store admin standardized address
+              if (adminValidation) {
+                adminStandardizedAddress = {
+                  street: { S: finalMailAddr },
+                  city: { S: finalMailCity },
+                  state: { S: finalMailState },
+                  zip: { S: finalMailZip },
+                  county: aStd?.county ? { S: aStd.county } : undefined,
+                };
+              }
+              
               labels.push('ABSENTEE');
             }
           }
@@ -312,6 +325,7 @@ export const handler: S3Handler = async (event) => {
             adminCity: finalMailCity,
             adminState: finalMailState,
             adminZip: finalMailZip,
+            adminStandardizedAddress,
             mailingAddress: finalMailAddr || finalPropAddr,
             mailingCity: finalMailCity || finalPropCity,
             mailingState: finalMailState || finalPropState,

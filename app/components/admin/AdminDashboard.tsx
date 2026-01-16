@@ -50,6 +50,7 @@ export default function AdminDashboard({ initialUsers, initialLeads, currentUser
   // Calculate stats
   const totalUsers = users.length;
   const totalLeads = leads.length;
+  const invalidLeads = leads.filter(lead => lead.validationStatus === 'INVALID' || (lead.validationErrors && lead.validationErrors.length > 0));
   const totalCredits = users.reduce((sum, user) => sum + (user.credits || 0), 0);
   const totalSkips = users.reduce((sum, user) => sum + (user.totalSkipsPerformed || 0), 0);
 
@@ -79,6 +80,16 @@ export default function AdminDashboard({ initialUsers, initialLeads, currentUser
 
         <div className="bg-white p-6 rounded-lg shadow-sm border">
           <div className="flex items-center">
+            <HiOutlineTrash className="h-8 w-8 text-red-500" />
+            <div className="ml-4">
+              <p className="text-sm font-medium text-gray-500">Invalid Leads</p>
+              <p className="text-2xl font-bold text-gray-900">{invalidLeads.length}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white p-6 rounded-lg shadow-sm border">
+          <div className="flex items-center">
             <HiOutlineChartBar className="h-8 w-8 text-purple-500" />
             <div className="ml-4">
               <p className="text-sm font-medium text-gray-500">Total Credits</p>
@@ -86,17 +97,36 @@ export default function AdminDashboard({ initialUsers, initialLeads, currentUser
             </div>
           </div>
         </div>
+      </div>
 
-        <div className="bg-white p-6 rounded-lg shadow-sm border">
-          <div className="flex items-center">
-            <HiOutlineShieldCheck className="h-8 w-8 text-orange-500" />
-            <div className="ml-4">
-              <p className="text-sm font-medium text-gray-500">Total Skips</p>
-              <p className="text-2xl font-bold text-gray-900">{totalSkips}</p>
-            </div>
+      {/* Invalid Leads Section */}
+      {invalidLeads.length > 0 && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-6">
+          <h3 className="text-lg font-bold text-red-900 mb-4">⚠️ Invalid Leads Requiring Review</h3>
+          <div className="space-y-2 max-h-96 overflow-y-auto">
+            {invalidLeads.map(lead => (
+              <div key={lead.id} className="bg-white p-3 rounded border border-red-200">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <p className="font-semibold text-gray-900">
+                      {lead.ownerFirstName} {lead.ownerLastName} - {lead.ownerAddress}
+                    </p>
+                    <p className="text-sm text-gray-600">Type: {lead.type}</p>
+                    {lead.validationErrors && lead.validationErrors.length > 0 && (
+                      <ul className="text-sm text-red-600 mt-1">
+                        {lead.validationErrors.map((error, idx) => (
+                          <li key={idx}>• {error}</li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                  <span className="text-xs text-gray-500">{lead.id}</span>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
-      </div>
+      )}
 
       {/* Admin Actions */}
       <div className="bg-white rounded-lg shadow-sm border p-6">

@@ -52,6 +52,16 @@ async function callBatchDataBulk(leads: any[]): Promise<Map<string, BatchDataRes
       zip: lead.ownerZip?.trim() || '',
     };
 
+    // Use standardized address if available
+    if (lead.standardizedAddress?.street?.S) {
+      targetAddress = {
+        street: lead.standardizedAddress.street.S,
+        city: lead.standardizedAddress.city.S,
+        state: lead.standardizedAddress.state.S,
+        zip: lead.standardizedAddress.zip.S,
+      };
+    }
+
     if (lead.type?.toUpperCase() === 'PROBATE') {
       targetAddress = {
         street: lead.adminAddress?.trim() || '',
@@ -59,6 +69,16 @@ async function callBatchDataBulk(leads: any[]): Promise<Map<string, BatchDataRes
         state: lead.adminState?.trim().toUpperCase() || '',
         zip: lead.adminZip?.trim() || '',
       };
+
+      // Use admin standardized address if available
+      if (lead.adminStandardizedAddress?.street?.S) {
+        targetAddress = {
+          street: lead.adminStandardizedAddress.street.S,
+          city: lead.adminStandardizedAddress.city.S,
+          state: lead.adminStandardizedAddress.state.S,
+          zip: lead.adminStandardizedAddress.zip.S,
+        };
+      }
     }
 
     return {
@@ -243,6 +263,20 @@ export const handler: Handler = async (event) => {
         Key: { id: leadId }
       }));
       if (lead && (lead.owner ?? '') === ownerId) {
+        // Validate probate leads have admin info
+        if (lead.type?.toUpperCase() === 'PROBATE' && (!lead.adminFirstName || !lead.adminLastName || !lead.adminAddress)) {
+          // Mark lead with validation error instead of throwing
+          await docClient.send(new UpdateCommand({
+            TableName: propertyLeadTableName,
+            Key: { id: leadId },
+            UpdateExpression: 'SET validationStatus = :status, validationErrors = :errors',
+            ExpressionAttributeValues: {
+              ':status': 'INVALID',
+              ':errors': ['Missing required admin information (name and address) for probate lead']
+            }
+          }));
+          continue; // Skip this lead
+        }
         leads.push(lead);
       }
     }

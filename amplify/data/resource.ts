@@ -53,6 +53,7 @@ const schema = a.schema({
       adminCity: a.string(),
       adminState: a.string(),
       adminZip: a.string(),
+      adminStandardizedAddress: a.json(), // Google Validation Object for admin address
 
       // --- 🟢 Mailing Address (For Direct Mail) ---
       mailingAddress: a.string(),
@@ -69,6 +70,7 @@ const schema = a.schema({
       skipTraceStatus: a.enum(['PENDING', 'COMPLETED', 'FAILED', 'NO_MATCH']),
       skipTraceCompletedAt: a.datetime(),
       validationStatus: a.enum(['VALID', 'INVALID']),
+      validationErrors: a.string().array(), // Track validation issues for admin review
       manualStatus: a.enum(['ACTIVE', 'SOLD', 'PENDING', 'OFF_MARKET', 'SKIP', 'DIRECT_MAIL']), // Manual override
 
       // 💥 NEW: GHL Sync Status Fields

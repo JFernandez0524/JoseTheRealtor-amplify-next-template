@@ -179,6 +179,16 @@ export async function syncToGoHighLevel(
       tags.push('Direct-Mail-Only');
     }
     
+    // 🛡️ Probate leads MUST have admin info
+    if (lead.type?.toUpperCase() === 'PROBATE' && (!lead.adminFirstName || !lead.adminLastName)) {
+      // Mark lead as invalid and skip sync
+      await ghl.put(`/contacts/${lead.ghlContactId}`, {
+        tags: ['Validation_Error_Missing_Admin_Info']
+      }).catch(() => {}); // Best effort tag
+      
+      throw new Error('Probate leads require admin name. Cannot sync without administrator information.');
+    }
+
     // 🛡️ DIRECT MAIL PROTECTION - Only ONE sibling gets mail eligibility
     if (isPrimary) {
       tags.push('Direct_Mail_Eligible');
