@@ -405,13 +405,13 @@ export function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
                       </p>
                     </div>
                     
-                    {lead.rawSkipTraceData.allPhones?.length > 0 && (
+                    {(lead.rawSkipTraceData as any).allPhones?.length > 0 && (
                       <div className='mb-4'>
                         <h4 className='text-[10px] font-black uppercase text-slate-400 mb-3'>
                           All Phone Numbers Found
                         </h4>
                         <div className='space-y-2'>
-                          {lead.rawSkipTraceData.allPhones.map((p: any, idx: number) => (
+                          {(lead.rawSkipTraceData as any).allPhones.map((p: any, idx: number) => (
                             <div
                               key={idx}
                               className='flex items-center justify-between p-3 bg-amber-50 rounded-xl border border-amber-100'
@@ -438,13 +438,13 @@ export function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
                       </div>
                     )}
 
-                    {lead.rawSkipTraceData.allEmails?.length > 0 && (
+                    {(lead.rawSkipTraceData as any).allEmails?.length > 0 && (
                       <div>
                         <h4 className='text-[10px] font-black uppercase text-slate-400 mb-3'>
                           All Email Addresses Found
                         </h4>
                         <div className='space-y-2'>
-                          {lead.rawSkipTraceData.allEmails.map((e: any, idx: number) => (
+                          {(lead.rawSkipTraceData as any).allEmails.map((e: any, idx: number) => (
                             <div
                               key={idx}
                               className='flex items-center justify-between p-3 bg-amber-50 rounded-xl border border-amber-100'
