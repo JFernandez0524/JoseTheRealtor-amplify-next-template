@@ -170,7 +170,7 @@ async function callBatchDataBulk(leads: any[]): Promise<Map<string, BatchDataRes
           foundPhones, 
           foundEmails, 
           mailingData,
-          rawPersonData: status === 'NO_QUALITY_CONTACTS' ? person : undefined
+          rawPersonData: person // Always store for NO_QUALITY_CONTACTS case
         });
       }
 
