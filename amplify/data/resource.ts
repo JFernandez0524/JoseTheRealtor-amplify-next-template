@@ -267,6 +267,12 @@ const schema = a.schema({
       ghlSubAccountId: a.string(), // For managed sub-accounts
       ghlSubAccountStatus: a.enum(['ACTIVE', 'SUSPENDED', 'CANCELLED']),
       
+      // GHL Rate Limiting
+      hourlyMessageCount: a.integer().default(0),
+      dailyMessageCount: a.integer().default(0),
+      lastHourReset: a.integer(), // Timestamp in milliseconds
+      lastDayReset: a.integer(), // Timestamp in milliseconds
+      
       crmLocationId: a.string(),
       crmApiKey: a.string(),
       totalLeadsSynced: a.integer().default(0),
