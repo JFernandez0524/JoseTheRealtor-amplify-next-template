@@ -1,7 +1,7 @@
 // app/components/dashboard/LeadTable.tsx
 /** @jsxImportSource react */
 
-import React from 'react';
+import React, { useState } from 'react';
 import { StatusBadge } from '../shared/StatusBadge';
 import { formatDate } from '@/app/utils/formatters';
 import { type Schema } from '@/amplify/data/resource';
@@ -114,6 +114,13 @@ export function LeadTable({
   onSort,
 }: Props) {
   const tableRef = React.useRef<HTMLDivElement>(null);
+  const [editingLead, setEditingLead] = useState<Lead | null>(null);
+  const [editForm, setEditForm] = useState({
+    street: '',
+    city: '',
+    state: '',
+    zip: '',
+  });
 
   const scrollLeft = () => {
     if (tableRef.current) {
@@ -124,6 +131,50 @@ export function LeadTable({
   const scrollRight = () => {
     if (tableRef.current) {
       tableRef.current.scrollBy({ left: 200, behavior: 'smooth' });
+    }
+  };
+
+  const handleEditAddress = (lead: Lead) => {
+    setEditingLead(lead);
+    setEditForm({
+      street: lead.ownerAddress || '',
+      city: lead.ownerCity || '',
+      state: lead.ownerState || '',
+      zip: lead.ownerZip || '',
+    });
+  };
+
+  const handleSaveAddress = async () => {
+    if (!editingLead) return;
+    
+    try {
+      const { client } = await import('@/app/utils/aws/data/frontEndClient');
+      await client.models.PropertyLead.update({
+        id: editingLead.id,
+        ownerAddress: editForm.street,
+        ownerCity: editForm.city,
+        ownerState: editForm.state,
+        ownerZip: editForm.zip,
+      });
+
+      // Refresh Zestimate with new address
+      await fetch('/api/v1/refresh-zestimate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          leadId: editingLead.id,
+          street: editForm.street,
+          city: editForm.city,
+          state: editForm.state,
+          zip: editForm.zip,
+        }),
+      });
+
+      setEditingLead(null);
+      window.location.reload();
+    } catch (err) {
+      console.error('Failed to update address:', err);
+      alert('Failed to update address');
     }
   };
 
@@ -365,6 +416,16 @@ export function LeadTable({
                           ⚠️
                         </span>
                       )}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleEditAddress(lead);
+                        }}
+                        className='text-gray-400 hover:text-blue-600'
+                        title='Edit address'
+                      >
+                        ✏️
+                      </button>
                     </div>
                   </td>
 
@@ -390,9 +451,12 @@ export function LeadTable({
                               }
                               target="_blank"
                               rel="noopener noreferrer"
-                              className='font-semibold text-green-700 hover:text-green-900 hover:underline'
+                              className='font-semibold text-green-700 hover:text-green-900 hover:underline relative group'
                             >
                               ${lead.zestimate.toLocaleString()}
+                              <span className='invisible group-hover:visible absolute left-0 top-full mt-1 w-64 bg-gray-900 text-white text-xs rounded p-2 z-50 whitespace-normal'>
+                                ⚠️ Always verify: Click to check if this Zillow property matches the lead address. If wrong property: Search the address manually on Zillow/Google, then use edit button (✏️) to update address and refresh Zestimate.
+                              </span>
                             </a>
                             {lead.zillowLastUpdated && (() => {
                               const ageInDays = Math.floor((Date.now() - new Date(lead.zillowLastUpdated).getTime()) / (1000 * 60 * 60 * 24));
@@ -545,6 +609,69 @@ export function LeadTable({
           </tbody>
         </table>
       </div>
+
+      {/* Address Edit Modal */}
+      {editingLead && (
+        <div className='fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50' onClick={() => setEditingLead(null)}>
+          <div className='bg-white rounded-lg p-6 max-w-md w-full' onClick={(e) => e.stopPropagation()}>
+            <h3 className='text-lg font-bold mb-4'>Edit Address</h3>
+            <div className='space-y-3'>
+              <div>
+                <label className='block text-sm font-medium text-gray-700 mb-1'>Street Address</label>
+                <input
+                  type='text'
+                  value={editForm.street}
+                  onChange={(e) => setEditForm({ ...editForm, street: e.target.value })}
+                  className='w-full px-3 py-2 border border-gray-300 rounded-md'
+                />
+              </div>
+              <div>
+                <label className='block text-sm font-medium text-gray-700 mb-1'>City</label>
+                <input
+                  type='text'
+                  value={editForm.city}
+                  onChange={(e) => setEditForm({ ...editForm, city: e.target.value })}
+                  className='w-full px-3 py-2 border border-gray-300 rounded-md'
+                />
+              </div>
+              <div className='grid grid-cols-2 gap-3'>
+                <div>
+                  <label className='block text-sm font-medium text-gray-700 mb-1'>State</label>
+                  <input
+                    type='text'
+                    value={editForm.state}
+                    onChange={(e) => setEditForm({ ...editForm, state: e.target.value })}
+                    className='w-full px-3 py-2 border border-gray-300 rounded-md'
+                  />
+                </div>
+                <div>
+                  <label className='block text-sm font-medium text-gray-700 mb-1'>ZIP</label>
+                  <input
+                    type='text'
+                    value={editForm.zip}
+                    onChange={(e) => setEditForm({ ...editForm, zip: e.target.value })}
+                    className='w-full px-3 py-2 border border-gray-300 rounded-md'
+                  />
+                </div>
+              </div>
+            </div>
+            <div className='flex gap-3 mt-6'>
+              <button
+                onClick={handleSaveAddress}
+                className='flex-1 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700'
+              >
+                Save & Refresh Zestimate
+              </button>
+              <button
+                onClick={() => setEditingLead(null)}
+                className='px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50'
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

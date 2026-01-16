@@ -45,7 +45,6 @@ async function callBatchDataBulk(leads: any[]): Promise<Map<string, BatchDataRes
   if (!BATCH_DATA_SERVER_TOKEN) throw new Error('Missing BatchData API Key');
 
   const requests = leads.map(lead => {
-    let targetName = { first: lead.ownerFirstName, last: lead.ownerLastName };
     let targetAddress = {
       street: lead.ownerAddress?.trim() || '',
       city: lead.ownerCity?.trim() || '',
@@ -54,7 +53,6 @@ async function callBatchDataBulk(leads: any[]): Promise<Map<string, BatchDataRes
     };
 
     if (lead.type?.toUpperCase() === 'PROBATE') {
-      targetName = { first: lead.adminFirstName, last: lead.adminLastName };
       targetAddress = {
         street: lead.adminAddress?.trim() || '',
         city: lead.adminCity?.trim() || '',
@@ -63,10 +61,8 @@ async function callBatchDataBulk(leads: any[]): Promise<Map<string, BatchDataRes
       };
     }
 
-    const cleanedName = cleanName(targetName);
     return {
       requestId: lead.id,
-      ...(Object.keys(cleanedName).length > 0 && { name: cleanedName }),
       propertyAddress: targetAddress,
       options: {
         prioritizeMobilePhones: true,
@@ -267,7 +263,7 @@ export const handler: Handler = async (event) => {
     }));
 
     if (leadsToProcess.length === 0) {
-      return { results, processedCount: 0 };
+      return results;
     }
 
     // 5. Call BatchData once with all leads

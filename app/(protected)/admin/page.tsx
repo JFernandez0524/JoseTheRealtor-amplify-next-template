@@ -3,6 +3,7 @@ import { AuthGetUserGroupsServer, AuthGetCurrentUserServer } from '@/app/utils/a
 import { redirect } from 'next/navigation';
 import AdminDashboard from '@/app/components/admin/AdminDashboard';
 import { type Schema } from '@/amplify/data/resource';
+import { fetchAllLeads } from '@/app/utils/aws/data/pagination';
 
 type UserAccount = Schema['UserAccount']['type'];
 type PropertyLead = Schema['PropertyLead']['type'];
@@ -20,11 +21,10 @@ export default async function AdminPage() {
   // Fetch admin data using server client to avoid triggering AccessContext
   const [
     { data: users, errors: userErrors },
-    { data: leads, errors: leadErrors },
+    { data: allLeads, errors: leadErrors },
   ] = await Promise.all([
-    // Use server client to avoid client-side effects
     cookiesClient.models.UserAccount.list(),
-    cookiesClient.models.PropertyLead.list(),
+    fetchAllLeads((params) => cookiesClient.models.PropertyLead.list(params)),
   ]);
 
   if (userErrors) console.error('User Fetch Error:', userErrors);
@@ -42,7 +42,7 @@ export default async function AdminPage() {
 
   // Serialize for client component
   const initialUsers: UserAccount[] = JSON.parse(JSON.stringify(deduplicatedUsers));
-  const initialLeads: PropertyLead[] = JSON.parse(JSON.stringify(leads || []));
+  const initialLeads: PropertyLead[] = JSON.parse(JSON.stringify(allLeads));
 
   return (
     <div className="p-6">

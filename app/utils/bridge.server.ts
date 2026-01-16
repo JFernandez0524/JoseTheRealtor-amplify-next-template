@@ -78,8 +78,9 @@ export async function analyzeBridgeProperty(params: {
   // Try address variations
   for (const street of streetVariations) {
     try {
+      const fullAddress = `${street}, ${city}, ${state} ${zip}`;
       const res = await bridgeClient.get('/zestimates_v2/zestimates', {
-        params: { limit: 3, address: street, city, state, postalCode: zip },
+        params: { limit: 3, 'address.in': fullAddress },
       });
       if (res.data.bundle?.[0]) {
         valuation = res.data.bundle[0];
