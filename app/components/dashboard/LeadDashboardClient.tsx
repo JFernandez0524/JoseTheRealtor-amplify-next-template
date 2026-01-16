@@ -138,8 +138,7 @@ export default function LeadDashboardClient({}: Props) {
         const matchesType = !filterType || lead.type === filterType;
         const matchesStatus =
           !filterStatus || 
-          lead.skipTraceStatus === filterStatus ||
-          (filterStatus === 'FAILED' && (lead.skipTraceStatus === 'ERROR' || lead.skipTraceStatus === 'FAILED'));
+          lead.skipTraceStatus === filterStatus;
 
         const matchesCrm =
           !filterCrmStatus ||
