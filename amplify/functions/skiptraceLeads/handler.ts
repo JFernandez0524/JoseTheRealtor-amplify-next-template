@@ -42,7 +42,12 @@ function cleanName(name: { first?: string | null; last?: string | null }) {
 }
 
 async function callBatchDataBulk(leads: any[]): Promise<Map<string, BatchDataResult>> {
-  if (!BATCH_DATA_SERVER_TOKEN) throw new Error('Missing BatchData API Key');
+  if (!BATCH_DATA_SERVER_TOKEN) {
+    console.error('❌ BATCH_DATA_SERVER_TOKEN is not set');
+    throw new Error('Missing BatchData API Key');
+  }
+
+  console.log(`📞 Calling BatchData API for ${leads.length} leads`);
 
   const requests = leads.map(lead => {
     let targetAddress = {
@@ -93,6 +98,9 @@ async function callBatchDataBulk(leads: any[]): Promise<Map<string, BatchDataRes
 
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     try {
+      console.log(`📤 Sending request to BatchData (attempt ${attempt + 1}/${MAX_RETRIES})`);
+      console.log(`Request payload:`, JSON.stringify({ requests: requests.slice(0, 2) }, null, 2)); // Log first 2 for debugging
+      
       const res = await axios.post(
         'https://api.batchdata.com/api/v1/property/skip-trace',
         { requests },
@@ -103,6 +111,10 @@ async function callBatchDataBulk(leads: any[]): Promise<Map<string, BatchDataRes
           },
         }
       );
+
+      console.log(`✅ BatchData API response received`);
+      console.log(`Response status: ${res.status}`);
+      console.log(`Results count: ${res.data?.results?.length || 0}`);
 
       const resultMap = new Map<string, BatchDataResult>();
       const resultsArray = res.data?.results || [];
@@ -193,8 +205,13 @@ async function callBatchDataBulk(leads: any[]): Promise<Map<string, BatchDataRes
 // ---------------------------------------------------------
 
 export const handler: Handler = async (event) => {
+  console.log('🚀 Skip trace handler started');
+  console.log('Event:', JSON.stringify(event, null, 2));
+  
   const { leadIds } = event.arguments;
   const identity = event.identity;
+
+  console.log(`📋 Lead IDs received: ${leadIds?.length || 0}`);
 
   let ownerId: string | undefined;
   let groups: string[] = [];
@@ -205,7 +222,11 @@ export const handler: Handler = async (event) => {
     groups = (identity as any).claims?.['cognito:groups'] || [];
   }
 
+  console.log(`👤 Owner ID: ${ownerId}`);
+  console.log(`👥 Groups: ${groups.join(', ')}`);
+
   if (!ownerId || !leadIds?.length) {
+    console.error('❌ Missing user identity or lead data');
     throw new Error('Unauthorized: Missing user identity or lead data.');
   }
 
@@ -214,13 +235,18 @@ export const handler: Handler = async (event) => {
     ['PRO', 'AI_PLAN', 'ADMINS'].includes(g)
   );
 
+  console.log(`🔐 Authorization check: ${isAuthorized}`);
+
   if (!isAuthorized) {
+    console.error('❌ User not authorized');
     throw new Error(
       'Forbidden: A paid membership is required to use this feature.'
     );
   }
 
   try {
+    console.log('💰 Checking user credits...');
+    
     // 💰 3. Wallet Check using ScanCommand with Filter
     const { Items: accounts } = await docClient.send(new ScanCommand({
       TableName: userAccountTableName,
@@ -232,9 +258,14 @@ export const handler: Handler = async (event) => {
         ':ownerId': ownerId
       }
     }));
+    
     const userAccount = accounts?.[0];
     const isAdmin = groups.includes('ADMINS');
     const isPro = groups.includes('PRO');
+
+    console.log(`💳 User account found: ${!!userAccount}`);
+    console.log(`💰 Credits: ${userAccount?.credits || 0}`);
+    console.log(`👑 Is Admin: ${isAdmin}`);
 
     // All users (FREE and PRO) need credits for skip tracing, except ADMIN
     if (!isAdmin) {
@@ -243,16 +274,21 @@ export const handler: Handler = async (event) => {
         const expirationDate = new Date(userAccount.creditsExpiresAt);
         const now = new Date();
         if (now > expirationDate) {
+          console.error('❌ Credits expired');
           throw new Error('Credits have expired. Please upgrade to PRO or purchase more credits.');
         }
       }
 
       if (!userAccount || (userAccount.credits || 0) < leadIds.length) {
+        console.error(`❌ Insufficient credits: need ${leadIds.length}, have ${userAccount?.credits || 0}`);
         throw new Error(
           `Insufficient Credits: Need ${leadIds.length}, have ${userAccount?.credits || 0}. Purchase skip tracing credits to continue.`
         );
       }
     }
+
+    console.log('✅ Credit check passed');
+    console.log('📥 Fetching leads...');
 
     // 🛡️ 4. Fetch all leads upfront
     const leads = [];
@@ -265,6 +301,7 @@ export const handler: Handler = async (event) => {
       if (lead && (lead.owner ?? '') === ownerId) {
         // Validate probate leads have admin info
         if (lead.type?.toUpperCase() === 'PROBATE' && (!lead.adminFirstName || !lead.adminLastName || !lead.adminAddress)) {
+          console.warn(`⚠️ Invalid probate lead ${leadId} - missing admin info`);
           // Mark lead with validation error instead of throwing
           await docClient.send(new UpdateCommand({
             TableName: propertyLeadTableName,
@@ -280,6 +317,8 @@ export const handler: Handler = async (event) => {
         leads.push(lead);
       }
     }
+
+    console.log(`✅ Fetched ${leads.length} valid leads`);
 
     // Filter out SOLD/SKIP leads
     const leadsToProcess = leads.filter(lead => 
@@ -297,11 +336,16 @@ export const handler: Handler = async (event) => {
     }));
 
     if (leadsToProcess.length === 0) {
+      console.log('⏭️ No leads to process, returning early');
       return results;
     }
 
+    console.log(`🔄 Processing ${leadsToProcess.length} leads with BatchData...`);
+
     // 5. Call BatchData once with all leads
     const enrichmentMap = await callBatchDataBulk(leadsToProcess);
+
+    console.log(`✅ BatchData processing complete, updating ${leadsToProcess.length} leads...`);
 
     // 6. Update all leads in parallel
     const updatePromises = leadsToProcess.map(async (lead) => {
@@ -344,8 +388,12 @@ export const handler: Handler = async (event) => {
 
     const processedSuccessfully = updateResults.filter(r => r.status === 'SUCCESS').length;
 
+    console.log(`✅ Database updates complete`);
+    console.log(`📊 Results: ${processedSuccessfully} successful, ${updateResults.length - processedSuccessfully} failed`);
+
     // 💰 7. Deduct Credits (all users except ADMIN)
     if (processedSuccessfully > 0 && !isAdmin && userAccount) {
+      console.log(`💳 Deducting ${processedSuccessfully} credits...`);
       await docClient.send(new UpdateCommand({
         TableName: userAccountTableName,
         Key: { id: userAccount.id },
@@ -357,9 +405,13 @@ export const handler: Handler = async (event) => {
       }));
     }
 
+    console.log('✅ Skip trace handler completed successfully');
+    console.log(`📤 Returning ${results.length} results`);
+    
     return results; // Return as JSON string for your mutation return type
   } catch (error: any) {
-    console.error('🔥 Lambda Handler Error:', error.message);
+    console.error('🔥 Lambda Handler Error:', error);
+    console.error('Error stack:', error.stack);
     throw error;
   }
 };

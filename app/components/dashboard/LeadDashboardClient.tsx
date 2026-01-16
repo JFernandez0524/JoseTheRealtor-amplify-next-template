@@ -331,30 +331,32 @@ export default function LeadDashboardClient({}: Props) {
 
     setIsProcessing(true);
     try {
-      // 1. Capture the data result
       const { data, errors } = await client.mutations.skipTraceLeads({
         leadIds: selectedIds,
       });
 
-      if (errors) throw new Error(errors[0].message);
+      console.log('Skip trace response:', { data, errors });
 
-      // 2. Since your handler returns the 'results' array:
-      // data looks like: [{ id: '...', status: 'SUCCESS', phones: 2 }, ...]
-      const results = data as Array<{ id: string; status: string }>;
-      const successful = results.filter((r) => r.status === 'SUCCESS').length;
+      if (errors) {
+        console.error('Skip trace errors:', errors);
+        throw new Error(errors[0].message);
+      }
+
+      // Handle response - data is the array directly
+      const results = Array.isArray(data) ? data : [];
+      const successful = results.filter((r: any) => r.status === 'SUCCESS').length;
       const failed = results.filter(
-        (r) => r.status === 'FAILED' || r.status === 'ERROR'
+        (r: any) => r.status === 'FAILED' || r.status === 'ERROR' || r.status === 'NO_MATCH'
       ).length;
 
-      // 3. Precise Feedback
       alert(
         `Skip-trace complete!\n✅ Successful: ${successful}\n❌ Failed/No Match: ${failed}`
       );
 
       setSelectedIds([]);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Skip-trace error:', err);
-      alert('Error during skip-trace. Check your network connection.');
+      alert(`Error during skip-trace: ${err.message || 'Check your network connection'}`);
     } finally {
       setIsProcessing(false);
     }
