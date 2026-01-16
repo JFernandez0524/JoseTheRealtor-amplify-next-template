@@ -42,6 +42,12 @@ export default function LeadDashboardClient({}: Props) {
   const [skipTraceFromDate, setSkipTraceFromDate] = useState('');
   const [skipTraceToDate, setSkipTraceToDate] = useState('');
 
+  // Debug: Log unique skipTraceStatus values
+  useEffect(() => {
+    const statuses = new Set(leads.map(l => l.skipTraceStatus).filter(Boolean));
+    console.log('Unique skipTraceStatus values:', Array.from(statuses));
+  }, [leads]);
+
   // Sort States
   const [sortField, setSortField] = useState<
     | 'createdAt'
@@ -131,7 +137,9 @@ export default function LeadDashboardClient({}: Props) {
 
         const matchesType = !filterType || lead.type === filterType;
         const matchesStatus =
-          !filterStatus || lead.skipTraceStatus === filterStatus;
+          !filterStatus || 
+          lead.skipTraceStatus === filterStatus ||
+          (filterStatus === 'FAILED' && (lead.skipTraceStatus === 'ERROR' || lead.skipTraceStatus === 'FAILED'));
 
         const matchesCrm =
           !filterCrmStatus ||

@@ -345,10 +345,11 @@ export function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
 
             <CardWrapper title='Skip Trace Results'>
               <div className='space-y-6'>
+                {/* Quality Contacts Section */}
                 <div>
                   <h4 className='text-[10px] font-black uppercase text-slate-400 mb-3 flex items-center gap-2'>
                     <HiOutlinePhone className='text-lg text-indigo-500' />{' '}
-                    Phones
+                    Phones (Quality Contacts)
                   </h4>
                   <div className='space-y-2'>
                     {lead.phones && lead.phones.length > 0 ? (
@@ -367,7 +368,7 @@ export function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
                       ))
                     ) : (
                       <p className='text-xs text-slate-400 italic'>
-                        No phone numbers found.
+                        No quality phone numbers found.
                       </p>
                     )}
                   </div>
@@ -375,7 +376,7 @@ export function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
                 <div>
                   <h4 className='text-[10px] font-black uppercase text-slate-400 mb-3 flex items-center gap-2'>
                     <HiOutlineEnvelope className='text-lg text-indigo-500' />{' '}
-                    Emails
+                    Emails (Quality Contacts)
                   </h4>
                   <div className='space-y-2'>
                     {lead.emails && lead.emails.length > 0 ? (
@@ -389,11 +390,80 @@ export function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
                       ))
                     ) : (
                       <p className='text-xs text-slate-400 italic'>
-                        No email addresses found.
+                        No quality email addresses found.
                       </p>
                     )}
                   </div>
                 </div>
+
+                {/* Raw Skip Trace Data Section */}
+                {lead.rawSkipTraceData && (
+                  <div className='border-t pt-6'>
+                    <div className='bg-amber-50 border border-amber-200 rounded-lg p-4 mb-4'>
+                      <p className='text-xs text-amber-800'>
+                        <strong>⚠️ Additional contacts found</strong> but didn't pass quality filters (Mobile 90+ score, not DNC, tested emails). Use at your discretion.
+                      </p>
+                    </div>
+                    
+                    {lead.rawSkipTraceData.allPhones?.length > 0 && (
+                      <div className='mb-4'>
+                        <h4 className='text-[10px] font-black uppercase text-slate-400 mb-3'>
+                          All Phone Numbers Found
+                        </h4>
+                        <div className='space-y-2'>
+                          {lead.rawSkipTraceData.allPhones.map((p: any, idx: number) => (
+                            <div
+                              key={idx}
+                              className='flex items-center justify-between p-3 bg-amber-50 rounded-xl border border-amber-100'
+                            >
+                              <span className='font-mono text-sm text-slate-700'>
+                                {p.number}
+                              </span>
+                              <div className='flex gap-2 text-[9px] font-bold'>
+                                <span className='bg-slate-100 text-slate-600 px-2 py-0.5 rounded uppercase'>
+                                  {p.type}
+                                </span>
+                                <span className='bg-slate-100 text-slate-600 px-2 py-0.5 rounded'>
+                                  Score: {p.score}
+                                </span>
+                                {p.dnc && (
+                                  <span className='bg-red-100 text-red-700 px-2 py-0.5 rounded'>
+                                    DNC
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {lead.rawSkipTraceData.allEmails?.length > 0 && (
+                      <div>
+                        <h4 className='text-[10px] font-black uppercase text-slate-400 mb-3'>
+                          All Email Addresses Found
+                        </h4>
+                        <div className='space-y-2'>
+                          {lead.rawSkipTraceData.allEmails.map((e: any, idx: number) => (
+                            <div
+                              key={idx}
+                              className='flex items-center justify-between p-3 bg-amber-50 rounded-xl border border-amber-100'
+                            >
+                              <span className='text-sm text-slate-600'>
+                                {e.email}
+                              </span>
+                              {!e.tested && (
+                                <span className='text-[9px] font-bold bg-slate-100 text-slate-600 px-2 py-0.5 rounded'>
+                                  Not Verified
+                                </span>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </CardWrapper>
 

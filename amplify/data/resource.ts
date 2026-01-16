@@ -67,8 +67,9 @@ const schema = a.schema({
       standardizedAddress: a.json(), // Google Validation Object
 
       // Statuses
-      skipTraceStatus: a.enum(['PENDING', 'COMPLETED', 'FAILED', 'NO_MATCH']),
+      skipTraceStatus: a.enum(['PENDING', 'COMPLETED', 'FAILED', 'NO_MATCH', 'NO_QUALITY_CONTACTS']),
       skipTraceCompletedAt: a.datetime(),
+      rawSkipTraceData: a.json(), // Store all skip trace results even if they don't pass filters
       validationStatus: a.enum(['VALID', 'INVALID']),
       validationErrors: a.string().array(), // Track validation issues for admin review
       manualStatus: a.enum(['ACTIVE', 'SOLD', 'PENDING', 'OFF_MARKET', 'SKIP', 'DIRECT_MAIL']), // Manual override

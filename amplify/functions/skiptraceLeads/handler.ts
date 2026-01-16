@@ -24,10 +24,11 @@ type MailingAddressData = {
 };
 
 type BatchDataResult = {
-  status: 'SUCCESS' | 'NO_MATCH' | 'INVALID_GEO' | 'ERROR';
+  status: 'SUCCESS' | 'NO_MATCH' | 'INVALID_GEO' | 'ERROR' | 'NO_QUALITY_CONTACTS';
   foundPhones: string[];
   foundEmails: string[];
   mailingData?: MailingAddressData | null;
+  rawPersonData?: any; // Store full person object for NO_QUALITY_CONTACTS
 };
 
 // ---------------------------------------------------------
@@ -114,14 +115,17 @@ async function callBatchDataBulk(leads: any[]): Promise<Map<string, BatchDataRes
 
       console.log(`✅ BatchData API response received`);
       console.log(`Response status: ${res.status}`);
-      console.log(`Results count: ${res.data?.results?.length || 0}`);
+      console.log(`Response data:`, JSON.stringify(res.data, null, 2));
+      console.log(`Persons count: ${res.data?.results?.persons?.length || 0}`);
 
       const resultMap = new Map<string, BatchDataResult>();
-      const resultsArray = res.data?.results || [];
+      const personsArray = res.data?.results?.persons || [];
 
-      for (const result of resultsArray) {
-        const leadId = result.requestId;
-        if (!result.persons?.length) {
+      for (const result of personsArray) {
+        const leadId = result.request?.requestId;
+        if (!leadId) continue;
+        
+        if (!result.meta?.matched) {
           resultMap.set(leadId, {
             status: 'NO_MATCH',
             foundPhones: [],
@@ -131,7 +135,7 @@ async function callBatchDataBulk(leads: any[]): Promise<Map<string, BatchDataRes
           continue;
         }
 
-        const person = result.persons[0];
+        const person = result;
         const foundPhones: string[] = [];
         const foundEmails: string[] = [];
         let mailingData = null;
@@ -160,31 +164,43 @@ async function callBatchDataBulk(leads: any[]): Promise<Map<string, BatchDataRes
           if (e.tested && e.email) foundEmails.push(e.email);
         });
 
-        resultMap.set(leadId, { status: 'SUCCESS', foundPhones, foundEmails, mailingData });
+        const status = foundPhones.length > 0 || foundEmails.length > 0 ? 'SUCCESS' : 'NO_QUALITY_CONTACTS';
+        resultMap.set(leadId, { 
+          status, 
+          foundPhones, 
+          foundEmails, 
+          mailingData,
+          rawPersonData: status === 'NO_QUALITY_CONTACTS' ? person : undefined
+        });
       }
 
       return resultMap;
     } catch (error: any) {
+      console.error(`❌ BatchData API error (attempt ${attempt + 1}):`, error.message);
+      console.error(`Error details:`, {
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        headers: error.response?.headers
+      });
+      
       if (
         isAxiosError(error) &&
         error.response?.status === 429 &&
         attempt < MAX_RETRIES - 1
       ) {
+        console.log(`⏳ Rate limited, retrying in ${RETRY_DELAY_MS * Math.pow(2, attempt)}ms...`);
         await new Promise((r) =>
           setTimeout(r, RETRY_DELAY_MS * Math.pow(2, attempt))
         );
         continue;
       }
-      const errorMap = new Map<string, BatchDataResult>();
-      leads.forEach(lead => {
-        errorMap.set(lead.id, {
-          status: 'ERROR',
-          foundPhones: [],
-          foundEmails: [],
-          mailingData: null,
-        });
-      });
-      return errorMap;
+      
+      // Don't catch and return empty - let it fail on last attempt
+      if (attempt === MAX_RETRIES - 1) {
+        console.error('❌ All retry attempts failed');
+        throw error;
+      }
     }
   }
   
@@ -350,7 +366,7 @@ export const handler: Handler = async (event) => {
     // 6. Update all leads in parallel
     const updatePromises = leadsToProcess.map(async (lead) => {
       const enrichedData = enrichmentMap.get(lead.id);
-      if (!enrichedData || enrichedData.status !== 'SUCCESS') {
+      if (!enrichedData || (enrichedData.status !== 'SUCCESS' && enrichedData.status !== 'NO_QUALITY_CONTACTS')) {
         const finalStatus = enrichedData?.status === 'ERROR' ? 'FAILED' : 'NO_MATCH';
         await docClient.send(new UpdateCommand({
           TableName: propertyLeadTableName,
@@ -359,6 +375,36 @@ export const handler: Handler = async (event) => {
           ExpressionAttributeValues: { ':status': finalStatus }
         }));
         return { id: lead.id, status: finalStatus };
+      }
+
+      // Handle NO_QUALITY_CONTACTS - mark as completed but no data to save
+      if (enrichedData.status === 'NO_QUALITY_CONTACTS') {
+        const currentLabels = lead.leadLabels || [];
+        const updatedLabels = [...new Set([...currentLabels, 'DIRECT_MAIL_ONLY'])];
+        
+        // Store raw data for user review
+        const rawData = {
+          allPhones: enrichedData.rawPersonData?.phoneNumbers || [],
+          allEmails: enrichedData.rawPersonData?.emails || [],
+          note: 'Skip trace found contact info but none passed quality filters (Mobile 90+ score, not DNC, tested emails)'
+        };
+        
+        await docClient.send(new UpdateCommand({
+          TableName: propertyLeadTableName,
+          Key: { id: lead.id },
+          UpdateExpression: 'SET mailingAddress = :mailingAddress, mailingCity = :mailingCity, mailingState = :mailingState, mailingZip = :mailingZip, skipTraceStatus = :status, skipTraceCompletedAt = :completedAt, leadLabels = :labels, rawSkipTraceData = :rawData',
+          ExpressionAttributeValues: {
+            ':mailingAddress': enrichedData.mailingData?.mailingAddress || null,
+            ':mailingCity': enrichedData.mailingData?.mailingCity || null,
+            ':mailingState': enrichedData.mailingData?.mailingState || null,
+            ':mailingZip': enrichedData.mailingData?.mailingZip || null,
+            ':status': 'NO_QUALITY_CONTACTS',
+            ':completedAt': new Date().toISOString(),
+            ':labels': updatedLabels,
+            ':rawData': rawData
+          }
+        }));
+        return { id: lead.id, status: 'NO_QUALITY_CONTACTS' };
       }
 
       const newPhones = [...new Set([...(lead.phones || []), ...enrichedData.foundPhones])];

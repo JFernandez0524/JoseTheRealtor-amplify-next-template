@@ -111,6 +111,7 @@ export function DashboardFilters({
             <option value=''>All Trace Statuses</option>
             <option value='PENDING'>Pending Trace</option>
             <option value='COMPLETED'>Completed Trace</option>
+            <option value='NO_QUALITY_CONTACTS'>No Quality Contacts</option>
             <option value='FAILED'>Failed/Error</option>
             <option value='NO_MATCH'>No Match</option>
           </select>
