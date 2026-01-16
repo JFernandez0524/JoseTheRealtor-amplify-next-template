@@ -403,6 +403,9 @@ export function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
                       <p className='text-xs text-amber-800'>
                         <strong>⚠️ Additional contacts found</strong> but didn't pass quality filters (Mobile 90+ score, not DNC, tested emails). Use at your discretion.
                       </p>
+                      <pre className='text-xs mt-2 text-slate-600'>
+                        Debug: {JSON.stringify(lead.rawSkipTraceData, null, 2)}
+                      </pre>
                     </div>
                     
                     {(lead.rawSkipTraceData as any).allPhones?.length > 0 && (
