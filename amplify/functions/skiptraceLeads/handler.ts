@@ -391,7 +391,7 @@ export const handler: Handler = async (event) => {
         
         console.log('💾 Saving raw skip trace data:', JSON.stringify(rawData, null, 2));
         
-        await docClient.send(new UpdateCommand({
+        const updateResult = await docClient.send(new UpdateCommand({
           TableName: propertyLeadTableName,
           Key: { id: lead.id },
           UpdateExpression: 'SET mailingAddress = :mailingAddress, mailingCity = :mailingCity, mailingState = :mailingState, mailingZip = :mailingZip, skipTraceStatus = :status, skipTraceCompletedAt = :completedAt, leadLabels = :labels, rawSkipTraceData = :rawData',
@@ -404,8 +404,11 @@ export const handler: Handler = async (event) => {
             ':completedAt': new Date().toISOString(),
             ':labels': updatedLabels,
             ':rawData': rawData
-          }
+          },
+          ReturnValues: 'ALL_NEW'
         }));
+        
+        console.log('✅ Update result:', JSON.stringify(updateResult.Attributes, null, 2));
         return { id: lead.id, status: 'NO_QUALITY_CONTACTS' };
       }
 
