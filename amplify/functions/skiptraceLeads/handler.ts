@@ -389,6 +389,8 @@ export const handler: Handler = async (event) => {
           note: 'Skip trace found contact info but none passed quality filters (Mobile 90+ score, not DNC, tested emails)'
         };
         
+        console.log('💾 Saving raw skip trace data:', JSON.stringify(rawData, null, 2));
+        
         await docClient.send(new UpdateCommand({
           TableName: propertyLeadTableName,
           Key: { id: lead.id },
