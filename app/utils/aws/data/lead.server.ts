@@ -269,3 +269,62 @@ export async function updateLeadGhlStatus(
     console.error(`[DB] Failed to update sync status for ${leadId}:`, error);
   }
 }
+
+/**
+ * Mark lead with validation errors
+ */
+export async function markLeadAsInvalid(leadId: string, errors: string[]) {
+  return updateLead({
+    id: leadId,
+    validationStatus: 'INVALID',
+    validationErrors: errors,
+  });
+}
+
+/**
+ * Get leads by owner (user ID)
+ */
+export async function getLeadsByOwner(ownerId: string): Promise<DBLead[]> {
+  try {
+    const { data: leads, errors } = await cookiesClient.models.PropertyLead.list({
+      filter: { owner: { eq: ownerId } },
+      authMode: 'userPool',
+    });
+
+    if (errors) {
+      console.error('❌ getLeadsByOwner errors:', errors);
+      return [];
+    }
+
+    return (leads as DBLead[]).sort((a, b) => {
+      const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      return dateB - dateA;
+    });
+  } catch (error: any) {
+    console.error('❌ getLeadsByOwner error:', error.message);
+    return [];
+  }
+}
+
+/**
+ * Get invalid leads (for admin review)
+ */
+export async function getInvalidLeads(): Promise<DBLead[]> {
+  try {
+    const { data: leads, errors } = await cookiesClient.models.PropertyLead.list({
+      filter: { validationStatus: { eq: 'INVALID' } },
+      authMode: 'userPool',
+    });
+
+    if (errors) {
+      console.error('❌ getInvalidLeads errors:', errors);
+      return [];
+    }
+
+    return leads as DBLead[];
+  } catch (error: any) {
+    console.error('❌ getInvalidLeads error:', error.message);
+    return [];
+  }
+}

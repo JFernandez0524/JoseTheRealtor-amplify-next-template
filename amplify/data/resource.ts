@@ -243,6 +243,16 @@ const schema = a.schema({
     .handler(a.handler.function('addUserToGroup'))
     .returns(a.json()),
 
+  removeUserFromGroup: a
+    .mutation()
+    .arguments({
+      userId: a.string().required(),
+      groupName: a.string().required(),
+    })
+    .authorization((allow) => [allow.group('ADMINS')])
+    .handler(a.handler.function('removeUserFromGroup'))
+    .returns(a.json()),
+
   UserAccount: a
     .model({
       owner: a.string().authorization((allow) => [allow.owner().to(['read'])]),

@@ -1,4 +1,3 @@
-// amplify/backend.ts
 import { defineBackend } from '@aws-amplify/backend';
 import { auth } from './auth/resource';
 import { data } from './data/resource';
@@ -8,6 +7,7 @@ import { skipTraceLeads } from './functions/skiptraceLeads/resource';
 import { manualGhlSync } from './functions/manualGhlSync/resource';
 import { aiFollowUpAgent } from './functions/aiFollowUpAgent/resource';
 import { addUserToGroup } from './data/add-user-to-group/resource';
+import { removeUserFromGroup } from './data/remove-user-from-group/resource';
 import { EventType } from 'aws-cdk-lib/aws-s3';
 import { LambdaDestination } from 'aws-cdk-lib/aws-s3-notifications';
 import { PolicyStatement, Effect } from 'aws-cdk-lib/aws-iam';
@@ -21,6 +21,7 @@ const backend = defineBackend({
   manualGhlSync,
   aiFollowUpAgent,
   addUserToGroup,
+  removeUserFromGroup,
 });
 
 // 🚀 S3 Trigger - uploadCsvHandler is in storage stack (no cross-stack reference)
@@ -107,6 +108,12 @@ backend.auth.resources.userPool.grant(
   backend.uploadCsvHandler.resources.lambda,
   'cognito-idp:AdminAddUserToGroup',
   'cognito-idp:AdminGetUser'
+);
+
+// 🛡️ Auth Permissions for removeUserFromGroup
+backend.auth.resources.userPool.grant(
+  backend.removeUserFromGroup.resources.lambda,
+  'cognito-idp:AdminRemoveUserFromGroup'
 );
 
 // 🤖 Grant Bedrock permissions to AI Follow-Up Agent

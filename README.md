@@ -201,14 +201,60 @@ The platform provides REST APIs for integration:
 
 ```
 ├── app/                    # Next.js App Router pages
+│   ├── api/               # API routes (webhooks, OAuth)
+│   ├── components/        # React components
+│   └── utils/             # Utility functions
+│       ├── aws/data/      # Data access layer (leads, users, pagination)
+│       ├── billing/       # Subscription management utilities
+│       └── google.server.ts # Address validation
 ├── amplify/               # AWS Amplify backend configuration
 │   ├── auth/             # Cognito authentication
 │   ├── data/             # GraphQL schema and resolvers
 │   ├── functions/        # Lambda functions
+│   │   ├── shared/       # Shared utilities (GHL token manager)
+│   │   ├── skiptraceLeads/ # Bulk skip trace handler
+│   │   └── manualGhlSync/  # GHL sync handler
 │   └── storage/          # S3 storage configuration
-├── components/           # React components
-└── utils/               # Utility functions
+└── components/           # Shared React components
 ```
+
+### Code Organization
+
+**Data Access Layer** (`app/utils/aws/data/`)
+- `lead.server.ts` - All lead CRUD operations and queries
+- `userAccount.server.ts` - User account operations, credits, rate limits
+- `pagination.ts` - Automatic pagination for large datasets
+
+**Business Logic** (`app/utils/billing/`)
+- `subscriptionManager.ts` - Subscription lifecycle management
+
+**Shared Functions** (`amplify/functions/shared/`)
+- `ghlTokenManager.ts` - OAuth token refresh automation
+- `bridgeUtils.ts` - Property data API utilities
+
+### Key Features
+
+**Automatic Token Refresh**
+- GHL OAuth tokens auto-refresh before expiration
+- Users stay connected without manual reconnection
+- See `amplify/functions/shared/ghlTokenManager.ts`
+
+**Subscription Management**
+- Stripe webhooks handle payment events
+- Automatic access revocation on payment failure
+- Group-based authorization (PRO, AI_PLAN)
+- See `app/utils/billing/subscriptionManager.ts`
+
+**Bulk Skip Tracing**
+- Processes up to 100 leads in single API call
+- Parallel database updates for performance
+- Uses standardized addresses for accuracy
+- See `amplify/functions/skiptraceLeads/handler.ts`
+
+**Validation Error Tracking**
+- Invalid leads flagged for admin review
+- Admin dashboard shows validation errors
+- Prevents processing incomplete data
 
 ### Environment Variables
 

@@ -1,9 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { cookiesClient } from '@/app/utils/aws/auth/amplifyServerUtils.server';
+import { 
+  revokeSubscriptionAccess, 
+  grantSubscriptionAccess, 
+  updateUserAccountForPlan,
+  addCreditsToUser 
+} from '@/app/utils/billing/subscriptionManager';
 
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
 const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET;
-const GHL_AGENCY_TOKEN = process.env.GHL_AGENCY_TOKEN;
 
 export async function POST(req: NextRequest) {
   try {
@@ -22,6 +26,10 @@ export async function POST(req: NextRequest) {
         await handleCheckoutCompleted(event.data.object);
         break;
       
+      case 'customer.subscription.updated':
+        await handleSubscriptionUpdated(event.data.object);
+        break;
+      
       case 'customer.subscription.deleted':
         await handleSubscriptionCancelled(event.data.object);
         break;
@@ -36,53 +44,47 @@ export async function POST(req: NextRequest) {
 }
 
 async function handleCheckoutCompleted(session: any) {
-  const { customer_email, metadata } = session;
+  const { metadata } = session;
   const { userId, plan, credits, type } = metadata;
 
   try {
-    // Get user account
-    const { data: accounts } = await cookiesClient.models.UserAccount.list({
-      filter: { owner: { eq: userId } }
-    });
-
-    const userAccount = accounts?.[0];
-    if (!userAccount) return;
-
     if (type === 'credits') {
-      // Handle credit purchase
-      const creditsToAdd = parseInt(credits);
-      await cookiesClient.models.UserAccount.update({
-        id: userAccount.id,
-        credits: (userAccount.credits || 0) + creditsToAdd,
-      });
-
-      console.log(`✅ Added ${creditsToAdd} credits to user ${userId}`);
-      
-    } else if (plan === 'sync-plan') {
-      // Handle SYNC PLAN subscription
-      await cookiesClient.models.UserAccount.update({
-        id: userAccount.id,
-        ghlIntegrationType: 'OAUTH', // User connects their own GHL
-      });
-
-      console.log(`✅ Activated SYNC PLAN for user ${userId}`);
-      
-    } else if (plan === 'ai-outreach') {
-      // Handle AI OUTREACH PLAN subscription
-      await cookiesClient.models.UserAccount.update({
-        id: userAccount.id,
-        ghlIntegrationType: 'OAUTH', // User connects their own GHL
-      });
-
-      console.log(`✅ Activated AI OUTREACH PLAN for user ${userId}`);
+      await addCreditsToUser(userId, parseInt(credits));
+    } else if (plan === 'sync-plan' || plan === 'ai-outreach') {
+      await updateUserAccountForPlan(userId, plan);
+      await grantSubscriptionAccess(userId, plan);
     }
-
   } catch (error) {
     console.error('Failed to handle checkout completion:', error);
   }
 }
 
+async function handleSubscriptionUpdated(subscription: any) {
+  const { status, metadata } = subscription;
+  const { userId, plan } = metadata;
+
+  if (!userId) return;
+
+  try {
+    if (status === 'past_due' || status === 'unpaid') {
+      await revokeSubscriptionAccess(userId, plan);
+    } else if (status === 'active') {
+      await grantSubscriptionAccess(userId, plan);
+    }
+  } catch (error) {
+    console.error('Failed to handle subscription update:', error);
+  }
+}
+
 async function handleSubscriptionCancelled(subscription: any) {
-  // Handle subscription cancellation
-  console.log('Subscription cancelled:', subscription.id);
+  const { metadata } = subscription;
+  const { userId, plan } = metadata;
+
+  if (!userId) return;
+
+  try {
+    await revokeSubscriptionAccess(userId, plan);
+  } catch (error) {
+    console.error('Failed to handle subscription cancellation:', error);
+  }
 }

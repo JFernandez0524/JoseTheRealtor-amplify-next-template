@@ -93,10 +93,19 @@ export async function syncToGoHighLevel(
   phoneIndex: number,
   isPrimary: boolean,
   userGroups: string[] = [],
-  userId: string = ''
+  userId: string = '',
+  ghlToken: string
 ): Promise<string> {
-  if (!GHL_API_KEY) throw new Error('GHL_API_KEY is missing.');
-  const ghl = createGhlClient();
+  const ghl = axios.create({
+    baseURL: 'https://services.leadconnectorhq.com',
+    timeout: 10000,
+    headers: {
+      Authorization: `Bearer ${ghlToken}`,
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+      Version: '2021-07-28',
+    },
+  });
 
   try {
     const primaryEmail = lead.emails?.[0]?.toLowerCase() || null;

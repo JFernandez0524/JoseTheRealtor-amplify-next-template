@@ -1,11 +1,11 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand, UpdateCommand, ScanCommand } from '@aws-sdk/lib-dynamodb';
 import { syncToGoHighLevel } from './integrations/gohighlevel';
+import { getValidGhlToken } from '../shared/ghlTokenManager';
 
 const dynamoClient = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
 
-const GHL_API_KEY = process.env.GHL_API_KEY;
 const propertyLeadTableName = process.env.AMPLIFY_DATA_PropertyLead_TABLE_NAME;
 const userAccountTableName = process.env.AMPLIFY_DATA_UserAccount_TABLE_NAME;
 
@@ -21,8 +21,11 @@ type Handler = (event: { arguments: { leadId: string }; identity: { sub: string 
 // HELPER: Core GHL Sync Logic
 // ---------------------------------------------------------
 async function processGhlSync(lead: any, groups: string[] = [], ownerId: string = ''): Promise<SyncResult> {
-  if (!GHL_API_KEY) {
-    const message = `GHL_API_KEY is missing. Check Amplify secrets.`;
+  // Get user's GHL token (auto-refreshes if expired)
+  const ghlToken = await getValidGhlToken(ownerId);
+  
+  if (!ghlToken) {
+    const message = `GHL not connected or token expired. Please reconnect GoHighLevel.`;
     await docClient.send(new UpdateCommand({
       TableName: propertyLeadTableName,
       Key: { id: lead.id },
@@ -105,7 +108,8 @@ async function processGhlSync(lead: any, groups: string[] = [], ownerId: string 
         1,
         true,
         groups, // Pass user groups
-        ownerId // Pass user ID
+        ownerId, // Pass user ID
+        ghlToken // Pass user token
       );
 
       await docClient.send(new UpdateCommand({
@@ -146,7 +150,8 @@ async function processGhlSync(lead: any, groups: string[] = [], ownerId: string 
         i + 1,
         i === 0,
         groups, // Pass user groups
-        ownerId // Pass user ID
+        ownerId, // Pass user ID
+        ghlToken // Pass user token
       );
       syncResults.push(ghlContactId);
     }
