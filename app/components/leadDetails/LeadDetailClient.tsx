@@ -397,24 +397,26 @@ export function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
                 </div>
 
                 {/* Raw Skip Trace Data Section */}
-                {lead.rawSkipTraceData && (
+                {lead.rawSkipTraceData && (() => {
+                  const rawData = typeof lead.rawSkipTraceData === 'string' 
+                    ? JSON.parse(lead.rawSkipTraceData) 
+                    : lead.rawSkipTraceData;
+                  
+                  return (
                   <div className='border-t pt-6'>
                     <div className='bg-amber-50 border border-amber-200 rounded-lg p-4 mb-4'>
                       <p className='text-xs text-amber-800'>
                         <strong>⚠️ Additional contacts found</strong> but didn't pass quality filters (Mobile 90+ score, not DNC, tested emails). Use at your discretion.
                       </p>
-                      <pre className='text-xs mt-2 text-slate-600'>
-                        Debug: {JSON.stringify(lead.rawSkipTraceData, null, 2)}
-                      </pre>
                     </div>
                     
-                    {(lead.rawSkipTraceData as any).allPhones?.length > 0 && (
+                    {rawData.allPhones?.length > 0 && (
                       <div className='mb-4'>
                         <h4 className='text-[10px] font-black uppercase text-slate-400 mb-3'>
                           All Phone Numbers Found
                         </h4>
                         <div className='space-y-2'>
-                          {(lead.rawSkipTraceData as any).allPhones.map((p: any, idx: number) => (
+                          {rawData.allPhones.map((p: any, idx: number) => (
                             <div
                               key={idx}
                               className='flex items-center justify-between p-3 bg-amber-50 rounded-xl border border-amber-100'
@@ -441,13 +443,13 @@ export function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
                       </div>
                     )}
 
-                    {(lead.rawSkipTraceData as any).allEmails?.length > 0 && (
+                    {rawData.allEmails?.length > 0 && (
                       <div>
                         <h4 className='text-[10px] font-black uppercase text-slate-400 mb-3'>
                           All Email Addresses Found
                         </h4>
                         <div className='space-y-2'>
-                          {(lead.rawSkipTraceData as any).allEmails.map((e: any, idx: number) => (
+                          {rawData.allEmails.map((e: any, idx: number) => (
                             <div
                               key={idx}
                               className='flex items-center justify-between p-3 bg-amber-50 rounded-xl border border-amber-100'
@@ -466,7 +468,8 @@ export function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
                       </div>
                     )}
                   </div>
-                )}
+                  );
+                })()}
               </div>
             </CardWrapper>
 
