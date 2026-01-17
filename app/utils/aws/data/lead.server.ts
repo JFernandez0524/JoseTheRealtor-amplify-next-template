@@ -6,7 +6,7 @@ import { GetCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 
 // Check if we are running inside an AWS Lambda environment
 const IS_LAMBDA_CONTEXT =
-  !!process.env.AWS_REGION && !!process.env.LAMBDA_TASK_ROOT;
+  !!process.env.AWS_EXECUTION_ENV || !!process.env.LAMBDA_TASK_ROOT;
 // 🛑 IMPORTANT: Replace this with the actual environment variable name for your DynamoDB table
 const PROPERTY_LEAD_TABLE_NAME =
   process.env.AMPLIFY_DATA_LEAD_TABLE_NAME || 'PropertyLead_Default_Table';
