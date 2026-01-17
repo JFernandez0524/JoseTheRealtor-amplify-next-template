@@ -245,6 +245,14 @@ export function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
     getCleanAddress(lead.ownerAddress) ||
     'Address Not Available';
 
+  const formatPhone = (phone: string) => {
+    const cleaned = phone.replace(/\D/g, '');
+    if (cleaned.length === 10) {
+      return `(${cleaned.slice(0, 3)}) ${cleaned.slice(3, 6)}-${cleaned.slice(6)}`;
+    }
+    return phone;
+  };
+
   return (
     <main className='max-w-[1600px] mx-auto py-6 px-8 bg-slate-50 min-h-screen'>
       {/* HEADER / NAV */}
@@ -359,7 +367,7 @@ export function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
                           className='flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100'
                         >
                           <span className='font-mono font-bold text-slate-700'>
-                            {p.number || p}
+                            {formatPhone(p.number || p)}
                           </span>
                           <span className='text-[9px] font-black bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded uppercase'>
                             {p.type || 'Mobile'}
@@ -397,10 +405,14 @@ export function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
                 </div>
 
                 {/* Raw Skip Trace Data Section */}
-                {lead.rawSkipTraceData && (() => {
+                {lead.skipTraceStatus === 'COMPLETED' && lead.rawSkipTraceData && (() => {
                   const rawData = typeof lead.rawSkipTraceData === 'string' 
                     ? JSON.parse(lead.rawSkipTraceData) 
                     : lead.rawSkipTraceData;
+                  
+                  const hasUnqualifiedData = rawData.allPhones?.length > 0 || rawData.allEmails?.length > 0;
+                  
+                  if (!hasUnqualifiedData) return null;
                   
                   return (
                   <div className='border-t pt-6'>
@@ -422,7 +434,7 @@ export function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
                               className='flex items-center justify-between p-3 bg-amber-50 rounded-xl border border-amber-100'
                             >
                               <span className='font-mono text-sm text-slate-700'>
-                                {p.number}
+                                {formatPhone(p.number)}
                               </span>
                               <div className='flex gap-2 text-[9px] font-bold'>
                                 <span className='bg-slate-100 text-slate-600 px-2 py-0.5 rounded uppercase'>

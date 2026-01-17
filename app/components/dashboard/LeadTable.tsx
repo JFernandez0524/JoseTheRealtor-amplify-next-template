@@ -115,6 +115,7 @@ export function LeadTable({
 }: Props) {
   const tableRef = React.useRef<HTMLDivElement>(null);
   const [editingLead, setEditingLead] = useState<Lead | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
   const [editForm, setEditForm] = useState({
     street: '',
     city: '',
@@ -147,6 +148,7 @@ export function LeadTable({
   const handleSaveAddress = async () => {
     if (!editingLead) return;
     
+    setIsSaving(true);
     try {
       const { client } = await import('@/app/utils/aws/data/frontEndClient');
       await client.models.PropertyLead.update({
@@ -158,7 +160,7 @@ export function LeadTable({
       });
 
       // Refresh Zestimate with new address
-      await fetch('/api/v1/refresh-zestimate', {
+      const res = await fetch('/api/v1/refresh-zestimate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -170,11 +172,19 @@ export function LeadTable({
         }),
       });
 
+      if (!res.ok) {
+        const error = await res.json();
+        console.error('Zestimate refresh failed:', error);
+        alert(`Address updated but Zestimate refresh failed: ${error.error}`);
+      }
+
       setEditingLead(null);
       window.location.reload();
     } catch (err) {
       console.error('Failed to update address:', err);
       alert('Failed to update address');
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -501,11 +511,15 @@ export function LeadTable({
                                   longitude: lead.longitude,
                                 }),
                               });
+                              const data = await res.json();
                               if (res.ok) {
                                 window.location.reload();
+                              } else {
+                                alert(`Refresh failed: ${data.error}`);
                               }
-                            } catch (err) {
+                            } catch (err: any) {
                               console.error('Refresh failed:', err);
+                              alert(`Refresh failed: ${err.message}`);
                             }
                           }}
                           className="text-gray-400 hover:text-green-600"
@@ -665,13 +679,25 @@ export function LeadTable({
             <div className='flex gap-3 mt-6'>
               <button
                 onClick={handleSaveAddress}
-                className='flex-1 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700'
+                disabled={isSaving}
+                className='flex-1 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2'
               >
-                Save & Refresh Zestimate
+                {isSaving ? (
+                  <>
+                    <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                    </svg>
+                    Updating...
+                  </>
+                ) : (
+                  'Save & Refresh Zestimate'
+                )}
               </button>
               <button
                 onClick={() => setEditingLead(null)}
-                className='px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50'
+                disabled={isSaving}
+                className='px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed'
               >
                 Cancel
               </button>

@@ -49,14 +49,14 @@ export default function PropertyAnalyzer({ user }: PropertyAnalyzerProps) {
         ? {
             lat: placeDetails.lat,
             lng: placeDetails.lng,
-            standardizedAddress: {
-              street: placeDetails.street,
-              city: placeDetails.city,
-              state: placeDetails.state,
-              zip: placeDetails.zip,
-            },
+            street: placeDetails.street,
+            city: placeDetails.city,
+            state: placeDetails.state,
+            zip: placeDetails.zip,
           }
         : { address };
+
+      console.log('🔍 Sending payload:', payload);
 
       const response = await fetch('/api/v1/analyze-property', {
         method: 'POST',
@@ -65,6 +65,8 @@ export default function PropertyAnalyzer({ user }: PropertyAnalyzerProps) {
       });
 
       const data = await response.json();
+
+      console.log('📦 Received data:', data);
 
       if (!response.ok) {
         throw new Error(data.error || 'Failed to analyze property');
@@ -127,6 +129,7 @@ export default function PropertyAnalyzer({ user }: PropertyAnalyzerProps) {
 
       {result && !isLoading && (
         <PropertyReportView
+          key={result.valuation?.zpid || result.assessment?.apn || Date.now()}
           marketData={result}
           isPremium={isLoggedIn}
           onSkipTrace={() => console.log('Skip trace triggered for member!')}

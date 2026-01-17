@@ -377,21 +377,20 @@ export const handler: Handler = async (event) => {
         return { id: lead.id, status: finalStatus };
       }
 
-      // Handle NO_QUALITY_CONTACTS - mark as completed but no data to save
-      if (enrichedData.status === 'NO_QUALITY_CONTACTS') {
+      // Store ALL raw data regardless of quality
+      const rawData = {
+        allPhones: enrichedData.rawPersonData?.phoneNumbers || [],
+        allEmails: enrichedData.rawPersonData?.emails || [],
+      };
+
+      // Determine status based on quality filters
+      const hasQualityContacts = enrichedData.foundPhones.length > 0 || enrichedData.foundEmails.length > 0;
+      
+      if (!hasQualityContacts) {
         const currentLabels = lead.leadLabels || [];
         const updatedLabels = [...new Set([...currentLabels, 'DIRECT_MAIL_ONLY'])];
         
-        // Store raw data for user review
-        const rawData = {
-          allPhones: enrichedData.rawPersonData?.phoneNumbers || [],
-          allEmails: enrichedData.rawPersonData?.emails || [],
-          note: 'Skip trace found contact info but none passed quality filters (Mobile 90+ score, not DNC, tested emails)'
-        };
-        
-        console.log('💾 Saving raw skip trace data:', JSON.stringify(rawData, null, 2));
-        
-        const updateResult = await docClient.send(new UpdateCommand({
+        await docClient.send(new UpdateCommand({
           TableName: propertyLeadTableName,
           Key: { id: lead.id },
           UpdateExpression: 'SET mailingAddress = :mailingAddress, mailingCity = :mailingCity, mailingState = :mailingState, mailingZip = :mailingZip, skipTraceStatus = :status, skipTraceCompletedAt = :completedAt, leadLabels = :labels, rawSkipTraceData = :rawData',
@@ -404,11 +403,8 @@ export const handler: Handler = async (event) => {
             ':completedAt': new Date().toISOString(),
             ':labels': updatedLabels,
             ':rawData': rawData
-          },
-          ReturnValues: 'ALL_NEW'
+          }
         }));
-        
-        console.log('✅ Update result:', JSON.stringify(updateResult.Attributes, null, 2));
         return { id: lead.id, status: 'NO_QUALITY_CONTACTS' };
       }
 
@@ -418,7 +414,7 @@ export const handler: Handler = async (event) => {
       await docClient.send(new UpdateCommand({
         TableName: propertyLeadTableName,
         Key: { id: lead.id },
-        UpdateExpression: 'SET phones = :phones, emails = :emails, mailingAddress = :mailingAddress, mailingCity = :mailingCity, mailingState = :mailingState, mailingZip = :mailingZip, skipTraceStatus = :status, skipTraceCompletedAt = :completedAt',
+        UpdateExpression: 'SET phones = :phones, emails = :emails, mailingAddress = :mailingAddress, mailingCity = :mailingCity, mailingState = :mailingState, mailingZip = :mailingZip, skipTraceStatus = :status, skipTraceCompletedAt = :completedAt, rawSkipTraceData = :rawData',
         ExpressionAttributeValues: {
           ':phones': newPhones,
           ':emails': newEmails,
@@ -427,7 +423,8 @@ export const handler: Handler = async (event) => {
           ':mailingState': enrichedData.mailingData?.mailingState || lead.ownerState,
           ':mailingZip': enrichedData.mailingData?.mailingZip || lead.ownerZip,
           ':status': 'COMPLETED',
-          ':completedAt': new Date().toISOString()
+          ':completedAt': new Date().toISOString(),
+          ':rawData': rawData
         }
       }));
 

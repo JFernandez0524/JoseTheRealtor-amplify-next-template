@@ -72,44 +72,47 @@ export async function analyzeBridgeProperty(params: {
   const city = cleanCityName(rawCity || '');
   const streetVariations = generateAddressVariations(rawStreet || '');
 
+  console.log('🔍 Bridge API search params:', { rawStreet, city, state, zip, lat, lng });
+  console.log('📝 Street variations:', streetVariations);
+
   let valuation = null;
   let successfulVariation = null;
 
   // Try address variations
   for (const street of streetVariations) {
     try {
-      const fullAddress = `${street}, ${city}, ${state} ${zip}`;
       const res = await bridgeClient.get('/zestimates_v2/zestimates', {
-        params: { limit: 3, 'address.in': fullAddress },
+        params: { limit: 10, address: street, city, state, postalCode: zip },
       });
-      if (res.data.bundle?.[0]) {
-        valuation = res.data.bundle[0];
+      if (res.data.bundle?.length > 0) {
+        // Sort: Priority 1 = No Unit Number (Main House), Priority 2 = Newest Date
+        const sortedBundle = res.data.bundle.sort((a: any, b: any) => {
+          const aIsMain = !a.unitNumber;
+          const bIsMain = !b.unitNumber;
+          if (aIsMain && !bIsMain) return -1;
+          if (!aIsMain && bIsMain) return 1;
+          const dateA = new Date(a.timestamp).getTime();
+          const dateB = new Date(b.timestamp).getTime();
+          return dateB - dateA;
+        });
+        valuation = sortedBundle[0];
         successfulVariation = street;
+        console.log(`✅ Selected Zestimate: $${valuation.zestimate} (${valuation.timestamp}, unitNumber: ${valuation.unitNumber || 'none'})`);
         break;
       }
     } catch (err) {}
   }
 
-  // Coordinate fallback
-  if (!valuation && lat && lng) {
-    const radii = ['0.01', '0.05', '0.1', '0.25'];
-    for (const radius of radii) {
-      try {
-        const res = await bridgeClient.get('/zestimates_v2/zestimates', {
-          params: { limit: 10, near: `${lng},${lat}`, radius },
-        });
-        if (res.data.bundle?.[0]) {
-          valuation = res.data.bundle[0];
-          break;
-        }
-      } catch (err) {}
-    }
+  // If no valuation found, return null - don't use coordinate fallback
+  if (!valuation) {
+    console.log('❌ No property found for address');
+    return { success: false, error: 'Property not found' };
   }
 
   const zpid = valuation?.zpid;
   const targetState = valuation?.state || state;
 
-  // Assessment waterfall
+  // Assessment waterfall - only use zpid or address, no coordinates
   let assessment = null;
 
   if (zpid) {
@@ -119,22 +122,6 @@ export async function analyzeBridgeProperty(params: {
       });
       assessment = res.data.bundle?.[0];
     } catch (err) {}
-  }
-
-  if (!assessment && lat && lng) {
-    const radii = ['0.01', '0.05', '0.1'];
-    for (const radius of radii) {
-      try {
-        const res = await bridgeClient.get('/pub/assessments', {
-          params: { near: `${lng},${lat}`, radius: `${radius}mi`, limit: 5, 'address.state': targetState },
-        });
-        const stateMatch = res.data.bundle?.find((a: any) => a.address?.state === targetState);
-        if (stateMatch) {
-          assessment = stateMatch;
-          break;
-        }
-      } catch (err) {}
-    }
   }
 
   if (!assessment && streetVariations.length > 0) {

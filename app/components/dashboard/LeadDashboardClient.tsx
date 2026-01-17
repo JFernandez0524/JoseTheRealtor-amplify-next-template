@@ -580,7 +580,6 @@ export default function LeadDashboardClient({}: Props) {
   };
 
   const handleDownloadSkipTraced = () => {
-    // Only download selected leads
     if (selectedIds.length === 0) {
       alert('Please select leads to download.');
       return;
@@ -595,7 +594,14 @@ export default function LeadDashboardClient({}: Props) {
       return;
     }
 
-    // Create CSV content with all dashboard columns
+    const formatPhone = (phone: string) => {
+      const cleaned = phone.replace(/\D/g, '');
+      if (cleaned.length === 10) {
+        return `(${cleaned.slice(0, 3)}) ${cleaned.slice(3, 6)}-${cleaned.slice(6)}`;
+      }
+      return phone;
+    };
+
     const headers = [
       'Type',
       'Manual Status',
@@ -603,7 +609,10 @@ export default function LeadDashboardClient({}: Props) {
       'GHL Sync',
       'Owner Name',
       'Address',
-      'Phone',
+      'Quality Phones',
+      'Quality Emails',
+      'All Phones Found',
+      'All Emails Found',
       'County',
       'City',
       'State',
@@ -612,22 +621,31 @@ export default function LeadDashboardClient({}: Props) {
       'Admin Name',
       'Admin Address',
       'Created At',
-      'Email Addresses',
       'Skip Traced Date',
       'Estimated Value',
     ];
 
     const csvContent = [
       headers.join(','),
-      ...selectedLeads.map((lead) =>
-        [
+      ...selectedLeads.map((lead) => {
+        const rawData = lead.rawSkipTraceData 
+          ? (typeof lead.rawSkipTraceData === 'string' ? JSON.parse(lead.rawSkipTraceData) : lead.rawSkipTraceData)
+          : null;
+        
+        const allPhones = rawData?.allPhones?.map((p: any) => formatPhone(p.number)).join('; ') || '';
+        const allEmails = rawData?.allEmails?.map((e: any) => e.email).join('; ') || '';
+        
+        return [
           `"${lead.type || ''}"`,
           `"${lead.manualStatus || ''}"`,
           `"${lead.skipTraceStatus || ''}"`,
           `"${lead.ghlSyncStatus || ''}"`,
           `"${lead.ownerFirstName || ''} ${lead.ownerLastName || ''}"`.trim(),
           `"${lead.ownerAddress || ''}"`,
-          `"${(lead.phones || []).join('; ')}"`,
+          `"${(lead.phones || []).map(formatPhone).join('; ')}"`,
+          `"${(lead.emails || []).join('; ')}"`,
+          `"${allPhones}"`,
+          `"${allEmails}"`,
           `"${lead.ownerCounty || ''}"`,
           `"${lead.ownerCity || ''}"`,
           `"${lead.ownerState || ''}"`,
@@ -636,11 +654,10 @@ export default function LeadDashboardClient({}: Props) {
           `"${lead.adminFirstName || ''} ${lead.adminLastName || ''}"`.trim(),
           `"${lead.adminAddress || ''}"`,
           `"${lead.createdAt ? new Date(lead.createdAt).toLocaleDateString() : ''}"`,
-          `"${(lead.emails || []).join('; ')}"`,
           `"${lead.skipTraceCompletedAt ? new Date(lead.skipTraceCompletedAt).toLocaleDateString() : ''}"`,
           `"${lead.estimatedValue || ''}"`,
-        ].join(',')
-      ),
+        ].join(',');
+      }),
     ].join('\n');
 
     // Download CSV

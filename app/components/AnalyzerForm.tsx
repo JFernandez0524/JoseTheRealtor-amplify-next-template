@@ -93,12 +93,11 @@ export default function AnalyzerForm({
     const val = e.target.value;
     setAddress(val);
     setHasText(val.trim().length > 0);
-    setPendingDetails(null); // Clear pending if user types manually
+    setPendingDetails(null);
   };
 
   const onFormSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    // ✅ Pass the stored Google details to the handler only when button is clicked
     handleSubmit(e, pendingDetails);
   };
 

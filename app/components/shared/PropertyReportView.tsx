@@ -39,6 +39,14 @@ export default function PropertyReportView({
   const building = parcel?.building?.[0] || {};
   const legal = parcel?.legal || {};
 
+  const formatPhone = (phone: string) => {
+    const cleaned = phone.replace(/\D/g, '');
+    if (cleaned.length === 10) {
+      return `(${cleaned.slice(0, 3)}) ${cleaned.slice(3, 6)}-${cleaned.slice(6)}`;
+    }
+    return phone;
+  };
+
   // 🎯 Intercept premium actions to redirect to pricing page for unauthenticated users
   const handlePremiumAction = (action?: () => void) => {
     if (!isPremium) {
