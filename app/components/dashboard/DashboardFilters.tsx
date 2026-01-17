@@ -82,15 +82,40 @@ export function DashboardFilters({
   const hasPreforeclosure = selectedLeadTypes.includes('PREFORECLOSURE');
   const hasProbate = selectedLeadTypes.includes('PROBATE');
   const isMixedTypes = hasPreforeclosure && hasProbate;
+  const [showFilters, setShowFilters] = React.useState(false);
   
   return (
     <div className='bg-white p-3 sm:p-4 rounded-lg shadow-sm border border-gray-200 mb-4 sm:mb-6 space-y-4'>
-      {/* Filters Section */}
-      <div className='flex flex-col sm:flex-row sm:flex-wrap gap-3 sm:gap-4 items-start sm:items-center'>
-        <span className='text-sm font-semibold text-gray-600 whitespace-nowrap'>Filter By:</span>
+      {/* Always Visible: Search Bar and Filter Toggle */}
+      <div className='flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between'>
+        {/* Address Search - Always Visible */}
+        <input
+          type='text'
+          placeholder='Search by address, name, or county...'
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className='flex-1 border border-gray-300 rounded-md px-4 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none'
+        />
+        
+        {/* Filter Toggle Button */}
+        <button
+          onClick={() => setShowFilters(!showFilters)}
+          className='px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition flex items-center gap-2 justify-center whitespace-nowrap'
+        >
+          <svg className='w-4 h-4' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+            <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z' />
+          </svg>
+          {showFilters ? 'Hide Filters' : 'Show Filters'}
+        </button>
+      </div>
 
-        {/* Filter Controls - Stack on mobile, inline on larger screens */}
-        <div className='flex flex-col sm:flex-row gap-3 sm:gap-4 w-full sm:w-auto'>
+      {/* Collapsible Filters Section */}
+      {showFilters && (
+        <div className='flex flex-col sm:flex-row sm:flex-wrap gap-3 sm:gap-4 items-start sm:items-center pt-4 border-t border-gray-200'>
+          <span className='text-sm font-semibold text-gray-600 whitespace-nowrap'>Filter By:</span>
+
+          {/* Filter Controls */}
+          <div className='flex flex-col sm:flex-row gap-3 sm:gap-4 w-full sm:w-auto'>
           {/* 1. Lead Type Filter */}
           <select
             value={filterType}
@@ -190,7 +215,7 @@ export function DashboardFilters({
         </div>
 
         {/* Clear All Button */}
-        {(filterType || filterStatus || searchQuery || filterGhlStatus || filterHasPhone || filterManualStatus || skipTraceFromDate || skipTraceToDate) && (
+        {(filterType || filterStatus || filterGhlStatus || filterHasPhone || filterManualStatus || skipTraceFromDate || skipTraceToDate) && (
           <button
             onClick={() => {
               setFilterType('');
@@ -200,48 +225,26 @@ export function DashboardFilters({
               setFilterManualStatus('');
               setSkipTraceFromDate('');
               setSkipTraceToDate('');
-              setSearchQuery('');
             }}
             className='text-sm text-blue-600 hover:underline whitespace-nowrap'
           >
             Clear All
           </button>
         )}
+      </div>
+      )}
 
-        {/* Download Selected Leads Button - Only show when leads are selected */}
-        {selectedLeadsCount > 0 && (
+      {/* Download Button - Always Visible When Leads Selected */}
+      {selectedLeadsCount > 0 && (
+        <div className='flex justify-end'>
           <button
             onClick={handleDownloadSkipTraced}
             className='text-sm px-3 py-1.5 rounded bg-green-600 text-white hover:bg-green-700 transition shadow-sm whitespace-nowrap'
           >
             📥 Download Selected ({selectedLeadsCount})
           </button>
-        )}
-      </div>
-
-      {/* Search Bar */}
-      <div className='relative w-full sm:max-w-md'>
-        <div className='absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none'>
-          <svg
-            className='h-5 w-5 text-gray-400'
-            fill='currentColor'
-            viewBox='0 0 20 20'
-          >
-            <path
-              fillRule='evenodd'
-              d='M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z'
-              clipRule='evenodd'
-            />
-          </svg>
         </div>
-        <input
-          type='text'
-          placeholder='Search Address...'
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className='pl-10 block w-full border border-gray-300 rounded-md py-1.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none'
-        />
-      </div>
+      )}
 
       {/* BULK ACTIONS MENU */}
       {selectedLeadsCount > 0 && (

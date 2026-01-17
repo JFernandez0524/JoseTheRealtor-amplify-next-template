@@ -217,8 +217,8 @@ export function LeadTable({
 
   return (
     <div className='bg-white shadow-lg rounded-lg overflow-hidden border border-gray-200'>
-      {/* Horizontal Scroll Controls */}
-      <div className='flex justify-between items-center px-4 py-2 bg-gray-50 border-b border-gray-200'>
+      {/* Horizontal Scroll Controls - Sticky */}
+      <div className='sticky top-0 z-10 flex justify-between items-center px-4 py-2 bg-gray-50 border-b border-gray-200'>
         <div className='text-sm text-gray-600'>
           {leads.length} leads on this page
         </div>
