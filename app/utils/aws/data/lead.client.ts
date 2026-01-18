@@ -1,32 +1,32 @@
 /**
  * CLIENT-SIDE LEAD OPERATIONS
- * 
+ *
  * This file contains all lead-related operations for React components (browser/client-side).
  * Uses Amplify Data client for authenticated user operations.
- * 
+ *
  * ⚠️ IMPORTANT: This file is for CLIENT-SIDE only (React components)
  * For server-side operations (API routes, Lambda), use lead.server.ts instead
- * 
+ *
  * ARCHITECTURE:
  * - All functions use the Amplify client from frontEndClient.ts
  * - Functions handle errors and return typed data
  * - Logging included for debugging
  * - Consistent error handling across all operations
- * 
+ *
  * USAGE EXAMPLES:
- * 
+ *
  * 1. Fetch all leads:
  *    ```typescript
  *    import { fetchLeads } from '@/app/utils/aws/data/lead.client';
  *    const leads = await fetchLeads();
  *    ```
- * 
+ *
  * 2. Update a lead:
  *    ```typescript
  *    import { updateLead } from '@/app/utils/aws/data/lead.client';
  *    await updateLead(leadId, { manualStatus: 'ACTIVE' });
  *    ```
- * 
+ *
  * 3. Real-time updates:
  *    ```typescript
  *    import { observeLeads } from '@/app/utils/aws/data/lead.client';
@@ -35,21 +35,21 @@
  *    });
  *    // Later: subscription.unsubscribe();
  *    ```
- * 
+ *
  * 4. Bulk operations:
  *    ```typescript
  *    import { skipTraceLeads, syncToGHL } from '@/app/utils/aws/data/lead.client';
  *    await skipTraceLeads(['lead1', 'lead2']);
  *    await syncToGHL(['lead1', 'lead2']);
  *    ```
- * 
+ *
  * WHY THIS FILE EXISTS:
  * - Centralizes all client-side lead operations
  * - Provides consistent error handling
  * - Makes components cleaner (no direct client.models calls)
  * - Easier to test and maintain
  * - Type-safe operations
- * 
+ *
  * RELATED FILES:
  * - lead.server.ts - Server-side lead operations
  * - frontEndClient.ts - Amplify client configuration
@@ -66,13 +66,21 @@ export type Lead = Schema['PropertyLead']['type'] & {
 };
 
 /**
- * Fetch all leads for the current user
+ * Fetch all leads for the current user (with automatic pagination)
  */
 export async function fetchLeads(): Promise<Lead[]> {
   try {
-    const { data } = await client.models.PropertyLead.list();
-    console.log('🔄 Fetched leads:', data.length);
-    return data as Lead[];
+    const allLeads: Lead[] = [];
+    let nextToken: string | null | undefined;
+
+    do {
+      const result = await client.models.PropertyLead.list();
+      allLeads.push(...(result.data || []));
+      nextToken = result.nextToken;
+    } while (nextToken);
+
+    console.log('🔄 Fetched leads:', allLeads.length);
+    return allLeads as Lead[];
   } catch (err) {
     console.error('Failed to fetch leads:', err);
     throw err;
@@ -95,7 +103,10 @@ export async function fetchLead(id: string): Promise<Lead | null> {
 /**
  * Update a lead
  */
-export async function updateLead(id: string, updates: Partial<Lead>): Promise<Lead> {
+export async function updateLead(
+  id: string,
+  updates: Partial<Lead>
+): Promise<Lead> {
   try {
     const { data, errors } = await client.models.PropertyLead.update({
       id,
@@ -131,7 +142,9 @@ export async function deleteLead(id: string): Promise<void> {
  */
 export async function bulkDeleteLeads(ids: string[]): Promise<void> {
   try {
-    await Promise.all(ids.map((id) => client.models.PropertyLead.delete({ id })));
+    await Promise.all(
+      ids.map((id) => client.models.PropertyLead.delete({ id }))
+    );
     console.log(`✅ Deleted ${ids.length} leads`);
   } catch (err) {
     console.error('Failed to bulk delete leads:', err);
