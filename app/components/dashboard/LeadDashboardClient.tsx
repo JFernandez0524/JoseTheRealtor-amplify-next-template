@@ -9,8 +9,7 @@ import {
   bulkDeleteLeads, 
   bulkUpdateStatus, 
   skipTraceLeads, 
-  syncToGHL, 
-  calculateAIScores 
+  syncToGHL
 } from '@/app/utils/aws/data/lead.client';
 import { useAccess } from '@/app/context/AccessContext';
 import { LeadTable } from './LeadTable';

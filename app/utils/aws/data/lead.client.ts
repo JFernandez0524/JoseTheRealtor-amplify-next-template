@@ -194,22 +194,6 @@ export async function syncToGHL(leadIds: string[]): Promise<void> {
 }
 
 /**
- * Calculate AI scores for leads
- */
-export async function calculateAIScores(leadIds: string[]): Promise<any> {
-  try {
-    const { data, errors } = await client.mutations.calculateAIScores({ leadIds });
-    if (errors) {
-      throw new Error(errors[0].message);
-    }
-    return data;
-  } catch (err) {
-    console.error('Failed to calculate AI scores:', err);
-    throw err;
-  }
-}
-
-/**
  * Observe leads in real-time
  * Returns a subscription that auto-updates when data changes
  */
