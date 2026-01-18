@@ -201,38 +201,76 @@ The platform provides REST APIs for integration:
 
 ```
 ├── app/                    # Next.js App Router pages
-│   ├── api/               # API routes (webhooks, OAuth)
+│   ├── api/               # API routes (webhooks, OAuth, property analysis)
 │   ├── components/        # React components
+│   │   ├── dashboard/     # Dashboard components (table, filters)
+│   │   ├── leadDetails/   # Lead detail page components
+│   │   └── shared/        # Reusable UI components
 │   └── utils/             # Utility functions
-│       ├── aws/data/      # Data access layer (leads, users, pagination)
+│       ├── aws/
+│       │   ├── auth/      # Authentication utilities
+│       │   │   ├── amplifyFrontEndUser.ts  # Client-side auth
+│       │   │   └── amplifyServerUtils.server.ts  # Server-side auth
+│       │   └── data/      # Data access layer
+│       │       ├── lead.client.ts  # Client-side lead operations
+│       │       ├── lead.server.ts  # Server-side lead operations
+│       │       ├── frontEndClient.ts  # Amplify client for browser
+│       │       └── pagination.ts  # Pagination utilities
 │       ├── billing/       # Subscription management utilities
-│       └── google.server.ts # Address validation
+│       ├── bridge.server.ts  # Bridge API (Zestimate) integration
+│       └── google.server.ts  # Address validation
 ├── amplify/               # AWS Amplify backend configuration
 │   ├── auth/             # Cognito authentication
 │   ├── data/             # GraphQL schema and resolvers
 │   ├── functions/        # Lambda functions
-│   │   ├── shared/       # Shared utilities (GHL token manager)
-│   │   ├── skiptraceLeads/ # Bulk skip trace handler
-│   │   └── manualGhlSync/  # GHL sync handler
+│   │   ├── shared/       # Shared utilities
+│   │   │   ├── ghlTokenManager.ts  # GHL OAuth token refresh
+│   │   │   └── bridgeUtils.ts  # Property data API utilities
+│   │   ├── skiptraceLeads/  # Bulk skip trace handler
+│   │   └── manualGhlSync/   # GHL sync handler
 │   └── storage/          # S3 storage configuration
 └── components/           # Shared React components
 ```
 
 ### Code Organization
 
-**Data Access Layer** (`app/utils/aws/data/`)
-- `lead.server.ts` - All lead CRUD operations and queries
-- `userAccount.server.ts` - User account operations, credits, rate limits
+**Frontend Data Access** (`app/utils/aws/data/`)
+- `lead.client.ts` - **Client-side** lead operations (React components)
+  - `fetchLeads()` - Get all leads
+  - `updateLead()` - Update a lead
+  - `skipTraceLeads()` - Skip trace leads
+  - `syncToGHL()` - Sync to GoHighLevel
+  - `observeLeads()` - Real-time lead updates
+- `lead.server.ts` - **Server-side** lead operations (API routes, Lambda)
+  - Auto-detects Lambda vs API route context
+  - Uses DynamoDB in Lambda, Amplify client in API routes
+- `frontEndClient.ts` - Amplify client for browser operations
 - `pagination.ts` - Automatic pagination for large datasets
+
+**Authentication** (`app/utils/aws/auth/`)
+- `amplifyFrontEndUser.ts` - Client-side auth utilities
+- `amplifyServerUtils.server.ts` - Server-side auth utilities
+
+**Property Data** (`app/utils/`)
+- `bridge.server.ts` - Bridge API integration for Zestimate data
+  - Address-based search with variations
+  - Coordinate-based fallback search
+  - Sorts by main house priority + newest timestamp
+- `google.server.ts` - Google Maps address validation
 
 **Business Logic** (`app/utils/billing/`)
 - `subscriptionManager.ts` - Subscription lifecycle management
 
 **Shared Functions** (`amplify/functions/shared/`)
 - `ghlTokenManager.ts` - OAuth token refresh automation
-- `bridgeUtils.ts` - Property data API utilities
+- `bridgeUtils.ts` - Property data API utilities for Lambda
 
 ### Key Features
+
+**Real-Time Updates**
+- Dashboard uses `observeQuery` for automatic updates
+- Manual refresh after bulk operations (skip trace, sync, etc.)
+- No page reload needed - instant UI updates
 
 **Automatic Token Refresh**
 - GHL OAuth tokens auto-refresh before expiration
@@ -248,6 +286,14 @@ The platform provides REST APIs for integration:
 **Bulk Skip Tracing**
 - Processes up to 100 leads in single API call
 - Parallel database updates for performance
+- Saves all raw data (qualified + unqualified contacts)
+- Phone number formatting: (XXX) XXX-XXXX
+
+**Zestimate Refresh**
+- Visual feedback (loading spinner, success checkmark)
+- Coordinate-based fallback when address not found
+- Matches Zillow's property selection logic
+- Updates age counter immediately
 - Uses standardized addresses for accuracy
 - See `amplify/functions/skiptraceLeads/handler.ts`
 

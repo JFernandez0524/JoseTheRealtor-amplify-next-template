@@ -3,6 +3,15 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { client } from '@/app/utils/aws/data/frontEndClient';
+import { 
+  fetchLeads, 
+  observeLeads, 
+  bulkDeleteLeads, 
+  bulkUpdateStatus, 
+  skipTraceLeads, 
+  syncToGHL, 
+  calculateAIScores 
+} from '@/app/utils/aws/data/lead.client';
 import { useAccess } from '@/app/context/AccessContext';
 import { LeadTable } from './LeadTable';
 import { DashboardFilters } from './DashboardFilters';
@@ -64,15 +73,23 @@ export default function LeadDashboardClient({}: Props) {
 
   // Fetch leads with observeQuery
   useEffect(() => {
-    const sub = client.models.PropertyLead.observeQuery().subscribe({
-      next: ({ items }) => {
-        setLeads([...items]);
-        console.log('📊 Loaded leads:', items.length);
-      },
+    const sub = observeLeads((items) => {
+      setLeads([...items]);
+      console.log('📊 Loaded leads:', items.length);
     });
 
     return () => sub.unsubscribe();
   }, []);
+
+  // Manual refresh function for immediate updates
+  const refreshLeads = async () => {
+    try {
+      const data = await fetchLeads();
+      setLeads([...data]);
+    } catch (err) {
+      console.error('Failed to refresh leads:', err);
+    }
+  };
 
   // 2. Ensure UserAccount exists (Wallet Initialization)
   useEffect(() => {
@@ -298,12 +315,10 @@ export default function LeadDashboardClient({}: Props) {
 
     setIsProcessing(true);
     try {
-      // Loop through selected leads and trigger the manual sync mutation
-      await Promise.all(
-        selectedIds.map((id) => client.mutations.manualGhlSync({ leadId: id }))
-      );
+      await syncToGHL(selectedIds);
       alert(`Successfully initiated CRM sync for ${selectedIds.length} leads.`);
       setSelectedIds([]);
+      await refreshLeads();
     } catch (err) {
       console.error('Sync error:', err);
       alert('Error initiating CRM sync. Ensure leads are skip-traced first.');
@@ -338,16 +353,9 @@ export default function LeadDashboardClient({}: Props) {
 
     setIsProcessing(true);
     try {
-      const { data, errors } = await client.mutations.skipTraceLeads({
-        leadIds: selectedIds,
-      });
+      const data = await skipTraceLeads(selectedIds);
 
-      console.log('Skip trace response:', { data, errors });
-
-      if (errors) {
-        console.error('Skip trace errors:', errors);
-        throw new Error(errors[0].message);
-      }
+      console.log('Skip trace response:', { data });
 
       // Handle response - data is the array directly
       const results = Array.isArray(data) ? data : [];
@@ -361,6 +369,9 @@ export default function LeadDashboardClient({}: Props) {
       );
 
       setSelectedIds([]);
+      
+      // Refresh table to show updated skip trace status
+      await refreshLeads();
     } catch (err: any) {
       console.error('Skip-trace error:', err);
       alert(`Error during skip-trace: ${err.message || 'Check your network connection'}`);
@@ -382,11 +393,10 @@ export default function LeadDashboardClient({}: Props) {
 
     setIsProcessing(true);
     try {
-      await Promise.all(
-        selectedIds.map((id) => client.models.PropertyLead.delete({ id }))
-      );
+      await bulkDeleteLeads(selectedIds);
       setSelectedIds([]);
       alert('Leads deleted successfully.');
+      await refreshLeads();
     } catch (err) {
       console.error('Delete error:', err);
     } finally {
@@ -401,22 +411,13 @@ export default function LeadDashboardClient({}: Props) {
 
     setIsProcessing(true);
     try {
-      await Promise.all(
-        selectedIds.map((id) =>
-          client.models.PropertyLead.update({
-            id,
-            manualStatus: status as
-              | 'ACTIVE'
-              | 'SOLD'
-              | 'PENDING'
-              | 'OFF_MARKET'
-              | 'SKIP'
-              | 'DIRECT_MAIL',
-          })
-        )
+      await bulkUpdateStatus(
+        selectedIds,
+        status as 'ACTIVE' | 'SOLD' | 'PENDING' | 'OFF_MARKET' | 'SKIP' | 'DIRECT_MAIL'
       );
       alert(`Successfully updated ${selectedIds.length} leads to ${status}`);
       setSelectedIds([]);
+      await refreshLeads();
     } catch (err) {
       console.error('Bulk status update error:', err);
       alert('Error updating lead statuses');
@@ -464,6 +465,7 @@ export default function LeadDashboardClient({}: Props) {
         `✅ AI Scoring Complete!\nScored: ${result.scored}/${result.total} preforeclosure leads`
       );
       setSelectedIds([]);
+      await refreshLeads();
     } catch (err) {
       console.error('AI scoring error:', err);
       alert('Error calculating AI scores');
@@ -521,6 +523,7 @@ export default function LeadDashboardClient({}: Props) {
           `Cost: $${result.cost.toFixed(2)}`
       );
       setSelectedIds([]);
+      await refreshLeads();
     } catch (err) {
       console.error('Enrichment error:', err);
       alert(
@@ -838,6 +841,7 @@ export default function LeadDashboardClient({}: Props) {
         selectedIds={selectedIds}
         isLoading={false}
         totalFilteredCount={filteredLeads.length}
+        onRefresh={refreshLeads}
         onToggleAll={() => {
           setSelectedIds(
             selectedIds.length === paginatedLeads.length

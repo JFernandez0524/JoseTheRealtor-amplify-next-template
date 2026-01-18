@@ -4,6 +4,7 @@
 import React, { useState } from 'react';
 import { StatusBadge } from '../shared/StatusBadge';
 import { formatDate } from '@/app/utils/formatters';
+import { updateLead } from '@/app/utils/aws/data/lead.client';
 import { type Schema } from '@/amplify/data/resource';
 
 // 1. EXTENDED LEAD TYPE (Kept correct)
@@ -22,6 +23,7 @@ type Props = {
   totalFilteredCount: number;
   onToggleOne: (id: string) => void;
   onRowClick: (id: string) => void;
+  onRefresh?: () => Promise<void>;
   sortField:
     | 'createdAt'
     | 'updatedAt'
@@ -109,6 +111,7 @@ export function LeadTable({
   totalFilteredCount,
   onToggleOne,
   onRowClick,
+  onRefresh,
   sortField,
   sortDirection,
   onSort,
@@ -150,9 +153,7 @@ export function LeadTable({
     
     setIsSaving(true);
     try {
-      const { client } = await import('@/app/utils/aws/data/frontEndClient');
-      await client.models.PropertyLead.update({
-        id: editingLead.id,
+      await updateLead(editingLead.id, {
         ownerAddress: editForm.street,
         ownerCity: editForm.city,
         ownerState: editForm.state,
@@ -179,7 +180,11 @@ export function LeadTable({
       }
 
       setEditingLead(null);
-      window.location.reload();
+      if (onRefresh) {
+        await onRefresh();
+      } else {
+        window.location.reload();
+      }
     } catch (err) {
       console.error('Failed to update address:', err);
       alert('Failed to update address');
@@ -497,6 +502,9 @@ export function LeadTable({
                         <button
                           onClick={async (e) => {
                             e.stopPropagation();
+                            const button = e.currentTarget;
+                            button.disabled = true;
+                            button.textContent = '⏳';
                             try {
                               const res = await fetch('/api/v1/refresh-zestimate', {
                                 method: 'POST',
@@ -513,11 +521,24 @@ export function LeadTable({
                               });
                               const data = await res.json();
                               if (res.ok) {
-                                window.location.reload();
+                                button.textContent = '✓';
+                                button.className = 'text-green-600 font-bold';
+                                // Wait a bit longer for database to update
+                                await new Promise(resolve => setTimeout(resolve, 1000));
+                                if (onRefresh) {
+                                  await onRefresh();
+                                }
+                                button.textContent = '↻';
+                                button.className = 'text-gray-400 hover:text-green-600';
+                                button.disabled = false;
                               } else {
+                                button.textContent = '↻';
+                                button.disabled = false;
                                 alert(`Refresh failed: ${data.error}`);
                               }
                             } catch (err: any) {
+                              button.textContent = '↻';
+                              button.disabled = false;
                               console.error('Refresh failed:', err);
                               alert(`Refresh failed: ${err.message}`);
                             }
@@ -538,9 +559,7 @@ export function LeadTable({
                       onChange={async (e) => {
                         const newStatus = e.target.value as 'ACTIVE' | 'SOLD' | 'PENDING' | 'OFF_MARKET' | 'SKIP' | 'DIRECT_MAIL' | '';
                         try {
-                          const { client } = await import('@/app/utils/aws/data/frontEndClient');
-                          await client.models.PropertyLead.update({
-                            id: lead.id,
+                          await updateLead(lead.id, {
                             manualStatus: newStatus || null
                           });
                         } catch (err) {

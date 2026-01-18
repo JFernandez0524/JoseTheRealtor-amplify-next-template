@@ -84,7 +84,18 @@ export async function analyzeBridgeProperty(params: {
       const res = await bridgeClient.get('/zestimates_v2/zestimates', {
         params: { limit: 10, address: street, city, state, postalCode: zip },
       });
+      console.log(`🔎 Trying: ${street}, ${city}, ${state} ${zip}`);
+      console.log(`📦 Bridge returned ${res.data.bundle?.length || 0} results`);
+      
       if (res.data.bundle?.length > 0) {
+        console.log(`📍 Results:`, res.data.bundle.map((r: any) => ({
+          address: r.address,
+          city: r.city,
+          state: r.state,
+          zip: r.postalCode,
+          zestimate: r.zestimate
+        })));
+        
         // Sort: Priority 1 = No Unit Number (Main House), Priority 2 = Newest Date
         const sortedBundle = res.data.bundle.sort((a: any, b: any) => {
           const aIsMain = !a.unitNumber;
@@ -100,13 +111,55 @@ export async function analyzeBridgeProperty(params: {
         console.log(`✅ Selected Zestimate: $${valuation.zestimate} (${valuation.timestamp}, unitNumber: ${valuation.unitNumber || 'none'})`);
         break;
       }
-    } catch (err) {}
+    } catch (err) {
+      console.log(`❌ API error for: ${street}`);
+    }
   }
 
-  // If no valuation found, return null - don't use coordinate fallback
+  // If no valuation found by address, try coordinate search as fallback
+  if (!valuation && lat && lng) {
+    console.log('🌍 Trying coordinate-based search as fallback...');
+    const radii = ['0.01', '0.05', '0.1'];
+    for (const radius of radii) {
+      try {
+        const res = await bridgeClient.get('/zestimates_v2/zestimates', {
+          params: { limit: 10, near: `${lng},${lat}`, radius },
+        });
+        console.log(`📦 Coordinate search (radius ${radius}): ${res.data.bundle?.length || 0} results`);
+        
+        if (res.data.bundle?.length > 0) {
+          console.log(`📍 Nearby properties:`, res.data.bundle.map((r: any) => ({
+            address: r.address,
+            distance: 'nearby',
+            zestimate: r.zestimate
+          })));
+          
+          // Sort and pick best match
+          const sortedBundle = res.data.bundle.sort((a: any, b: any) => {
+            const aIsMain = !a.unitNumber;
+            const bIsMain = !b.unitNumber;
+            if (aIsMain && !bIsMain) return -1;
+            if (!aIsMain && bIsMain) return 1;
+            const dateA = new Date(a.timestamp).getTime();
+            const dateB = new Date(b.timestamp).getTime();
+            return dateB - dateA;
+          });
+          valuation = sortedBundle[0];
+          successfulVariation = 'coordinate-based';
+          console.log(`✅ Found via coordinates: $${valuation.zestimate} at ${valuation.address}`);
+          break;
+        }
+      } catch (err) {
+        console.log(`❌ Coordinate search failed for radius ${radius}`);
+      }
+    }
+  }
+
   if (!valuation) {
     console.log('❌ No property found for address');
-    return { success: false, error: 'Property not found' };
+    console.log('🔍 Search details:', { rawStreet, city, state, zip, lat, lng });
+    console.log('📝 Tried variations:', streetVariations);
+    return { success: false, error: 'Property not found. Please verify the address is correct.' };
   }
 
   const zpid = valuation?.zpid;
