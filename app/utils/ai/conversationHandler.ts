@@ -15,6 +15,7 @@ interface ConversationContext {
   leadType?: string;
   locationId: string;
   contact?: any; // Full contact object for field checking
+  testMode?: boolean; // If true, don't send messages to GHL
 }
 
 interface PropertyAnalysis {
@@ -59,9 +60,15 @@ async function getPropertyAnalysis(address: string, city: string, state: string,
 }
 
 // Send message to GHL
-async function sendGHLMessage(conversationId: string, message: string) {
+async function sendGHLMessage(conversationId: string, message: string, testMode = false) {
+  if (testMode) {
+    console.log('🧪 TEST MODE - Would send message:', message);
+    return;
+  }
+  
   try {
-    await axios.post(
+    console.log(`📤 Sending message to GHL conversation ${conversationId}`);
+    const response = await axios.post(
       `https://services.leadconnectorhq.com/conversations/${conversationId}/messages`,
       {
         type: 'SMS',
@@ -76,13 +83,18 @@ async function sendGHLMessage(conversationId: string, message: string) {
         }
       }
     );
-  } catch (error) {
-    console.error('Failed to send GHL message:', error);
+    console.log('✅ Message sent successfully to GHL conversation');
+  } catch (error: any) {
+    console.error('❌ Failed to send GHL message:', error.response?.data || error.message);
+    throw error;
   }
 }
 
 // Generate AI response using OpenAI
 async function generateOpenAIResponse(context: ConversationContext, propertyData?: PropertyAnalysis): Promise<string> {
+  const hasPropertyData = propertyData?.zestimate;
+  const hasAddress = context.propertyAddress && context.propertyCity && context.propertyState;
+  
   const propertyInfo = propertyData ? 
     `Property Details: ${context.propertyAddress}, ${context.propertyCity}, ${context.propertyState} ${context.propertyZip}
     Estimated Value: $${propertyData.zestimate?.toLocaleString() || 'N/A'}
@@ -91,28 +103,68 @@ async function generateOpenAIResponse(context: ConversationContext, propertyData
     ${propertyData.baths ? `Bathrooms: ${propertyData.baths}` : ''}
     ${propertyData.yearBuilt ? `Year Built: ${propertyData.yearBuilt}` : ''}` : '';
 
-  const systemPrompt = `You are a professional real estate investor assistant helping homeowners with ${context.leadType?.toLowerCase() || 'real estate'} situations. 
+  const cashOffer = propertyData?.zestimate ? Math.round(propertyData.zestimate * 0.70) : null;
+  const offerInfo = cashOffer && propertyData ? 
+    `\nOFFER OPTIONS:
+    - AS-IS CASH OFFER: $${cashOffer.toLocaleString()} (70% of market value, quick close)
+    - RETAIL LISTING: $${propertyData.zestimate?.toLocaleString()} (maximum value, traditional sale)` : '';
 
-Your goal is to:
-1. Build rapport and understand their situation
-2. Offer to purchase their property as-is for cash OR list it for them
-3. Identify qualified leads who are motivated to sell
-4. Schedule appointments for serious prospects
+  // Adapt script based on available data
+  const isInitialOutreach = context.incomingMessage === 'initial_outreach';
+  
+  const scriptReason = hasAddress 
+    ? `"I saw the public notice regarding the property at ${context.propertyAddress} and I wanted to see if I could make you a firm cash offer to buy it directly, or help you list it for its maximum value."`
+    : `"I saw the public notice regarding your property and I wanted to see if I could make you a firm cash offer to buy it directly, or help you list it for its maximum value."`;
 
-Key Guidelines:
-- Be empathetic and professional
-- Focus on solving their problems (probate/foreclosure stress)
-- Mention cash offers and quick closings
-- Ask qualifying questions about timeline and motivation
+  const scriptBridge = hasPropertyData
+    ? `"I work with families in these situations because I've found that having both a 'speed' option and a 'top-dollar' option gives you the most control over your next move. I just need 10 minutes to see the condition so I can give you accurate numbers for both routes."`
+    : `"I work with families in these situations because I've found that having both a 'speed' option and a 'top-dollar' option gives you the most control over your next move. I need to see the property condition and get some details to give you accurate numbers for both routes."`;
+
+  const systemPrompt = isInitialOutreach 
+    ? `You are Jose Fernandez from RE/MAX Homeland Realtors reaching out to ${context.contactName} for the FIRST TIME about their ${context.leadType?.toLowerCase() || 'real estate'} situation.
+
+DELIVER THE COMPLETE 5-STEP SCRIPT AS YOUR INITIAL OUTREACH:
+1. Get Attention: "Hi, ${context.contactName}."
+2. Identify Yourself: "This is Jose Fernandez from RE/MAX Homeland Realtors."
+3. The Reason: ${scriptReason}
+4. The Bridge: ${scriptBridge}
+5. The Ask: "I'd like to stop by for a quick look this Wednesday at 3:00 PM to give you those figures. Does that work for you?"
+
+${propertyInfo}${offerInfo}
+
+IMPORTANT:
+${!hasPropertyData ? '- You do NOT have property valuation data yet, so DO NOT mention specific dollar amounts' : '- You have property valuation data, include the specific offer amounts'}
+${!hasAddress ? '- You do NOT have the full property address' : ''}
+- This is your FIRST message to them - deliver the full script
+- Keep it under 160 characters for SMS
+- Be professional and empathetic
+- End with the appointment ask
+
+Craft the initial outreach message:`
+    : `You are Jose Fernandez from RE/MAX Homeland Realtors, helping homeowners with ${context.leadType?.toLowerCase() || 'real estate'} situations.
+
+FOLLOW THIS 5-STEP SCRIPT (adapt based on available information):
+1. Get Attention: "Hi, ${context.contactName}."
+2. Identify Yourself: "This is Jose Fernandez from RE/MAX Homeland Realtors."
+3. The Reason: ${scriptReason}
+4. The Bridge: ${scriptBridge}
+5. The Ask: "I'd like to stop by for a quick look this Wednesday at 3:00 PM to give you those figures. Does that work for you?"
+
+${propertyInfo}${offerInfo}
+
+IMPORTANT INSTRUCTIONS:
+${!hasPropertyData ? '- You do NOT have property valuation data yet, so DO NOT mention specific dollar amounts' : '- You have property valuation data, include the specific offer amounts'}
+${!hasAddress ? '- You do NOT have the full property address, ask for it if needed' : ''}
+- If missing key information (address, value), focus on scheduling the property visit to gather details
 - Keep responses under 160 characters for SMS
-- If they show strong interest, ask to schedule a call
-
-${propertyInfo}
+- Goal: Get to "Yes, No, or Maybe" on a property visit
+- Present BOTH options: cash offer (speed) and listing (top dollar)
+- Be empathetic about their situation
 
 Contact: ${context.contactName}
 Their message: "${context.incomingMessage}"
 
-Respond naturally and helpfully:`;
+Respond following the script:`;
 
   try {
     const response = await axios.post(
@@ -213,33 +265,37 @@ function shouldHandoffToHuman(message: string): boolean {
 export async function generateAIResponse(context: ConversationContext): Promise<string> {
   try {
     // 🛡️ Check if AI is enabled for this contact (app is source of truth)
-    if (!isAIEnabled(context.contact)) {
+    if (!context.testMode && !isAIEnabled(context.contact)) {
       console.log(`AI disabled for contact ${context.contactId}`);
       return 'Thanks for your message! Someone will get back to you soon.';
     }
 
-    // Update AI state to running
-    await updateAIState(context.contactId, 'running');
+    // Update AI state to running (skip in test mode)
+    if (!context.testMode) {
+      await updateAIState(context.contactId, 'running');
+    }
 
     // Check if human handoff is needed
     if (shouldHandoffToHuman(context.incomingMessage)) {
       // Update AI state to handoff
-      await updateAIState(context.contactId, 'handoff');
-      
-      // Tag contact for human follow-up in GHL
-      await axios.post(
-        `https://services.leadconnectorhq.com/contacts/${context.contactId}/tags`,
-        { tags: ['Ready-For-Human-Contact'] },
-        {
-          headers: {
-            'Authorization': `Bearer ${GHL_API_KEY}`,
-            'Content-Type': 'application/json'
+      if (!context.testMode) {
+        await updateAIState(context.contactId, 'handoff');
+        
+        // Tag contact for human follow-up in GHL
+        await axios.post(
+          `https://services.leadconnectorhq.com/contacts/${context.contactId}/tags`,
+          { tags: ['Ready-For-Human-Contact'] },
+          {
+            headers: {
+              'Authorization': `Bearer ${GHL_API_KEY}`,
+              'Content-Type': 'application/json'
+            }
           }
-        }
-      );
+        );
+      }
 
       const handoffMessage = "Great! I'll have one of our property specialists reach out to you within the next few hours to discuss your options. Thanks for your interest!";
-      await sendGHLMessage(context.conversationId, handoffMessage);
+      await sendGHLMessage(context.conversationId, handoffMessage, context.testMode);
       return handoffMessage;
     }
 
@@ -257,15 +313,15 @@ export async function generateAIResponse(context: ConversationContext): Promise<
     // Generate AI response
     const aiMessage = await generateOpenAIResponse(context, propertyData || undefined);
 
-    // Send response to GHL
-    await sendGHLMessage(context.conversationId, aiMessage);
+    // Send response to GHL (skip in test mode)
+    await sendGHLMessage(context.conversationId, aiMessage, context.testMode);
 
     return aiMessage;
 
   } catch (error) {
     console.error('Conversation handler error:', error);
     const fallbackMessage = "Thanks for your message! I'll have someone get back to you soon.";
-    await sendGHLMessage(context.conversationId, fallbackMessage);
+    await sendGHLMessage(context.conversationId, fallbackMessage, context.testMode);
     return fallbackMessage;
   }
 }

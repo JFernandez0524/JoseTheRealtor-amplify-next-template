@@ -6,6 +6,7 @@ import { uploadCsvHandler } from './functions/uploadCsvHandler/resource';
 import { skipTraceLeads } from './functions/skiptraceLeads/resource';
 import { manualGhlSync } from './functions/manualGhlSync/resource';
 import { aiFollowUpAgent } from './functions/aiFollowUpAgent/resource';
+import { dailyOutreachAgent } from './functions/dailyOutreachAgent/resource';
 import { addUserToGroup } from './data/add-user-to-group/resource';
 import { removeUserFromGroup } from './data/remove-user-from-group/resource';
 import { EventType } from 'aws-cdk-lib/aws-s3';
@@ -20,6 +21,7 @@ const backend = defineBackend({
   skipTraceLeads,
   manualGhlSync,
   aiFollowUpAgent,
+  dailyOutreachAgent,
   addUserToGroup,
   removeUserFromGroup,
 });
@@ -123,4 +125,14 @@ backend.aiFollowUpAgent.resources.lambda.addToRolePolicy(
     actions: ['bedrock:InvokeModel'],
     resources: ['arn:aws:bedrock:*::foundation-model/anthropic.claude-3-5-sonnet-20241022-v2:0']
   })
+);
+
+// 📤 Configure Daily Outreach Agent
+backend.dailyOutreachAgent.addEnvironment(
+  'GHL_INTEGRATION_TABLE',
+  backend.data.resources.tables['GhlIntegration'].tableName
+);
+
+backend.data.resources.tables['GhlIntegration'].grantReadData(
+  backend.dailyOutreachAgent.resources.lambda
 );

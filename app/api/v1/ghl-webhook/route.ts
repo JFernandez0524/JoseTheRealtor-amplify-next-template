@@ -88,16 +88,50 @@ export async function POST(req: Request) {
 
 async function processConversationAsync(body: any) {
   try {
-    const { contactId, conversationId, message, contact, locationId } = body;
+    const { contactId, conversationId, message, locationId } = body;
 
-    // Get property data from contact custom fields
+    // 1. Fetch fresh contact data from GHL API
+    const GHL_API_KEY = process.env.GHL_API_KEY;
+    if (!GHL_API_KEY) {
+      console.error('GHL_API_KEY not configured');
+      return;
+    }
+
+    let contact;
+    try {
+      const contactResponse = await fetch(
+        `https://services.leadconnectorhq.com/contacts/${contactId}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${GHL_API_KEY}`,
+            'Version': '2021-07-28'
+          }
+        }
+      );
+      const contactData = await contactResponse.json();
+      contact = contactData.contact;
+    } catch (error) {
+      console.error('Failed to fetch contact from GHL:', error);
+      return;
+    }
+
+    // 2. Extract property data from contact custom fields
     const propertyAddress = contact?.customFields?.find((f: any) => f.id === 'p3NOYiInAERYbe0VsLHB')?.value;
     const propertyCity = contact?.customFields?.find((f: any) => f.id === 'h4UIjKQvFu7oRW4SAY8W')?.value;
     const propertyState = contact?.customFields?.find((f: any) => f.id === '9r9OpQaxYPxqbA6Hvtx7')?.value;
     const propertyZip = contact?.customFields?.find((f: any) => f.id === 'hgbjsTVwcyID7umdhm2o')?.value;
     const leadType = contact?.customFields?.find((f: any) => f.id === 'oaf4wCuM3Ub9eGpiddrO')?.value;
 
-    // Generate AI response
+    console.log('📋 Contact data from GHL:', {
+      name: `${contact.firstName} ${contact.lastName}`,
+      phone: contact.phone,
+      propertyAddress,
+      propertyCity,
+      propertyState,
+      leadType
+    });
+
+    // 3. Generate AI response based on GHL contact data
     const aiResponse = await generateAIResponse({
       contactId,
       conversationId,
@@ -112,7 +146,7 @@ async function processConversationAsync(body: any) {
       contact
     });
 
-    console.log('Successfully processed conversation webhook:', body.webhookId);
+    console.log('✅ Successfully processed conversation webhook:', body.webhookId);
   } catch (error) {
     console.error('Failed to process conversation webhook:', body.webhookId, error);
   }
