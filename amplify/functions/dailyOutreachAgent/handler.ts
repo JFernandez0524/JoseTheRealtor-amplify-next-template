@@ -131,6 +131,24 @@ async function filterNewContacts(contacts: any[], integration: GhlIntegration): 
   const newContacts: any[] = [];
   
   for (const contact of contacts) {
+    // Skip if marked "Do Not Contact"
+    if (contact.dnd === true || contact.dndSettings?.all?.status === 'active') {
+      console.log(`⏭️ Skipping ${contact.firstName} ${contact.lastName} - Do Not Contact`);
+      continue;
+    }
+
+    // Check if contact has required tag (AI Outreach)
+    const hasTags = contact.tags && Array.isArray(contact.tags);
+    const hasAIOutreachTag = hasTags && contact.tags.some((tag: string) => 
+      tag.toLowerCase().includes('ai outreach') || 
+      tag.toLowerCase().includes('ai-outreach')
+    );
+
+    if (!hasAIOutreachTag) {
+      console.log(`⏭️ Skipping ${contact.firstName} ${contact.lastName} - Missing AI Outreach tag`);
+      continue;
+    }
+
     // Check if contact has any conversation history
     try {
       const conversationResponse = await axios.get(
@@ -147,6 +165,7 @@ async function filterNewContacts(contacts: any[], integration: GhlIntegration): 
       
       // If no conversations or no messages in conversations, this is a new contact
       if (conversations.length === 0) {
+        console.log(`✅ New contact: ${contact.firstName} ${contact.lastName}`);
         newContacts.push(contact);
       } else {
         // Check if any conversation has messages
@@ -155,6 +174,7 @@ async function filterNewContacts(contacts: any[], integration: GhlIntegration): 
         );
         
         if (!hasMessages) {
+          console.log(`✅ Contact with no messages: ${contact.firstName} ${contact.lastName}`);
           newContacts.push(contact);
         }
       }

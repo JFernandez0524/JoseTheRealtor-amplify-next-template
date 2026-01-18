@@ -162,6 +162,11 @@ export async function syncToGoHighLevel(
     // 📊 DATA SOURCE TRACKING
     if (lead.skipTraceStatus === 'COMPLETED') {
       tags.push('Data:SkipTraced'); // Phone/email from skip trace
+      
+      // 🤖 AI OUTREACH - Only for AI plan users and admins
+      if (isAIPlan || isAdmin) {
+        tags.push('AI Outreach'); // Enable AI outreach for skip traced leads
+      }
     } else if (specificPhone) {
       tags.push('Data:OriginalUpload'); // Phone was in original upload
     }

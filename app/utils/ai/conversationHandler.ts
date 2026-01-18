@@ -171,10 +171,15 @@ Respond following the script:`;
       'https://api.openai.com/v1/chat/completions',
       {
         model: 'gpt-4o-mini',
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: context.incomingMessage }
-        ],
+        messages: isInitialOutreach 
+          ? [
+              { role: 'system', content: systemPrompt },
+              { role: 'user', content: 'Generate the initial outreach message following the 5-step script.' }
+            ]
+          : [
+              { role: 'system', content: systemPrompt },
+              { role: 'user', content: context.incomingMessage }
+            ],
         max_tokens: 150,
         temperature: 0.7
       },
