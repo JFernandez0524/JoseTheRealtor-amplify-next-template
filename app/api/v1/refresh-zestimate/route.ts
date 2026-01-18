@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { AuthIsUserAuthenticatedServer } from '@/app/utils/aws/auth/amplifyServerUtils.server';
-import { updateLead } from '@/app/utils/aws/data/lead.server';
+import { cookiesClient } from '@/app/utils/aws/auth/amplifyServerUtils.server';
 import { analyzeBridgeProperty } from '@/app/utils/bridge.server';
 
 export async function POST(request: NextRequest) {
@@ -12,12 +11,6 @@ export async function POST(request: NextRequest) {
         { error: 'Missing leadId' },
         { status: 400 }
       );
-    }
-
-    // Verify authentication
-    const isAuthenticated = await AuthIsUserAuthenticatedServer();
-    if (!isAuthenticated) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     // Fetch fresh Zestimate using working bridge utility
@@ -39,8 +32,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Update the lead using shared utility
-    await updateLead({
+    // Update the lead using cookiesClient directly
+    const { data: updatedLead, errors } = await cookiesClient.models.PropertyLead.update({
       id: leadId,
       zestimate: zillowData.zestimate,
       zillowZpid: zillowData.zpid,
@@ -48,6 +41,10 @@ export async function POST(request: NextRequest) {
       rentZestimate: zillowData.rentalZestimate,
       zillowLastUpdated: new Date().toISOString(),
     });
+
+    if (errors) {
+      throw new Error(errors.map((e: any) => e.message).join(', '));
+    }
 
     return NextResponse.json({ success: true, zillowData });
   } catch (error: any) {
