@@ -1,16 +1,39 @@
 import { NextResponse } from 'next/server';
 import axios from 'axios';
 import { generateAIResponse } from '@/app/utils/ai/conversationHandler';
+import { AuthGetCurrentUserServer } from '@/app/utils/aws/auth/amplifyServerUtils.server';
+import { getValidGhlToken } from '@/app/utils/aws/data/ghlIntegration.server';
 
 /**
- * Send an OUTBOUND message to a GHL contact using AI
- * Looks up contact info and crafts personalized outreach
+ * OUTBOUND AI MESSAGING ENDPOINT
  * 
- * Usage:
+ * Sends AI-generated outreach messages to GHL contacts.
+ * Used for initial prospecting and manual outreach.
+ * 
+ * WORKFLOW:
+ * 1. Authenticate user
+ * 2. Get valid GHL OAuth token (auto-refresh if expired)
+ * 3. Fetch contact data from GHL API
+ * 4. Extract property info from custom fields
+ * 5. Generate AI message using 5-step script
+ * 6. Send via GHL Conversations API
+ * 
+ * USAGE:
  * POST /api/v1/send-test-to-contact
- * Body: {
- *   contactId: "your-ghl-contact-id"
- * }
+ * Body: { contactId: "ghl-contact-id" }
+ * 
+ * RELATED FILES:
+ * - app/utils/ai/conversationHandler.ts - AI message generation
+ * - app/utils/aws/data/ghlIntegration.server.ts - OAuth token management
+ * - amplify/functions/dailyOutreachAgent/handler.ts - Automated daily outreach
+ * 
+ * @example
+ * // From browser (logged in)
+ * fetch('/api/v1/send-test-to-contact', {
+ *   method: 'POST',
+ *   headers: { 'Content-Type': 'application/json' },
+ *   body: JSON.stringify({ contactId: 'OnI6dClVhzwFU8ZOx2rU' })
+ * })
  */
 export async function POST(req: Request) {
   try {
@@ -23,11 +46,21 @@ export async function POST(req: Request) {
       );
     }
 
-    const GHL_API_KEY = process.env.GHL_API_KEY;
-    if (!GHL_API_KEY) {
+    // Get current user
+    const user = await AuthGetCurrentUserServer();
+    if (!user) {
       return NextResponse.json(
-        { error: 'GHL_API_KEY not configured' },
-        { status: 500 }
+        { error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
+
+    // Get user's valid GHL OAuth token (auto-refreshes if expired)
+    const GHL_ACCESS_TOKEN = await getValidGhlToken(user.userId);
+    if (!GHL_ACCESS_TOKEN) {
+      return NextResponse.json(
+        { error: 'GHL integration not found. Please connect your GHL account.' },
+        { status: 404 }
       );
     }
 
@@ -36,7 +69,7 @@ export async function POST(req: Request) {
       `https://services.leadconnectorhq.com/contacts/${contactId}`,
       {
         headers: {
-          'Authorization': `Bearer ${GHL_API_KEY}`,
+          'Authorization': `Bearer ${GHL_ACCESS_TOKEN}`,
           'Version': '2021-07-28'
         }
       }
@@ -63,7 +96,7 @@ export async function POST(req: Request) {
         },
         {
           headers: {
-            'Authorization': `Bearer ${GHL_API_KEY}`,
+            'Authorization': `Bearer ${GHL_ACCESS_TOKEN}`,
             'Content-Type': 'application/json',
             'Version': '2021-07-28'
           }
@@ -118,6 +151,6 @@ export async function GET() {
     example: {
       contactId: "OnI6dClVhzwFU8ZOx2rU"
     },
-    note: 'Looks up contact info and sends personalized outreach message'
+    note: 'Looks up contact info and sends personalized outreach message using your GHL OAuth token'
   });
 }

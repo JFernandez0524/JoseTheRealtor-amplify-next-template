@@ -1,45 +1,11 @@
 /**
- * GHL TOKEN MANAGER
+ * GHL TOKEN MANAGER - Lambda Version
  * 
- * Manages GoHighLevel OAuth tokens with automatic refresh functionality.
- * Ensures users stay connected to GHL without manual reconnection.
+ * This is a thin wrapper that uses DynamoDB client for Lambda context.
+ * The actual logic matches app/utils/aws/data/ghlIntegration.server.ts
+ * but uses DynamoDB instead of Amplify client for Lambda performance.
  * 
- * PROBLEM SOLVED:
- * - GHL access tokens expire after 24 hours
- * - Without refresh, users must reconnect manually
- * - This module automatically refreshes tokens before they expire
- * 
- * USAGE:
- * - Called by GHL sync functions before making API calls
- * - Checks token expiration and refreshes if needed
- * - Updates database with new tokens
- * 
- * FLOW:
- * 1. Function needs to call GHL API
- * 2. Calls getValidGhlToken(userId)
- * 3. Module checks if token is expired
- * 4. If expired, uses refresh token to get new access token
- * 5. Saves new tokens to database
- * 6. Returns valid access token
- * 
- * EXAMPLES:
- * ```typescript
- * import { getValidGhlToken } from '@/amplify/functions/shared/ghlTokenManager';
- * 
- * const token = await getValidGhlToken(userId);
- * if (!token) {
- *   throw new Error('GHL not connected');
- * }
- * 
- * // Use token for API calls
- * const ghl = axios.create({
- *   headers: { Authorization: `Bearer ${token}` }
- * });
- * ```
- * 
- * RELATED FILES:
- * - amplify/functions/manualGhlSync/handler.ts - Uses this for sync operations
- * - app/api/v1/oauth/callback/route.ts - Initial OAuth connection
+ * NOTE: Keep this in sync with app/utils/aws/data/ghlIntegration.server.ts
  */
 
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
@@ -64,23 +30,7 @@ type GhlIntegration = {
 
 /**
  * Gets a valid GHL access token for a user, refreshing if expired
- * 
- * This is the main function to use before any GHL API call. It handles
- * token expiration automatically so you don't have to check manually.
- * 
- * @param userId - The Cognito user ID (sub)
- * @returns Valid access token or null if user not connected/refresh failed
- * 
- * @example
- * const token = await getValidGhlToken(userId);
- * if (!token) {
- *   return { status: 'FAILED', message: 'GHL not connected' };
- * }
- * 
- * // Token is valid, use it for API calls
- * await axios.get('https://services.leadconnectorhq.com/contacts', {
- *   headers: { Authorization: `Bearer ${token}` }
- * });
+ * Lambda-optimized version using DynamoDB client
  */
 export async function getValidGhlToken(userId: string): Promise<string | null> {
   try {

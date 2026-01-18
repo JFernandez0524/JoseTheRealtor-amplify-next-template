@@ -1,6 +1,30 @@
 import { NextRequest, NextResponse } from 'next/server';
 import axios from 'axios';
-import { cookiesClient } from '@/app/utils/aws/auth/amplifyServerUtils.server';
+import { createGhlIntegration } from '@/app/utils/aws/data/ghlIntegration.server';
+
+/**
+ * GHL OAUTH CALLBACK HANDLER
+ * 
+ * Handles the OAuth callback from GoHighLevel after user authorization.
+ * Exchanges authorization code for access/refresh tokens and stores them.
+ * 
+ * OAUTH FLOW:
+ * 1. User clicks "Connect GHL" in app
+ * 2. Redirected to GHL OAuth page
+ * 3. User authorizes app
+ * 4. GHL redirects here with authorization code
+ * 5. Exchange code for tokens
+ * 6. Store tokens in database
+ * 7. Redirect to success page
+ * 
+ * STATE PARAMETER:
+ * Contains base64-encoded JSON with userId for security.
+ * Prevents CSRF attacks and links OAuth to correct user.
+ * 
+ * RELATED FILES:
+ * - app/utils/aws/data/ghlIntegration.server.ts - Token storage
+ * - app/components/dashboard/GhlConnection.tsx - Initiates OAuth flow
+ */
 
 const GHL_CLIENT_ID = process.env.GHL_CLIENT_ID;
 const GHL_CLIENT_SECRET = process.env.GHL_CLIENT_SECRET;
@@ -95,18 +119,12 @@ export async function GET(req: Request) {
     try {
       console.log('Using user ID from state:', userId);
 
-      // Store tokens using existing cookiesClient
-      await cookiesClient.models.GhlIntegration.create({
-        userId: userId,
-        locationId: locationId || 'default',
-        accessToken: access_token,
-        refreshToken: refresh_token,
-        tokenType: 'Bearer',
-        expiresAt: new Date(Date.now() + (expires_in * 1000)).toISOString(),
-        scope: 'contacts.readonly contacts.write locations/tags.write conversations/message.readonly conversations/message.write',
-        isActive: true,
-        dailyMessageCount: 0,
-        hourlyMessageCount: 0,
+      // Store tokens using utility function
+      await createGhlIntegration(userId, {
+        access_token,
+        refresh_token,
+        expires_in,
+        locationId
       });
 
       console.log('✅ Tokens stored successfully for user:', userId);

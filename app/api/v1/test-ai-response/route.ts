@@ -2,19 +2,38 @@ import { NextResponse } from 'next/server';
 import { generateAIResponse } from '@/app/utils/ai/conversationHandler';
 
 /**
- * TEST ENDPOINT - Simulate AI responses without sending actual messages
+ * AI RESPONSE TEST ENDPOINT
  * 
- * Usage:
+ * Tests AI message generation WITHOUT sending actual SMS.
+ * Used for testing conversation scripts and AI responses safely.
+ * 
+ * WORKFLOW:
+ * 1. Accept test context (contact name, message, property data)
+ * 2. Generate AI response with testMode=true
+ * 3. Return response without sending to GHL
+ * 
+ * USAGE:
  * POST /api/v1/test-ai-response
  * Body: {
  *   contactName: "John Doe",
- *   incomingMessage: "How much can you offer for my house?",
+ *   incomingMessage: "How much can you offer?",
  *   propertyAddress: "123 Main St",
  *   propertyCity: "Miami",
  *   propertyState: "FL",
  *   propertyZip: "33101",
  *   leadType: "PREFORECLOSURE"
  * }
+ * 
+ * TESTING SCENARIOS:
+ * - Initial outreach message
+ * - Response to interest
+ * - Handling objections
+ * - Appointment scheduling
+ * - Missing property data
+ * 
+ * RELATED FILES:
+ * - app/utils/ai/conversationHandler.ts - AI message generation
+ * - AI_TESTING_GUIDE.md - Complete testing documentation
  */
 export async function POST(req: Request) {
   try {

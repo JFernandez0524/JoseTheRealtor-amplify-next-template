@@ -7,6 +7,7 @@ A comprehensive real estate lead management platform built with AWS Amplify Gen2
 - **Lead Management**: Import and analyze property leads (preforeclosure, probate)
 - **AI Lead Scoring**: Intelligent prioritization with 0-100 scores based on equity, value, timeline, location, and contact availability
 - **AI Insights Dashboard**: View top hottest leads, urgent attention items, and best ROI opportunities
+- **AI Messaging Bot**: Automated SMS conversations with leads using OpenAI, following proven 5-step script
 - **Property Enrichment (Preforeclosure)**: Real equity data, mortgage balances, and quality contact info via BatchData ($0.29/lead)
 - **Skip Tracing**: Pay-per-use contact lookup at $0.10 per skip (probate leads)
 - **Bulk Operations**: Update multiple lead statuses, skip trace, enrich, calculate AI scores, and sync in one click
@@ -14,6 +15,7 @@ A comprehensive real estate lead management platform built with AWS Amplify Gen2
 - **Property Valuation**: Real-time Zestimate data with refresh capability and age indicators
 - **CRM Integration**: Seamless GoHighLevel synchronization with rate limiting protection
 - **Direct Mail Automation**: Automatic Zestimate and cash offer calculation for GHL Click2Mail campaigns
+- **Daily Outreach Automation**: Automatically finds and messages new GHL contacts every day
 - **AI Assistant**: Claude 3.5 Sonnet for lead analysis and follow-ups
 - **Address Validation**: Google Maps API integration for property verification
 - **Role-Based Access**: FREE, SYNC PLAN, AI OUTREACH PLAN, and ADMIN tiers
@@ -47,6 +49,7 @@ A comprehensive real estate lead management platform built with AWS Amplify Gen2
    NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=your_google_maps_key
    GHL_CLIENT_ID=your_ghl_client_id
    GHL_CLIENT_SECRET=your_ghl_client_secret
+   OPENAI_API_KEY=your_openai_key
    ```
 
 3. **Deploy AWS backend**
@@ -167,7 +170,15 @@ For detailed deployment instructions, see the [Amplify documentation](https://do
      - Appropriate tags for direct mail or phone campaigns
    - GHL automations handle Click2Mail integration with mail merge
 
-9. **AI Analysis**
+9. **AI Messaging Bot (Automated Outreach)**
+   - Daily automated outreach to new GHL contacts
+   - AI follows proven 5-step script for property visits
+   - Adapts message based on available property data
+   - Handles inbound responses automatically
+   - Triggers human handoff for qualified leads
+   - See `AI_TESTING_GUIDE.md` for testing instructions
+
+10. **AI Analysis**
    - Use Chat feature for property insights
    - Get automated follow-up suggestions
    - Analyze market conditions and equity potential
@@ -178,8 +189,32 @@ The platform provides REST APIs for integration:
 
 - `POST /api/v1/upload-leads` - Upload lead data
 - `POST /api/v1/analyze-property` - Property analysis
-- `GET /api/v1/oauth/ghl/callback` - GHL OAuth callback
+- `POST /api/v1/send-test-to-contact` - Send AI outreach message
+- `POST /api/v1/test-ai-response` - Test AI responses (no SMS sent)
+- `GET /api/v1/oauth/callback` - GHL OAuth callback
+- `POST /api/v1/oauth/refresh` - Refresh GHL OAuth token
 - `POST /api/v1/ghl-webhook` - Handle GHL webhooks
+
+### AI Messaging System
+
+The platform includes an automated AI messaging system for lead outreach:
+
+**Features:**
+- Automated daily outreach to new contacts
+- Inbound message handling with AI responses
+- 5-step proven script for property visits
+- Adapts to missing property data
+- Human handoff for qualified leads
+
+**Architecture:**
+- `app/utils/ai/conversationHandler.ts` - AI message generation
+- `app/utils/aws/data/ghlIntegration.server.ts` - OAuth token management
+- `app/api/v1/ghl-webhook/route.ts` - Inbound message handler
+- `amplify/functions/dailyOutreachAgent/` - Daily automation
+
+**Documentation:**
+- `AI_TESTING_GUIDE.md` - Testing procedures
+- `AI_SYSTEM_WORKFLOW.md` - Complete system workflow
 
 ### Troubleshooting
 
@@ -189,10 +224,12 @@ The platform provides REST APIs for integration:
 - **Skip Trace No Results**: Verify address data is complete and accurate
 - **GHL Sync Errors**: Check OAuth connection in Profile settings
 - **Missing Credits**: Upgrade to PRO plan for skip tracing features
+- **AI Not Responding**: Verify GHL webhook is configured and OAuth token is valid
 
 **Support:**
 - Check application logs in AWS CloudWatch
 - Review error messages in the dashboard notifications
+- Test AI responses using `/api/v1/test-ai-response` endpoint
 - Contact support for account-specific issues
 
 ## Development

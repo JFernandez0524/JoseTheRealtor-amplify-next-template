@@ -1,84 +1,65 @@
 import { NextResponse } from 'next/server';
-import axios from 'axios';
+import { refreshGhlToken, getGhlIntegration } from '@/app/utils/aws/data/ghlIntegration.server';
+import { AuthGetCurrentUserServer } from '@/app/utils/aws/auth/amplifyServerUtils.server';
 
-const GHL_CLIENT_ID = process.env.GHL_CLIENT_ID;
-const GHL_CLIENT_SECRET = process.env.GHL_CLIENT_SECRET;
-const GHL_REDIRECT_URI = 'https://JoseTheRealtor.com/api/v1/oauth/callback';
+/**
+ * MANUAL GHL TOKEN REFRESH ENDPOINT
+ * 
+ * Manually refreshes a user's GHL OAuth token.
+ * Normally tokens auto-refresh, but this endpoint allows manual refresh.
+ * 
+ * WORKFLOW:
+ * 1. Authenticate user
+ * 2. Get user's GHL integration
+ * 3. Refresh the OAuth token
+ * 4. Return new access token
+ * 
+ * USAGE:
+ * POST /api/v1/oauth/refresh
+ * 
+ * NOTE: Tokens auto-refresh in getValidGhlToken(), so this is rarely needed.
+ * 
+ * RELATED FILES:
+ * - app/utils/aws/data/ghlIntegration.server.ts - Token management utilities
+ */
 
 export async function POST(req: Request) {
   try {
-    const { refreshToken, userType = 'Location' } = await req.json();
-
-    if (!refreshToken) {
+    // Get current user
+    const user = await AuthGetCurrentUserServer();
+    if (!user) {
       return NextResponse.json(
-        { error: 'Refresh token is required' },
-        { status: 400 }
+        { error: 'Unauthorized' },
+        { status: 401 }
       );
     }
 
-    // Refresh the access token
-    const tokenResponse = await axios.post(
-      'https://services.leadconnectorhq.com/oauth/token',
-      {
-        client_id: GHL_CLIENT_ID,
-        client_secret: GHL_CLIENT_SECRET,
-        grant_type: 'refresh_token',
-        refresh_token: refreshToken,
-        user_type: userType,
-        redirect_uri: GHL_REDIRECT_URI
-      },
-      {
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        }
-      }
-    );
+    // Get user's integration
+    const integration = await getGhlIntegration(user.userId);
+    if (!integration || !integration.refreshToken) {
+      return NextResponse.json(
+        { error: 'GHL integration not found' },
+        { status: 404 }
+      );
+    }
 
-    const {
-      access_token,
-      refresh_token: newRefreshToken,
-      expires_in,
-      locationId,
-      companyId,
-      userId
-    } = tokenResponse.data;
-
-    console.log('Token refreshed successfully for location:', locationId);
-
-    // TODO: Update stored tokens in database
-    // await updateStoredTokens({
-    //   locationId,
-    //   accessToken: access_token,
-    //   refreshToken: newRefreshToken,
-    //   expiresAt: new Date(Date.now() + expires_in * 1000)
-    // });
+    // Refresh the token
+    const newAccessToken = await refreshGhlToken(integration.id, integration.refreshToken);
+    
+    if (!newAccessToken) {
+      return NextResponse.json(
+        { error: 'Token refresh failed' },
+        { status: 500 }
+      );
+    }
 
     return NextResponse.json({
       success: true,
-      access_token,
-      refresh_token: newRefreshToken,
-      expires_in,
-      locationId,
-      companyId,
-      userId
+      access_token: newAccessToken
     });
 
   } catch (error: any) {
     console.error('Token refresh error:', error);
-    
-    if (error.response) {
-      console.error('GHL API Error:', error.response.status, error.response.data);
-      
-      // Handle specific error cases
-      if (error.response.status === 400) {
-        return NextResponse.json(
-          { error: 'Invalid refresh token' },
-          { status: 400 }
-        );
-      }
-    }
-
     return NextResponse.json(
       { error: 'Token refresh failed' },
       { status: 500 }
