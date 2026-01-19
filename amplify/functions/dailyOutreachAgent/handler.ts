@@ -91,12 +91,14 @@ async function processUserContacts(integration: GhlIntegration): Promise<number>
   console.log(`Processing contacts for user ${integration.userId}`);
   
   try {
-    // 1. Get valid GHL token (auto-refreshes if expired)
-    const accessToken = await getValidGhlToken(integration.userId);
-    if (!accessToken) {
+    // 1. Get valid GHL token and locationId (auto-refreshes if expired)
+    const ghlData = await getValidGhlToken(integration.userId);
+    if (!ghlData) {
       console.error(`Failed to get valid token for user ${integration.userId}`);
       return 0;
     }
+
+    const { token: accessToken } = ghlData;
 
     // Update integration with fresh token
     const integrationWithToken = { ...integration, accessToken };

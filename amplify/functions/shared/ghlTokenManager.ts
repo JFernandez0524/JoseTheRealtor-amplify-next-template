@@ -22,6 +22,7 @@ const GHL_INTEGRATION_TABLE = process.env.AMPLIFY_DATA_GhlIntegration_TABLE_NAME
 type GhlIntegration = {
   id: string;
   userId: string;
+  locationId: string;
   accessToken: string;
   refreshToken: string;
   expiresAt: string;
@@ -32,7 +33,7 @@ type GhlIntegration = {
  * Gets a valid GHL access token for a user, refreshing if expired
  * Lambda-optimized version using DynamoDB client
  */
-export async function getValidGhlToken(userId: string): Promise<string | null> {
+export async function getValidGhlToken(userId: string): Promise<{ token: string; locationId: string } | null> {
   try {
     const { Items } = await docClient.send(new ScanCommand({
       TableName: GHL_INTEGRATION_TABLE,
@@ -55,7 +56,7 @@ export async function getValidGhlToken(userId: string): Promise<string | null> {
     // Token still valid
     if (expiresAt > now) {
       console.log(`✅ Token valid for user ${userId}`);
-      return integration.accessToken;
+      return { token: integration.accessToken, locationId: integration.locationId };
     }
 
     // Token expired - refresh it
@@ -90,7 +91,7 @@ export async function getValidGhlToken(userId: string): Promise<string | null> {
     }));
 
     console.log(`✅ Token refreshed for user ${userId}`);
-    return access_token;
+    return { token: access_token, locationId: integration.locationId };
 
   } catch (error: any) {
     console.error(`❌ Failed to get/refresh token for user ${userId}:`, error.message);

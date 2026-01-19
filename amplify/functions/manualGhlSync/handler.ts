@@ -21,10 +21,10 @@ type Handler = (event: { arguments: { leadId: string }; identity: { sub: string 
 // HELPER: Core GHL Sync Logic
 // ---------------------------------------------------------
 async function processGhlSync(lead: any, groups: string[] = [], ownerId: string = ''): Promise<SyncResult> {
-  // Get user's GHL token (auto-refreshes if expired)
-  const ghlToken = await getValidGhlToken(ownerId);
+  // Get user's GHL token and locationId (auto-refreshes if expired)
+  const ghlData = await getValidGhlToken(ownerId);
   
-  if (!ghlToken) {
+  if (!ghlData) {
     const message = `GHL not connected or token expired. Please reconnect GoHighLevel.`;
     await docClient.send(new UpdateCommand({
       TableName: propertyLeadTableName,
@@ -36,6 +36,8 @@ async function processGhlSync(lead: any, groups: string[] = [], ownerId: string 
     }));
     return { status: 'FAILED', message };
   }
+
+  const { token: ghlToken, locationId: ghlLocationId } = ghlData;
 
   // 🚦 Check GHL rate limits before syncing
   try {
@@ -107,9 +109,10 @@ async function processGhlSync(lead: any, groups: string[] = [], ownerId: string 
         '', // Empty phone
         1,
         true,
-        groups, // Pass user groups
-        ownerId, // Pass user ID
-        ghlToken // Pass user token
+        groups,
+        ownerId,
+        ghlToken,
+        ghlLocationId
       );
 
       await docClient.send(new UpdateCommand({
@@ -149,9 +152,10 @@ async function processGhlSync(lead: any, groups: string[] = [], ownerId: string 
         phones[i],
         i + 1,
         i === 0,
-        groups, // Pass user groups
-        ownerId, // Pass user ID
-        ghlToken // Pass user token
+        groups,
+        ownerId,
+        ghlToken,
+        ghlLocationId
       );
       syncResults.push(ghlContactId);
     }

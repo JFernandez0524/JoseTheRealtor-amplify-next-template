@@ -38,18 +38,14 @@ const GHL_OPPORTUNITY_FIELD_ID_MAP: Record<string, string> = {
   disposition: '5PTlyH0ahrPVzYTKicYn',
 };
 
-const GHL_API_KEY = process.env.GHL_API_KEY;
-const LOCATION_ID = process.env.GHL_LOCATION_ID;
-
 const createGhlClient = (): AxiosInstance => {
   const client = axios.create({
     baseURL: 'https://services.leadconnectorhq.com',
     timeout: 10000,
     headers: {
-      Authorization: `Bearer ${GHL_API_KEY}`,
       'Content-Type': 'application/json',
       Accept: 'application/json',
-      Version: '2021-07-28', // 🚨 CRITICAL: GHL Version header
+      Version: '2021-07-28',
     },
   });
 
@@ -102,7 +98,8 @@ export async function syncToGoHighLevel(
   isPrimary: boolean,
   userGroups: string[] = [],
   userId: string = '',
-  ghlToken: string
+  ghlToken: string,
+  ghlLocationId: string
 ): Promise<string> {
   const ghl = axios.create({
     baseURL: 'https://services.leadconnectorhq.com',
@@ -239,7 +236,7 @@ export async function syncToGoHighLevel(
     if (specificPhone) {
       // Search by phone if available
       const searchBody = {
-        locationId: LOCATION_ID,
+        locationId: ghlLocationId,
         pageLimit: 1,
         filters: [{ field: 'phone', operator: 'eq', value: specificPhone }],
       };
@@ -251,7 +248,7 @@ export async function syncToGoHighLevel(
       // Search by email or name for direct mail leads
       if (primaryEmail) {
         const searchBody = {
-          locationId: LOCATION_ID,
+          locationId: ghlLocationId,
           pageLimit: 1,
           filters: [{ field: 'email', operator: 'eq', value: primaryEmail }],
         };
@@ -269,7 +266,7 @@ export async function syncToGoHighLevel(
     );
     const res = await ghl.post('/contacts/', {
       ...basePayload,
-      locationId: LOCATION_ID,
+      locationId: ghlLocationId,
     });
     return res.data?.contact?.id;
   } catch (error: any) {

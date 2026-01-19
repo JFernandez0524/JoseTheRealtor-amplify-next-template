@@ -76,6 +76,8 @@ backend.manualGhlSync.addEnvironment(
   'AMPLIFY_DATA_GhlIntegration_TABLE_NAME',
   backend.data.resources.tables['GhlIntegration'].tableName
 );
+backend.manualGhlSync.addEnvironment('GHL_CLIENT_ID', process.env.GHL_CLIENT_ID || '');
+backend.manualGhlSync.addEnvironment('GHL_CLIENT_SECRET', process.env.GHL_CLIENT_SECRET || '');
 
 // 🤖 Add AI Follow-Up Agent environment variables
 backend.aiFollowUpAgent.addEnvironment(
@@ -144,6 +146,10 @@ backend.dailyOutreachAgent.addEnvironment(
   'AMPLIFY_DATA_GhlIntegration_TABLE_NAME',
   backend.data.resources.tables['GhlIntegration'].tableName
 );
+
+backend.dailyOutreachAgent.addEnvironment('GHL_CLIENT_ID', process.env.GHL_CLIENT_ID || '');
+backend.dailyOutreachAgent.addEnvironment('GHL_CLIENT_SECRET', process.env.GHL_CLIENT_SECRET || '');
+backend.dailyOutreachAgent.addEnvironment('API_ENDPOINT', process.env.API_ENDPOINT || 'https://leads.JoseTheRealtor.com');
 
 backend.data.resources.tables['GhlIntegration'].grantReadData(
   backend.dailyOutreachAgent.resources.lambda
