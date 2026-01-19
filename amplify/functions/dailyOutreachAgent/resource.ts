@@ -1,4 +1,4 @@
-import { defineFunction, secret } from '@aws-amplify/backend';
+import { defineFunction } from '@aws-amplify/backend';
 
 export const dailyOutreachAgent = defineFunction({
   name: 'dailyOutreachAgent',
@@ -8,9 +8,7 @@ export const dailyOutreachAgent = defineFunction({
   environment: {
     GHL_INTEGRATION_TABLE: process.env.GHL_INTEGRATION_TABLE || 'GhlIntegration-Default',
     API_ENDPOINT: process.env.API_ENDPOINT || 'https://leads.JoseTheRealtor.com'
-  }
+  },
+  schedule: '0 14 * * ? *' // 9 AM EST (14:00 UTC) daily
 });
 
-// Schedule to run daily at 9 AM EST (14:00 UTC)
-// Note: Use EventBridge rule separately if needed
-// schedule: 'rate(1 day)' // Alternative: run every 24 hours

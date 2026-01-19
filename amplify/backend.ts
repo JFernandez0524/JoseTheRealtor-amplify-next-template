@@ -72,6 +72,10 @@ backend.manualGhlSync.addEnvironment(
   'AMPLIFY_DATA_UserAccount_TABLE_NAME',
   backend.data.resources.tables['UserAccount'].tableName
 );
+backend.manualGhlSync.addEnvironment(
+  'AMPLIFY_DATA_GhlIntegration_TABLE_NAME',
+  backend.data.resources.tables['GhlIntegration'].tableName
+);
 
 // 🤖 Add AI Follow-Up Agent environment variables
 backend.aiFollowUpAgent.addEnvironment(
@@ -94,6 +98,9 @@ backend.data.resources.tables['PropertyLead'].grantReadWriteData(
   backend.manualGhlSync.resources.lambda
 );
 backend.data.resources.tables['UserAccount'].grantReadWriteData(
+  backend.manualGhlSync.resources.lambda
+);
+backend.data.resources.tables['GhlIntegration'].grantReadData(
   backend.manualGhlSync.resources.lambda
 );
 
@@ -130,6 +137,11 @@ backend.aiFollowUpAgent.resources.lambda.addToRolePolicy(
 // 📤 Configure Daily Outreach Agent
 backend.dailyOutreachAgent.addEnvironment(
   'GHL_INTEGRATION_TABLE',
+  backend.data.resources.tables['GhlIntegration'].tableName
+);
+
+backend.dailyOutreachAgent.addEnvironment(
+  'AMPLIFY_DATA_GhlIntegration_TABLE_NAME',
   backend.data.resources.tables['GhlIntegration'].tableName
 );
 

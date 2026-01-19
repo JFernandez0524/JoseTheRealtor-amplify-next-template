@@ -1,11 +1,12 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, ScanCommand } from '@aws-sdk/lib-dynamodb';
 import axios from 'axios';
+import { getValidGhlToken } from '../shared/ghlTokenManager';
 
 const dynamoClient = new DynamoDBClient({ region: process.env.AWS_REGION });
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
 
-const GHL_INTEGRATION_TABLE = process.env.GHL_INTEGRATION_TABLE || 'GhlIntegration-Default';
+const GHL_INTEGRATION_TABLE = process.env.AMPLIFY_DATA_GhlIntegration_TABLE_NAME || process.env.GHL_INTEGRATION_TABLE;
 
 interface GhlIntegration {
   id: string;
@@ -21,9 +22,25 @@ interface GhlIntegration {
  * 1. Check GHL for new contacts
  * 2. Find contacts with no conversation history
  * 3. Send initial outreach message using AI
+ * 
+ * COMPLIANCE:
+ * - Only sends messages during business hours (9 AM - 8 PM EST)
+ * - Rate limited to 2 seconds between messages
+ * - Respects Do Not Contact status
  */
 export const handler = async (event: any) => {
   console.log('📤 Daily Outreach Agent starting...');
+  
+  // Check if we're within business hours (9 AM - 8 PM EST)
+  const now = new Date();
+  const estHour = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' })).getHours();
+  
+  if (estHour < 9 || estHour >= 20) {
+    console.log(`⏰ Outside business hours (${estHour}:00 EST). Skipping outreach to comply with carrier regulations.`);
+    return { statusCode: 200, message: 'Outside business hours', contactsProcessed: 0 };
+  }
+  
+  console.log(`✅ Within business hours (${estHour}:00 EST). Proceeding with outreach.`);
   
   try {
     // 1. Get all active GHL integrations
@@ -73,19 +90,29 @@ async function processUserContacts(integration: GhlIntegration): Promise<number>
   console.log(`Processing contacts for user ${integration.userId}`);
   
   try {
-    // 1. Get all contacts from GHL
-    const contacts = await fetchGHLContacts(integration);
+    // 1. Get valid GHL token (auto-refreshes if expired)
+    const accessToken = await getValidGhlToken(integration.userId);
+    if (!accessToken) {
+      console.error(`Failed to get valid token for user ${integration.userId}`);
+      return 0;
+    }
+
+    // Update integration with fresh token
+    const integrationWithToken = { ...integration, accessToken };
+
+    // 2. Get all contacts from GHL
+    const contacts = await fetchGHLContacts(integrationWithToken);
     
-    // 2. Filter to contacts with no conversation history
-    const newContacts = await filterNewContacts(contacts, integration);
+    // 3. Filter to contacts with no conversation history
+    const newContacts = await filterNewContacts(contacts, integrationWithToken);
     
     console.log(`Found ${newContacts.length} new contacts without outreach`);
     
-    // 3. Send initial outreach to each new contact
+    // 4. Send initial outreach to each new contact
     let processed = 0;
     for (const contact of newContacts) {
       try {
-        await sendInitialOutreach(contact, integration);
+        await sendInitialOutreach(contact, integrationWithToken);
         processed++;
         
         // Rate limiting: wait 2 seconds between messages
