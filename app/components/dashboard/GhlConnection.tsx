@@ -12,6 +12,12 @@ export function GhlConnection() {
 
   useEffect(() => {
     checkGhlConnection();
+    
+    // Re-check when window regains focus (after OAuth redirect)
+    const handleFocus = () => checkGhlConnection();
+    window.addEventListener('focus', handleFocus);
+    
+    return () => window.removeEventListener('focus', handleFocus);
   }, []);
 
   const checkGhlConnection = async () => {
@@ -35,26 +41,13 @@ export function GhlConnection() {
           try {
             const refreshResponse = await fetch('/api/v1/oauth/refresh', {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ 
-                refreshToken: integration.refreshToken,
-                userType: 'Location'
-              })
+              headers: { 'Content-Type': 'application/json' }
             });
 
             if (refreshResponse.ok) {
-              const refreshData = await refreshResponse.json();
-              
-              // Update the integration with new tokens
-              await client.models.GhlIntegration.update({
-                id: integration.id,
-                accessToken: refreshData.access_token,
-                refreshToken: refreshData.refresh_token,
-                expiresAt: new Date(Date.now() + (refreshData.expires_in * 1000)).toISOString()
-              });
-
-              setIsConnected(true);
-              setConnectionInfo({...integration, accessToken: refreshData.access_token});
+              // Token already updated in database by the endpoint
+              // Just re-fetch to get the updated integration
+              await checkGhlConnection();
               return;
             }
           } catch (refreshError) {
