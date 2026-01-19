@@ -28,6 +28,14 @@ const GHL_CUSTOM_FIELD_ID_MAP: Record<string, string> = {
   app_account_status: 'diShiF2bpX7VFql08MVN',
   app_lead_id: 'aBlDP8DU3dFSHI2LFesn',
   ai_state: '1NxQW2kKMVgozjSUuu7s',
+  // 📞 DIAL TRACKING FIELDS
+  call_attempt_counter: '0MD4Pp2LCyOSCbCjA5qF',
+  last_call_date: 'dWNGeSckpRoVUxXLgxMj',
+};
+
+// Opportunity field (separate from contact fields)
+const GHL_OPPORTUNITY_FIELD_ID_MAP: Record<string, string> = {
+  disposition: '5PTlyH0ahrPVzYTKicYn',
 };
 
 const GHL_API_KEY = process.env.GHL_API_KEY;

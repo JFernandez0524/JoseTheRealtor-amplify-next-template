@@ -2,6 +2,7 @@ import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, ScanCommand } from '@aws-sdk/lib-dynamodb';
 import axios from 'axios';
 import { getValidGhlToken } from '../shared/ghlTokenManager';
+import { shouldSendNextMessage } from '../shared/dialTracking';
 
 const dynamoClient = new DynamoDBClient({ region: process.env.AWS_REGION });
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
@@ -176,6 +177,11 @@ async function filterNewContacts(contacts: any[], integration: GhlIntegration): 
       continue;
     }
 
+    // Check if contact is ready for next message based on cadence
+    if (!shouldSendNextMessage(contact)) {
+      continue;
+    }
+
     // Check if contact has any conversation history
     try {
       const conversationResponse = await axios.get(
@@ -190,21 +196,45 @@ async function filterNewContacts(contacts: any[], integration: GhlIntegration): 
       
       const conversations = conversationResponse.data.conversations || [];
       
-      // If no conversations or no messages in conversations, this is a new contact
+      // If no conversations, this is a new contact
       if (conversations.length === 0) {
         console.log(`✅ New contact: ${contact.firstName} ${contact.lastName}`);
         newContacts.push(contact);
-      } else {
-        // Check if any conversation has messages
-        const hasMessages = conversations.some((conv: any) => 
-          conv.lastMessageBody || conv.lastMessageDate
-        );
-        
-        if (!hasMessages) {
-          console.log(`✅ Contact with no messages: ${contact.firstName} ${contact.lastName}`);
-          newContacts.push(contact);
+        continue;
+      }
+      
+      // Check if any conversation has INBOUND messages (replies from contact)
+      let hasInboundMessages = false;
+      for (const conv of conversations) {
+        try {
+          const messagesResponse = await axios.get(
+            `https://services.leadconnectorhq.com/conversations/${conv.id}/messages`,
+            {
+              headers: {
+                'Authorization': `Bearer ${integration.accessToken}`,
+                'Version': '2021-07-28'
+              }
+            }
+          );
+          
+          const messages = messagesResponse.data.messages || [];
+          hasInboundMessages = messages.some((msg: any) => msg.direction === 'inbound');
+          
+          if (hasInboundMessages) break;
+        } catch (error) {
+          console.error(`Error fetching messages for conversation ${conv.id}:`, error);
         }
       }
+      
+      // If contact has replied, skip automated outreach (AI webhook handles responses)
+      if (hasInboundMessages) {
+        console.log(`💬 Contact ${contact.firstName} ${contact.lastName} has replied - skipping automated outreach`);
+        continue;
+      }
+      
+      // Contact has outbound messages but no replies - eligible for follow-up
+      console.log(`🔄 Follow-up candidate: ${contact.firstName} ${contact.lastName}`);
+      newContacts.push(contact);
       
     } catch (error) {
       console.error(`Error checking conversation for contact ${contact.id}:`, error);
@@ -217,23 +247,39 @@ async function filterNewContacts(contacts: any[], integration: GhlIntegration): 
 async function sendInitialOutreach(contact: any, integration: GhlIntegration): Promise<void> {
   console.log(`Sending initial outreach to ${contact.firstName} ${contact.lastName}`);
   
-  // Call the existing API endpoint to send outreach
   const apiUrl = process.env.API_ENDPOINT || 'https://leads.JoseTheRealtor.com';
   
   try {
     const response = await axios.post(
-      `${apiUrl}/api/v1/send-test-to-contact`,
+      `${apiUrl}/api/v1/send-message-to-contact`,
+      { contactId: contact.id, accessToken: integration.accessToken },
+      { headers: { 'Content-Type': 'application/json' } }
+    );
+    
+    console.log(`✅ Sent outreach to ${contact.firstName} ${contact.lastName}`);
+    
+    // Increment dial counter after successful send
+    const currentCounter = parseInt(contact.customFields?.find((f: any) => f.id === '0MD4Pp2LCyOSCbCjA5qF')?.value || '0');
+    const newCounter = currentCounter + 1;
+    
+    await axios.put(
+      `https://services.leadconnectorhq.com/contacts/${contact.id}`,
       {
-        contactId: contact.id
+        customFields: [
+          { id: '0MD4Pp2LCyOSCbCjA5qF', value: newCounter.toString() },
+          { id: 'dWNGeSckpRoVUxXLgxMj', value: new Date().toISOString() }
+        ]
       },
       {
         headers: {
-          'Content-Type': 'application/json'
+          'Authorization': `Bearer ${integration.accessToken}`,
+          'Content-Type': 'application/json',
+          'Version': '2021-07-28'
         }
       }
     );
     
-    console.log(`✅ Sent outreach to ${contact.firstName} ${contact.lastName}`);
+    console.log(`📊 Updated dial counter to ${newCounter} for ${contact.firstName} ${contact.lastName}`);
     
   } catch (error: any) {
     console.error(`Failed to send outreach:`, error.response?.data || error.message);
