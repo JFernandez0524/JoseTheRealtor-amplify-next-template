@@ -333,6 +333,9 @@ export function LeadTable({
               <th className='px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider whitespace-nowrap bg-green-50'>
                 Phone
               </th>
+              <th className='px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider whitespace-nowrap bg-green-50'>
+                Email
+              </th>
               {renderSortableHeader('skipTraceCompletedAt', 'Skip Traced', 'bg-green-50')}
               <th className='px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider whitespace-nowrap'>
                 Enriched Data
@@ -345,7 +348,7 @@ export function LeadTable({
             {isLoading ? (
               <tr>
                 <td
-                  colSpan={15}
+                  colSpan={16}
                   className='px-6 py-10 text-center text-gray-500'
                 >
                   <div className='flex flex-col items-center'>
@@ -357,7 +360,7 @@ export function LeadTable({
             ) : leads.length === 0 ? (
               <tr>
                 <td
-                  colSpan={15}
+                  colSpan={16}
                   className='px-6 py-10 text-center text-gray-500'
                 >
                   <div className='text-lg mb-2'>📭 No leads found</div>
@@ -616,6 +619,27 @@ export function LeadTable({
                       </div>
                     ) : (
                       <span className='text-gray-400 text-xs'>No phone</span>
+                    )}
+                  </td>
+
+                  {/* Email Column */}
+                  <td className='px-4 py-4 whitespace-nowrap text-sm text-gray-900 bg-green-50/30'>
+                    {lead.emails && lead.emails.length > 0 ? (
+                      <div className='flex items-center gap-1'>
+                        <span className='text-xs truncate max-w-[150px]' title={lead.emails[0] ?? undefined}>
+                          {lead.emails[0]}
+                        </span>
+                        {lead.emails.length > 1 && (
+                          <span
+                            className='text-xs bg-green-600 text-white px-1.5 py-0.5 rounded-full font-bold cursor-help'
+                            title={`${lead.emails.length} emails total: ${lead.emails.filter(e => e).join(', ')}`}
+                          >
+                            +{lead.emails.length - 1}
+                          </span>
+                        )}
+                      </div>
+                    ) : (
+                      <span className='text-gray-400 text-xs'>No email</span>
                     )}
                   </td>
 
