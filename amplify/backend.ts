@@ -7,6 +7,7 @@ import { skipTraceLeads } from './functions/skiptraceLeads/resource';
 import { manualGhlSync } from './functions/manualGhlSync/resource';
 import { aiFollowUpAgent } from './functions/aiFollowUpAgent/resource';
 import { dailyOutreachAgent } from './functions/dailyOutreachAgent/resource';
+import { bulkEmailCampaign } from './functions/bulkEmailCampaign/resource';
 import { addUserToGroup } from './data/add-user-to-group/resource';
 import { removeUserFromGroup } from './data/remove-user-from-group/resource';
 import { EventType } from 'aws-cdk-lib/aws-s3';
@@ -22,6 +23,7 @@ const backend = defineBackend({
   manualGhlSync,
   aiFollowUpAgent,
   dailyOutreachAgent,
+  bulkEmailCampaign,
   addUserToGroup,
   removeUserFromGroup,
 });
@@ -153,4 +155,17 @@ backend.dailyOutreachAgent.addEnvironment('API_ENDPOINT', process.env.API_ENDPOI
 
 backend.data.resources.tables['GhlIntegration'].grantReadData(
   backend.dailyOutreachAgent.resources.lambda
+);
+
+// 📧 Configure Bulk Email Campaign
+backend.bulkEmailCampaign.addEnvironment(
+  'AMPLIFY_DATA_GhlIntegration_TABLE_NAME',
+  backend.data.resources.tables['GhlIntegration'].tableName
+);
+
+backend.bulkEmailCampaign.addEnvironment('GHL_CLIENT_ID', process.env.GHL_CLIENT_ID || '');
+backend.bulkEmailCampaign.addEnvironment('GHL_CLIENT_SECRET', process.env.GHL_CLIENT_SECRET || '');
+
+backend.data.resources.tables['GhlIntegration'].grantReadData(
+  backend.bulkEmailCampaign.resources.lambda
 );

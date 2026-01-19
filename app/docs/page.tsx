@@ -295,6 +295,44 @@ export default function DocsPage() {
                   <li>Tags leads for direct mail or phone campaigns</li>
                   <li>Updates lead status to track sync progress</li>
                   <li>Bulk sync multiple leads at once</li>
+                  <li><strong>Automatic initial email</strong> sent to all email addresses on sync</li>
+                </ul>
+              </div>
+
+              <div className="bg-blue-50 p-4 rounded-lg">
+                <h4 className="font-medium text-blue-800 mb-2">📧 Email Campaign System</h4>
+                <ul className="list-disc list-inside space-y-1 text-blue-700 text-sm">
+                  <li><strong>Initial Email</strong>: Automatically sent when contact is created in GHL</li>
+                  <li><strong>Bulk Campaign</strong>: Click "📧 Start Email Campaign" to email all eligible contacts</li>
+                  <li>Emails sent to ALL addresses (primary + email_2 + email_3)</li>
+                  <li>Personalized with property data (address, Zestimate, cash offer)</li>
+                  <li>Reply detection: Automatically tags replied contacts and stops automation</li>
+                  <li>Bounce protection: Stops emails to bounced addresses</li>
+                  <li>Configure email address in Profile → GHL Settings</li>
+                </ul>
+              </div>
+
+              <div className="bg-green-50 p-4 rounded-lg">
+                <h4 className="font-medium text-green-800 mb-2">📱 SMS Campaign System</h4>
+                <ul className="list-disc list-inside space-y-1 text-green-700 text-sm">
+                  <li><strong>Daily Automated Outreach</strong>: Runs at 9 AM EST for contacts with "AI Outreach" tag</li>
+                  <li>AI-generated messages using proven 5-step script</li>
+                  <li>Adapts to available property data</li>
+                  <li>Business hours compliance (9 AM - 8 PM EST)</li>
+                  <li>Reply handling: AI responds automatically</li>
+                  <li>Configure phone number in Profile → GHL Settings</li>
+                </ul>
+              </div>
+
+              <div className="bg-amber-50 p-4 rounded-lg">
+                <h4 className="font-medium text-amber-800 mb-2">⚙️ GHL Settings Configuration</h4>
+                <ul className="list-disc list-inside space-y-1 text-amber-700 text-sm">
+                  <li>Go to Profile → GHL Settings card</li>
+                  <li><strong>Campaign Phone</strong>: Select which GHL phone number for SMS</li>
+                  <li><strong>Campaign Email</strong>: Set your verified email address</li>
+                  <li>All messages sent from your selected phone/email</li>
+                  <li>Replies route directly to you</li>
+                  <li>Settings are per-user (multi-tenant support)</li>
                 </ul>
               </div>
 

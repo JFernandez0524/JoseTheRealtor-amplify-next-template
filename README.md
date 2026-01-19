@@ -8,6 +8,8 @@ A comprehensive real estate lead management platform built with AWS Amplify Gen2
 - **AI Lead Scoring**: Intelligent prioritization with 0-100 scores based on equity, value, timeline, location, and contact availability
 - **AI Insights Dashboard**: View top hottest leads, urgent attention items, and best ROI opportunities
 - **AI Messaging Bot**: Automated SMS conversations with leads using OpenAI, following proven 5-step script
+- **Email Campaigns**: Automated prospecting emails with property details and cash offers
+- **Multi-Channel Outreach**: SMS and email campaigns with reply/bounce handling
 - **Property Enrichment (Preforeclosure)**: Real equity data, mortgage balances, and quality contact info via BatchData ($0.29/lead)
 - **Skip Tracing**: Pay-per-use contact lookup at $0.10 per skip (probate leads)
 - **Bulk Operations**: Update multiple lead statuses, skip trace, enrich, calculate AI scores, and sync in one click
@@ -160,17 +162,29 @@ For detailed deployment instructions, see the [Amplify documentation](https://do
    - Click "Download Skip Traced" to export leads with contact information
    - CSV includes owner details, property info, phone numbers, emails, manual status, and completion dates
 
-8. **CRM Integration & Direct Mail**
+8. **CRM Integration & Automated Campaigns**
    - Connect GoHighLevel account in Profile settings (connection persists across sessions)
+   - Configure campaign settings (phone number and email) in Profile → GHL Settings
    - Select qualified leads for sync
    - Rate limiting prevents API blocks (100/hour, 1000/day limits enforced)
    - Leads automatically appear in your GHL pipeline with:
      - Zestimate data (full market value for listing option)
      - Cash offer (70% of Zestimate for as-is purchase option)
      - Appropriate tags for direct mail or phone campaigns
-   - GHL automations handle Click2Mail integration with mail merge
+   - **Initial Email**: Automatically sent to all email addresses when contact is created
+   - **Bulk Email Campaign**: Click "📧 Start Email Campaign" to email all eligible contacts
+   - **Daily SMS Outreach**: Automated at 9 AM EST for contacts with "AI Outreach" tag
+   - **Reply Handling**: Automatic detection and tagging of email/SMS replies
+   - **Bounce Protection**: Stops emails to bounced addresses automatically
 
-9. **AI Messaging Bot (Automated Outreach)**
+9. **GHL Campaign Settings**
+   - Go to Profile → GHL Settings card
+   - **Campaign Phone**: Select which GHL phone number to use for SMS campaigns
+   - **Campaign Email**: Set your verified email address for email campaigns
+   - All messages will be sent from your selected phone/email
+   - Replies route directly to you
+
+10. **AI Messaging Bot (Automated Outreach)**
    - Daily automated outreach to new GHL contacts
    - AI follows proven 5-step script for property visits
    - Adapts message based on available property data
@@ -178,7 +192,7 @@ For detailed deployment instructions, see the [Amplify documentation](https://do
    - Triggers human handoff for qualified leads
    - See `AI_TESTING_GUIDE.md` for testing instructions
 
-10. **AI Analysis**
+11. **AI Analysis**
    - Use Chat feature for property insights
    - Get automated follow-up suggestions
    - Analyze market conditions and equity potential
@@ -189,7 +203,11 @@ The platform provides REST APIs for integration:
 
 - `POST /api/v1/upload-leads` - Upload lead data
 - `POST /api/v1/analyze-property` - Property analysis
-- `POST /api/v1/send-test-to-contact` - Send AI outreach message
+- `POST /api/v1/send-message-to-contact` - Send AI outreach message (production)
+- `POST /api/v1/send-test-to-contact` - Send AI outreach message (testing)
+- `POST /api/v1/start-email-campaign` - Start bulk email campaign
+- `GET /api/v1/ghl-phone-numbers` - Get available GHL phone numbers
+- `POST /api/v1/ghl-email-webhook` - Handle email replies and bounces
 - `POST /api/v1/test-ai-response` - Test AI responses (no SMS sent)
 - `GET /api/v1/oauth/callback` - GHL OAuth callback
 - `POST /api/v1/oauth/refresh` - Refresh GHL OAuth token
@@ -216,6 +234,38 @@ The platform includes an automated AI messaging system for lead outreach:
 - `AI_TESTING_GUIDE.md` - Testing procedures
 - `AI_SYSTEM_WORKFLOW.md` - Complete system workflow
 
+### Admin Features
+
+**Admin Dashboard** (`/admin`)
+- View all users and their subscription status
+- Manage user groups (FREE, SYNC PLAN, AI OUTREACH PLAN, ADMINS)
+- Add/remove users from groups
+- Monitor system-wide usage statistics
+- View validation errors for imported leads
+
+**User Management:**
+- Add users to ADMINS group for full access
+- Assign PRO group for GHL sync features
+- Assign AI_PLAN group for automated messaging
+- Remove users from groups to revoke access
+
+**GHL Settings Configuration:**
+- Users configure their own phone/email in Profile → GHL Settings
+- Each user selects from their available GHL phone numbers
+- Campaign settings are per-user (multi-tenant support)
+- Settings stored in GhlIntegration table
+
+**System Monitoring:**
+- CloudWatch logs for all Lambda functions
+- GHL rate limiting tracked per user
+- Email/SMS tracking via custom fields
+- Webhook logs for reply/bounce events
+
+**Configuration Files:**
+- `amplify/data/resource.ts` - Database schema
+- `amplify/backend.ts` - Lambda configuration
+- Environment variables in Amplify Console
+
 ### Troubleshooting
 
 **Common Issues:**
@@ -225,6 +275,8 @@ The platform includes an automated AI messaging system for lead outreach:
 - **GHL Sync Errors**: Check OAuth connection in Profile settings
 - **Missing Credits**: Upgrade to PRO plan for skip tracing features
 - **AI Not Responding**: Verify GHL webhook is configured and OAuth token is valid
+- **Email Not Sending**: Verify email address is verified in GHL
+- **SMS Wrong Number**: Check GHL Settings to select correct phone number
 
 **Support:**
 - Check application logs in AWS CloudWatch

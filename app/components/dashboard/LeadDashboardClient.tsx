@@ -581,6 +581,36 @@ export default function LeadDashboardClient({}: Props) {
     }
   };
 
+  const handleBulkEmailCampaign = async () => {
+    if (
+      !confirm(
+        `Start email campaign for all eligible contacts in GHL?\n\nThis will send prospecting emails to contacts that haven't been emailed yet.`
+      )
+    )
+      return;
+
+    setIsProcessing(true);
+    try {
+      const response = await fetch('/api/v1/start-email-campaign', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) throw new Error(result.error);
+
+      alert(
+        `✅ Email Campaign Complete!\n\nEmails sent: ${result.successCount}\nFailed: ${result.failCount}\nTotal contacts: ${result.totalContacts}`
+      );
+    } catch (err: any) {
+      console.error('Email campaign error:', err);
+      alert(`Error starting email campaign: ${err.message}`);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   const handleDownloadSkipTraced = () => {
     if (selectedIds.length === 0) {
       alert('Please select leads to download.');
@@ -725,9 +755,11 @@ export default function LeadDashboardClient({}: Props) {
         handleBulkAIScore={handleBulkAIScore}
         handleBulkEnrichLeads={handleBulkEnrichLeads}
         handleBulkDirectMail={handleBulkDirectMail}
+        handleBulkEmailCampaign={handleBulkEmailCampaign}
         handleDelete={handleDeleteLeads}
         handleExport={() => alert('Exporting leads to CSV...')}
         handleDownloadSkipTraced={handleDownloadSkipTraced}
+        isEmailCampaigning={isProcessing}
       />
 
       {/* GHL Connection Status */}

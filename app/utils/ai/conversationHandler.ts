@@ -16,6 +16,7 @@ interface ConversationContext {
   locationId: string;
   contact?: any; // Full contact object for field checking
   testMode?: boolean; // If true, don't send messages to GHL
+  fromNumber?: string; // Phone number to send SMS from
 }
 
 interface PropertyAnalysis {
@@ -60,7 +61,7 @@ async function getPropertyAnalysis(address: string, city: string, state: string,
 }
 
 // Send message to GHL
-async function sendGHLMessage(conversationId: string, message: string, testMode = false) {
+async function sendGHLMessage(conversationId: string, message: string, testMode = false, fromNumber?: string) {
   if (testMode) {
     console.log('🧪 TEST MODE - Would send message:', message);
     return;
@@ -68,12 +69,20 @@ async function sendGHLMessage(conversationId: string, message: string, testMode 
   
   try {
     console.log(`📤 Sending message to GHL conversation ${conversationId}`);
+    
+    const messagePayload: any = {
+      type: 'SMS',
+      message
+    };
+    
+    // Add fromNumber if provided
+    if (fromNumber) {
+      messagePayload.fromNumber = fromNumber;
+    }
+    
     const response = await axios.post(
       `https://services.leadconnectorhq.com/conversations/${conversationId}/messages`,
-      {
-        type: 'SMS',
-        message
-      },
+      messagePayload,
       {
         headers: {
           'Authorization': `Bearer ${GHL_API_KEY}`,
@@ -300,7 +309,7 @@ export async function generateAIResponse(context: ConversationContext): Promise<
       }
 
       const handoffMessage = "Great! I'll have one of our property specialists reach out to you within the next few hours to discuss your options. Thanks for your interest!";
-      await sendGHLMessage(context.conversationId, handoffMessage, context.testMode);
+      await sendGHLMessage(context.conversationId, handoffMessage, context.testMode, context.fromNumber);
       return handoffMessage;
     }
 
@@ -319,14 +328,14 @@ export async function generateAIResponse(context: ConversationContext): Promise<
     const aiMessage = await generateOpenAIResponse(context, propertyData || undefined);
 
     // Send response to GHL (skip in test mode)
-    await sendGHLMessage(context.conversationId, aiMessage, context.testMode);
+    await sendGHLMessage(context.conversationId, aiMessage, context.testMode, context.fromNumber);
 
     return aiMessage;
 
   } catch (error) {
     console.error('Conversation handler error:', error);
     const fallbackMessage = "Thanks for your message! I'll have someone get back to you soon.";
-    await sendGHLMessage(context.conversationId, fallbackMessage, context.testMode);
+    await sendGHLMessage(context.conversationId, fallbackMessage, context.testMode, context.fromNumber);
     return fallbackMessage;
   }
 }

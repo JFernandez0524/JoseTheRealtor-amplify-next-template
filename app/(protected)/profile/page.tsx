@@ -149,6 +149,39 @@ export default async function ProfilePage() {
               </div>
             </div>
           </div>
+
+          {/* GHL Integration Settings Card */}
+          <div className='bg-white border border-slate-200 rounded-[2rem] p-8 shadow-sm'>
+            <h3 className='text-lg font-black text-slate-900 mb-4 flex items-center gap-2'>
+              ⚙️ GoHighLevel Settings
+            </h3>
+            <p className='text-sm text-slate-600 mb-6'>
+              Configure your campaign phone number and email address for automated outreach.
+            </p>
+            
+            <div className='space-y-4 mb-6'>
+              <div className='bg-blue-50 border border-blue-200 rounded-xl p-4'>
+                <p className='text-xs font-bold text-blue-900 mb-1'>📱 Campaign Phone</p>
+                <p className='text-xs text-blue-700'>
+                  Select which GHL phone number to use for SMS campaigns. All text messages will be sent from this number.
+                </p>
+              </div>
+              
+              <div className='bg-green-50 border border-green-200 rounded-xl p-4'>
+                <p className='text-xs font-bold text-green-900 mb-1'>📧 Campaign Email</p>
+                <p className='text-xs text-green-700'>
+                  Set your verified email address for email campaigns. All prospecting emails will be sent from this address.
+                </p>
+              </div>
+            </div>
+
+            <a
+              href='/settings'
+              className='block text-center bg-blue-600 text-white py-3 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-blue-700 transition-colors'
+            >
+              Configure Settings
+            </a>
+          </div>
         </div>
 
         {/* --- RIGHT COLUMN: SUBSCRIPTION & WALLET --- */}

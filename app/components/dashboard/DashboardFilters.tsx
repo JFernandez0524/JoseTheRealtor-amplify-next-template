@@ -32,6 +32,7 @@ type Props = {
   handleBulkAIScore: () => Promise<void>;
   handleBulkEnrichLeads: () => Promise<void>;
   handleBulkDirectMail: () => Promise<void>;
+  handleBulkEmailCampaign: () => Promise<void>;
   handleDelete: () => Promise<void>;
   handleExport: () => void;
   handleDownloadSkipTraced: () => void;
@@ -40,6 +41,7 @@ type Props = {
   isAiScoring: boolean;
   isEnriching: boolean;
   isGeneratingLetters: boolean;
+  isEmailCampaigning: boolean;
 };
 
 export function DashboardFilters({
@@ -69,6 +71,7 @@ export function DashboardFilters({
   handleBulkAIScore,
   handleBulkEnrichLeads,
   handleBulkDirectMail,
+  handleBulkEmailCampaign,
   handleDelete,
   handleExport,
   handleDownloadSkipTraced,
@@ -77,6 +80,7 @@ export function DashboardFilters({
   isAiScoring,
   isEnriching,
   isGeneratingLetters,
+  isEmailCampaigning,
 }: Props) {
   // Determine if selected leads are all same type
   const hasPreforeclosure = selectedLeadTypes.includes('PREFORECLOSURE');
@@ -360,6 +364,22 @@ export function DashboardFilters({
                 </>
               ) : (
                 <>📬 Generate Letters</>
+              )}
+            </button>
+
+            {/* Email Campaign Button */}
+            <button
+              onClick={handleBulkEmailCampaign}
+              disabled={isEmailCampaigning || isSkipTracing || isGhlSyncing}
+              className={`text-sm px-3 py-1.5 rounded transition-colors flex items-center justify-center gap-1.5 shadow-sm w-full sm:w-auto
+                                ${isEmailCampaigning ? 'bg-blue-300 text-white cursor-not-allowed' : 'bg-gradient-to-r from-blue-600 to-cyan-600 text-white hover:from-blue-700 hover:to-cyan-700'}`}
+            >
+              {isEmailCampaigning ? (
+                <>
+                  <Loader size='small' variation='linear' /> Sending...
+                </>
+              ) : (
+                <>📧 Start Email Campaign</>
               )}
             </button>
 

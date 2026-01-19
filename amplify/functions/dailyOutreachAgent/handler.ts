@@ -14,6 +14,8 @@ interface GhlIntegration {
   userId: string;
   accessToken: string;
   locationId: string;
+  selectedPhoneNumber?: string;
+  selectedEmail?: string;
 }
 
 /**
@@ -98,24 +100,33 @@ async function processUserContacts(integration: GhlIntegration): Promise<number>
       return 0;
     }
 
-    const { token: accessToken } = ghlData;
+    const { token: accessToken, locationId } = ghlData;
+
+    // 2. Get user's phone number from GHL (use selected or default)
+    const phoneNumber = await getGhlPhoneNumber(accessToken, locationId, integration.selectedPhoneNumber);
+    if (!phoneNumber) {
+      console.error(`No phone number found for location ${locationId}`);
+      return 0;
+    }
+    
+    console.log(`Using phone number: ${phoneNumber}`);
 
     // Update integration with fresh token
     const integrationWithToken = { ...integration, accessToken };
 
-    // 2. Get all contacts from GHL
+    // 3. Get all contacts from GHL
     const contacts = await fetchGHLContacts(integrationWithToken);
     
-    // 3. Filter to contacts with no conversation history
+    // 4. Filter to contacts with no conversation history
     const newContacts = await filterNewContacts(contacts, integrationWithToken);
     
     console.log(`Found ${newContacts.length} new contacts without outreach`);
     
-    // 4. Send initial outreach to each new contact
+    // 5. Send initial outreach to each new contact
     let processed = 0;
     for (const contact of newContacts) {
       try {
-        await sendInitialOutreach(contact, integrationWithToken);
+        await sendInitialOutreach(contact, integrationWithToken, phoneNumber);
         processed++;
         
         // Rate limiting: wait 2 seconds between messages
@@ -246,7 +257,7 @@ async function filterNewContacts(contacts: any[], integration: GhlIntegration): 
   return newContacts;
 }
 
-async function sendInitialOutreach(contact: any, integration: GhlIntegration): Promise<void> {
+async function sendInitialOutreach(contact: any, integration: GhlIntegration, phoneNumber: string): Promise<void> {
   console.log(`Sending initial outreach to ${contact.firstName} ${contact.lastName}`);
   
   const apiUrl = process.env.API_ENDPOINT || 'https://leads.JoseTheRealtor.com';
@@ -254,7 +265,7 @@ async function sendInitialOutreach(contact: any, integration: GhlIntegration): P
   try {
     const response = await axios.post(
       `${apiUrl}/api/v1/send-message-to-contact`,
-      { contactId: contact.id, accessToken: integration.accessToken },
+      { contactId: contact.id, accessToken: integration.accessToken, fromNumber: phoneNumber },
       { headers: { 'Content-Type': 'application/json' } }
     );
     
@@ -286,5 +297,47 @@ async function sendInitialOutreach(contact: any, integration: GhlIntegration): P
   } catch (error: any) {
     console.error(`Failed to send outreach:`, error.response?.data || error.message);
     throw error;
+  }
+}
+
+/**
+ * Get user's phone numbers from GHL and return selected, default, or first available
+ */
+async function getGhlPhoneNumber(accessToken: string, locationId: string, selectedNumber?: string): Promise<string | null> {
+  try {
+    // If user has selected a specific number, use it
+    if (selectedNumber) {
+      console.log(`Using user-selected phone number: ${selectedNumber}`);
+      return selectedNumber;
+    }
+
+    // Fetch all phone numbers for the location
+    const response = await axios.get(
+      `https://services.leadconnectorhq.com/locations/${locationId}/phoneNumbers`,
+      {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Version': '2021-07-28'
+        }
+      }
+    );
+    
+    const phoneNumbers = response.data.phoneNumbers || [];
+    
+    if (phoneNumbers.length === 0) {
+      console.error('No phone numbers found for location');
+      return null;
+    }
+    
+    // Find the default number or use the first one
+    const defaultNumber = phoneNumbers.find((p: any) => p.isDefault === true);
+    const selectedPhone = defaultNumber || phoneNumbers[0];
+    
+    console.log(`Using phone number: ${selectedPhone.number} (${selectedPhone.isDefault ? 'default' : 'first available'})`);
+    
+    return selectedPhone.number;
+  } catch (error: any) {
+    console.error('Failed to get GHL phone numbers:', error.response?.data || error.message);
+    return null;
   }
 }

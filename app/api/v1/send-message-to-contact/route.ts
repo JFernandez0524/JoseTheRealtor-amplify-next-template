@@ -21,7 +21,7 @@ import { generateAIResponse } from '@/app/utils/ai/conversationHandler';
  */
 export async function POST(req: Request) {
   try {
-    const { contactId, accessToken } = await req.json();
+    const { contactId, accessToken, fromNumber } = await req.json();
     
     if (!contactId || !accessToken) {
       return NextResponse.json(
@@ -82,7 +82,8 @@ export async function POST(req: Request) {
       propertyZip,
       leadType,
       locationId: contact.locationId,
-      contact
+      contact,
+      fromNumber // Pass phone number to AI handler
     });
 
     return NextResponse.json({

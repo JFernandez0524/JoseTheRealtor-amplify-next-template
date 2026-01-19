@@ -13,6 +13,9 @@ const schema = a.schema({
       expiresAt: a.datetime().required(),
       scope: a.string(),
       isActive: a.boolean().default(true),
+      // 📞 CAMPAIGN SETTINGS
+      selectedPhoneNumber: a.string(), // User's selected phone for campaigns
+      selectedEmail: a.string(), // User's selected email for campaigns
       // 🚦 RATE LIMITING FIELDS
       dailyMessageCount: a.integer().default(0),
       hourlyMessageCount: a.integer().default(0),

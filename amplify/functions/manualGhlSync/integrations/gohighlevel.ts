@@ -31,6 +31,9 @@ const GHL_CUSTOM_FIELD_ID_MAP: Record<string, string> = {
   // 📞 DIAL TRACKING FIELDS
   call_attempt_counter: '0MD4Pp2LCyOSCbCjA5qF',
   last_call_date: 'dWNGeSckpRoVUxXLgxMj',
+  // 📧 EMAIL TRACKING FIELDS
+  email_attempt_counter: 'wWlrXoXeMXcM6kUexf2L',
+  last_email_date: '3xOBr4GvgRc22kBRNYCE',
 };
 
 // Opportunity field (separate from contact fields)
@@ -268,10 +271,91 @@ export async function syncToGoHighLevel(
       ...basePayload,
       locationId: ghlLocationId,
     });
-    return res.data?.contact?.id;
+    const contactId = res.data?.contact?.id;
+    
+    // 📧 Send initial prospecting email if contact has email
+    if (contactId && primaryEmail) {
+      await sendInitialProspectingEmail(ghl, contactId, lead, primaryEmail, ghlLocationId);
+    }
+    
+    return contactId;
   } catch (error: any) {
     throw new Error(
       `GHL sync failed: ${error.response?.data?.message || error.message}`
     );
+  }
+}
+
+/**
+ * Sends initial prospecting email to new contact
+ */
+async function sendInitialProspectingEmail(
+  ghl: AxiosInstance,
+  contactId: string,
+  lead: DBLead,
+  primaryEmail: string,
+  locationId: string
+): Promise<void> {
+  try {
+    // Get user's email from location settings
+    const locationResponse = await ghl.get(`/locations/${locationId}`);
+    const fromEmail = locationResponse.data.location?.email || 'jose.fernandez@josetherealtor.com';
+    
+    const propertyAddress = `${lead.ownerAddress}, ${lead.ownerCity}, ${lead.ownerState} ${lead.ownerZip}`;
+    const zestimate = lead.zestimate || lead.estimatedValue || 0;
+    const cashOffer = Math.round(zestimate * 0.70);
+    const leadType = lead.type === 'PROBATE' ? 'probate' : 'preforeclosure';
+    
+    // Collect all email addresses
+    const emails = [primaryEmail];
+    if (lead.emails && lead.emails.length > 1) {
+      const additionalEmails = lead.emails.slice(1).filter((e): e is string => e !== null && e.length > 0);
+      emails.push(...additionalEmails);
+    }
+    
+    const subject = `Interested in Your Property at ${lead.ownerAddress}`;
+    const html = `
+      <p>Hi ${lead.adminFirstName || lead.ownerFirstName || 'there'},</p>
+      
+      <p>I noticed your ${leadType} property at <strong>${propertyAddress}</strong> and wanted to reach out.</p>
+      
+      <p>We specialize in helping property owners in situations like yours. Based on current market data:</p>
+      <ul>
+        <li><strong>Estimated Property Value:</strong> $${zestimate.toLocaleString()}</li>
+        <li><strong>Our Cash Offer:</strong> $${cashOffer.toLocaleString()} (as-is condition)</li>
+      </ul>
+      
+      <p>We can close quickly with no repairs needed, or we can help you list it for full market value if you prefer.</p>
+      
+      <p>Would you be open to a quick conversation about your options?</p>
+      
+      <p>Best regards,<br>
+      Jose Fernandez<br>
+      RE/MAX Agent</p>
+    `;
+    
+    // Send to all email addresses
+    for (const emailAddr of emails) {
+      await ghl.post('/conversations/messages', {
+        type: 'Email',
+        contactId: contactId,
+        emailFrom: fromEmail,
+        subject: subject,
+        html: html
+      });
+      console.info(`📧 Sent initial prospecting email to ${emailAddr} from ${fromEmail}`);
+    }
+    
+    // Update email tracking fields
+    await ghl.put(`/contacts/${contactId}`, {
+      customFields: [
+        { id: GHL_CUSTOM_FIELD_ID_MAP.email_attempt_counter, value: '1' },
+        { id: GHL_CUSTOM_FIELD_ID_MAP.last_email_date, value: new Date().toISOString().split('T')[0] }
+      ]
+    });
+    
+  } catch (error: any) {
+    console.error(`Failed to send initial email:`, error.response?.data || error.message);
+    // Don't throw - email failure shouldn't block contact creation
   }
 }
