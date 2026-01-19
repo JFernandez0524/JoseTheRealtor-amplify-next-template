@@ -1,13 +1,13 @@
 import { redirect } from 'next/navigation';
 import SignOutButton from '@/app/components/Logout';
+import AdminTools from '@/app/components/AdminTools';
 import {
   AuthGetCurrentUserServer,
   AuthGetUserAttributesServer,
   AuthGetUserGroupsServer,
   cookiesClient,
 } from '@/app/utils/aws/auth/amplifyServerUtils.server';
-// Use AdminTools Component to add user to ADMINS group
-import AdminTools from '@/app/components/AdminTools';
+import GhlSettingsCard from '@/app/components/profile/GhlSettingsCard';
 
 import {
   HiOutlineUserCircle,
@@ -38,7 +38,16 @@ export default async function ProfilePage() {
   });
   const userAccount = accounts?.[0];
 
-  // 3. Determine Subscription Level
+  // 3. Fetch GHL Integration status
+  const { data: integrations } = await cookiesClient.models.GhlIntegration.list({
+    filter: { 
+      userId: { eq: user.userId },
+      isActive: { eq: true }
+    }
+  });
+  const ghlIntegration = integrations?.[0];
+
+  // 4. Determine Subscription Level
   // We filter out the system "Google" group to show only app-specific tiers
   const subscriptionTier = groups.includes('ADMINS')
     ? 'Admin (Full Access)'
@@ -59,7 +68,21 @@ export default async function ProfilePage() {
             Manage your account and subscription
           </p>
         </div>
-        <SignOutButton />
+        <div className='flex items-center gap-3'>
+          {groups.includes('ADMINS') && (
+            <a
+              href='/admin'
+              className='px-4 py-2 bg-amber-600 text-white rounded-lg text-sm font-semibold hover:bg-amber-700 transition-colors flex items-center gap-2'
+            >
+              <HiOutlineShieldCheck />
+              Admin Dashboard
+            </a>
+          )}
+          {!groups.includes('ADMINS') && (
+            <AdminTools userId={user.userId} />
+          )}
+          <SignOutButton />
+        </div>
       </div>
 
       <div className='grid grid-cols-1 md:grid-cols-3 gap-6'>
@@ -151,37 +174,11 @@ export default async function ProfilePage() {
           </div>
 
           {/* GHL Integration Settings Card */}
-          <div className='bg-white border border-slate-200 rounded-[2rem] p-8 shadow-sm'>
-            <h3 className='text-lg font-black text-slate-900 mb-4 flex items-center gap-2'>
-              ⚙️ GoHighLevel Settings
-            </h3>
-            <p className='text-sm text-slate-600 mb-6'>
-              Configure your campaign phone number and email address for automated outreach.
-            </p>
-            
-            <div className='space-y-4 mb-6'>
-              <div className='bg-blue-50 border border-blue-200 rounded-xl p-4'>
-                <p className='text-xs font-bold text-blue-900 mb-1'>📱 Campaign Phone</p>
-                <p className='text-xs text-blue-700'>
-                  Select which GHL phone number to use for SMS campaigns. All text messages will be sent from this number.
-                </p>
-              </div>
-              
-              <div className='bg-green-50 border border-green-200 rounded-xl p-4'>
-                <p className='text-xs font-bold text-green-900 mb-1'>📧 Campaign Email</p>
-                <p className='text-xs text-green-700'>
-                  Set your verified email address for email campaigns. All prospecting emails will be sent from this address.
-                </p>
-              </div>
-            </div>
-
-            <a
-              href='/settings'
-              className='block text-center bg-blue-600 text-white py-3 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-blue-700 transition-colors'
-            >
-              Configure Settings
-            </a>
-          </div>
+          <GhlSettingsCard 
+            isConnected={!!ghlIntegration}
+            locationId={ghlIntegration?.locationId}
+            integrationId={ghlIntegration?.id}
+          />
         </div>
 
         {/* --- RIGHT COLUMN: SUBSCRIPTION & WALLET --- */}
