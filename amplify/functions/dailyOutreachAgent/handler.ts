@@ -136,12 +136,25 @@ async function processUserContacts(integration: GhlIntegration): Promise<number>
     // 5. Send initial outreach to each new contact
     let processed = 0;
     for (const contact of newContacts) {
+      // Check business hours before each message
+      const now = new Date();
+      const estHour = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' })).getHours();
+      
+      if (estHour < 9 || estHour >= 20) {
+        console.log(`⏰ [DAILY_OUTREACH] Outside business hours (${estHour}:00 EST). Stopping outreach.`);
+        break; // Stop processing remaining contacts
+      }
+      
       try {
         await sendInitialOutreach(contact, integrationWithToken, phoneNumber);
         processed++;
+        console.log(`✅ [DAILY_OUTREACH] Sent message ${processed}/${newContacts.length}`);
         
-        // Rate limiting: wait 2 seconds between messages
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        // Rate limiting: wait 5 minutes between messages
+        if (processed < newContacts.length) {
+          console.log(`⏳ [DAILY_OUTREACH] Waiting 5 minutes before next message...`);
+          await new Promise(resolve => setTimeout(resolve, 300000)); // 5 minutes = 300,000ms
+        }
       } catch (error) {
         console.error(`Failed to send outreach to contact ${contact.id}:`, error);
       }
