@@ -9,6 +9,13 @@ const docClient = DynamoDBDocumentClient.from(dynamoClient);
 
 const GHL_INTEGRATION_TABLE = process.env.AMPLIFY_DATA_GhlIntegration_TABLE_NAME || process.env.GHL_INTEGRATION_TABLE;
 
+console.log('🔧 [DAILY_OUTREACH] Lambda initialized');
+console.log('🔧 [DAILY_OUTREACH] Environment:', {
+  hasGhlIntegrationTable: !!GHL_INTEGRATION_TABLE,
+  region: process.env.AWS_REGION,
+  apiEndpoint: process.env.API_ENDPOINT
+});
+
 interface GhlIntegration {
   id: string;
   userId: string;
@@ -32,21 +39,25 @@ interface GhlIntegration {
  * - Respects Do Not Contact status
  */
 export const handler = async (event: any) => {
-  console.log('📤 Daily Outreach Agent starting...');
+  console.log('📤 [DAILY_OUTREACH] Starting daily outreach agent');
+  console.log('📤 [DAILY_OUTREACH] Event:', JSON.stringify(event));
   
   // Check if we're within business hours (9 AM - 8 PM EST)
   const now = new Date();
   const estHour = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' })).getHours();
   
+  console.log(`⏰ [DAILY_OUTREACH] Current EST hour: ${estHour}`);
+  
   if (estHour < 9 || estHour >= 20) {
-    console.log(`⏰ Outside business hours (${estHour}:00 EST). Skipping outreach to comply with carrier regulations.`);
+    console.log(`⏰ [DAILY_OUTREACH] Outside business hours (${estHour}:00 EST). Skipping outreach.`);
     return { statusCode: 200, message: 'Outside business hours', contactsProcessed: 0 };
   }
   
-  console.log(`✅ Within business hours (${estHour}:00 EST). Proceeding with outreach.`);
+  console.log(`✅ [DAILY_OUTREACH] Within business hours (${estHour}:00 EST). Proceeding.`);
   
   try {
     // 1. Get all active GHL integrations
+    console.log('🔍 [DAILY_OUTREACH] Fetching active integrations...');
     const integrations = await getAllActiveIntegrations();
     
     if (integrations.length === 0) {

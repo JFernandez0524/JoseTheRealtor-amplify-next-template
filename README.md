@@ -7,9 +7,9 @@ A comprehensive real estate lead management platform built with AWS Amplify Gen2
 - **Lead Management**: Import and analyze property leads (preforeclosure, probate)
 - **AI Lead Scoring**: Intelligent prioritization with 0-100 scores based on equity, value, timeline, location, and contact availability
 - **AI Insights Dashboard**: View top hottest leads, urgent attention items, and best ROI opportunities
-- **AI Messaging Bot**: Automated SMS conversations with leads using OpenAI, following proven 5-step script
-- **Email Campaigns**: Automated prospecting emails with property details and cash offers
-- **Multi-Channel Outreach**: SMS and email campaigns with reply/bounce handling
+- **AI SMS Bot**: Automated text conversations with leads using OpenAI, following proven 5-step script for property visits
+- **Automated Email Campaigns**: Bulk prospecting emails with personalized property details, Zestimate values, and cash offers
+- **Multi-Channel Outreach**: Coordinated SMS and email campaigns with automatic reply/bounce detection and tagging
 - **Property Enrichment (Preforeclosure)**: Real equity data, mortgage balances, and quality contact info via BatchData ($0.29/lead)
 - **Skip Tracing**: Pay-per-use contact lookup at $0.10 per skip (probate leads)
 - **Bulk Operations**: Update multiple lead statuses, skip trace, enrich, calculate AI scores, and sync in one click
@@ -17,7 +17,7 @@ A comprehensive real estate lead management platform built with AWS Amplify Gen2
 - **Property Valuation**: Real-time Zestimate data with refresh capability and age indicators
 - **CRM Integration**: Seamless GoHighLevel synchronization with rate limiting protection
 - **Direct Mail Automation**: Automatic Zestimate and cash offer calculation for GHL Click2Mail campaigns
-- **Daily Outreach Automation**: Automatically finds and messages new GHL contacts every day
+- **Daily Outreach Automation**: Automatically finds and messages new GHL contacts every day at 9 AM EST
 - **AI Assistant**: Claude 3.5 Sonnet for lead analysis and follow-ups
 - **Address Validation**: Google Maps API integration for property verification
 - **Role-Based Access**: FREE, SYNC PLAN, AI OUTREACH PLAN, and ADMIN tiers
@@ -184,15 +184,46 @@ For detailed deployment instructions, see the [Amplify documentation](https://do
    - All messages will be sent from your selected phone/email
    - Replies route directly to you
 
-10. **AI Messaging Bot (Automated Outreach)**
-   - Daily automated outreach to new GHL contacts
-   - AI follows proven 5-step script for property visits
-   - Adapts message based on available property data
-   - Handles inbound responses automatically
-   - Triggers human handoff for qualified leads
-   - See `AI_TESTING_GUIDE.md` for testing instructions
+10. **AI SMS Messaging (Automated Text Outreach)**
+   - **Daily Automation**: Runs every day at 9 AM EST
+   - **Target Contacts**: New GHL contacts with "AI Outreach" tag who haven't been messaged
+   - **Conversation Flow**:
+     1. Initial outreach introduces you and mentions the property
+     2. AI adapts message based on lead type (preforeclosure vs probate)
+     3. Handles inbound replies with contextual responses
+     4. Follows proven 5-step script to schedule property visit
+     5. Tags contact for human handoff when qualified
+   - **Smart Features**:
+     - Respects business hours (9 AM - 8 PM EST only)
+     - Rate limited (2 seconds between messages)
+     - Tracks conversation history to avoid duplicate messages
+     - Automatically detects and tags replies
+   - **Testing**: Use `/api/v1/test-ai-response` endpoint to test AI responses without sending SMS
 
-11. **AI Analysis**
+11. **Email Campaigns (Bulk Prospecting)**
+   - **Manual Trigger**: Click "📧 Start Email Campaign" button in dashboard
+   - **Target Contacts**: GHL contacts with "app:synced" tag who haven't been emailed
+   - **Email Content**:
+     - Personalized with contact's first name
+     - Property address and estimated value
+     - Cash offer amount (70% of Zestimate)
+     - Two options: quick cash sale or full market listing
+   - **Multi-Email Support**: Sends to all email addresses on contact (primary + email2 + email3)
+   - **Tracking**:
+     - Updates email_attempt_counter after sending
+     - Records last_email_date
+     - Prevents duplicate emails in future campaigns
+   - **Reply Handling**:
+     - Webhook automatically detects email replies
+     - Tags contact with "email:replied"
+     - Removes from future campaigns
+   - **Bounce Protection**:
+     - Detects bounced emails via webhook
+     - Tags contact with "email:bounced"
+     - Stops future emails to that address
+   - **Rate Limiting**: 2 seconds between emails to prevent API throttling
+
+12. **AI Analysis**
    - Use Chat feature for property insights
    - Get automated follow-up suggestions
    - Analyze market conditions and equity potential

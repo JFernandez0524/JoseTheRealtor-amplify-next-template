@@ -2,7 +2,7 @@ import axios, { isAxiosError } from 'axios';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand, UpdateCommand, ScanCommand } from '@aws-sdk/lib-dynamodb';
 
-const dynamoClient = new DynamoDBClient({});
+const dynamoClient = new DynamoDBClient({ region: process.env.AWS_REGION });
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
 
 const MAX_RETRIES = 3;
@@ -10,6 +10,14 @@ const RETRY_DELAY_MS = 1000;
 const BATCH_DATA_SERVER_TOKEN = process.env.BATCH_DATA_SERVER_TOKEN;
 const propertyLeadTableName = process.env.AMPLIFY_DATA_PropertyLead_TABLE_NAME;
 const userAccountTableName = process.env.AMPLIFY_DATA_UserAccount_TABLE_NAME;
+
+console.log('🔧 [SKIP_TRACE] Lambda initialized');
+console.log('🔧 [SKIP_TRACE] Environment:', {
+  hasApiKey: !!BATCH_DATA_SERVER_TOKEN,
+  hasPropertyLeadTable: !!propertyLeadTableName,
+  hasUserAccountTable: !!userAccountTableName,
+  region: process.env.AWS_REGION
+});
 
 // ---------------------------------------------------------
 // Type Definitions

@@ -14,9 +14,18 @@ import { validateAddressWithGoogle } from '../../../app/utils/google.server';
 import { calculateLeadScore } from '../../../app/utils/ai/leadScoring';
 import { fetchBestZestimate } from '../shared/bridgeUtils';
 
-const s3 = new S3Client({});
-const dynamoClient = new DynamoDBClient({});
+const s3 = new S3Client({ region: process.env.AWS_REGION });
+const dynamoClient = new DynamoDBClient({ region: process.env.AWS_REGION });
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
+
+console.log('🔧 [CSV_UPLOAD] Lambda initialized');
+console.log('🔧 [CSV_UPLOAD] Environment:', {
+  hasPropertyLeadTable: !!process.env.AMPLIFY_DATA_PropertyLead_TABLE_NAME,
+  hasUserAccountTable: !!process.env.AMPLIFY_DATA_UserAccount_TABLE_NAME,
+  hasGoogleApiKey: !!process.env.GOOGLE_MAPS_API_KEY,
+  hasBridgeApiKey: !!process.env.BRIDGE_API_KEY,
+  region: process.env.AWS_REGION
+});
 
 // ---------------------------------------------------------
 // 🚦 RATE LIMITING

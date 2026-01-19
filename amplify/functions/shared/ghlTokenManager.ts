@@ -34,7 +34,12 @@ type GhlIntegration = {
  * Lambda-optimized version using DynamoDB client
  */
 export async function getValidGhlToken(userId: string): Promise<{ token: string; locationId: string } | null> {
+  console.log(`🔑 [TOKEN_MANAGER] Getting token for user: ${userId}`);
+  console.log(`🔑 [TOKEN_MANAGER] Table name: ${GHL_INTEGRATION_TABLE}`);
+  console.log(`🔑 [TOKEN_MANAGER] Region: ${process.env.AWS_REGION}`);
+  
   try {
+    console.log(`🔍 [TOKEN_MANAGER] Scanning DynamoDB for active integration...`);
     const { Items } = await docClient.send(new ScanCommand({
       TableName: GHL_INTEGRATION_TABLE,
       FilterExpression: 'userId = :userId AND isActive = :active',
@@ -45,28 +50,33 @@ export async function getValidGhlToken(userId: string): Promise<{ token: string;
     }));
 
     if (!Items || Items.length === 0) {
-      console.log(`❌ No GHL integration found for user ${userId}`);
+      console.log(`❌ [TOKEN_MANAGER] No GHL integration found for user ${userId}`);
       return null;
     }
 
+    console.log(`✅ [TOKEN_MANAGER] Found integration for user ${userId}`);
     const integration = Items[0] as GhlIntegration;
     const now = new Date();
     const expiresAt = new Date(integration.expiresAt);
+    
+    console.log(`🔍 [TOKEN_MANAGER] Token expires at: ${expiresAt.toISOString()}`);
+    console.log(`🔍 [TOKEN_MANAGER] Current time: ${now.toISOString()}`);
 
     // Token still valid
     if (expiresAt > now) {
-      console.log(`✅ Token valid for user ${userId}`);
+      console.log(`✅ [TOKEN_MANAGER] Token valid for user ${userId}`);
       return { token: integration.accessToken, locationId: integration.locationId };
     }
 
     // Token expired - refresh it
-    console.log(`🔄 Token expired for user ${userId}, refreshing...`);
+    console.log(`🔄 [TOKEN_MANAGER] Token expired for user ${userId}, refreshing...`);
     
     if (!GHL_CLIENT_ID || !GHL_CLIENT_SECRET) {
-      console.error('❌ GHL_CLIENT_ID or GHL_CLIENT_SECRET not set');
+      console.error('❌ [TOKEN_MANAGER] GHL_CLIENT_ID or GHL_CLIENT_SECRET not set');
       return null;
     }
 
+    console.log(`🔄 [TOKEN_MANAGER] Calling GHL token refresh endpoint...`);
     const response = await axios.post('https://services.leadconnectorhq.com/oauth/token', {
       client_id: GHL_CLIENT_ID,
       client_secret: GHL_CLIENT_SECRET,
@@ -76,8 +86,11 @@ export async function getValidGhlToken(userId: string): Promise<{ token: string;
 
     const { access_token, refresh_token, expires_in } = response.data;
     const newExpiresAt = new Date(Date.now() + expires_in * 1000).toISOString();
+    
+    console.log(`✅ [TOKEN_MANAGER] Token refreshed, new expiry: ${newExpiresAt}`);
 
     // Update token in database
+    console.log(`💾 [TOKEN_MANAGER] Updating token in DynamoDB...`);
     await docClient.send(new UpdateCommand({
       TableName: GHL_INTEGRATION_TABLE,
       Key: { id: integration.id },
@@ -90,11 +103,12 @@ export async function getValidGhlToken(userId: string): Promise<{ token: string;
       }
     }));
 
-    console.log(`✅ Token refreshed for user ${userId}`);
+    console.log(`✅ [TOKEN_MANAGER] Token refreshed and saved for user ${userId}`);
     return { token: access_token, locationId: integration.locationId };
 
   } catch (error: any) {
-    console.error(`❌ Failed to get/refresh token for user ${userId}:`, error.message);
+    console.error(`❌ [TOKEN_MANAGER] Failed to get/refresh token for user ${userId}:`, error.message);
+    console.error(`❌ [TOKEN_MANAGER] Stack:`, error.stack);
     return null;
   }
 }

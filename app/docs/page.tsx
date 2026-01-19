@@ -309,18 +309,22 @@ export default function DocsPage() {
                   <li>Reply detection: Automatically tags replied contacts and stops automation</li>
                   <li>Bounce protection: Stops emails to bounced addresses</li>
                   <li>Configure email address in Profile → GHL Settings</li>
+                  <li>Rate limited: 2 seconds between emails to prevent throttling</li>
                 </ul>
               </div>
 
               <div className="bg-green-50 p-4 rounded-lg">
-                <h4 className="font-medium text-green-800 mb-2">📱 SMS Campaign System</h4>
+                <h4 className="font-medium text-green-800 mb-2">📱 AI SMS Campaign System</h4>
                 <ul className="list-disc list-inside space-y-1 text-green-700 text-sm">
                   <li><strong>Daily Automated Outreach</strong>: Runs at 9 AM EST for contacts with "AI Outreach" tag</li>
-                  <li>AI-generated messages using proven 5-step script</li>
-                  <li>Adapts to available property data</li>
-                  <li>Business hours compliance (9 AM - 8 PM EST)</li>
-                  <li>Reply handling: AI responds automatically</li>
+                  <li>AI-generated messages using OpenAI with proven 5-step script</li>
+                  <li>Adapts to lead type (preforeclosure vs probate)</li>
+                  <li>Handles inbound replies with contextual AI responses</li>
+                  <li>Business hours compliance (9 AM - 8 PM EST only)</li>
+                  <li>Tags contact for human handoff when qualified</li>
                   <li>Configure phone number in Profile → GHL Settings</li>
+                  <li>Rate limited: 2 seconds between messages</li>
+                  <li>Tracks conversation history to avoid duplicates</li>
                 </ul>
               </div>
 

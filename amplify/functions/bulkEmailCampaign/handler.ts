@@ -1,39 +1,84 @@
+/**
+ * ============================================================================
+ * BULK EMAIL CAMPAIGN HANDLER
+ * ============================================================================
+ * 
+ * PURPOSE:
+ * Sends automated prospecting emails to all synced GHL contacts who haven't
+ * been contacted yet. This is a one-time bulk operation triggered manually
+ * from the dashboard.
+ * 
+ * ELIGIBILITY CRITERIA:
+ * - Contact has tag: "app:synced" (synced from our platform)
+ * - email_attempt_counter = 0 (never emailed before)
+ * - Has valid email address
+ * - Not marked DND (Do Not Disturb)
+ * - No "email:bounced" or "email:replied" tags
+ * 
+ * EMAIL CONTENT:
+ * - Personalized with contact's first name
+ * - Includes property address and details
+ * - Shows estimated property value (Zestimate)
+ * - Presents cash offer (70% of Zestimate)
+ * - Offers two options: quick cash sale or full market listing
+ * 
+ * RATE LIMITING:
+ * - 2 seconds between each email to prevent API throttling
+ * - Sends to all email addresses on contact (primary + email2 + email3)
+ * 
+ * TRACKING:
+ * - Updates email_attempt_counter to 1 after sending
+ * - Records last_email_date for future reference
+ * 
+ * INVOCATION:
+ * - Triggered from dashboard "Start Email Campaign" button
+ * - Requires user to have active GHL integration
+ * - Returns success/fail counts for reporting
+ * 
+ * CLOUDWATCH LOGS:
+ * - Filter by [BULK_EMAIL] to see all campaign activity
+ * - Logs each email sent with recipient address
+ * - Captures errors with full stack traces
+ * ============================================================================
+ */
+
 import axios from 'axios';
 import { getValidGhlToken } from '../shared/ghlTokenManager';
 
+// GHL Custom Field IDs for email tracking
 const EMAIL_FIELD_IDS = {
-  email_attempt_counter: 'wWlrXoXeMXcM6kUexf2L',
-  last_email_date: '3xOBr4GvgRc22kBRNYCE',
+  email_attempt_counter: 'wWlrXoXeMXcM6kUexf2L', // Tracks number of emails sent
+  last_email_date: '3xOBr4GvgRc22kBRNYCE',       // Last email send date
 };
-
-/**
- * BULK EMAIL CAMPAIGN HANDLER
- * 
- * Sends initial prospecting emails to all existing GHL contacts that:
- * - Have tag: app:synced
- * - Have email_attempt_counter = 0 or empty
- * - Have valid email address
- * - Are not marked DND
- * 
- * Triggered manually from dashboard button.
- */
 export const handler = async (event: { userId: string }) => {
-  console.log('📧 Starting bulk email campaign...');
+  console.log('📧 [BULK_EMAIL] Starting bulk email campaign');
+  console.log('📧 [BULK_EMAIL] Event:', JSON.stringify(event));
+  console.log('📧 [BULK_EMAIL] Environment:', {
+    hasGhlClientId: !!process.env.GHL_CLIENT_ID,
+    hasGhlClientSecret: !!process.env.GHL_CLIENT_SECRET,
+    hasTableName: !!process.env.AMPLIFY_DATA_GhlIntegration_TABLE_NAME,
+    region: process.env.AWS_REGION
+  });
   
   const { userId } = event;
+  console.log('📧 [BULK_EMAIL] User ID:', userId);
   
   try {
     // Get user's GHL token and locationId
+    console.log('📧 [BULK_EMAIL] Fetching GHL token...');
     const ghlData = await getValidGhlToken(userId);
     if (!ghlData) {
+      console.error('❌ [BULK_EMAIL] GHL integration not found for user:', userId);
       throw new Error('GHL integration not found');
     }
     
+    console.log('✅ [BULK_EMAIL] GHL token retrieved, locationId:', ghlData.locationId);
     const { token: accessToken, locationId } = ghlData;
     
     // Fetch all contacts with app:synced tag
+    console.log('📧 [BULK_EMAIL] Fetching eligible contacts...');
     const contacts = await fetchEligibleContacts(accessToken, locationId);
-    console.log(`Found ${contacts.length} eligible contacts for email campaign`);
+    console.log(`✅ [BULK_EMAIL] Found ${contacts.length} eligible contacts`);
     
     let successCount = 0;
     let failCount = 0;
@@ -41,18 +86,20 @@ export const handler = async (event: { userId: string }) => {
     // Send email to each contact
     for (const contact of contacts) {
       try {
+        console.log(`📧 [BULK_EMAIL] Sending to: ${contact.email}`);
         await sendProspectingEmail(accessToken, contact);
         successCount++;
+        console.log(`✅ [BULK_EMAIL] Sent to: ${contact.email}`);
         
         // Rate limiting: 2 seconds between emails
         await new Promise(resolve => setTimeout(resolve, 2000));
       } catch (error: any) {
-        console.error(`Failed to email ${contact.email}:`, error.message);
+        console.error(`❌ [BULK_EMAIL] Failed to email ${contact.email}:`, error.message);
         failCount++;
       }
     }
     
-    console.log(`✅ Campaign complete: ${successCount} sent, ${failCount} failed`);
+    console.log(`✅ [BULK_EMAIL] Campaign complete: ${successCount} sent, ${failCount} failed`);
     
     return {
       statusCode: 200,
@@ -63,7 +110,8 @@ export const handler = async (event: { userId: string }) => {
     };
     
   } catch (error: any) {
-    console.error('❌ Bulk email campaign error:', error);
+    console.error('❌ [BULK_EMAIL] Campaign error:', error.message);
+    console.error('❌ [BULK_EMAIL] Stack:', error.stack);
     return {
       statusCode: 500,
       success: false,
@@ -72,6 +120,26 @@ export const handler = async (event: { userId: string }) => {
   }
 };
 
+/**
+ * ============================================================================
+ * FETCH ELIGIBLE CONTACTS
+ * ============================================================================
+ * 
+ * Retrieves all GHL contacts that meet the criteria for email outreach.
+ * Uses pagination to handle large contact lists (100 contacts per page).
+ * 
+ * FILTERS APPLIED:
+ * 1. Has "app:synced" tag (contact came from our platform)
+ * 2. email_attempt_counter = 0 (never emailed)
+ * 3. Has valid email address
+ * 4. Not on DND list
+ * 5. No "email:bounced" tag (previous email didn't bounce)
+ * 6. No "email:replied" tag (already engaged)
+ * 
+ * @param accessToken - GHL API access token
+ * @param locationId - GHL location ID
+ * @returns Array of eligible contact objects
+ */
 async function fetchEligibleContacts(accessToken: string, locationId: string): Promise<any[]> {
   const eligibleContacts: any[] = [];
   let nextCursor: string | undefined;
@@ -130,6 +198,35 @@ async function fetchEligibleContacts(accessToken: string, locationId: string): P
   return eligibleContacts;
 }
 
+/**
+ * ============================================================================
+ * SEND PROSPECTING EMAIL
+ * ============================================================================
+ * 
+ * Sends personalized prospecting email to a contact with property details
+ * and offer information. Sends to all email addresses on the contact record.
+ * 
+ * EMAIL STRUCTURE:
+ * - Subject: "Interested in Your Property at [Address]"
+ * - Personalized greeting with first name
+ * - Property address and type (preforeclosure/probate)
+ * - Estimated property value from Zillow
+ * - Cash offer amount (70% of Zestimate)
+ * - Two options: quick cash sale or full market listing
+ * - Professional signature
+ * 
+ * MULTI-EMAIL SUPPORT:
+ * - Sends to primary email + email2 + email3 if available
+ * - Increases chance of contact reaching the owner
+ * 
+ * TRACKING:
+ * - Updates email_attempt_counter to 1
+ * - Records last_email_date
+ * - Prevents duplicate emails in future campaigns
+ * 
+ * @param accessToken - GHL API access token
+ * @param contact - GHL contact object with custom fields
+ */
 async function sendProspectingEmail(accessToken: string, contact: any): Promise<void> {
   // Extract property data from custom fields
   const getCustomField = (id: string) => 

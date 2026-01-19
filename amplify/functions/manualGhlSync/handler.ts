@@ -3,11 +3,18 @@ import { DynamoDBDocumentClient, GetCommand, UpdateCommand, ScanCommand } from '
 import { syncToGoHighLevel } from './integrations/gohighlevel';
 import { getValidGhlToken } from '../shared/ghlTokenManager';
 
-const dynamoClient = new DynamoDBClient({});
+const dynamoClient = new DynamoDBClient({ region: process.env.AWS_REGION });
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
 
 const propertyLeadTableName = process.env.AMPLIFY_DATA_PropertyLead_TABLE_NAME;
 const userAccountTableName = process.env.AMPLIFY_DATA_UserAccount_TABLE_NAME;
+
+console.log('🔧 [GHL_SYNC] Lambda initialized');
+console.log('🔧 [GHL_SYNC] Environment:', {
+  hasPropertyLeadTable: !!propertyLeadTableName,
+  hasUserAccountTable: !!userAccountTableName,
+  region: process.env.AWS_REGION
+});
 
 type SyncResult = {
   status: 'SUCCESS' | 'SKIPPED' | 'FAILED' | 'ERROR' | 'NO_CHANGE';
@@ -21,11 +28,16 @@ type Handler = (event: { arguments: { leadId: string }; identity: { sub: string 
 // HELPER: Core GHL Sync Logic
 // ---------------------------------------------------------
 async function processGhlSync(lead: any, groups: string[] = [], ownerId: string = ''): Promise<SyncResult> {
+  console.log(`🔄 [GHL_SYNC] Processing sync for lead: ${lead.id}`);
+  console.log(`🔄 [GHL_SYNC] Owner: ${ownerId}, Groups: ${groups.join(', ')}`);
+  
   // Get user's GHL token and locationId (auto-refreshes if expired)
+  console.log(`🔑 [GHL_SYNC] Getting GHL token...`);
   const ghlData = await getValidGhlToken(ownerId);
   
   if (!ghlData) {
     const message = `GHL not connected or token expired. Please reconnect GoHighLevel.`;
+    console.error(`❌ [GHL_SYNC] ${message}`);
     await docClient.send(new UpdateCommand({
       TableName: propertyLeadTableName,
       Key: { id: lead.id },
@@ -37,6 +49,7 @@ async function processGhlSync(lead: any, groups: string[] = [], ownerId: string 
     return { status: 'FAILED', message };
   }
 
+  console.log(`✅ [GHL_SYNC] Token retrieved, locationId: ${ghlData.locationId}`);
   const { token: ghlToken, locationId: ghlLocationId } = ghlData;
 
   // 🚦 Check GHL rate limits before syncing
