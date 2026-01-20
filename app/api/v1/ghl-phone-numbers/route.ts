@@ -48,7 +48,7 @@ export async function GET(req: Request) {
 
     // Fetch phone numbers from GHL
     const response = await axios.get(
-      `https://services.leadconnectorhq.com/locations/${integration.locationId}/phoneNumbers`,
+      `https://services.leadconnectorhq.com/phone-system/numbers/location/${integration.locationId}`,
       {
         headers: {
           'Authorization': `Bearer ${ghlData}`,
@@ -57,7 +57,7 @@ export async function GET(req: Request) {
       }
     );
 
-    const phoneNumbers = response.data.phoneNumbers || [];
+    const phoneNumbers = response.data.numbers || response.data.phoneNumbers || [];
     console.log(`✅ [GHL_PHONE_NUMBERS] Found ${phoneNumbers.length} phone numbers`);
 
     return NextResponse.json({

@@ -123,7 +123,7 @@ export async function syncToGoHighLevel(
     const isPROPlan = userGroups.includes('PRO');
     const isAdmin = userGroups.includes('ADMINS');
     
-    const appPlan = isAIPlan ? 'AI' : isPROPlan ? 'SYNC' : 'SYNC'; // Default to SYNC for paid users
+    const appPlan = isAdmin ? 'AI' : isAIPlan ? 'AI' : isPROPlan ? 'SYNC' : 'SYNC'; // Admins get AI plan
     const appAccountStatus = 'active'; // TODO: Add billing status check for 'past_due'/'canceled'
 
     // 🎯 Construct Custom Field Values

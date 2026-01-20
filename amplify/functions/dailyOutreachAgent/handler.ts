@@ -337,7 +337,7 @@ async function getGhlPhoneNumber(accessToken: string, locationId: string, select
 
     // Fetch all phone numbers for the location
     const response = await axios.get(
-      `https://services.leadconnectorhq.com/locations/${locationId}/phoneNumbers`,
+      `https://services.leadconnectorhq.com/phone-system/numbers/location/${locationId}`,
       {
         headers: {
           'Authorization': `Bearer ${accessToken}`,
@@ -346,7 +346,7 @@ async function getGhlPhoneNumber(accessToken: string, locationId: string, select
       }
     );
     
-    const phoneNumbers = response.data.phoneNumbers || [];
+    const phoneNumbers = response.data.numbers || response.data.phoneNumbers || [];
     
     if (phoneNumbers.length === 0) {
       console.error('No phone numbers found for location');
