@@ -94,10 +94,14 @@ export const handler = async (event: any) => {
 async function getAllActiveIntegrations(): Promise<GhlIntegration[]> {
   const command = new ScanCommand({
     TableName: GHL_INTEGRATION_TABLE,
-    FilterExpression: 'attribute_exists(accessToken)'
+    FilterExpression: 'isActive = :true AND attribute_exists(accessToken)',
+    ExpressionAttributeValues: {
+      ':true': true
+    }
   });
   
   const result = await docClient.send(command);
+  console.log(`📊 [DAILY_OUTREACH] Found ${result.Items?.length || 0} active integrations`);
   return (result.Items || []) as GhlIntegration[];
 }
 
