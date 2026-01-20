@@ -22,6 +22,7 @@ interface GhlIntegration {
   accessToken: string;
   locationId: string;
   selectedPhoneNumber?: string;
+  campaignPhone?: string;
   selectedEmail?: string;
 }
 
@@ -113,8 +114,8 @@ async function processUserContacts(integration: GhlIntegration): Promise<number>
 
     const { token: accessToken, locationId } = ghlData;
 
-    // 2. Get user's phone number from GHL (use selected or default)
-    const phoneNumber = await getGhlPhoneNumber(accessToken, locationId, integration.selectedPhoneNumber);
+    // 2. Get user's phone number from database or GHL
+    const phoneNumber = await getGhlPhoneNumber(accessToken, locationId, integration.campaignPhone || integration.selectedPhoneNumber);
     if (!phoneNumber) {
       console.error(`No phone number found for location ${locationId}`);
       return 0;
