@@ -36,6 +36,7 @@ type Props = {
   handleDelete: () => Promise<void>;
   handleExport: () => void;
   handleDownloadSkipTraced: () => void;
+  handleViewDetails: () => void;
   isSkipTracing: boolean;
   isGhlSyncing: boolean;
   isAiScoring: boolean;
@@ -75,6 +76,7 @@ export function DashboardFilters({
   handleDelete,
   handleExport,
   handleDownloadSkipTraced,
+  handleViewDetails,
   isSkipTracing,
   isGhlSyncing,
   isAiScoring,
@@ -299,6 +301,16 @@ export function DashboardFilters({
                 'Skip Trace'
               )}
             </button>
+
+            {/* View Details Button (only when 1 lead selected) */}
+            {selectedLeadsCount === 1 && (
+              <button
+                onClick={handleViewDetails}
+                className='text-sm px-3 py-1.5 rounded bg-gray-600 text-white hover:bg-gray-700 transition shadow-sm w-full sm:w-auto'
+              >
+                👁️ View Details
+              </button>
+            )}
 
             {/* GHL Sync Button */}
             <button

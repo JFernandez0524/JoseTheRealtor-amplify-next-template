@@ -10,11 +10,16 @@ import { getValidGhlToken } from '@/app/utils/aws/data/ghlIntegration.server';
  * Used in settings page for phone number selection
  */
 export async function GET(req: Request) {
+  console.log('📞 [GHL_PHONE_NUMBERS] Fetching phone numbers...');
+  
   try {
     const user = await AuthGetCurrentUserServer();
     if (!user) {
+      console.error('❌ [GHL_PHONE_NUMBERS] No user found');
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+
+    console.log('✅ [GHL_PHONE_NUMBERS] User:', user.userId);
 
     // Get user's GHL integration
     const { data: integrations } = await cookiesClient.models.GhlIntegration.list({
@@ -25,28 +30,35 @@ export async function GET(req: Request) {
     });
 
     if (!integrations || integrations.length === 0) {
+      console.error('❌ [GHL_PHONE_NUMBERS] No GHL integration found');
       return NextResponse.json({ error: 'GHL not connected' }, { status: 404 });
     }
 
     const integration = integrations[0];
-    const accessToken = await getValidGhlToken(user.userId);
+    console.log('✅ [GHL_PHONE_NUMBERS] Integration found, locationId:', integration.locationId);
+    
+    const ghlData = await getValidGhlToken(user.userId);
 
-    if (!accessToken) {
+    if (!ghlData) {
+      console.error('❌ [GHL_PHONE_NUMBERS] Failed to get access token');
       return NextResponse.json({ error: 'Failed to get access token' }, { status: 500 });
     }
+
+    console.log('✅ [GHL_PHONE_NUMBERS] Token retrieved, fetching phone numbers...');
 
     // Fetch phone numbers from GHL
     const response = await axios.get(
       `https://services.leadconnectorhq.com/locations/${integration.locationId}/phoneNumbers`,
       {
         headers: {
-          'Authorization': `Bearer ${accessToken}`,
+          'Authorization': `Bearer ${ghlData}`,
           'Version': '2021-07-28'
         }
       }
     );
 
     const phoneNumbers = response.data.phoneNumbers || [];
+    console.log(`✅ [GHL_PHONE_NUMBERS] Found ${phoneNumbers.length} phone numbers`);
 
     return NextResponse.json({
       success: true,
@@ -59,7 +71,8 @@ export async function GET(req: Request) {
     });
 
   } catch (error: any) {
-    console.error('Error fetching phone numbers:', error.response?.data || error.message);
+    console.error('❌ [GHL_PHONE_NUMBERS] Error:', error.response?.data || error.message);
+    console.error('❌ [GHL_PHONE_NUMBERS] Stack:', error.stack);
     return NextResponse.json({
       success: false,
       error: error.message

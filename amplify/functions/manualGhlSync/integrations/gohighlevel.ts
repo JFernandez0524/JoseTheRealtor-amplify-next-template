@@ -191,7 +191,7 @@ export async function syncToGoHighLevel(
     
     if (isCallable) {
       tags.push('Multi-Phone-Lead');
-      tags.push('start dialing campaign'); // 🎯 TRIGGER TAG for Dialer Logic: Weekly 8x Loop
+      // Removed 'start dialing campaign' - GHL workflow handles routing based on App:Synced tag
     } else if (specificPhone) {
       // Has phone but not callable (failed skip trace, DNC, etc.)
       tags.push('Multi-Phone-Lead');

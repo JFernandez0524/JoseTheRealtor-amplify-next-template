@@ -301,6 +301,12 @@ export default function LeadDashboardClient({}: Props) {
 
   // --- Action Handlers ---
 
+  const handleViewDetails = () => {
+    if (selectedIds.length === 1) {
+      router.push(`/lead/${selectedIds[0]}`);
+    }
+  };
+
   const handleBulkGHLSync = async () => {
     if (selectedIds.length === 0) return;
 
@@ -315,8 +321,11 @@ export default function LeadDashboardClient({}: Props) {
     setIsProcessing(true);
     try {
       await syncToGHL(selectedIds);
-      alert(`Successfully initiated CRM sync for ${selectedIds.length} leads.`);
+      alert(`Successfully initiated CRM sync for ${selectedIds.length} leads. Refreshing in 3 seconds...`);
       setSelectedIds([]);
+      
+      // Wait for Lambda to complete processing
+      await new Promise(resolve => setTimeout(resolve, 3000));
       await refreshLeads();
     } catch (err) {
       console.error('Sync error:', err);
@@ -354,14 +363,26 @@ export default function LeadDashboardClient({}: Props) {
     try {
       const data = await skipTraceLeads(selectedIds);
 
-      console.log('Skip trace response:', { data });
+      console.log('Skip trace response:', JSON.stringify(data, null, 2));
+      console.log('Response type:', typeof data);
+      console.log('Is array?:', Array.isArray(data));
 
       // Handle response - data is the array directly
       const results = Array.isArray(data) ? data : [];
-      const successful = results.filter((r: any) => r.status === 'SUCCESS').length;
+      console.log('Results array:', results);
+      console.log('Results length:', results.length);
+      
+      const successful = results.filter((r: any) => {
+        console.log('Checking result:', r, 'status:', r?.status);
+        return r?.status === 'SUCCESS';
+      }).length;
+      
       const failed = results.filter(
-        (r: any) => r.status === 'FAILED' || r.status === 'ERROR' || r.status === 'NO_MATCH'
+        (r: any) => r?.status === 'FAILED' || r?.status === 'ERROR' || r?.status === 'NO_MATCH'
       ).length;
+
+      console.log('Successful count:', successful);
+      console.log('Failed count:', failed);
 
       alert(
         `Skip-trace complete!\n✅ Successful: ${successful}\n❌ Failed/No Match: ${failed}`
@@ -369,7 +390,8 @@ export default function LeadDashboardClient({}: Props) {
 
       setSelectedIds([]);
       
-      // Refresh table to show updated skip trace status
+      // Wait for database to update, then refresh
+      await new Promise(resolve => setTimeout(resolve, 2000));
       await refreshLeads();
     } catch (err: any) {
       console.error('Skip-trace error:', err);
@@ -759,6 +781,7 @@ export default function LeadDashboardClient({}: Props) {
         handleDelete={handleDeleteLeads}
         handleExport={() => alert('Exporting leads to CSV...')}
         handleDownloadSkipTraced={handleDownloadSkipTraced}
+        handleViewDetails={handleViewDetails}
         isEmailCampaigning={isProcessing}
       />
 

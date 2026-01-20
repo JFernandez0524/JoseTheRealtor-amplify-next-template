@@ -105,6 +105,19 @@ export function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
 
   // 2. DATA FETCHING (ANALYZER)
   useEffect(() => {
+    // Subscribe to real-time updates for this lead
+    const subscription = client.models.PropertyLead.observeQuery({
+      filter: { id: { eq: initialLead.id } }
+    }).subscribe({
+      next: ({ items }) => {
+        if (items.length > 0) {
+          const updatedLead = items[0] as Lead;
+          setLead(updatedLead);
+          console.log('📡 Lead updated in real-time:', updatedLead.id);
+        }
+      }
+    });
+
     const fetchMarketIntel = async () => {
       if (
         !initialLead?.id ||
@@ -113,10 +126,10 @@ export function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
         return;
       setIsAnalyzing(true);
 
-      let street = initialLead.ownerAddress || '';
-      let city = initialLead.ownerCity || '';
-      let state = initialLead.ownerState || '';
-      let zip = initialLead.ownerZip || '';
+      let street = lead?.ownerAddress || initialLead.ownerAddress || '';
+      let city = lead?.ownerCity || initialLead.ownerCity || '';
+      let state = lead?.ownerState || initialLead.ownerState || '';
+      let zip = lead?.ownerZip || initialLead.ownerZip || '';
 
       const rawAddress = initialLead.standardizedAddress;
       if (typeof rawAddress === 'string' && rawAddress.trim().startsWith('{')) {
@@ -145,8 +158,11 @@ export function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
         setIsAnalyzing(false);
       }
     };
+    
     setLead(initialLead);
     fetchMarketIntel();
+
+    return () => subscription.unsubscribe();
   }, [initialLead]);
 
   // 3. NAVIGATION LOGIC - Updated path to match /lead/ structure
