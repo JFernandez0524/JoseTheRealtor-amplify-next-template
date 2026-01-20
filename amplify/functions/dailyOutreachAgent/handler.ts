@@ -346,7 +346,7 @@ async function getGhlPhoneNumber(accessToken: string, locationId: string, select
       }
     );
     
-    const phoneNumbers = response.data.numbers || response.data.phoneNumbers || [];
+    const phoneNumbers = response.data.numbers || [];
     
     if (phoneNumbers.length === 0) {
       console.error('No phone numbers found for location');
@@ -356,10 +356,11 @@ async function getGhlPhoneNumber(accessToken: string, locationId: string, select
     // Find the default number or use the first one
     const defaultNumber = phoneNumbers.find((p: any) => p.isDefault === true);
     const selectedPhone = defaultNumber || phoneNumbers[0];
+    const phoneNumber = selectedPhone.phoneNumber || selectedPhone.number;
     
-    console.log(`Using phone number: ${selectedPhone.number} (${selectedPhone.isDefault ? 'default' : 'first available'})`);
+    console.log(`Using phone number: ${phoneNumber} (${selectedPhone.isDefault ? 'default' : 'first available'})`);
     
-    return selectedPhone.number;
+    return phoneNumber;
   } catch (error: any) {
     console.error('Failed to get GHL phone numbers:', error.response?.data || error.message);
     return null;

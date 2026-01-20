@@ -57,14 +57,14 @@ export async function GET(req: Request) {
       }
     );
 
-    const phoneNumbers = response.data.numbers || response.data.phoneNumbers || [];
+    const phoneNumbers = response.data.numbers || [];
     console.log(`✅ [GHL_PHONE_NUMBERS] Found ${phoneNumbers.length} phone numbers`);
 
     return NextResponse.json({
       success: true,
       phoneNumbers: phoneNumbers.map((p: any) => ({
-        number: p.number,
-        name: p.name || '',
+        number: p.phoneNumber || p.number,
+        name: p.name || p.friendlyName || '',
         isDefault: p.isDefault || false,
         type: p.type || 'unknown'
       }))
