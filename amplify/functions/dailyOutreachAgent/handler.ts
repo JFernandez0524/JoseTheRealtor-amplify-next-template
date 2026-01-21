@@ -175,24 +175,28 @@ async function processUserContacts(integration: GhlIntegration): Promise<number>
 
 async function fetchGHLContacts(integration: GhlIntegration): Promise<any[]> {
   const allContacts: any[] = [];
-  let nextCursor: string | undefined;
   
-  do {
-    const url = nextCursor 
-      ? `https://services.leadconnectorhq.com/contacts/?locationId=${integration.locationId}&limit=100&cursor=${nextCursor}`
-      : `https://services.leadconnectorhq.com/contacts/?locationId=${integration.locationId}&limit=100`;
-    
-    const response = await axios.get(url, {
+  // Use search endpoint to get contacts with tags
+  const response = await axios.post(
+    `https://services.leadconnectorhq.com/contacts/search`,
+    {
+      locationId: integration.locationId,
+      query: {
+        tags: ["ai outreach"]
+      }
+    },
+    {
       headers: {
         'Authorization': `Bearer ${integration.accessToken}`,
-        'Version': '2021-07-28'
+        'Version': '2021-07-28',
+        'Content-Type': 'application/json'
       }
-    });
-    
-    allContacts.push(...(response.data.contacts || []));
-    nextCursor = response.data.meta?.nextCursor;
-    
-  } while (nextCursor);
+    }
+  );
+  
+  allContacts.push(...(response.data.contacts || []));
+  
+  console.log(`📋 [DAILY_OUTREACH] Found ${allContacts.length} contacts with "ai outreach" tag`);
   
   return allContacts;
 }
