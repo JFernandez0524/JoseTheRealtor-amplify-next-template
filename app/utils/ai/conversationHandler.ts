@@ -144,14 +144,14 @@ async function generateOpenAIResponse(context: ConversationContext, propertyData
 
 DELIVER THIS INITIAL OUTREACH MESSAGE:
 
-"Hi ${context.contactName}, this is Jose Fernandez from RE/MAX Homeland Realtors. I saw the public notice about ${hasAddress ? context.propertyAddress : 'your property'} and wanted to see if I could make you a firm cash offer${hasPropertyData ? ` of $${cashOffer?.toLocaleString()}` : ''} to buy it directly, or help you list it for maximum value${hasPropertyData ? ` around $${propertyData.zestimate?.toLocaleString()}` : ''}. I work with families in these situations because having both a 'speed' option and a 'top-dollar' option gives you the most control. I just need 10 minutes to see the condition. Can I stop by Wednesday at 3 PM?"
+"Hi ${context.contactName}, this is Jose Fernandez from RE/MAX Homeland Realtors. I saw the public notice about ${hasAddress ? context.propertyAddress : 'your property'} and wanted to see if I could make you a firm cash offer${hasPropertyData ? ` of $${cashOffer?.toLocaleString()}` : ''} to buy it directly, or help you list it for maximum value${hasPropertyData ? ` around $${propertyData.zestimate?.toLocaleString()}` : ''}. I work with families in these situations because having both a 'speed' option and a 'top-dollar' option gives you the most control. I just need 10 minutes to see the condition. Are you open to meeting with me to discuss your options?"
 
 INSTRUCTIONS:
 - Use the exact message above as your template
 - This is SMS, so it can be longer than 160 characters (up to 1600 is fine)
 - Be conversational and empathetic
 - Include the specific dollar amounts if available
-- End with the appointment ask
+- End with asking if they're open to meeting
 
 Generate the initial outreach message:`
     : `You are Jose Fernandez from RE/MAX Homeland Realtors, helping homeowners with ${context.leadType?.toLowerCase() || 'real estate'} situations.
