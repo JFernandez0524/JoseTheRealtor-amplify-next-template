@@ -207,15 +207,14 @@ async function filterNewContacts(contacts: any[], integration: GhlIntegration): 
       continue;
     }
 
-    // Check if contact has required tag (AI Outreach)
+    // Check if contact has required tag (ai outreach - all lowercase)
     const hasTags = contact.tags && Array.isArray(contact.tags);
     const hasAIOutreachTag = hasTags && contact.tags.some((tag: string) => 
-      tag.toLowerCase().includes('ai outreach') || 
-      tag.toLowerCase().includes('ai-outreach')
+      tag.toLowerCase() === 'ai outreach'
     );
 
     if (!hasAIOutreachTag) {
-      console.log(`⏭️ Skipping ${contact.firstName} ${contact.lastName} - Missing AI Outreach tag. Tags: ${JSON.stringify(contact.tags || [])}`);
+      console.log(`⏭️ Skipping ${contact.firstName} ${contact.lastName} - Missing "ai outreach" tag. Tags: ${JSON.stringify(contact.tags || [])}`);
       continue;
     }
 
@@ -224,63 +223,9 @@ async function filterNewContacts(contacts: any[], integration: GhlIntegration): 
       continue;
     }
 
-    // Check if contact has any conversation history
-    try {
-      const conversationResponse = await axios.get(
-        `https://services.leadconnectorhq.com/conversations/search?contactId=${contact.id}`,
-        {
-          headers: {
-            'Authorization': `Bearer ${integration.accessToken}`,
-            'Version': '2021-07-28'
-          }
-        }
-      );
-      
-      const conversations = conversationResponse.data.conversations || [];
-      
-      // If no conversations, this is a new contact
-      if (conversations.length === 0) {
-        console.log(`✅ New contact: ${contact.firstName} ${contact.lastName}`);
-        newContacts.push(contact);
-        continue;
-      }
-      
-      // Check if any conversation has INBOUND messages (replies from contact)
-      let hasInboundMessages = false;
-      for (const conv of conversations) {
-        try {
-          const messagesResponse = await axios.get(
-            `https://services.leadconnectorhq.com/conversations/${conv.id}/messages`,
-            {
-              headers: {
-                'Authorization': `Bearer ${integration.accessToken}`,
-                'Version': '2021-07-28'
-              }
-            }
-          );
-          
-          const messages = messagesResponse.data.messages || [];
-          hasInboundMessages = messages.some((msg: any) => msg.direction === 'inbound');
-          
-          if (hasInboundMessages) break;
-        } catch (error) {
-          console.error(`Error fetching messages for conversation ${conv.id}:`, error);
-        }
-      }
-      
-      // If contact has replied, skip automated outreach (AI webhook handles responses)
-      if (hasInboundMessages) {
-        console.log(`💬 Contact ${contact.firstName} ${contact.lastName} has replied - skipping automated outreach`);
-        continue;
-      }
-      
-      // Contact has outbound messages but no replies - eligible for follow-up
-      console.log(`🔄 Follow-up candidate: ${contact.firstName} ${contact.lastName}`);
-      newContacts.push(contact);
-      
-    } catch (error) {
-      console.error(`Error checking conversation for contact ${contact.id}:`, error);
-    }
+    // Add contact to outreach list (skipping conversation history check for now)
+    console.log(`✅ Contact eligible for outreach: ${contact.firstName} ${contact.lastName}`);
+    newContacts.push(contact);
   }
   
   return newContacts;
