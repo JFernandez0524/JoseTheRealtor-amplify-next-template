@@ -2,8 +2,6 @@ import { NextResponse } from 'next/server';
 import { AuthGetCurrentUserServer } from '@/app/utils/aws/auth/amplifyServerUtils.server';
 import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda';
 
-const lambda = new LambdaClient({ region: process.env.AWS_REGION || 'us-east-1' });
-
 /**
  * START BULK EMAIL CAMPAIGN
  * 
@@ -19,15 +17,29 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    console.log('[EMAIL_CAMPAIGN] Starting campaign for user:', user.userId);
+
+    // Get function name from environment or construct it
+    const functionName = process.env.BULK_EMAIL_CAMPAIGN_FUNCTION_NAME || 
+      `amplify-${process.env.AMPLIFY_APP_ID}-${process.env.AMPLIFY_BRANCH}-bulkEmailCampaignlambda7`;
+
+    console.log('[EMAIL_CAMPAIGN] Function name:', functionName);
+
+    const lambda = new LambdaClient({ 
+      region: process.env.AWS_REGION || 'us-east-1'
+    });
+
     // Invoke bulk email campaign Lambda
     const command = new InvokeCommand({
-      FunctionName: process.env.BULK_EMAIL_CAMPAIGN_FUNCTION_NAME || 'bulkEmailCampaign',
+      FunctionName: functionName,
       InvocationType: 'RequestResponse',
       Payload: JSON.stringify({ userId: user.userId })
     });
 
     const response = await lambda.send(command);
     const result = JSON.parse(new TextDecoder().decode(response.Payload));
+
+    console.log('[EMAIL_CAMPAIGN] Lambda response:', result);
 
     if (result.success) {
       return NextResponse.json({
@@ -45,7 +57,7 @@ export async function POST(req: Request) {
     }
 
   } catch (error: any) {
-    console.error('Start email campaign error:', error);
+    console.error('[EMAIL_CAMPAIGN] Error:', error);
     return NextResponse.json({
       success: false,
       error: error.message

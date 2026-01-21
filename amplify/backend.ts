@@ -169,3 +169,6 @@ backend.bulkEmailCampaign.addEnvironment('GHL_CLIENT_SECRET', process.env.GHL_CL
 backend.data.resources.tables['GhlIntegration'].grantReadData(
   backend.bulkEmailCampaign.resources.lambda
 );
+
+// 🔐 Grant Lambda invoke permission to authenticated users (for API routes)
+backend.bulkEmailCampaign.resources.lambda.grantInvoke(backend.auth.resources.authenticatedUserIamRole);
