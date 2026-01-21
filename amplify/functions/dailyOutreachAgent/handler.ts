@@ -174,35 +174,32 @@ async function processUserContacts(integration: GhlIntegration): Promise<number>
 }
 
 async function fetchGHLContacts(integration: GhlIntegration): Promise<any[]> {
-  const allContacts: any[] = [];
-  
-  // Fetch all contacts - we'll filter by tag in memory since API doesn't support tag filtering
-  const response = await axios.get(
-    `https://services.leadconnectorhq.com/contacts/`,
+  const response = await axios.post(
+    `https://services.leadconnectorhq.com/contacts/search`,
     {
-      params: {
-        locationId: integration.locationId,
-        limit: 100
-      },
+      locationId: integration.locationId,
+      pageLimit: 100,
+      filters: [
+        {
+          field: 'tags',
+          operator: 'contains',
+          value: 'ai outreach'
+        }
+      ]
+    },
+    {
       headers: {
         'Authorization': `Bearer ${integration.accessToken}`,
-        'Version': '2021-07-28'
+        'Version': '2021-07-28',
+        'Content-Type': 'application/json'
       }
     }
   );
   
-  allContacts.push(...(response.data.contacts || []));
+  const contacts = response.data.contacts || [];
+  console.log(`📋 [DAILY_OUTREACH] Found ${contacts.length} contacts with "ai outreach" tag`);
   
-  console.log(`📋 [DAILY_OUTREACH] Fetched ${allContacts.length} total contacts`);
-  
-  // Filter for "ai outreach" tag
-  const taggedContacts = allContacts.filter(contact => 
-    contact.tags?.some((tag: string) => tag.toLowerCase() === 'ai outreach')
-  );
-  
-  console.log(`📋 [DAILY_OUTREACH] Found ${taggedContacts.length} contacts with "ai outreach" tag`);
-  
-  return taggedContacts;
+  return contacts;
 }
 
 async function filterNewContacts(contacts: any[], integration: GhlIntegration): Promise<any[]> {
