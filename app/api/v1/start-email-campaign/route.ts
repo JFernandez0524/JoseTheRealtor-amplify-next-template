@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { AuthGetCurrentUserServer } from '@/app/utils/aws/auth/amplifyServerUtils.server';
 import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda';
+import { fromCognitoIdentityPool } from '@aws-sdk/credential-providers';
 
 /**
  * START BULK EMAIL CAMPAIGN
@@ -25,8 +26,13 @@ export async function POST(req: Request) {
 
     console.log('[EMAIL_CAMPAIGN] Function name:', functionName);
 
+    // Use Cognito Identity Pool credentials for Lambda invocation
     const lambda = new LambdaClient({ 
-      region: process.env.AWS_REGION || 'us-east-1'
+      region: process.env.AWS_REGION || 'us-east-1',
+      credentials: fromCognitoIdentityPool({
+        clientConfig: { region: process.env.AWS_REGION || 'us-east-1' },
+        identityPoolId: process.env.NEXT_PUBLIC_AWS_COGNITO_IDENTITY_POOL_ID!,
+      })
     });
 
     // Invoke bulk email campaign Lambda
