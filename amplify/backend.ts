@@ -172,3 +172,4 @@ backend.data.resources.tables['GhlIntegration'].grantReadData(
 
 // 🔐 Grant Lambda invoke permission to authenticated users (for API routes)
 backend.bulkEmailCampaign.resources.lambda.grantInvoke(backend.auth.resources.authenticatedUserIamRole);
+backend.bulkEmailCampaign.resources.lambda.grantInvoke(backend.auth.resources.unauthenticatedUserIamRole);
