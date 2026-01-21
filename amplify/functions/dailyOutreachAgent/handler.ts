@@ -215,7 +215,7 @@ async function filterNewContacts(contacts: any[], integration: GhlIntegration): 
     );
 
     if (!hasAIOutreachTag) {
-      console.log(`⏭️ Skipping ${contact.firstName} ${contact.lastName} - Missing AI Outreach tag`);
+      console.log(`⏭️ Skipping ${contact.firstName} ${contact.lastName} - Missing AI Outreach tag. Tags: ${JSON.stringify(contact.tags || [])}`);
       continue;
     }
 
