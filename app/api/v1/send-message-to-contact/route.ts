@@ -50,25 +50,8 @@ export async function POST(req: Request) {
     const propertyZip = contact?.customFields?.find((f: any) => f.id === 'hgbjsTVwcyID7umdhm2o')?.value;
     const leadType = contact?.customFields?.find((f: any) => f.id === 'oaf4wCuM3Ub9eGpiddrO')?.value;
 
-    // Get or create conversation
-    let conversationId = contact.conversationId;
-    if (!conversationId) {
-      const convResponse = await axios.post(
-        'https://services.leadconnectorhq.com/conversations',
-        {
-          locationId: contact.locationId,
-          contactId: contactId
-        },
-        {
-          headers: {
-            'Authorization': `Bearer ${accessToken}`,
-            'Content-Type': 'application/json',
-            'Version': '2021-07-28'
-          }
-        }
-      );
-      conversationId = convResponse.data.conversation.id;
-    }
+    // Use a placeholder conversationId - the AI handler will send directly to contact
+    const conversationId = 'auto';
 
     // Generate and send AI outreach message
     await generateAIResponse({
