@@ -17,6 +17,7 @@ interface ConversationContext {
   contact?: any; // Full contact object for field checking
   testMode?: boolean; // If true, don't send messages to GHL
   fromNumber?: string; // Phone number to send SMS from
+  accessToken?: string; // GHL OAuth token for API calls
 }
 
 interface PropertyAnalysis {
@@ -61,7 +62,7 @@ async function getPropertyAnalysis(address: string, city: string, state: string,
 }
 
 // Send message to GHL
-async function sendGHLMessage(conversationId: string, message: string, testMode = false, fromNumber?: string) {
+async function sendGHLMessage(conversationId: string, message: string, accessToken: string, testMode = false, fromNumber?: string) {
   if (testMode) {
     console.log('🧪 TEST MODE - Would send message:', message);
     return;
@@ -85,7 +86,7 @@ async function sendGHLMessage(conversationId: string, message: string, testMode 
       messagePayload,
       {
         headers: {
-          'Authorization': `Bearer ${GHL_API_KEY}`,
+          'Authorization': `Bearer ${accessToken}`,
           'Content-Type': 'application/json',
           'Version': '2021-07-28',
           'Accept': 'application/json'
@@ -232,7 +233,7 @@ function isAIEnabled(contact: any): boolean {
 }
 
 // Update AI state in GHL
-async function updateAIState(contactId: string, newState: string) {
+async function updateAIState(contactId: string, newState: string, accessToken: string) {
   try {
     await axios.put(
       `https://services.leadconnectorhq.com/contacts/${contactId}`,
@@ -243,7 +244,7 @@ async function updateAIState(contactId: string, newState: string) {
       },
       {
         headers: {
-          'Authorization': `Bearer ${GHL_API_KEY}`,
+          'Authorization': `Bearer ${accessToken}`,
           'Content-Type': 'application/json',
           'Version': '2021-07-28',
           'Accept': 'application/json'
@@ -278,6 +279,11 @@ function shouldHandoffToHuman(message: string): boolean {
 // Main conversation handler
 export async function generateAIResponse(context: ConversationContext): Promise<string> {
   try {
+    // Require accessToken for non-test mode
+    if (!context.testMode && !context.accessToken) {
+      throw new Error('accessToken is required for production mode');
+    }
+
     // 🛡️ Check if AI is enabled for this contact (app is source of truth)
     if (!context.testMode && !isAIEnabled(context.contact)) {
       console.log(`AI disabled for contact ${context.contactId}`);
@@ -285,15 +291,15 @@ export async function generateAIResponse(context: ConversationContext): Promise<
     }
 
     // Update AI state to running (skip in test mode)
-    if (!context.testMode) {
-      await updateAIState(context.contactId, 'running');
+    if (!context.testMode && context.accessToken) {
+      await updateAIState(context.contactId, 'running', context.accessToken);
     }
 
     // Check if human handoff is needed
     if (shouldHandoffToHuman(context.incomingMessage)) {
       // Update AI state to handoff
-      if (!context.testMode) {
-        await updateAIState(context.contactId, 'handoff');
+      if (!context.testMode && context.accessToken) {
+        await updateAIState(context.contactId, 'handoff', context.accessToken);
         
         // Tag contact for human follow-up in GHL
         await axios.post(
@@ -301,7 +307,7 @@ export async function generateAIResponse(context: ConversationContext): Promise<
           { tags: ['Ready-For-Human-Contact'] },
           {
             headers: {
-              'Authorization': `Bearer ${GHL_API_KEY}`,
+              'Authorization': `Bearer ${context.accessToken}`,
               'Content-Type': 'application/json'
             }
           }
@@ -309,7 +315,7 @@ export async function generateAIResponse(context: ConversationContext): Promise<
       }
 
       const handoffMessage = "Great! I'll have one of our property specialists reach out to you within the next few hours to discuss your options. Thanks for your interest!";
-      await sendGHLMessage(context.conversationId, handoffMessage, context.testMode, context.fromNumber);
+      await sendGHLMessage(context.conversationId, handoffMessage, context.accessToken || '', context.testMode, context.fromNumber);
       return handoffMessage;
     }
 
@@ -328,14 +334,16 @@ export async function generateAIResponse(context: ConversationContext): Promise<
     const aiMessage = await generateOpenAIResponse(context, propertyData || undefined);
 
     // Send response to GHL (skip in test mode)
-    await sendGHLMessage(context.conversationId, aiMessage, context.testMode, context.fromNumber);
+    await sendGHLMessage(context.conversationId, aiMessage, context.accessToken || '', context.testMode, context.fromNumber);
 
     return aiMessage;
 
   } catch (error) {
     console.error('Conversation handler error:', error);
     const fallbackMessage = "Thanks for your message! I'll have someone get back to you soon.";
-    await sendGHLMessage(context.conversationId, fallbackMessage, context.testMode, context.fromNumber);
+    if (context.accessToken) {
+      await sendGHLMessage(context.conversationId, fallbackMessage, context.accessToken, context.testMode, context.fromNumber);
+    }
     return fallbackMessage;
   }
 }

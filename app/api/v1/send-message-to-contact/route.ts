@@ -83,7 +83,8 @@ export async function POST(req: Request) {
       leadType,
       locationId: contact.locationId,
       contact,
-      fromNumber // Pass phone number to AI handler
+      fromNumber, // Pass phone number to AI handler
+      accessToken // Pass OAuth token for GHL API calls
     });
 
     return NextResponse.json({
