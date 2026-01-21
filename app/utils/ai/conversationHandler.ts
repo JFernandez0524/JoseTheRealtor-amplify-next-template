@@ -140,26 +140,20 @@ async function generateOpenAIResponse(context: ConversationContext, propertyData
     : `"I work with families in these situations because I've found that having both a 'speed' option and a 'top-dollar' option gives you the most control over your next move. I need to see the property condition and get some details to give you accurate numbers for both routes."`;
 
   const systemPrompt = isInitialOutreach 
-    ? `You are Jose Fernandez from RE/MAX Homeland Realtors reaching out to ${context.contactName} for the FIRST TIME about their ${context.leadType?.toLowerCase() || 'real estate'} situation.
+    ? `You are Jose Fernandez from RE/MAX Homeland Realtors reaching out to ${context.contactName} for the FIRST TIME via SMS about their ${context.leadType?.toLowerCase() || 'real estate'} situation.
 
-DELIVER THE COMPLETE 5-STEP SCRIPT AS YOUR INITIAL OUTREACH:
-1. Get Attention: "Hi, ${context.contactName}."
-2. Identify Yourself: "This is Jose Fernandez from RE/MAX Homeland Realtors."
-3. The Reason: ${scriptReason}
-4. The Bridge: ${scriptBridge}
-5. The Ask: "I'd like to stop by for a quick look this Wednesday at 3:00 PM to give you those figures. Does that work for you?"
+DELIVER THIS INITIAL OUTREACH MESSAGE:
 
-${propertyInfo}${offerInfo}
+"Hi ${context.contactName}, this is Jose Fernandez from RE/MAX Homeland Realtors. I saw the public notice about ${hasAddress ? context.propertyAddress : 'your property'} and wanted to see if I could make you a firm cash offer${hasPropertyData ? ` of $${cashOffer?.toLocaleString()}` : ''} to buy it directly, or help you list it for maximum value${hasPropertyData ? ` around $${propertyData.zestimate?.toLocaleString()}` : ''}. I work with families in these situations because having both a 'speed' option and a 'top-dollar' option gives you the most control. I just need 10 minutes to see the condition. Can I stop by Wednesday at 3 PM?"
 
-IMPORTANT:
-${!hasPropertyData ? '- You do NOT have property valuation data yet, so DO NOT mention specific dollar amounts' : '- You have property valuation data, include the specific offer amounts'}
-${!hasAddress ? '- You do NOT have the full property address' : ''}
-- This is your FIRST message to them - deliver the full script
-- Keep it under 160 characters for SMS
-- Be professional and empathetic
+INSTRUCTIONS:
+- Use the exact message above as your template
+- This is SMS, so it can be longer than 160 characters (up to 1600 is fine)
+- Be conversational and empathetic
+- Include the specific dollar amounts if available
 - End with the appointment ask
 
-Craft the initial outreach message:`
+Generate the initial outreach message:`
     : `You are Jose Fernandez from RE/MAX Homeland Realtors, helping homeowners with ${context.leadType?.toLowerCase() || 'real estate'} situations.
 
 FOLLOW THIS 5-STEP SCRIPT (adapt based on available information):
@@ -175,7 +169,7 @@ IMPORTANT INSTRUCTIONS:
 ${!hasPropertyData ? '- You do NOT have property valuation data yet, so DO NOT mention specific dollar amounts' : '- You have property valuation data, include the specific offer amounts'}
 ${!hasAddress ? '- You do NOT have the full property address, ask for it if needed' : ''}
 - If missing key information (address, value), focus on scheduling the property visit to gather details
-- Keep responses under 160 characters for SMS
+- Keep responses conversational and under 300 characters when possible
 - Goal: Get to "Yes, No, or Maybe" on a property visit
 - Present BOTH options: cash offer (speed) and listing (top dollar)
 - Be empathetic about their situation
