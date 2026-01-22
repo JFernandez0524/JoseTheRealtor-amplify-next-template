@@ -206,10 +206,10 @@ async function processUserContacts(integration: GhlIntegration): Promise<number>
         processed++;
         console.log(`✅ [DAILY_OUTREACH] Sent message ${processed}/${newContacts.length}`);
         
-        // Rate limiting: wait 5 minutes between messages
+        // Rate limiting: wait 2 seconds between messages
         if (processed < newContacts.length) {
-          console.log(`⏳ [DAILY_OUTREACH] Waiting 5 minutes before next message...`);
-          await new Promise(resolve => setTimeout(resolve, 300000)); // 5 minutes = 300,000ms
+          console.log(`⏳ [DAILY_OUTREACH] Waiting 2 seconds before next message...`);
+          await new Promise(resolve => setTimeout(resolve, 2000));
         }
       } catch (error) {
         console.error(`Failed to send outreach to contact ${contact.id}:`, error);
@@ -269,10 +269,10 @@ async function processQueueContacts(
       processed++;
       console.log(`✅ [QUEUE] Sent message ${processed}/${queueContacts.length}`);
       
-      // Rate limiting: wait 5 minutes between messages
+      // Rate limiting: wait 2 seconds between messages
       if (processed < queueContacts.length) {
-        console.log(`⏳ [QUEUE] Waiting 5 minutes before next message...`);
-        await new Promise(resolve => setTimeout(resolve, 300000));
+        console.log(`⏳ [QUEUE] Waiting 2 seconds before next message...`);
+        await new Promise(resolve => setTimeout(resolve, 2000));
       }
     } catch (error) {
       console.error(`❌ [QUEUE] Failed to send to contact ${queueItem.contactId}:`, error);

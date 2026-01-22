@@ -80,6 +80,10 @@ backend.manualGhlSync.addEnvironment(
   'AMPLIFY_DATA_GhlIntegration_TABLE_NAME',
   backend.data.resources.tables['GhlIntegration'].tableName
 );
+backend.manualGhlSync.addEnvironment(
+  'AMPLIFY_DATA_OutreachQueue_TABLE_NAME',
+  backend.data.resources.tables['OutreachQueue'].tableName
+);
 backend.manualGhlSync.addEnvironment('GHL_CLIENT_ID', process.env.GHL_CLIENT_ID || '');
 backend.manualGhlSync.addEnvironment('GHL_CLIENT_SECRET', process.env.GHL_CLIENT_SECRET || '');
 
@@ -107,6 +111,9 @@ backend.data.resources.tables['UserAccount'].grantReadWriteData(
   backend.manualGhlSync.resources.lambda
 );
 backend.data.resources.tables['GhlIntegration'].grantReadData(
+  backend.manualGhlSync.resources.lambda
+);
+backend.data.resources.tables['OutreachQueue'].grantReadWriteData(
   backend.manualGhlSync.resources.lambda
 );
 
@@ -151,11 +158,20 @@ backend.dailyOutreachAgent.addEnvironment(
   backend.data.resources.tables['GhlIntegration'].tableName
 );
 
+backend.dailyOutreachAgent.addEnvironment(
+  'AMPLIFY_DATA_OutreachQueue_TABLE_NAME',
+  backend.data.resources.tables['OutreachQueue'].tableName
+);
+
 backend.dailyOutreachAgent.addEnvironment('GHL_CLIENT_ID', process.env.GHL_CLIENT_ID || '');
 backend.dailyOutreachAgent.addEnvironment('GHL_CLIENT_SECRET', process.env.GHL_CLIENT_SECRET || '');
 backend.dailyOutreachAgent.addEnvironment('API_ENDPOINT', process.env.API_ENDPOINT || 'https://leads.JoseTheRealtor.com');
 
 backend.data.resources.tables['GhlIntegration'].grantReadData(
+  backend.dailyOutreachAgent.resources.lambda
+);
+
+backend.data.resources.tables['OutreachQueue'].grantReadWriteData(
   backend.dailyOutreachAgent.resources.lambda
 );
 
@@ -178,8 +194,17 @@ backend.dailyEmailAgent.addEnvironment(
   backend.data.resources.tables['GhlIntegration'].tableName
 );
 
+backend.dailyEmailAgent.addEnvironment(
+  'AMPLIFY_DATA_OutreachQueue_TABLE_NAME',
+  backend.data.resources.tables['OutreachQueue'].tableName
+);
+
 backend.dailyEmailAgent.addEnvironment('APP_URL', process.env.APP_URL || 'https://leads.josetherealtor.com');
 
 backend.data.resources.tables['GhlIntegration'].grantReadData(
+  backend.dailyEmailAgent.resources.lambda
+);
+
+backend.data.resources.tables['OutreachQueue'].grantReadWriteData(
   backend.dailyEmailAgent.resources.lambda
 );
