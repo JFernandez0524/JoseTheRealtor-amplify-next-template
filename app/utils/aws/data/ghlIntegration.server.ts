@@ -168,6 +168,9 @@ export async function refreshGhlToken(integrationId: string, refreshToken: strin
  * Called by /api/v1/oauth/callback after successful OAuth flow.
  * Stores access token, refresh token, and metadata.
  * 
+ * IMPORTANT: Automatically deactivates any existing integrations for this user
+ * to prevent duplicate/stale tokens from being used by agents.
+ * 
  * @param userId - The Cognito user ID
  * @param tokenData - OAuth token response data from GHL
  * 
@@ -188,6 +191,25 @@ export async function createGhlIntegration(userId: string, tokenData: {
   try {
     const { access_token, refresh_token, expires_in, locationId } = tokenData;
 
+    // 1. Deactivate any existing integrations for this user
+    console.log(`🔄 Checking for existing integrations for user ${userId}...`);
+    const { data: existingIntegrations } = await cookiesClient.models.GhlIntegration.list({
+      filter: { userId: { eq: userId } }
+    });
+
+    if (existingIntegrations && existingIntegrations.length > 0) {
+      console.log(`⚠️ Found ${existingIntegrations.length} existing integration(s), deactivating...`);
+      
+      for (const integration of existingIntegrations) {
+        await cookiesClient.models.GhlIntegration.update({
+          id: integration.id,
+          isActive: false,
+        });
+        console.log(`✅ Deactivated integration ${integration.id}`);
+      }
+    }
+
+    // 2. Create new active integration
     await cookiesClient.models.GhlIntegration.create({
       userId: userId,
       locationId: locationId || 'default',
