@@ -66,27 +66,66 @@ async function handleEmailReply(
       return;
     }
 
-    // Stop automated emails - contact has replied
-    await axios.put(
+    // Fetch full contact details
+    const contactResponse = await axios.get(
       `https://services.leadconnectorhq.com/contacts/${contactId}`,
-      {
-        tags: ['Email:Replied'], // Add tag to stop automation
-        customFields: [
-          { id: 'wWlrXoXeMXcM6kUexf2L', value: '99' } // Set counter to 99 to stop drip
-        ]
-      },
       {
         headers: {
           'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
           'Version': '2021-07-28'
         }
       }
     );
 
-    console.log(`✅ Marked contact ${contactId} as replied - stopped automation`);
+    const contact = contactResponse.data.contact;
 
-    // TODO: Notify user of reply (email, SMS, or dashboard notification)
+    // Check if AI is enabled for this contact
+    const aiState = contact?.customFields?.find((f: any) => f.id === '1NxQW2kKMVgozjSUuu7s')?.value;
+    
+    if (aiState === 'running' || aiState === 'not_started') {
+      // Generate AI response
+      const { generateEmailAIResponse } = await import('@/app/utils/ai/emailConversationHandler');
+      
+      const propertyAddress = contact?.customFields?.find((f: any) => f.id === 'p3NOYiInAERYbe0VsLHB')?.value;
+      const propertyCity = contact?.customFields?.find((f: any) => f.id === 'h4UIjKQvFu7oRW4SAY8W')?.value;
+      const propertyState = contact?.customFields?.find((f: any) => f.id === '9r9OpQaxYPxqbA6Hvtx7')?.value;
+      const propertyZip = contact?.customFields?.find((f: any) => f.id === 'hgbjsTVwcyID7umdhm2o')?.value;
+      const leadType = contact?.customFields?.find((f: any) => f.id === 'oaf4wCuM3Ub9eGpiddrO')?.value;
+
+      await generateEmailAIResponse({
+        contactId,
+        conversationId: 'auto',
+        incomingMessage: body,
+        contactName: `${contact.firstName || ''} ${contact.lastName || ''}`.trim(),
+        propertyAddress,
+        propertyCity,
+        propertyState,
+        propertyZip,
+        leadType,
+        locationId,
+        contact,
+        accessToken: token
+      });
+
+      console.log(`✅ AI email response sent to ${from}`);
+    } else {
+      // AI not active - just tag as replied
+      await axios.put(
+        `https://services.leadconnectorhq.com/contacts/${contactId}`,
+        {
+          tags: ['email:replied']
+        },
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+            'Version': '2021-07-28'
+          }
+        }
+      );
+
+      console.log(`✅ Marked contact ${contactId} as replied (AI not active)`);
+    }
 
   } catch (error: any) {
     console.error('Failed to handle email reply:', error.message);

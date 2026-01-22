@@ -7,6 +7,7 @@ import { skipTraceLeads } from './functions/skiptraceLeads/resource';
 import { manualGhlSync } from './functions/manualGhlSync/resource';
 import { aiFollowUpAgent } from './functions/aiFollowUpAgent/resource';
 import { dailyOutreachAgent } from './functions/dailyOutreachAgent/resource';
+import { dailyEmailAgent } from './functions/dailyEmailAgent/resource';
 import { bulkEmailCampaign } from './functions/bulkEmailCampaign/resource';
 import { addUserToGroup } from './data/add-user-to-group/resource';
 import { removeUserFromGroup } from './data/remove-user-from-group/resource';
@@ -23,6 +24,7 @@ const backend = defineBackend({
   manualGhlSync,
   aiFollowUpAgent,
   dailyOutreachAgent,
+  dailyEmailAgent,
   bulkEmailCampaign,
   addUserToGroup,
   removeUserFromGroup,
@@ -168,4 +170,16 @@ backend.bulkEmailCampaign.addEnvironment('GHL_CLIENT_SECRET', process.env.GHL_CL
 
 backend.data.resources.tables['GhlIntegration'].grantReadData(
   backend.bulkEmailCampaign.resources.lambda
+);
+
+// 📧 Configure Daily Email Agent
+backend.dailyEmailAgent.addEnvironment(
+  'GHL_INTEGRATION_TABLE_NAME',
+  backend.data.resources.tables['GhlIntegration'].tableName
+);
+
+backend.dailyEmailAgent.addEnvironment('APP_URL', process.env.APP_URL || 'https://leads.josetherealtor.com');
+
+backend.data.resources.tables['GhlIntegration'].grantReadData(
+  backend.dailyEmailAgent.resources.lambda
 );

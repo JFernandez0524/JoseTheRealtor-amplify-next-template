@@ -3,6 +3,7 @@ import { DynamoDBDocumentClient, ScanCommand } from '@aws-sdk/lib-dynamodb';
 import axios from 'axios';
 import { getValidGhlToken } from '../shared/ghlTokenManager';
 import { shouldSendNextMessage } from '../shared/dialTracking';
+import { isWithinBusinessHours, getNextBusinessHourMessage } from '../shared/businessHours';
 
 const dynamoClient = new DynamoDBClient({ region: process.env.AWS_REGION });
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
@@ -35,7 +36,9 @@ interface GhlIntegration {
  * 3. Send initial outreach message using AI
  * 
  * COMPLIANCE:
- * - Only sends messages during business hours (9 AM - 8 PM EST)
+ * - Monday-Friday: 9 AM - 7 PM EST
+ * - Saturday: 9 AM - 12 PM EST
+ * - Sunday: Closed
  * - Rate limited to 2 seconds between messages
  * - Respects Do Not Contact status
  */
@@ -43,18 +46,14 @@ export const handler = async (event: any) => {
   console.log('📤 [DAILY_OUTREACH] Starting daily outreach agent');
   console.log('📤 [DAILY_OUTREACH] Event:', JSON.stringify(event));
   
-  // Check if we're within business hours (9 AM - 8 PM EST)
-  const now = new Date();
-  const estHour = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' })).getHours();
-  
-  console.log(`⏰ [DAILY_OUTREACH] Current EST hour: ${estHour}`);
-  
-  if (estHour < 9 || estHour >= 20) {
-    console.log(`⏰ [DAILY_OUTREACH] Outside business hours (${estHour}:00 EST). Skipping outreach.`);
-    return { statusCode: 200, message: 'Outside business hours', contactsProcessed: 0 };
+  // Check if we're within business hours
+  if (!isWithinBusinessHours()) {
+    const message = getNextBusinessHourMessage();
+    console.log(`⏰ [DAILY_OUTREACH] ${message}`);
+    return { statusCode: 200, message, contactsProcessed: 0 };
   }
   
-  console.log(`✅ [DAILY_OUTREACH] Within business hours (${estHour}:00 EST). Proceeding.`);
+  console.log(`✅ [DAILY_OUTREACH] Within business hours. Proceeding.`);
   
   try {
     // 1. Get all active GHL integrations
