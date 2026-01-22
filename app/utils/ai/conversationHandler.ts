@@ -287,8 +287,8 @@ export async function generateAIResponse(context: ConversationContext): Promise<
 
     // 🛡️ Check if AI is enabled for this contact (app is source of truth)
     if (!context.testMode && !isAIEnabled(context.contact)) {
-      console.log(`AI disabled for contact ${context.contactId}`);
-      return 'Thanks for your message! Someone will get back to you soon.';
+      console.log(`❌ AI disabled for contact ${context.contactId}`);
+      throw new Error('AI is not enabled for this contact');
     }
 
     // Update AI state to running (skip in test mode)
@@ -339,12 +339,10 @@ export async function generateAIResponse(context: ConversationContext): Promise<
 
     return aiMessage;
 
-  } catch (error) {
-    console.error('Conversation handler error:', error);
-    const fallbackMessage = "Thanks for your message! I'll have someone get back to you soon.";
-    if (context.accessToken) {
-      await sendGHLMessage(context.conversationId, fallbackMessage, context.accessToken, context.testMode, context.fromNumber, context.contactId);
-    }
-    return fallbackMessage;
+  } catch (error: any) {
+    console.error('❌ Conversation handler error:', error);
+    console.error('❌ Error details:', JSON.stringify(error, null, 2));
+    console.error('❌ Context:', JSON.stringify(context, null, 2));
+    throw error; // Don't send fallback - let caller handle error
   }
 }

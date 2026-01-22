@@ -324,11 +324,8 @@ export async function generateEmailAIResponse(context: EmailConversationContext)
 
     // Check if AI is enabled for this contact
     if (!context.testMode && !isAIEnabled(context.contact)) {
-      console.log(`AI disabled for contact ${context.contactId}`);
-      return {
-        subject: 'Re: Your Property',
-        body: 'Thanks for your message! Someone will get back to you soon.'
-      };
+      console.log(`❌ AI disabled for contact ${context.contactId}`);
+      throw new Error('AI is not enabled for this contact');
     }
 
     // Update AI state to running
