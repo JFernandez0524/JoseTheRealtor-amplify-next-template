@@ -172,6 +172,9 @@ Their message: "${context.incomingMessage}"
 Respond following the script:`;
 
   try {
+    console.log('🤖 Calling OpenAI for message generation...');
+    console.log(`📝 Context: ${isInitialOutreach ? 'Initial outreach' : 'Reply'} for ${context.contactName}`);
+    
     const response = await axios.post(
       'https://api.openai.com/v1/chat/completions',
       {
@@ -196,9 +199,11 @@ Respond following the script:`;
       }
     );
 
-    return response.data.choices[0]?.message?.content || 'Thanks for your message. Let me get back to you shortly.';
-  } catch (error) {
-    console.error('OpenAI API error:', error);
+    const aiMessage = response.data.choices[0]?.message?.content || 'Thanks for your message. Let me get back to you shortly.';
+    console.log(`✅ OpenAI response: ${aiMessage.substring(0, 100)}...`);
+    return aiMessage;
+  } catch (error: any) {
+    console.error('❌ OpenAI API error:', error.response?.data || error.message);
     return 'Thanks for reaching out! I\'d love to help with your property. Can you tell me more about your situation?';
   }
 }
