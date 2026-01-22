@@ -73,10 +73,10 @@ export const handler = async (event: any) => {
   console.log('✅ Within business hours. Proceeding with email outreach.');
   
   try {
-    // Get all GHL integrations
+    // Get all GHL integrations (TEMPORARILY BYPASS campaignEmail requirement)
     const scanCommand = new ScanCommand({
       TableName: process.env.GHL_INTEGRATION_TABLE_NAME,
-      FilterExpression: 'attribute_exists(accessToken) AND attribute_exists(campaignEmail)',
+      FilterExpression: 'attribute_exists(accessToken)',
     });
     
     const result = await dynamoClient.send(scanCommand);
@@ -91,7 +91,7 @@ export const handler = async (event: any) => {
       userId: item.userId.S!,
       locationId: item.locationId.S!,
       accessToken: item.accessToken.S!,
-      campaignEmail: item.campaignEmail?.S,
+      campaignEmail: 'jose.fernandez@JoseTheRealtor.com', // HARDCODED - Remove when GHL scope approved
     }));
 
     console.log(`Found ${integrations.length} active integrations`);

@@ -38,15 +38,11 @@ function getBusinessDaysDiff(startDate: Date, endDate: Date): number {
 
 /**
  * Check if contact is ready for next outreach message
+ * 
+ * DIAL TRACKING DISABLED - Always returns true for immediate sending
  */
 export function shouldSendNextMessage(contact: any): boolean {
   const callAttempts = parseInt(contact.customFields?.find((f: any) => f.id === '0MD4Pp2LCyOSCbCjA5qF')?.value || '0');
-  const lastCallDate = contact.customFields?.find((f: any) => f.id === 'dWNGeSckpRoVUxXLgxMj')?.value;
-  
-  // First message - always send
-  if (!lastCallDate || callAttempts === 0) {
-    return true;
-  }
   
   // Max attempts reached
   if (callAttempts >= MAX_OUTREACH_ATTEMPTS) {
@@ -54,18 +50,8 @@ export function shouldSendNextMessage(contact: any): boolean {
     return false;
   }
   
-  // Check if 5 business days have passed
-  const lastCall = new Date(lastCallDate);
-  const now = new Date();
-  const businessDaysPassed = getBusinessDaysDiff(lastCall, now);
-  
-  if (businessDaysPassed >= BUSINESS_DAYS_BETWEEN_MESSAGES) {
-    console.log(`✅ Contact ${contact.id} ready for follow-up (${businessDaysPassed} business days since last message)`);
-    return true;
-  }
-  
-  console.log(`⏰ Contact ${contact.id} not ready yet (${businessDaysPassed}/${BUSINESS_DAYS_BETWEEN_MESSAGES} business days)`);
-  return false;
+  // DIAL TRACKING DISABLED - Send immediately
+  return true;
 }
 
 /**

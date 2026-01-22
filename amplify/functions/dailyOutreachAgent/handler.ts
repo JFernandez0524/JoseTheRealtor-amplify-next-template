@@ -117,14 +117,9 @@ async function processUserContacts(integration: GhlIntegration): Promise<number>
 
     const { token: accessToken, locationId } = ghlData;
 
-    // 2. Get user's phone number from database or GHL
-    const phoneNumber = await getGhlPhoneNumber(accessToken, locationId, integration.campaignPhone || integration.selectedPhoneNumber);
-    if (!phoneNumber) {
-      console.error(`No phone number found for location ${locationId}`);
-      return 0;
-    }
-    
-    console.log(`Using phone number: ${phoneNumber}`);
+    // 2. HARDCODED phone number (remove when GHL scope approved)
+    const phoneNumber = '+17328100182';
+    console.log(`Using hardcoded phone number: ${phoneNumber}`);
 
     // Update integration with fresh token
     const integrationWithToken = { ...integration, accessToken };
