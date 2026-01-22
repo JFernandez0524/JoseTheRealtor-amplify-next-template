@@ -204,7 +204,8 @@ Respond to their message:`;
     return aiMessage;
   } catch (error: any) {
     console.error('❌ OpenAI API error:', error.response?.data || error.message);
-    return 'Thanks for reaching out! I\'d love to help with your property. Can you tell me more about your situation?';
+    console.error('❌ Full error details:', JSON.stringify(error, null, 2));
+    throw new Error(`AI response generation failed: ${error.message}`);
   }
 }
 

@@ -59,6 +59,8 @@
 
 import { NextResponse } from 'next/server';
 import axios from 'axios';
+
+export async function POST(req: Request) {
   try {
     const payload = await req.json();
     console.log('📧 Email webhook received:', payload.type);

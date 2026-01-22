@@ -250,12 +250,10 @@ Generate the email response (return as JSON with "subject" and "body" fields):`;
       subject: result.subject || `Re: ${context.propertyAddress || 'Your Property'}`,
       body: result.body || 'Thanks for your message. I\'ll get back to you shortly.'
     };
-  } catch (error) {
-    console.error('OpenAI API error:', error);
-    return {
-      subject: `Re: ${context.propertyAddress || 'Your Property'}`,
-      body: 'Thanks for reaching out! I\'d love to help with your property. Can you tell me more about your situation?'
-    };
+  } catch (error: any) {
+    console.error('❌ OpenAI API error:', error);
+    console.error('❌ Full error details:', JSON.stringify(error, null, 2));
+    throw new Error(`AI email generation failed: ${error.message}`);
   }
 }
 
