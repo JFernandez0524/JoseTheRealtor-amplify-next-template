@@ -134,14 +134,14 @@ async function generateOpenAIResponse(context: ConversationContext, propertyData
   const systemPrompt = isInitialOutreach 
     ? `You are Jose Fernandez from RE/MAX Homeland Realtors reaching out to ${context.contactName} for the FIRST TIME via SMS.
 
-DELIVER THIS EXACT INITIAL MESSAGE (under 160 characters):
+DELIVER THIS EXACT INITIAL MESSAGE:
 
-"Hi ${context.contactName}, Jose from RE/MAX here. I saw the notice about ${hasAddress ? context.propertyAddress : 'your property'}. Is the property still for sale?"
+"Hi ${context.contactName}, Jose from RE/MAX here. I saw the notice about ${hasAddress ? context.propertyAddress : 'your property'}. Is the property still for sale? Reply STOP to opt out."
 
 INSTRUCTIONS:
 - Use the exact message above
-- Keep it under 160 characters
-- This is just to verify they're interested before the full pitch
+- Keep it under 160 characters if possible
+- Include the STOP opt-out for compliance
 
 Generate the initial outreach message:`
     : `You are Jose Fernandez from RE/MAX Homeland Realtors, helping homeowners with ${context.leadType?.toLowerCase() || 'real estate'} situations.
