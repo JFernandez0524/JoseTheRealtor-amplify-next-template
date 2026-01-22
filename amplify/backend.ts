@@ -15,6 +15,8 @@ import { removeUserFromGroup } from './data/remove-user-from-group/resource';
 import { EventType } from 'aws-cdk-lib/aws-s3';
 import { LambdaDestination } from 'aws-cdk-lib/aws-s3-notifications';
 import { PolicyStatement, Effect } from 'aws-cdk-lib/aws-iam';
+import { Rule, Schedule } from 'aws-cdk-lib/aws-events';
+import { LambdaFunction } from 'aws-cdk-lib/aws-events-targets';
 
 const backend = defineBackend({
   auth,
@@ -212,7 +214,16 @@ backend.data.resources.tables['OutreachQueue'].grantReadWriteData(
 );
 
 
-// 📬 Configure Inbound Message Poller
+// 📬 Configure Inbound Message Poller (runs every 10 minutes)
+import { Rule, Schedule } from 'aws-cdk-lib/aws-events';
+import { LambdaFunction } from 'aws-cdk-lib/aws-events-targets';
+
+const pollerRule = new Rule(backend.inboundMessagePoller.resources.lambda.stack, 'InboundPollerSchedule', {
+  schedule: Schedule.rate({ minutes: 10 })
+});
+
+pollerRule.addTarget(new LambdaFunction(backend.inboundMessagePoller.resources.lambda));
+
 backend.inboundMessagePoller.addEnvironment(
   'AMPLIFY_DATA_GhlIntegration_TABLE_NAME',
   backend.data.resources.tables['GhlIntegration'].tableName
