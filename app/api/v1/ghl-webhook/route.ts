@@ -109,7 +109,54 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: true, message: 'Ignored' });
     }
 
-    // 🔄 Update outreach queue status to REPLIED
+    // A2P Compliance: Check for opt-out keywords
+    const messageBody = message.body.toLowerCase().trim();
+    const optOutKeywords = ['stop', 'stopall', 'unsubscribe', 'cancel', 'end', 'quit'];
+    const isOptOut = optOutKeywords.some(keyword => messageBody === keyword || messageBody.includes(keyword));
+    
+    if (isOptOut) {
+      console.log(`🛑 [A2P] Opt-out keyword detected: "${message.body}"`);
+      
+      // Update queue status to OPTED_OUT
+      if (contactId) {
+        try {
+          const userId = contact?.customFields?.find((f: any) => f.id === 'CNoGugInWOC59hAPptxY')?.value;
+          
+          if (userId) {
+            const { DynamoDBClient } = await import('@aws-sdk/client-dynamodb');
+            const { DynamoDBDocumentClient, UpdateCommand } = await import('@aws-sdk/lib-dynamodb');
+            
+            const dynamoClient = new DynamoDBClient({ region: process.env.AWS_REGION });
+            const docClient = DynamoDBDocumentClient.from(dynamoClient);
+            
+            const queueId = `${userId}_${contactId}`;
+            
+            await docClient.send(new UpdateCommand({
+              TableName: process.env.AMPLIFY_DATA_OutreachQueue_TABLE_NAME,
+              Key: { id: queueId },
+              UpdateExpression: 'SET smsStatus = :status, updatedAt = :now',
+              ExpressionAttributeValues: {
+                ':status': 'OPTED_OUT',
+                ':now': new Date().toISOString(),
+              },
+            }));
+            
+            console.log(`✅ Updated queue status to OPTED_OUT for contact ${contactId}`);
+          }
+        } catch (queueError) {
+          console.error(`⚠️ Failed to update queue status:`, queueError);
+        }
+      }
+      
+      // Send confirmation message (required by A2P)
+      return NextResponse.json({ 
+        success: true, 
+        message: 'Opt-out processed',
+        autoReply: 'You have been unsubscribed. You will not receive further messages.'
+      });
+    }
+
+    // 🔄 Update outreach queue status to REPLIED (for non-opt-out messages)
     if (contactId) {
       try {
         // Get user ID from contact's custom fields (app_user_id)

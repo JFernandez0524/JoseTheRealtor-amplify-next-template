@@ -151,6 +151,18 @@ async function getAllActiveIntegrations(): Promise<GhlIntegration[]> {
 async function processUserContacts(integration: GhlIntegration): Promise<number> {
   console.log(`Processing contacts for user ${integration.userId}`);
   
+  // A2P Compliance: Check daily message count
+  const dailyLimit = 200; // A2P safe limit for new numbers
+  const currentCount = integration.dailyMessageCount || 0;
+  
+  if (currentCount >= dailyLimit) {
+    console.log(`⚠️ [A2P] Daily limit reached (${currentCount}/${dailyLimit}). Skipping outreach.`);
+    return 0;
+  }
+  
+  const remainingQuota = dailyLimit - currentCount;
+  console.log(`📊 [A2P] Daily quota: ${currentCount}/${dailyLimit} used, ${remainingQuota} remaining`);
+  
   try {
     // 1. Get valid GHL token and locationId (auto-refreshes if expired)
     const ghlData = await getValidGhlToken(integration.userId);
@@ -206,10 +218,10 @@ async function processUserContacts(integration: GhlIntegration): Promise<number>
         processed++;
         console.log(`✅ [DAILY_OUTREACH] Sent message ${processed}/${newContacts.length}`);
         
-        // Rate limiting: wait 2 seconds between messages
+        // A2P Compliance: Rate limiting to 1 message per second
         if (processed < newContacts.length) {
-          console.log(`⏳ [DAILY_OUTREACH] Waiting 2 seconds before next message...`);
-          await new Promise(resolve => setTimeout(resolve, 2000));
+          console.log(`⏳ [DAILY_OUTREACH] Waiting 1 second before next message (A2P compliance)...`);
+          await new Promise(resolve => setTimeout(resolve, 1000));
         }
       } catch (error) {
         console.error(`Failed to send outreach to contact ${contact.id}:`, error);
@@ -269,10 +281,10 @@ async function processQueueContacts(
       processed++;
       console.log(`✅ [QUEUE] Sent message ${processed}/${queueContacts.length}`);
       
-      // Rate limiting: wait 2 seconds between messages
+      // A2P Compliance: Rate limiting to 1 message per second
       if (processed < queueContacts.length) {
-        console.log(`⏳ [QUEUE] Waiting 2 seconds before next message...`);
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        console.log(`⏳ [QUEUE] Waiting 1 second before next message (A2P compliance)...`);
+        await new Promise(resolve => setTimeout(resolve, 1000));
       }
     } catch (error) {
       console.error(`❌ [QUEUE] Failed to send to contact ${queueItem.contactId}:`, error);
