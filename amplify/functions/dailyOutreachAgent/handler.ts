@@ -25,6 +25,9 @@ interface GhlIntegration {
   selectedPhoneNumber?: string;
   campaignPhone?: string;
   selectedEmail?: string;
+  dailyMessageCount?: number;
+  hourlyMessageCount?: number;
+  lastMessageSent?: string;
 }
 
 /**
