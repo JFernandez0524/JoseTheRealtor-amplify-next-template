@@ -76,35 +76,62 @@ export async function getValidGhlToken(userId: string): Promise<{ token: string;
       return null;
     }
 
-    console.log(`🔄 [TOKEN_MANAGER] Calling GHL token refresh endpoint...`);
-    const response = await axios.post('https://services.leadconnectorhq.com/oauth/token', {
-      client_id: GHL_CLIENT_ID,
-      client_secret: GHL_CLIENT_SECRET,
-      grant_type: 'refresh_token',
-      refresh_token: integration.refreshToken,
-    });
+    try {
+      console.log(`🔄 [TOKEN_MANAGER] Calling GHL token refresh endpoint...`);
+      const response = await axios.post('https://services.leadconnectorhq.com/oauth/token', {
+        client_id: GHL_CLIENT_ID,
+        client_secret: GHL_CLIENT_SECRET,
+        grant_type: 'refresh_token',
+        refresh_token: integration.refreshToken,
+      });
 
-    const { access_token, refresh_token, expires_in } = response.data;
-    const newExpiresAt = new Date(Date.now() + expires_in * 1000).toISOString();
-    
-    console.log(`✅ [TOKEN_MANAGER] Token refreshed, new expiry: ${newExpiresAt}`);
+      const { access_token, refresh_token, expires_in } = response.data;
+      const newExpiresAt = new Date(Date.now() + expires_in * 1000).toISOString();
+      
+      console.log(`✅ [TOKEN_MANAGER] Token refreshed, new expiry: ${newExpiresAt}`);
 
-    // Update token in database
-    console.log(`💾 [TOKEN_MANAGER] Updating token in DynamoDB...`);
-    await docClient.send(new UpdateCommand({
-      TableName: GHL_INTEGRATION_TABLE,
-      Key: { id: integration.id },
-      UpdateExpression: 'SET accessToken = :token, refreshToken = :refresh, expiresAt = :expires, updatedAt = :updated',
-      ExpressionAttributeValues: {
-        ':token': access_token,
-        ':refresh': refresh_token,
-        ':expires': newExpiresAt,
-        ':updated': new Date().toISOString(),
+      // Update token in database with conditional check to prevent race conditions
+      console.log(`💾 [TOKEN_MANAGER] Updating token in DynamoDB...`);
+      await docClient.send(new UpdateCommand({
+        TableName: GHL_INTEGRATION_TABLE,
+        Key: { id: integration.id },
+        UpdateExpression: 'SET accessToken = :token, refreshToken = :refresh, expiresAt = :expires, updatedAt = :updated',
+        ConditionExpression: 'refreshToken = :oldRefresh',
+        ExpressionAttributeValues: {
+          ':token': access_token,
+          ':refresh': refresh_token,
+          ':expires': newExpiresAt,
+          ':updated': new Date().toISOString(),
+          ':oldRefresh': integration.refreshToken,
+        }
+      }));
+
+      console.log(`✅ [TOKEN_MANAGER] Token refreshed and saved for user ${userId}`);
+      return { token: access_token, locationId: integration.locationId };
+    } catch (refreshError: any) {
+      // If conditional update failed, another process already refreshed - retry once
+      if (refreshError.name === 'ConditionalCheckFailedException') {
+        console.log(`🔄 [TOKEN_MANAGER] Token was refreshed by another process, re-fetching...`);
+        const { Items: retryItems } = await docClient.send(new ScanCommand({
+          TableName: GHL_INTEGRATION_TABLE,
+          FilterExpression: 'userId = :userId AND isActive = :active',
+          ExpressionAttributeValues: {
+            ':userId': userId,
+            ':active': true
+          }
+        }));
+        
+        if (retryItems && retryItems.length > 0) {
+          const updated = retryItems[0] as GhlIntegration;
+          const retryExpires = new Date(updated.expiresAt);
+          if (retryExpires > new Date()) {
+            console.log(`✅ [TOKEN_MANAGER] Using refreshed token from other process`);
+            return { token: updated.accessToken, locationId: updated.locationId };
+          }
+        }
       }
-    }));
-
-    console.log(`✅ [TOKEN_MANAGER] Token refreshed and saved for user ${userId}`);
-    return { token: access_token, locationId: integration.locationId };
+      throw refreshError;
+    }
 
   } catch (error: any) {
     console.error(`❌ [TOKEN_MANAGER] Failed to get/refresh token for user ${userId}:`, error.message);

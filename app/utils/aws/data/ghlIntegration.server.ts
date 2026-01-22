@@ -108,6 +108,17 @@ export async function refreshGhlToken(integrationId: string, refreshToken: strin
       return null;
     }
 
+    // Check if token was already refreshed by another process
+    const { data: current } = await cookiesClient.models.GhlIntegration.get({ id: integrationId });
+    if (current && current.refreshToken !== refreshToken) {
+      console.log(`🔄 Token already refreshed by another process, checking validity...`);
+      const expiresAt = new Date(current.expiresAt);
+      if (expiresAt > new Date()) {
+        console.log(`✅ Using already-refreshed token`);
+        return current.accessToken;
+      }
+    }
+
     // Call GHL OAuth token endpoint
     const response = await axios.post('https://services.leadconnectorhq.com/oauth/token', {
       client_id: GHL_CLIENT_ID,
@@ -132,6 +143,21 @@ export async function refreshGhlToken(integrationId: string, refreshToken: strin
 
   } catch (error: any) {
     console.error(`❌ Failed to refresh token:`, error.message);
+    
+    // If refresh failed, check if another process succeeded
+    try {
+      const { data: retry } = await cookiesClient.models.GhlIntegration.get({ id: integrationId });
+      if (retry && retry.refreshToken !== refreshToken) {
+        const expiresAt = new Date(retry.expiresAt);
+        if (expiresAt > new Date()) {
+          console.log(`✅ Another process refreshed token successfully`);
+          return retry.accessToken;
+        }
+      }
+    } catch (retryError) {
+      // Ignore retry errors
+    }
+    
     return null;
   }
 }
