@@ -13,24 +13,51 @@ interface GHLIntegration {
 }
 
 /**
- * Daily Email Outreach Agent
+ * DAILY EMAIL OUTREACH AGENT
  * 
- * Runs every day at 9 AM EST
- * Finds contacts with "ai outreach" tag who haven't been emailed
- * Sends personalized email using AMMO framework
+ * Automated Lambda function that sends personalized prospecting emails to leads
+ * using the AMMO framework (Audience-Message-Method-Outcome).
  * 
- * COMPLIANCE:
- * - Monday-Friday: 9 AM - 7 PM EST
- * - Saturday: 9 AM - 12 PM EST
- * - Sunday: Closed
- * - Rate limited to 2 seconds between emails
+ * SCHEDULE:
+ * - Runs every hour (configured in resource.ts)
+ * - Only sends during business hours (Mon-Fri 9AM-7PM, Sat 9AM-12PM EST)
+ * - Sunday: No emails sent
  * 
  * WORKFLOW:
- * 1. Get all active GHL integrations with campaignEmail configured
- * 2. For each integration, search for contacts with "ai outreach" tag
- * 3. Filter out contacts who have already been emailed
- * 4. Send email to each eligible contact
- * 5. Rate limit: 2 seconds between emails
+ * 1. Check if within business hours (exit if not)
+ * 2. Scan DynamoDB for active GHL integrations with campaignEmail configured
+ * 3. For each integration:
+ *    a. Search GHL for contacts with "ai outreach" tag
+ *    b. Filter contacts who haven't been emailed (email_attempt_counter = 0)
+ *    c. Send personalized email via /api/v1/send-email-to-contact
+ *    d. Update email_attempt_counter to 1
+ * 4. Rate limit: 2 seconds between emails
+ * 
+ * EMAIL CONTENT:
+ * - Subject: "Clarity on [Property Address]"
+ * - Professional salutation (name only, no "Hi/Hello")
+ * - Bullet points for cash offer and retail value
+ * - Signature block with contact information
+ * - Personalized with property details and Zestimate values
+ * 
+ * TRACKING:
+ * - email_attempt_counter: Incremented after sending
+ * - last_email_date: Updated with send timestamp
+ * - Prevents duplicate emails to same contact
+ * 
+ * ENVIRONMENT VARIABLES:
+ * - GHL_INTEGRATION_TABLE_NAME: DynamoDB table for GHL integrations
+ * - APP_URL: Base URL for API calls (e.g., https://leads.josetherealtor.com)
+ * 
+ * RELATED FILES:
+ * - /api/v1/send-email-to-contact - API route for email generation
+ * - /utils/ai/emailConversationHandler - Email content generator
+ * - /api/v1/ghl-email-webhook - Handles email replies
+ * - shared/businessHours - Business hours checker
+ * 
+ * MONITORING:
+ * - CloudWatch logs: /aws/lambda/dailyEmailAgent
+ * - Metrics: Total emails sent, success/failure counts
  */
 
 export const handler = async (event: any) => {

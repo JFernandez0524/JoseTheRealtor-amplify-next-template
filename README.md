@@ -8,8 +8,10 @@ A comprehensive real estate lead management platform built with AWS Amplify Gen2
 - **AI Lead Scoring**: Intelligent prioritization with 0-100 scores based on equity, value, timeline, location, and contact availability
 - **AI Insights Dashboard**: View top hottest leads, urgent attention items, and best ROI opportunities
 - **AI SMS Bot**: Automated text conversations with leads using OpenAI, following proven 5-step script for property visits
+- **AI Email Bot**: Automated email conversations using AMMO framework (Hook-Relate-Bridge-Ask) for professional prospecting
 - **Automated Email Campaigns**: Bulk prospecting emails with personalized property details, Zestimate values, and cash offers
 - **Multi-Channel Outreach**: Coordinated SMS and email campaigns with automatic reply/bounce detection and tagging
+- **Business Hours Compliance**: All outreach respects Mon-Fri 9AM-7PM, Sat 9AM-12PM EST schedule
 - **Property Enrichment (Preforeclosure)**: Real equity data, mortgage balances, and quality contact info via BatchData ($0.29/lead)
 - **Skip Tracing**: Pay-per-use contact lookup at $0.10 per skip (probate leads)
 - **Bulk Operations**: Update multiple lead statuses, skip trace, enrich, calculate AI scores, and sync in one click
@@ -185,7 +187,8 @@ For detailed deployment instructions, see the [Amplify documentation](https://do
    - Replies route directly to you
 
 10. **AI SMS Messaging (Automated Text Outreach)**
-   - **Daily Automation**: Runs every day at 9 AM EST
+   - **Daily Automation**: Runs every hour during business hours
+   - **Business Hours**: Mon-Fri 9AM-7PM, Sat 9AM-12PM EST (Sunday closed)
    - **Target Contacts**: New GHL contacts with "AI Outreach" tag who haven't been messaged
    - **Conversation Flow**:
      1. Initial outreach introduces you and mentions the property
@@ -194,13 +197,43 @@ For detailed deployment instructions, see the [Amplify documentation](https://do
      4. Follows proven 5-step script to schedule property visit
      5. Tags contact for human handoff when qualified
    - **Smart Features**:
-     - Respects business hours (9 AM - 8 PM EST only)
+     - Respects business hours automatically
      - Rate limited (2 seconds between messages)
      - Tracks conversation history to avoid duplicate messages
      - Automatically detects and tags replies
    - **Testing**: Use `/api/v1/test-ai-response` endpoint to test AI responses without sending SMS
 
-11. **Email Campaigns (Bulk Prospecting)**
+11. **AI Email Messaging (Automated Email Outreach)**
+   - **Daily Automation**: Runs every hour during business hours
+   - **Business Hours**: Mon-Fri 9AM-7PM, Sat 9AM-12PM EST (Sunday closed)
+   - **Target Contacts**: GHL contacts with "ai outreach" tag who haven't been emailed (email_attempt_counter = 0)
+   - **Email Framework**: Uses AMMO method (Audience-Message-Method-Outcome)
+   - **Email Structure (Hook-Relate-Bridge-Ask)**:
+     - **Hook**: Professional salutation (name only, no "Hi/Hello")
+     - **Relate**: Shows understanding of their probate/foreclosure situation
+     - **Bridge**: Presents two clear options (cash offer vs retail listing)
+     - **Ask**: Invites them to meet and discuss options
+   - **Email Content**:
+     - Subject: "Clarity on [Property Address]" (3-6 words)
+     - Personalized with contact's name and property details
+     - Bullet points for cash offer and retail value
+     - Professional signature block with contact info
+     - Includes specific dollar amounts when available
+   - **Reply Handling**:
+     - AI generates contextual responses to email replies
+     - Continues conversation toward property visit
+     - Detects handoff keywords and tags for human follow-up
+   - **Tracking**:
+     - Updates email_attempt_counter after sending
+     - Records last_email_date
+     - Prevents duplicate emails
+   - **Smart Features**:
+     - Respects business hours automatically
+     - Rate limited (2 seconds between emails)
+     - Multi-email support (sends to all addresses on contact)
+     - Bounce detection and automatic tagging
+
+12. **Email Campaigns (Manual Bulk Prospecting)**
    - **Manual Trigger**: Click "📧 Start Email Campaign" button in dashboard
    - **Target Contacts**: GHL contacts with "app:synced" tag who haven't been emailed
    - **Email Content**:
@@ -234,15 +267,16 @@ The platform provides REST APIs for integration:
 
 - `POST /api/v1/upload-leads` - Upload lead data
 - `POST /api/v1/analyze-property` - Property analysis
-- `POST /api/v1/send-message-to-contact` - Send AI outreach message (production)
+- `POST /api/v1/send-message-to-contact` - Send AI SMS outreach message (production)
+- `POST /api/v1/send-email-to-contact` - Send AI email outreach message (production)
 - `POST /api/v1/send-test-to-contact` - Send AI outreach message (testing)
 - `POST /api/v1/start-email-campaign` - Start bulk email campaign
 - `GET /api/v1/ghl-phone-numbers` - Get available GHL phone numbers
-- `POST /api/v1/ghl-email-webhook` - Handle email replies and bounces
+- `POST /api/v1/ghl-email-webhook` - Handle email replies and bounces (AI responses)
+- `POST /api/v1/ghl-webhook` - Handle SMS replies (AI responses)
 - `POST /api/v1/test-ai-response` - Test AI responses (no SMS sent)
 - `GET /api/v1/oauth/callback` - GHL OAuth callback
 - `POST /api/v1/oauth/refresh` - Refresh GHL OAuth token
-- `POST /api/v1/ghl-webhook` - Handle GHL webhooks
 
 ### AI Messaging System
 

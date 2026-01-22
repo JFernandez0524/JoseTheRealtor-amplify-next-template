@@ -177,14 +177,37 @@ export async function bulkUpdateStatus(
 
 /**
  * Skip trace leads
+ * 
+ * Initiates bulk skip trace operation for multiple leads.
+ * Returns detailed results including success/failure counts.
+ * 
+ * @param leadIds - Array of lead IDs to skip trace
+ * @returns Array of results with status for each lead
+ * 
+ * RESULT FORMAT:
+ * [
+ *   { leadId: string, status: 'SUCCESS' | 'FAILED' | 'NO_MATCH', ... },
+ *   ...
+ * ]
+ * 
+ * NOTES:
+ * - Response may be JSON string or object (auto-parsed)
+ * - Lambda updates lead records in DynamoDB
+ * - Credits deducted for successful traces
+ * - UI should refresh after operation completes
  */
 export async function skipTraceLeads(leadIds: string[]): Promise<any> {
   try {
     const { data, errors } = await client.mutations.skipTraceLeads({ leadIds });
     if (errors) {
+      console.error('Skip trace errors:', errors);
       throw new Error(errors[0].message);
     }
-    return data;
+    
+    // Parse JSON response if it's a string
+    const results = typeof data === 'string' ? JSON.parse(data) : data;
+    console.log('Skip trace results:', results);
+    return results;
   } catch (err) {
     console.error('Failed to skip trace leads:', err);
     throw err;
@@ -193,13 +216,36 @@ export async function skipTraceLeads(leadIds: string[]): Promise<any> {
 
 /**
  * Sync leads to GoHighLevel
+ * 
+ * Syncs multiple leads to GHL CRM in parallel.
+ * Uses Promise.allSettled to handle partial failures gracefully.
+ * 
+ * @param leadIds - Array of lead IDs to sync
+ * @returns Object with successful and failed counts
+ * 
+ * RETURN FORMAT:
+ * {
+ *   successful: number,  // Count of successfully synced leads
+ *   failed: number       // Count of failed syncs
+ * }
+ * 
+ * NOTES:
+ * - Each lead synced independently (partial failures allowed)
+ * - Lambda creates/updates contacts in GHL
+ * - Includes property details, Zestimate, and cash offer
+ * - UI should refresh after operation completes
  */
-export async function syncToGHL(leadIds: string[]): Promise<void> {
+export async function syncToGHL(leadIds: string[]): Promise<{ successful: number; failed: number }> {
   try {
-    await Promise.all(
+    const results = await Promise.allSettled(
       leadIds.map((id) => client.mutations.manualGhlSync({ leadId: id }))
     );
-    console.log(`✅ Synced ${leadIds.length} leads to GHL`);
+    
+    const successful = results.filter(r => r.status === 'fulfilled').length;
+    const failed = results.filter(r => r.status === 'rejected').length;
+    
+    console.log(`✅ GHL Sync complete: ${successful} successful, ${failed} failed`);
+    return { successful, failed };
   } catch (err) {
     console.error('Failed to sync to GHL:', err);
     throw err;

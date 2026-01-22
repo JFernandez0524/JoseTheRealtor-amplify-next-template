@@ -2,6 +2,37 @@ import axios from 'axios';
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
+/**
+ * EMAIL CONVERSATION HANDLER
+ * 
+ * Handles automated email conversations with leads using the AMMO framework
+ * (Audience-Message-Method-Outcome) and Hook-Relate-Bridge-Ask structure.
+ * 
+ * FRAMEWORK:
+ * - Hook: Professional salutation (name only, no "Hi/Hello")
+ * - Relate: Shows understanding of their probate/foreclosure situation
+ * - Bridge: Presents two clear options (cash offer vs retail listing)
+ * - Ask: Invites them to meet and discuss options
+ * 
+ * FEATURES:
+ * - Generates personalized emails with property-specific details
+ * - Includes cash offer (70% of Zestimate) and retail value
+ * - Professional formatting with bullet points
+ * - Signature block with contact information
+ * - Detects handoff keywords for human follow-up
+ * - Updates AI state in GHL custom fields
+ * 
+ * USAGE:
+ * - Initial outreach: Set incomingMessage to "initial_outreach"
+ * - Reply handling: Set incomingMessage to the contact's email body
+ * - Test mode: Set testMode to true to prevent sending
+ * 
+ * RELATED FILES:
+ * - /api/v1/send-email-to-contact - API route for sending emails
+ * - /api/v1/ghl-email-webhook - Webhook for handling replies
+ * - amplify/functions/dailyEmailAgent - Lambda for daily automation
+ */
+
 interface EmailConversationContext {
   contactId: string;
   conversationId: string;

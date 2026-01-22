@@ -8,16 +8,50 @@ import { generateEmailAIResponse } from '@/app/utils/ai/emailConversationHandler
  * Used by dailyEmailAgent Lambda for automated email outreach.
  * Does NOT require user authentication - uses provided access token.
  * 
+ * PURPOSE:
+ * - Generates and sends personalized prospecting emails to leads
+ * - Uses AMMO framework (Audience-Message-Method-Outcome)
+ * - Includes property details, cash offer, and retail value
+ * 
  * WORKFLOW:
  * 1. Validate access token provided in request
  * 2. Fetch contact data from GHL API
  * 3. Extract property info from custom fields
- * 4. Generate AI email using AMMO framework
+ * 4. Generate AI email using AMMO framework (Hook-Relate-Bridge-Ask)
  * 5. Send via GHL Conversations API
+ * 
+ * REQUEST BODY:
+ * {
+ *   contactId: string,      // GHL contact ID
+ *   accessToken: string,    // GHL OAuth token
+ *   fromEmail: string       // Verified email address to send from
+ * }
+ * 
+ * RESPONSE:
+ * {
+ *   success: boolean,
+ *   contactId: string,
+ *   conversationId: string,
+ *   subject: string         // Email subject line
+ * }
+ * 
+ * EMAIL FORMAT:
+ * - Subject: "Clarity on [Property Address]"
+ * - Salutation: "[Name]," (no "Hi/Hello")
+ * - Body: Hook-Relate-Bridge-Ask structure
+ * - Bullet points for cash offer and retail value
+ * - Signature block with contact information
  * 
  * USAGE:
  * POST /api/v1/send-email-to-contact
  * Body: { contactId: string, accessToken: string, fromEmail: string }
+ * 
+ * CALLED BY:
+ * - amplify/functions/dailyEmailAgent (automated outreach)
+ * 
+ * RELATED FILES:
+ * - /utils/ai/emailConversationHandler - Email content generator
+ * - /api/v1/ghl-email-webhook - Handles email replies
  */
 export async function POST(req: Request) {
   try {

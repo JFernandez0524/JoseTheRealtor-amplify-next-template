@@ -320,11 +320,11 @@ export default function LeadDashboardClient({}: Props) {
 
     setIsProcessing(true);
     try {
-      await syncToGHL(selectedIds);
-      alert(`Successfully initiated CRM sync for ${selectedIds.length} leads. Refreshing in 3 seconds...`);
+      const { successful, failed } = await syncToGHL(selectedIds);
+      alert(`CRM Sync Complete!\n✅ Successful: ${successful}\n❌ Failed: ${failed}`);
       setSelectedIds([]);
       
-      // Wait for Lambda to complete processing
+      // Wait for Lambda to complete processing, then refresh
       await new Promise(resolve => setTimeout(resolve, 3000));
       await refreshLeads();
     } catch (err) {

@@ -1,9 +1,32 @@
 /**
- * Business Hours Checker
+ * BUSINESS HOURS CHECKER
  * 
- * Monday-Friday: 9 AM - 7 PM EST
- * Saturday: 9 AM - 12 PM EST
- * Sunday: Closed
+ * Ensures all automated outreach (SMS and email) respects business hours
+ * to comply with best practices and avoid annoying leads.
+ * 
+ * SCHEDULE:
+ * - Monday-Friday: 9 AM - 7 PM EST
+ * - Saturday: 9 AM - 12 PM EST
+ * - Sunday: Closed
+ * 
+ * USAGE:
+ * ```typescript
+ * import { isWithinBusinessHours, getNextBusinessHourMessage } from './businessHours';
+ * 
+ * if (!isWithinBusinessHours()) {
+ *   console.log(getNextBusinessHourMessage());
+ *   return; // Skip outreach
+ * }
+ * ```
+ * 
+ * USED BY:
+ * - amplify/functions/dailyOutreachAgent (SMS automation)
+ * - amplify/functions/dailyEmailAgent (Email automation)
+ * 
+ * NOTES:
+ * - Converts UTC to EST automatically
+ * - Handles daylight saving time
+ * - Returns helpful messages about next available time
  */
 
 export function isWithinBusinessHours(): boolean {
