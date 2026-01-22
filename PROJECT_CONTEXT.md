@@ -45,6 +45,24 @@
 - ✅ `README.md` - Complete architecture section added
 - ✅ `PROJECT_CONTEXT.md` - Full system documentation added
 
+## Recent Fixes (Today)
+
+1. **Duplicate SMS Messages** - FIXED ✅
+   - Changed rate limit from 5 minutes to 2 seconds
+   - Added OutreachQueue environment variables
+   - Lambda no longer times out and restarts
+
+2. **Invalid JWT Errors** - FIXED ✅
+   - Cleaned up 12 old inactive GHL integrations
+   - Updated createGhlIntegration to auto-deactivate old integrations
+   - Only 1 active integration per user going forward
+   - Prevents stale tokens from being used by agents
+
+3. **OutreachQueue Backfill** - COMPLETE ✅
+   - All 22 existing contacts added to queue
+   - 17 contacts ready for next touch
+   - 5 contacts maxed out (8+ attempts)
+
 ### Recent Deployments (Today)
 1. **Automated Email Outreach System** - DEPLOYED ✅
    - Daily email agent runs hourly during business hours
