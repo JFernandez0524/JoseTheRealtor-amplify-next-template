@@ -1,20 +1,64 @@
-import { NextResponse } from 'next/server';
-import axios from 'axios';
-
 /**
  * GHL EMAIL WEBHOOK HANDLER
  * 
- * Handles email events from GoHighLevel:
- * - InboundMessage (email replies)
- * - EmailBounced (delivery failures)
+ * Handles email events from GoHighLevel and updates OutreachQueue status.
+ * Processes both email replies (InboundMessage) and bounces (EmailBounced).
+ * 
+ * WEBHOOK EVENTS:
+ * 1. InboundMessage (Email Reply)
+ *    - Contact replied to prospecting email
+ *    - Updates queue emailStatus to REPLIED
+ *    - Generates AI response using AMMO framework
+ *    - Tags contact with "email:replied"
+ *    - Stops further automated email touches
+ * 
+ * 2. EmailBounced (Delivery Failure)
+ *    - Email address is invalid or unreachable
+ *    - Updates queue emailStatus to BOUNCED
+ *    - Tags contact with "email:bounced"
+ *    - Stops further email attempts to that address
+ * 
+ * OUTREACH QUEUE INTEGRATION:
+ * - When contact replies: emailStatus → REPLIED (stops touches)
+ * - When email bounces: emailStatus → BOUNCED (stops touches)
+ * - Queue ID format: userId_contactId
+ * - Graceful error handling (doesn't fail webhook if queue update fails)
+ * 
+ * AI RESPONSE GENERATION (Replies Only):
+ * - Uses AMMO framework (Hook-Relate-Bridge-Ask)
+ * - Adapts to conversation context and property data
+ * - Detects handoff keywords (schedule, appointment, etc.)
+ * - Tags contact for human follow-up when qualified
+ * 
+ * WORKFLOW:
+ * 1. Receive webhook from GHL
+ * 2. Validate required fields (contactId, locationId)
+ * 3. Fetch contact details from GHL
+ * 4. Extract userId from custom field
+ * 5. 🔄 Update OutreachQueue status (REPLIED or BOUNCED)
+ * 6. For replies: Generate and send AI response
+ * 7. Update GHL tags and custom fields
  * 
  * WEBHOOK SETUP IN GHL:
  * Settings → Integrations → Webhooks
  * - Event: InboundMessage (Email)
  * - Event: EmailBounced
  * - URL: https://leads.josetherealtor.com/api/v1/ghl-email-webhook
+ * 
+ * RELATED FILES:
+ * - /utils/ai/emailConversationHandler - AI email response generator
+ * - shared/outreachQueue - Queue manager utilities
+ * - /functions/dailyEmailAgent - Email outreach agent
+ * 
+ * MONITORING:
+ * - Logs all webhook events
+ * - Tracks queue update success/failure
+ * - Records AI response generation
+ * - Monitors bounce rate
  */
-export async function POST(req: Request) {
+
+import { NextResponse } from 'next/server';
+import axios from 'axios';
   try {
     const payload = await req.json();
     console.log('📧 Email webhook received:', payload.type);

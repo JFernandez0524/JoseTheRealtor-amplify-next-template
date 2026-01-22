@@ -211,14 +211,14 @@ For detailed deployment instructions, see the [Amplify documentation](https://do
      - Sub-second queries vs 2-3 second GHL searches
      - Better tracking and analytics
      - Costs pennies instead of dollars per operation
-   - **7-Touch Cadence**: Each phone/email gets up to 7 touches over 30 days
+   - **7-Touch Cadence**: Each phone/email gets up to 7 touches over 28 days
      - Touch 1: Day 1 (immediate)
-     - Touch 2: Day 5
-     - Touch 3: Day 9
-     - Touch 4: Day 13
-     - Touch 5: Day 17
-     - Touch 6: Day 21
-     - Touch 7: Day 25
+     - Touch 2: Day 5 (4 days later)
+     - Touch 3: Day 9 (4 days later)
+     - Touch 4: Day 13 (4 days later)
+     - Touch 5: Day 17 (4 days later)
+     - Touch 6: Day 21 (4 days later)
+     - Touch 7: Day 25 (4 days later)
    - **Multi-Contact Support**: Contacts with multiple phones/emails get 7 touches per channel
      - Example: 2 phones + 2 emails = up to 28 total touches (7×4)
    - **How It Works**:
@@ -230,7 +230,14 @@ For detailed deployment instructions, see the [Amplify documentation](https://do
      - SMS: PENDING (ready for next touch) → REPLIED/FAILED/OPTED_OUT (stop)
      - Email: PENDING (ready for next touch) → REPLIED/BOUNCED/FAILED/OPTED_OUT (stop)
    - **Fallback**: If queue is empty or fails, agents fall back to GHL search (no breaking changes)
-   - **Implementation**: `amplify/functions/shared/outreachQueue.ts`
+   - **Architecture**:
+     - **Queue Manager**: `amplify/functions/shared/outreachQueue.ts`
+     - **Schema**: `amplify/data/resource.ts` (OutreachQueue model)
+     - **SMS Agent**: `amplify/functions/dailyOutreachAgent/handler.ts` (uses queue)
+     - **Email Agent**: `amplify/functions/dailyEmailAgent/handler.ts` (uses queue)
+     - **SMS Webhook**: `app/api/v1/ghl-webhook/route.ts` (updates queue on replies)
+     - **Email Webhook**: `app/api/v1/ghl-email-webhook/route.ts` (updates queue on replies/bounces)
+     - **Sync Handler**: `amplify/functions/manualGhlSync/integrations/gohighlevel.ts` (adds to queue)
 
 12. **AI Email Messaging (Automated Email Outreach)**
    - **Daily Automation**: Runs every hour during business hours

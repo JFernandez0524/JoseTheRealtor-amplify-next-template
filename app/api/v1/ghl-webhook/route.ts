@@ -1,3 +1,46 @@
+/**
+ * GHL SMS WEBHOOK HANDLER
+ * 
+ * Handles inbound SMS messages from GoHighLevel and generates AI responses.
+ * Also updates OutreachQueue status to stop further automated touches.
+ * 
+ * WORKFLOW:
+ * 1. Verify webhook signature (GHL public key)
+ * 2. Check for duplicate webhooks (prevent double processing)
+ * 3. Extract contact info and message content
+ * 4. 🔄 Update OutreachQueue status to REPLIED (stops further SMS touches)
+ * 5. Generate AI response using conversation handler
+ * 6. Send response via GHL API
+ * 7. Update GHL custom fields (call_attempt_counter, last_call_date)
+ * 
+ * OUTREACH QUEUE INTEGRATION:
+ * - When contact replies, updates smsStatus to REPLIED
+ * - Prevents further automated SMS touches to that contact
+ * - Queue ID format: userId_contactId
+ * - Graceful error handling (doesn't fail webhook if queue update fails)
+ * 
+ * AI RESPONSE GENERATION:
+ * - Uses 5-step proven script for property visits
+ * - Adapts to conversation context and property data
+ * - Detects handoff keywords (schedule, appointment, etc.)
+ * - Tags contact for human follow-up when qualified
+ * 
+ * SECURITY:
+ * - Verifies webhook signature using GHL public key
+ * - Prevents replay attacks with processed webhook tracking
+ * - Validates required fields before processing
+ * 
+ * RELATED FILES:
+ * - /utils/ai/conversationHandler - AI response generator
+ * - shared/outreachQueue - Queue manager utilities
+ * - /functions/dailyOutreachAgent - SMS outreach agent
+ * 
+ * MONITORING:
+ * - Logs all webhook events
+ * - Tracks queue update success/failure
+ * - Records AI response generation
+ */
+
 import { NextResponse } from 'next/server';
 import { generateAIResponse } from '@/app/utils/ai/conversationHandler';
 import crypto from 'crypto';
