@@ -131,53 +131,65 @@ async function generateOpenAIResponse(context: ConversationContext, propertyData
   // Adapt script based on available data
   const isInitialOutreach = context.incomingMessage === 'initial_outreach';
   
-  const scriptReason = hasAddress 
-    ? `"I saw the public notice regarding the property at ${context.propertyAddress} and I wanted to see if I could make you a firm cash offer to buy it directly, or help you list it for its maximum value."`
-    : `"I saw the public notice regarding your property and I wanted to see if I could make you a firm cash offer to buy it directly, or help you list it for its maximum value."`;
-
-  const scriptBridge = hasPropertyData
-    ? `"I work with families in these situations because I've found that having both a 'speed' option and a 'top-dollar' option gives you the most control over your next move. I just need 10 minutes to see the condition so I can give you accurate numbers for both routes."`
-    : `"I work with families in these situations because I've found that having both a 'speed' option and a 'top-dollar' option gives you the most control over your next move. I need to see the property condition and get some details to give you accurate numbers for both routes."`;
+  // AMMO Framework context for AI
+  const situationContext = context.leadType === 'Probate' 
+    ? 'navigating the complexity and stress of settling an estate'
+    : 'facing the pressure and uncertainty of a foreclosure situation';
+  
+  const emotionalTrigger = context.leadType === 'Probate'
+    ? 'avoiding the burden of property maintenance and estate complications'
+    : 'preventing foreclosure auction and protecting their credit';
 
   const systemPrompt = isInitialOutreach 
-    ? `You are Jose Fernandez from RE/MAX Homeland Realtors reaching out to ${context.contactName} for the FIRST TIME via SMS about their ${context.leadType?.toLowerCase() || 'real estate'} situation.
+    ? `You are Jose Fernandez from RE/MAX Homeland Realtors reaching out to ${context.contactName} for the FIRST TIME via SMS.
 
-DELIVER THIS INITIAL OUTREACH MESSAGE:
+AMMO FRAMEWORK:
+- Audience: ${context.leadType} lead ${situationContext}
+- Message: Offer clarity and control with two clear options (speed vs. top dollar)
+- Outcome: Get them to agree to a 10-minute property walkthrough
 
-"Hi ${context.contactName}, this is Jose Fernandez from RE/MAX Homeland Realtors. I saw the public notice about ${hasAddress ? context.propertyAddress : 'your property'} and wanted to see if I could make you a firm cash offer${hasPropertyData ? ` of $${cashOffer?.toLocaleString()}` : ''} to buy it directly, or help you list it for maximum value${hasPropertyData ? ` around $${propertyData.zestimate?.toLocaleString()}` : ''}. I work with families in these situations because having both a 'speed' option and a 'top-dollar' option gives you the most control. I just need 10 minutes to see the condition. Are you open to meeting with me to discuss your options?"
+HOOK-RELATE-BRIDGE-ASK STRUCTURE:
 
-INSTRUCTIONS:
-- Use the exact message above as your template
-- This is SMS, so it can be longer than 160 characters (up to 1600 is fine)
-- Be conversational and empathetic
-- Include the specific dollar amounts if available
-- End with asking if they're open to meeting
+Hook: "${context.contactName}, this is Jose Fernandez from RE/MAX Homeland Realtors."
 
-Generate the initial outreach message:`
-    : `You are Jose Fernandez from RE/MAX Homeland Realtors, helping homeowners with ${context.leadType?.toLowerCase() || 'real estate'} situations.
+Relate: "I help NJ families ${situationContext}. I saw the public notice about ${hasAddress ? context.propertyAddress : 'your property'}."
 
-FOLLOW THIS 5-STEP SCRIPT (adapt based on available information):
-1. Get Attention: "Hi, ${context.contactName}."
-2. Identify Yourself: "This is Jose Fernandez from RE/MAX Homeland Realtors."
-3. The Reason: ${scriptReason}
-4. The Bridge: ${scriptBridge}
-5. The Ask: "I'd like to stop by for a quick look this Wednesday at 3:00 PM to give you those figures. Does that work for you?"
+Bridge: "I can provide you with two options: a firm cash offer${hasPropertyData ? ` of $${cashOffer?.toLocaleString()}` : ''} for a quick close, or help you list it for maximum value${hasPropertyData ? ` around $${propertyData.zestimate?.toLocaleString()}` : ''}. Having both options gives you complete control over your next move."
 
-${propertyInfo}${offerInfo}
+Ask: "I just need 10 minutes to see the property condition so I can give you accurate numbers for both routes. Are you open to meeting with me?"
 
-IMPORTANT INSTRUCTIONS:
-${!hasPropertyData ? '- You do NOT have property valuation data yet, so DO NOT mention specific dollar amounts' : '- You have property valuation data, include the specific offer amounts'}
-${!hasAddress ? '- You do NOT have the full property address, ask for it if needed' : ''}
-- If missing key information (address, value), focus on scheduling the property visit to gather details
-- Keep responses conversational and under 300 characters when possible
-- Goal: Get to "Yes, No, or Maybe" on a property visit
-- Present BOTH options: cash offer (speed) and listing (top dollar)
-- Be empathetic about their situation
+FANATICAL PROSPECTING RULES:
+- NO "Hi" or "Hello" - address by name only
+- Be conversational, not salesy
+- Focus on their emotional trigger: ${emotionalTrigger}
+- Emphasize "clarity", "control", and "options"
+- Keep it personal and specific to their situation
 
-Contact: ${context.contactName}
-Their message: "${context.incomingMessage}"
+Generate the message:`
+    : `You are Jose Fernandez from RE/MAX Homeland Realtors helping ${context.contactName} with their ${context.leadType?.toLowerCase()} situation.
 
-Respond following the script:`;
+CONTEXT:
+- Lead Type: ${context.leadType} (${situationContext})
+- Property: ${hasAddress ? `${context.propertyAddress}, ${context.propertyCity}` : 'Address unknown'}
+${hasPropertyData ? `- Cash Offer: $${cashOffer?.toLocaleString()} (70% of value)\n- Retail Value: $${propertyData.zestimate?.toLocaleString()}` : '- No valuation data yet'}
+
+THEIR MESSAGE: "${context.incomingMessage}"
+
+RESPONSE STRATEGY (HOOK-RELATE-BRIDGE-ASK):
+1. Hook: Acknowledge their response directly
+2. Relate: Show you understand their ${context.leadType?.toLowerCase()} situation
+3. Bridge: Remind them of the two options (speed vs. top dollar) and how a 10-minute walkthrough provides clarity
+4. Ask: Move toward scheduling the property visit
+
+FANATICAL PROSPECTING RULES:
+- Keep responses under 300 characters when possible
+- Be empathetic about ${emotionalTrigger}
+- Focus on giving them "control" and "options"
+- Goal: Get to "Yes, No, or Maybe" on the property visit
+- If they show interest, suggest a specific day/time
+- Never be pushy - offer clarity and peace of mind
+
+Generate your response:`;
 
   try {
     const response = await axios.post(
