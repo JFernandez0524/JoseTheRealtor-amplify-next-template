@@ -66,6 +66,39 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: true, message: 'Ignored' });
     }
 
+    // 🔄 Update outreach queue status to REPLIED
+    if (contactId) {
+      try {
+        // Get user ID from contact's custom fields (app_user_id)
+        const userId = contact?.customFields?.find((f: any) => f.id === 'CNoGugInWOC59hAPptxY')?.value;
+        
+        if (userId) {
+          const { DynamoDBClient } = await import('@aws-sdk/client-dynamodb');
+          const { DynamoDBDocumentClient, UpdateCommand } = await import('@aws-sdk/lib-dynamodb');
+          
+          const dynamoClient = new DynamoDBClient({ region: process.env.AWS_REGION });
+          const docClient = DynamoDBDocumentClient.from(dynamoClient);
+          
+          const queueId = `${userId}_${contactId}`;
+          
+          await docClient.send(new UpdateCommand({
+            TableName: process.env.AMPLIFY_DATA_OutreachQueue_TABLE_NAME,
+            Key: { id: queueId },
+            UpdateExpression: 'SET smsStatus = :status, updatedAt = :now',
+            ExpressionAttributeValues: {
+              ':status': 'REPLIED',
+              ':now': new Date().toISOString(),
+            },
+          }));
+          
+          console.log(`✅ Updated queue status to REPLIED for contact ${contactId}`);
+        }
+      } catch (queueError) {
+        console.error(`⚠️ Failed to update queue status:`, queueError);
+        // Don't fail webhook processing if queue update fails
+      }
+    }
+
     // 3. Process asynchronously
     setImmediate(() => {
       processConversationAsync(body);

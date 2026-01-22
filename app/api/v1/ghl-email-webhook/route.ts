@@ -78,6 +78,35 @@ async function handleEmailReply(
     );
 
     const contact = contactResponse.data.contact;
+    
+    // 🔄 Update outreach queue status to REPLIED
+    const userId = contact?.customFields?.find((f: any) => f.id === 'CNoGugInWOC59hAPptxY')?.value;
+    
+    if (userId) {
+      try {
+        const { DynamoDBClient } = await import('@aws-sdk/client-dynamodb');
+        const { DynamoDBDocumentClient, UpdateCommand } = await import('@aws-sdk/lib-dynamodb');
+        
+        const dynamoClient = new DynamoDBClient({ region: process.env.AWS_REGION });
+        const docClient = DynamoDBDocumentClient.from(dynamoClient);
+        
+        const queueId = `${userId}_${contactId}`;
+        
+        await docClient.send(new UpdateCommand({
+          TableName: process.env.AMPLIFY_DATA_OutreachQueue_TABLE_NAME,
+          Key: { id: queueId },
+          UpdateExpression: 'SET emailStatus = :status, updatedAt = :now',
+          ExpressionAttributeValues: {
+            ':status': 'REPLIED',
+            ':now': new Date().toISOString(),
+          },
+        }));
+        
+        console.log(`✅ Updated queue status to REPLIED for contact ${contactId}`);
+      } catch (queueError) {
+        console.error(`⚠️ Failed to update queue status:`, queueError);
+      }
+    }
 
     // Check if AI is enabled for this contact
     const aiState = contact?.customFields?.find((f: any) => f.id === '1NxQW2kKMVgozjSUuu7s')?.value;
@@ -148,6 +177,47 @@ async function handleEmailBounce(
     if (!token) {
       console.error('No GHL integration found for location:', locationId);
       return;
+    }
+
+    // Fetch contact to get userId
+    const contactResponse = await axios.get(
+      `https://services.leadconnectorhq.com/contacts/${contactId}`,
+      {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Version': '2021-07-28'
+        }
+      }
+    );
+
+    const contact = contactResponse.data.contact;
+    const userId = contact?.customFields?.find((f: any) => f.id === 'CNoGugInWOC59hAPptxY')?.value;
+    
+    // 🔄 Update outreach queue status to BOUNCED
+    if (userId) {
+      try {
+        const { DynamoDBClient } = await import('@aws-sdk/client-dynamodb');
+        const { DynamoDBDocumentClient, UpdateCommand } = await import('@aws-sdk/lib-dynamodb');
+        
+        const dynamoClient = new DynamoDBClient({ region: process.env.AWS_REGION });
+        const docClient = DynamoDBDocumentClient.from(dynamoClient);
+        
+        const queueId = `${userId}_${contactId}`;
+        
+        await docClient.send(new UpdateCommand({
+          TableName: process.env.AMPLIFY_DATA_OutreachQueue_TABLE_NAME,
+          Key: { id: queueId },
+          UpdateExpression: 'SET emailStatus = :status, updatedAt = :now',
+          ExpressionAttributeValues: {
+            ':status': 'BOUNCED',
+            ':now': new Date().toISOString(),
+          },
+        }));
+        
+        console.log(`✅ Updated queue status to BOUNCED for contact ${contactId}`);
+      } catch (queueError) {
+        console.error(`⚠️ Failed to update queue status:`, queueError);
+      }
     }
 
     // Mark contact with bounce tag and stop emails

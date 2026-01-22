@@ -273,6 +273,29 @@ export async function syncToGoHighLevel(
     });
     const contactId = res.data?.contact?.id;
     
+    // 📋 Add to outreach queue if contact has "ai outreach" tag
+    if (contactId && tags.includes('ai outreach')) {
+      try {
+        const { addToOutreachQueue } = await import('../../shared/outreachQueue');
+        await addToOutreachQueue({
+          userId,
+          locationId: ghlLocationId,
+          contactId,
+          contactName: `${basePayload.firstName} ${basePayload.lastName}`,
+          contactPhone: specificPhone,
+          contactEmail: primaryEmail || undefined,
+          propertyAddress: lead.ownerAddress,
+          propertyCity: lead.ownerCity,
+          propertyState: lead.ownerState,
+          leadType: lead.type,
+        });
+        console.log(`✅ Added contact ${contactId} to outreach queue`);
+      } catch (queueError) {
+        console.error(`⚠️ Failed to add to outreach queue:`, queueError);
+        // Don't fail the sync if queue add fails
+      }
+    }
+    
     // 📧 Send initial prospecting email if contact has email
     if (contactId && primaryEmail) {
       await sendInitialProspectingEmail(ghl, contactId, lead, primaryEmail, ghlLocationId);

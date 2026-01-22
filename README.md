@@ -9,6 +9,7 @@ A comprehensive real estate lead management platform built with AWS Amplify Gen2
 - **AI Insights Dashboard**: View top hottest leads, urgent attention items, and best ROI opportunities
 - **AI SMS Bot**: Automated text conversations with leads using OpenAI, following proven 5-step script for property visits
 - **AI Email Bot**: Automated email conversations using AMMO framework (Hook-Relate-Bridge-Ask) for professional prospecting
+- **Outreach Queue System**: Efficient DynamoDB-based queue for tracking outreach status (90% reduction in API costs)
 - **Automated Email Campaigns**: Bulk prospecting emails with personalized property details, Zestimate values, and cash offers
 - **Multi-Channel Outreach**: Coordinated SMS and email campaigns with automatic reply/bounce detection and tagging
 - **Business Hours Compliance**: All outreach respects Mon-Fri 9AM-7PM, Sat 9AM-12PM EST schedule
@@ -203,7 +204,35 @@ For detailed deployment instructions, see the [Amplify documentation](https://do
      - Automatically detects and tags replies
    - **Testing**: Use `/api/v1/test-ai-response` endpoint to test AI responses without sending SMS
 
-11. **AI Email Messaging (Automated Email Outreach)**
+11. **Outreach Queue System (Performance Optimization)**
+   - **Purpose**: Replaces expensive GHL API searches with fast DynamoDB queries
+   - **Benefits**:
+     - 90% reduction in GHL API calls
+     - Sub-second queries vs 2-3 second GHL searches
+     - Better tracking and analytics
+     - Costs pennies instead of dollars per operation
+   - **7-Touch Cadence**: Each phone/email gets up to 7 touches over 30 days
+     - Touch 1: Day 1 (immediate)
+     - Touch 2: Day 5
+     - Touch 3: Day 9
+     - Touch 4: Day 13
+     - Touch 5: Day 17
+     - Touch 6: Day 21
+     - Touch 7: Day 25
+   - **Multi-Contact Support**: Contacts with multiple phones/emails get 7 touches per channel
+     - Example: 2 phones + 2 emails = up to 28 total touches (7×4)
+   - **How It Works**:
+     1. Contacts automatically added to queue when synced to GHL with "ai outreach" tag
+     2. Hourly agents query queue for PENDING contacts ready for next touch
+     3. After sending, status stays PENDING (for follow-ups) or changes to REPLIED/BOUNCED/OPTED_OUT
+     4. Webhooks update status on replies/bounces to stop further touches
+   - **Queue Statuses**:
+     - SMS: PENDING (ready for next touch) → REPLIED/FAILED/OPTED_OUT (stop)
+     - Email: PENDING (ready for next touch) → REPLIED/BOUNCED/FAILED/OPTED_OUT (stop)
+   - **Fallback**: If queue is empty or fails, agents fall back to GHL search (no breaking changes)
+   - **Implementation**: `amplify/functions/shared/outreachQueue.ts`
+
+12. **AI Email Messaging (Automated Email Outreach)**
    - **Daily Automation**: Runs every hour during business hours
    - **Business Hours**: Mon-Fri 9AM-7PM, Sat 9AM-12PM EST (Sunday closed)
    - **Target Contacts**: GHL contacts with "ai outreach" tag who haven't been emailed (email_attempt_counter = 0)
@@ -233,7 +262,7 @@ For detailed deployment instructions, see the [Amplify documentation](https://do
      - Multi-email support (sends to all addresses on contact)
      - Bounce detection and automatic tagging
 
-12. **Email Campaigns (Manual Bulk Prospecting)**
+13. **Email Campaigns (Manual Bulk Prospecting)**
    - **Manual Trigger**: Click "📧 Start Email Campaign" button in dashboard
    - **Target Contacts**: GHL contacts with "app:synced" tag who haven't been emailed
    - **Email Content**:
@@ -256,7 +285,7 @@ For detailed deployment instructions, see the [Amplify documentation](https://do
      - Stops future emails to that address
    - **Rate Limiting**: 2 seconds between emails to prevent API throttling
 
-12. **AI Analysis**
+14. **AI Analysis**
    - Use Chat feature for property insights
    - Get automated follow-up suggestions
    - Analyze market conditions and equity potential

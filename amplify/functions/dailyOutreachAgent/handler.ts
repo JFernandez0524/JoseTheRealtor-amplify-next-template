@@ -124,10 +124,23 @@ async function processUserContacts(integration: GhlIntegration): Promise<number>
     // Update integration with fresh token
     const integrationWithToken = { ...integration, accessToken };
 
-    // 3. Get all contacts from GHL
+    // 3. 🚀 NEW: Try queue-based approach first (fast, cheap)
+    try {
+      const { getPendingSmsContacts } = await import('../shared/outreachQueue');
+      const queueContacts = await getPendingSmsContacts(integration.userId, 50);
+      
+      if (queueContacts.length > 0) {
+        console.log(`📋 [QUEUE] Found ${queueContacts.length} pending SMS contacts in queue`);
+        return await processQueueContacts(queueContacts, integrationWithToken, phoneNumber);
+      }
+      
+      console.log(`📋 [QUEUE] No pending contacts in queue, falling back to GHL search`);
+    } catch (queueError) {
+      console.error(`⚠️ [QUEUE] Queue query failed, falling back to GHL search:`, queueError);
+    }
+
+    // 4. 🔄 FALLBACK: Use old GHL search method (slower, more expensive)
     const contacts = await fetchGHLContacts(integrationWithToken);
-    
-    // 4. Filter to contacts with no conversation history
     const newContacts = await filterNewContacts(contacts, integrationWithToken);
     
     console.log(`Found ${newContacts.length} new contacts without outreach`);
@@ -165,6 +178,66 @@ async function processUserContacts(integration: GhlIntegration): Promise<number>
     console.error(`Error processing user contacts:`, error);
     return 0;
   }
+}
+
+/**
+ * 🚀 NEW: Process contacts from outreach queue (fast, cheap)
+ * Uses DynamoDB queue instead of expensive GHL searches
+ */
+async function processQueueContacts(
+  queueContacts: any[],
+  integration: GhlIntegration,
+  phoneNumber: string
+): Promise<number> {
+  const { updateSmsStatus } = await import('../shared/outreachQueue');
+  let processed = 0;
+  
+  for (const queueItem of queueContacts) {
+    // Check business hours before each message
+    const now = new Date();
+    const estHour = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' })).getHours();
+    
+    if (estHour < 9 || estHour >= 20) {
+      console.log(`⏰ [QUEUE] Outside business hours (${estHour}:00 EST). Stopping outreach.`);
+      break;
+    }
+    
+    try {
+      // Convert queue item to contact format for existing sendInitialOutreach function
+      const contact = {
+        id: queueItem.contactId,
+        firstName: queueItem.contactName?.split(' ')[0],
+        lastName: queueItem.contactName?.split(' ').slice(1).join(' '),
+        phone: queueItem.contactPhone,
+        customFields: [
+          { id: 'p3NOYiInAERYbe0VsLHB', value: queueItem.propertyAddress },
+          { id: 'h4UIjKQvFu7oRW4SAY8W', value: queueItem.propertyCity },
+          { id: '9r9OpQaxYPxqbA6Hvtx7', value: queueItem.propertyState },
+          { id: 'oaf4wCuM3Ub9eGpiddrO', value: queueItem.leadType },
+        ]
+      };
+      
+      await sendInitialOutreach(contact, integration, phoneNumber);
+      
+      // Update queue status to SENT
+      await updateSmsStatus(queueItem.id, 'SENT', (queueItem.smsAttempts || 0) + 1);
+      
+      processed++;
+      console.log(`✅ [QUEUE] Sent message ${processed}/${queueContacts.length}`);
+      
+      // Rate limiting: wait 5 minutes between messages
+      if (processed < queueContacts.length) {
+        console.log(`⏳ [QUEUE] Waiting 5 minutes before next message...`);
+        await new Promise(resolve => setTimeout(resolve, 300000));
+      }
+    } catch (error) {
+      console.error(`❌ [QUEUE] Failed to send to contact ${queueItem.contactId}:`, error);
+      // Mark as failed in queue
+      await updateSmsStatus(queueItem.id, 'FAILED').catch(() => {});
+    }
+  }
+  
+  return processed;
 }
 
 async function fetchGHLContacts(integration: GhlIntegration): Promise<any[]> {

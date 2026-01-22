@@ -3,6 +3,40 @@ import { skipTraceLeads } from '../functions/skiptraceLeads/resource';
 import { manualGhlSync } from '../functions/manualGhlSync/resource';
 
 const schema = a.schema({
+  OutreachQueue: a
+    .model({
+      userId: a.string().required(),
+      locationId: a.string().required(),
+      contactId: a.string().required(),
+      contactName: a.string(),
+      contactPhone: a.string(),
+      contactEmail: a.string(),
+      
+      // Outreach status
+      smsStatus: a.enum(['PENDING', 'SENT', 'REPLIED', 'FAILED', 'OPTED_OUT']),
+      emailStatus: a.enum(['PENDING', 'SENT', 'REPLIED', 'BOUNCED', 'FAILED', 'OPTED_OUT']),
+      
+      // Tracking
+      smsAttempts: a.integer().default(0),
+      emailAttempts: a.integer().default(0),
+      lastSmsSent: a.datetime(),
+      lastEmailSent: a.datetime(),
+      
+      // Property data for messaging
+      propertyAddress: a.string(),
+      propertyCity: a.string(),
+      propertyState: a.string(),
+      leadType: a.string(),
+    })
+    .authorization((allow) => [
+      allow.owner().to(['create', 'read', 'update', 'delete']),
+      allow.groups(['ADMINS']).to(['create', 'read', 'update', 'delete']),
+    ])
+    .secondaryIndexes((index) => [
+      index('userId').sortKeys(['smsStatus']).queryField('byUserAndSmsStatus'),
+      index('userId').sortKeys(['emailStatus']).queryField('byUserAndEmailStatus'),
+    ]),
+
   GhlIntegration: a
     .model({
       userId: a.string().required(),

@@ -108,40 +108,78 @@ export const handler = async (event: any) => {
       console.log(`\n📧 Processing integration ${integration.id} for location ${integration.locationId}`);
       
       try {
-        // Search for contacts with "ai outreach" tag
-        const searchResponse = await axios.post(
-          'https://services.leadconnectorhq.com/contacts/search',
-          {
-            locationId: integration.locationId,
-            pageLimit: 100,
-            filters: [
-              {
-                field: 'tags',
-                operator: 'contains',
-                value: 'ai outreach'
-              }
-            ]
-          },
-          {
-            headers: {
-              'Authorization': `Bearer ${integration.accessToken}`,
-              'Content-Type': 'application/json',
-              'Version': '2021-07-28'
-            }
-          }
-        );
-
-        const contacts = searchResponse.data.contacts || [];
-        console.log(`Found ${contacts.length} contacts with "ai outreach" tag`);
-
-        // Filter contacts who haven't been emailed yet
-        const eligibleContacts = contacts.filter((contact: any) => {
-          const emailAttemptCounter = contact.customFields?.find((f: any) => f.id === '0MD4Pp2LCyOSCbCjA5qF')?.value;
-          const hasEmail = contact.email;
+        // 🚀 NEW: Try queue-based approach first (fast, cheap)
+        let eligibleContacts: any[] = [];
+        let usingQueue = false;
+        
+        try {
+          const { getPendingEmailContacts } = await import('../shared/outreachQueue');
+          const queueContacts = await getPendingEmailContacts(integration.userId, 50);
           
-          // Only send to contacts with email who haven't been emailed (counter = 0 or null)
-          return hasEmail && (!emailAttemptCounter || emailAttemptCounter === 0 || emailAttemptCounter === '0');
-        });
+          if (queueContacts.length > 0) {
+            console.log(`📋 [QUEUE] Found ${queueContacts.length} pending email contacts in queue`);
+            eligibleContacts = queueContacts.map((q: any) => ({
+              id: q.contactId,
+              firstName: q.contactName?.split(' ')[0],
+              lastName: q.contactName?.split(' ').slice(1).join(' '),
+              email: q.contactEmail,
+              customFields: [
+                { id: 'p3NOYiInAERYbe0VsLHB', value: q.propertyAddress },
+                { id: 'h4UIjKQvFu7oRW4SAY8W', value: q.propertyCity },
+                { id: '9r9OpQaxYPxqbA6Hvtx7', value: q.propertyState },
+                { id: 'oaf4wCuM3Ub9eGpiddrO', value: q.leadType },
+              ],
+              _queueId: q.id, // Store queue ID for status updates
+              _queueAttempts: q.emailAttempts || 0
+            }));
+            usingQueue = true;
+          } else {
+            console.log(`📋 [QUEUE] No pending contacts in queue, falling back to GHL search`);
+          }
+        } catch (queueError) {
+          console.error(`⚠️ [QUEUE] Queue query failed, falling back to GHL search:`, queueError);
+        }
+
+        // 🔄 FALLBACK: Use old GHL search method if queue is empty or failed
+        if (!usingQueue) {
+          const searchResponse = await axios.post(
+            'https://services.leadconnectorhq.com/contacts/search',
+            {
+              locationId: integration.locationId,
+              pageLimit: 100,
+              filters: [
+                {
+                  field: 'tags',
+                  operator: 'contains',
+                  value: 'ai outreach'
+                }
+              ]
+            },
+            {
+              headers: {
+                'Authorization': `Bearer ${integration.accessToken}`,
+                'Content-Type': 'application/json',
+                'Version': '2021-07-28'
+              }
+            }
+          );
+
+          const contacts = searchResponse.data.contacts || [];
+          console.log(`Found ${contacts.length} contacts with "ai outreach" tag`);
+
+          // Filter contacts who haven't been emailed yet and have at least one email
+          eligibleContacts = contacts.filter((contact: any) => {
+            const emailAttemptCounter = contact.customFields?.find((f: any) => f.id === '0MD4Pp2LCyOSCbCjA5qF')?.value;
+            
+            // Check all email fields (primary + email2 + email3)
+            const email2 = contact.customFields?.find((f: any) => f.id === 'JY5nf3NzRwfCGvN5u00E')?.value;
+            const email3 = contact.customFields?.find((f: any) => f.id === '1oy6TLKItn5RkebjI7kD')?.value;
+            const hasEmail = contact.email || email2 || email3;
+            
+            // Only send to contacts with at least one email who haven't been emailed (counter = 0 or null)
+            return hasEmail && (!emailAttemptCounter || emailAttemptCounter === 0 || emailAttemptCounter === '0');
+          });
+        }
 
         console.log(`${eligibleContacts.length} contacts eligible for email outreach`);
 
@@ -168,7 +206,17 @@ export const handler = async (event: any) => {
               console.log(`✅ Email sent successfully to ${contact.email}`);
               totalEmailsSent++;
               
-              // Update email counter
+              // Update queue status if using queue
+              if (usingQueue && contact._queueId) {
+                try {
+                  const { updateEmailStatus } = await import('../shared/outreachQueue');
+                  await updateEmailStatus(contact._queueId, 'SENT', contact._queueAttempts + 1);
+                } catch (queueError) {
+                  console.error(`⚠️ Failed to update queue status:`, queueError);
+                }
+              }
+              
+              // Update email counter in GHL (fallback tracking)
               await axios.put(
                 `https://services.leadconnectorhq.com/contacts/${contact.id}`,
                 {
