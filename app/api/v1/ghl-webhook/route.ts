@@ -139,16 +139,15 @@ export async function POST(req: Request) {
     }));
     
     // Check if this is an inbound message
-    // Custom data (preferred): contactId + messageBody from workflow
+    // 1. Custom data (preferred): contactId + messageBody from workflow
     const hasCustomData = customContactId && customMessageBody;
-    // Native webhook: type === 'InboundMessage' && message.direction === 'inbound'
-    const isNativeWebhook = type === 'InboundMessage' || message?.direction === 'inbound';
-    // Workflow webhook: message.body exists (GHL sends message object with type and body)
-    const isWorkflowWebhook = message?.body && !type && !message?.direction;
-    const isInbound = hasCustomData || isNativeWebhook || isWorkflowWebhook;
+    // 2. Workflow webhook: message.body exists (standard GHL workflow format)
+    const hasMessageBody = !!message?.body;
+    // 3. Accept if we have either custom data or message body
+    const isInbound = hasCustomData || hasMessageBody;
     
     if (!isInbound || !finalMessageBody) {
-      console.log(`⚠️ [WEBHOOK] Not inbound message. HasCustomData: ${hasCustomData}, IsNative: ${isNativeWebhook}, IsWorkflow: ${isWorkflowWebhook}, HasBody: ${!!finalMessageBody}`);
+      console.log(`⚠️ [WEBHOOK] Not inbound. HasCustomData: ${hasCustomData}, HasMessageBody: ${hasMessageBody}, FinalBody: ${!!finalMessageBody}`);
       return NextResponse.json({ success: true, message: 'Ignored - not inbound message' });
     }
 
