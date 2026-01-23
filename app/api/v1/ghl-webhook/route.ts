@@ -277,67 +277,83 @@ export async function POST(req: Request) {
 }
 
 async function processConversationAsync(body: any) {
+  console.log('🔄 [ASYNC] Starting async processing for contact:', body.contactId);
   try {
-    const { contactId, conversationId, message, locationId } = body;
+    const { contactId, conversationId, message, locationId, contact } = body;
 
-    // 1. Fetch fresh contact data from GHL API
-    const GHL_API_KEY = process.env.GHL_API_KEY;
-    if (!GHL_API_KEY) {
-      console.error('GHL_API_KEY not configured');
+    // 1. Get user ID from contact custom fields
+    const userId = contact?.customFields?.find((f: any) => f.id === 'CNoGugInWOC59hAPptxY')?.value;
+    
+    if (!userId) {
+      console.error('❌ [ASYNC] No user ID found in contact custom fields');
       return;
     }
 
-    let contact;
+    console.log('🔑 [ASYNC] Found user ID:', userId);
+
+    // 2. Get valid GHL token from database
+    const { getValidGhlToken } = await import('@/app/utils/aws/data/ghlIntegration.server');
+    const token = await getValidGhlToken(userId);
+    
+    if (!token) {
+      console.error('❌ [ASYNC] No valid GHL token found for user:', userId);
+      return;
+    }
+
+    console.log('✅ [ASYNC] Got valid token');
+
+    // 3. Fetch fresh contact data from GHL API
+    let fullContact;
     try {
       const contactResponse = await fetch(
         `https://services.leadconnectorhq.com/contacts/${contactId}`,
         {
           headers: {
-            'Authorization': `Bearer ${GHL_API_KEY}`,
+            'Authorization': `Bearer ${token}`,
             'Version': '2021-07-28'
           }
         }
       );
       const contactData = await contactResponse.json();
-      contact = contactData.contact;
+      fullContact = contactData.contact;
     } catch (error) {
-      console.error('Failed to fetch contact from GHL:', error);
+      console.error('❌ [ASYNC] Failed to fetch contact from GHL:', error);
       return;
     }
 
-    // 2. Extract property data from contact custom fields
-    const propertyAddress = contact?.customFields?.find((f: any) => f.id === 'p3NOYiInAERYbe0VsLHB')?.value;
-    const propertyCity = contact?.customFields?.find((f: any) => f.id === 'h4UIjKQvFu7oRW4SAY8W')?.value;
-    const propertyState = contact?.customFields?.find((f: any) => f.id === '9r9OpQaxYPxqbA6Hvtx7')?.value;
-    const propertyZip = contact?.customFields?.find((f: any) => f.id === 'hgbjsTVwcyID7umdhm2o')?.value;
-    const leadType = contact?.customFields?.find((f: any) => f.id === 'oaf4wCuM3Ub9eGpiddrO')?.value;
+    // 4. Extract property data from contact custom fields
+    const propertyAddress = fullContact?.customFields?.find((f: any) => f.id === 'p3NOYiInAERYbe0VsLHB')?.value;
+    const propertyCity = fullContact?.customFields?.find((f: any) => f.id === 'h4UIjKQvFu7oRW4SAY8W')?.value;
+    const propertyState = fullContact?.customFields?.find((f: any) => f.id === '9r9OpQaxYPxqbA6Hvtx7')?.value;
+    const propertyZip = fullContact?.customFields?.find((f: any) => f.id === 'hgbjsTVwcyID7umdhm2o')?.value;
+    const leadType = fullContact?.customFields?.find((f: any) => f.id === 'oaf4wCuM3Ub9eGpiddrO')?.value;
 
-    console.log('📋 Contact data from GHL:', {
-      name: `${contact.firstName} ${contact.lastName}`,
-      phone: contact.phone,
+    console.log('📋 [ASYNC] Contact data from GHL:', {
+      name: `${fullContact.firstName} ${fullContact.lastName}`,
+      phone: fullContact.phone,
       propertyAddress,
       propertyCity,
       propertyState,
       leadType
     });
 
-    // 3. Generate AI response based on GHL contact data
+    // 5. Generate AI response based on GHL contact data
     const aiResponse = await generateAIResponse({
       contactId,
       conversationId,
       incomingMessage: message.body,
-      contactName: `${contact?.firstName || ''} ${contact?.lastName || ''}`.trim(),
+      contactName: `${fullContact?.firstName || ''} ${fullContact?.lastName || ''}`.trim(),
       propertyAddress,
       propertyCity,
       propertyState,
       propertyZip,
       leadType,
       locationId,
-      contact
+      contact: fullContact
     });
 
-    console.log('✅ Successfully processed conversation webhook:', body.webhookId);
+    console.log('✅ [ASYNC] Successfully processed conversation webhook');
   } catch (error) {
-    console.error('Failed to process conversation webhook:', body.webhookId, error);
+    console.error('❌ [ASYNC] Failed to process conversation webhook:', error);
   }
 }
