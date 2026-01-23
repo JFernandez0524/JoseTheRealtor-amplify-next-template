@@ -335,11 +335,26 @@ async function processConversationAsync(body: any) {
   try {
     const { contactId, conversationId, message, locationId, contact } = body;
 
-    // 1. Get user ID from contact custom fields
-    const userId = contact?.customFields?.find((f: any) => f.id === 'CNoGugInWOC59hAPptxY')?.value;
+    // 1. Get user ID from contact custom fields OR from PropertyLead
+    let userId = contact?.customFields?.find((f: any) => f.id === 'CNoGugInWOC59hAPptxY')?.value;
     
     if (!userId) {
-      console.error('❌ [ASYNC] No user ID found in contact custom fields');
+      console.log('⚠️ [ASYNC] No user ID in custom fields, checking PropertyLead...');
+      
+      // Fallback: Get user ID from PropertyLead
+      const { cookiesClient } = await import('@/app/utils/aws/auth/amplifyServerUtils.server');
+      const { data: leads } = await cookiesClient.models.PropertyLead.list({
+        filter: { ghlContactId: { eq: contactId } }
+      });
+      
+      if (leads && leads.length > 0) {
+        userId = leads[0].userId;
+        console.log('✅ [ASYNC] Found user ID from PropertyLead:', userId);
+      }
+    }
+    
+    if (!userId) {
+      console.error('❌ [ASYNC] No user ID found in contact custom fields or PropertyLead');
       return;
     }
 
