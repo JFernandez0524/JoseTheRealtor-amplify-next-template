@@ -25,6 +25,7 @@ import { GhlActions } from './GhlActions';
 import { LeadStatusBadge } from './LeadStatusBadge';
 import { CardWrapper } from './CardWrapper';
 import { TagsManager } from './TagsManager';
+import { OutreachStatus } from './OutreachStatus';
 
 // Utils
 import { client } from '@/app/utils/aws/data/frontEndClient';
@@ -602,6 +603,11 @@ export function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
                 </div>
               </div>
             </CardWrapper>
+
+            <OutreachStatus 
+              ghlContactId={lead.ghlContactId}
+              outreachData={lead.ghlOutreachData as any}
+            />
           </div>
         </div>
       </div>

@@ -122,9 +122,15 @@ export async function POST(req: Request) {
       phone,
     } = body;
 
+    // DEBUG: Log full payload to see what GHL is actually sending
+    console.log('📨 [WEBHOOK] Full payload:', JSON.stringify(body));
+
     // Prioritize custom data, then message.body
     const finalContactId = customContactId || contactId || id;
     const finalMessageBody = customMessageBody || message?.body;
+    
+    // If no contact ID but we have a phone number, we'll need to look it up
+    const contactPhone = phone;
 
     // Log payload for debugging
     console.log('📨 [WEBHOOK] Payload:', JSON.stringify({
@@ -132,6 +138,7 @@ export async function POST(req: Request) {
       customMessageBody,
       contactId,
       id,
+      phone,
       hasMessage: !!message,
       messageBody: message?.body,
       finalContactId,

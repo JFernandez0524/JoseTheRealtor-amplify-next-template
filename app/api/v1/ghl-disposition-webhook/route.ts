@@ -11,6 +11,7 @@
 
 import { NextResponse } from 'next/server';
 import { updateSmsStatus, updateEmailStatus, findQueueItemByContactId } from '@/amplify/functions/shared/outreachQueue';
+import { cookiesClient } from '@/app/utils/aws/auth/amplifyServerUtils.server';
 
 const CALL_OUTCOME_FIELD_ID = 'LNyfm5JDal955puZGbu3';
 
@@ -67,6 +68,34 @@ export async function POST(request: Request) {
         await updateEmailStatus(queueId, 'OPTED_OUT');
         
         console.log(`✅ [DISPOSITION] Stopped outreach for ${contactId} - Reason: ${callOutcome}`);
+        
+        // Update PropertyLead with call outcome
+        try {
+          // Find lead by ghlContactId
+          const { data: leads } = await cookiesClient.models.PropertyLead.list({
+            filter: { ghlContactId: { eq: contactId } }
+          });
+          
+          if (leads && leads.length > 0) {
+            const lead = leads[0];
+            const currentOutreachData = (lead.ghlOutreachData as any) || {};
+            
+            await cookiesClient.models.PropertyLead.update({
+              id: lead.id,
+              ghlOutreachData: {
+                ...currentOutreachData,
+                callOutcome,
+                smsStatus: 'OPTED_OUT',
+                emailStatus: 'OPTED_OUT'
+              }
+            });
+            
+            console.log(`✅ [DISPOSITION] Updated PropertyLead ${lead.id} with call outcome`);
+          }
+        } catch (leadError) {
+          console.error(`⚠️ [DISPOSITION] Failed to update PropertyLead:`, leadError);
+          // Don't fail the webhook if lead update fails
+        }
         
         return NextResponse.json({
           success: true,

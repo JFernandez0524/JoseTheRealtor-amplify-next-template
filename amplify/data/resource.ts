@@ -115,6 +115,9 @@ const schema = a.schema({
       ghlSyncStatus: a.enum(['PENDING', 'SUCCESS', 'FAILED', 'SKIPPED']),
       ghlContactId: a.string(), // The Contact ID returned by GHL
       ghlSyncDate: a.datetime(), // ISO Date string of last sync attempt
+      
+      // 📤 GHL Outreach Data (synced from GHL custom fields)
+      ghlOutreachData: a.json(), // { smsAttempts, emailAttempts, lastSmsSent, lastEmailSent, smsStatus, emailStatus, callOutcome, aiState }
 
       // Coordinates (For Map)
       latitude: a.float(),
