@@ -101,10 +101,6 @@ export async function POST(req: Request) {
     }
 
     const {
-      // Custom data fields (preferred - set in GHL workflow)
-      contactId: customContactId,
-      messageBody: customMessageBody,
-      
       // Native webhook fields (fallback)
       type,
       contactId,
@@ -113,6 +109,7 @@ export async function POST(req: Request) {
       contact,
       locationId,
       webhookId,
+      customData,
       
       // Workflow root-level fields (fallback)
       id,
@@ -121,6 +118,10 @@ export async function POST(req: Request) {
       last_name,
       phone,
     } = body;
+
+    // Extract custom data fields (GHL workflow sends them nested)
+    const customContactId = customData?.contactId;
+    const customMessageBody = customData?.messageBody;
 
     // DEBUG: Log full payload to see what GHL is actually sending
     console.log('📨 [WEBHOOK] Full payload:', JSON.stringify(body));
