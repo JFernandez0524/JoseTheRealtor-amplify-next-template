@@ -211,17 +211,39 @@ Respond to their message:`;
 
 // Check if contact has AI enabled and is in good standing
 function isAIEnabled(contact: any): boolean {
-  // 🔧 TEMPORARY FIX: Since AI control fields don't exist yet,
-  // enable AI for contacts with phone numbers and specific lead types
   const hasPhone = contact?.phone;
   const leadType = contact?.customFields?.find((f: any) => f.id === 'oaf4wCuM3Ub9eGpiddrO')?.value;
   const contactType = contact?.customFields?.find((f: any) => f.id === 'pGfgxcdFaYAkdq0Vp53j')?.value;
   
-  // Enable AI for contacts with phones that aren't direct mail only
-  const isDirectMailOnly = contactType === 'Direct Mail';
-  const hasValidLeadType = ['Probate', 'PREFORECLOSURE', 'Preforeclosure'].includes(leadType);
+  if (!hasPhone) {
+    console.log('❌ Contact has no phone number');
+    return false;
+  }
   
-  return hasPhone && hasValidLeadType && !isDirectMailOnly;
+  // Exclude direct mail only contacts
+  if (contactType === 'Direct Mail') {
+    console.log('❌ Contact is Direct Mail only');
+    return false;
+  }
+  
+  // Check all variations of lead type (case-insensitive)
+  const validLeadTypes = [
+    'Probate',
+    'probate', 
+    'PROBATE',
+    'PREFORECLOSURE',
+    'Preforeclosure',
+    'preforeclosure',
+    'Pre-Foreclosure',
+    'pre-foreclosure'
+  ];
+  
+  if (!leadType || !validLeadTypes.includes(leadType)) {
+    console.log(`❌ Invalid or missing lead type: "${leadType}"`);
+    return false;
+  }
+  
+  return true;
   
   // 🚨 TODO: Once AI control fields are added to GHL, use this logic:
   // const appPlan = contact?.customFields?.find((f: any) => f.id === 'YEJuROSCNnG9OXi3K8lb')?.value;
