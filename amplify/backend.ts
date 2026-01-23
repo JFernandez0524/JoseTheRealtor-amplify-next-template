@@ -177,6 +177,17 @@ backend.data.resources.tables['OutreachQueue'].grantReadWriteData(
   backend.dailyOutreachAgent.resources.lambda
 );
 
+// Grant permission to query GSI indexes
+backend.dailyOutreachAgent.resources.lambda.addToRolePolicy(
+  new PolicyStatement({
+    effect: Effect.ALLOW,
+    actions: ['dynamodb:Query'],
+    resources: [
+      `${backend.data.resources.tables['OutreachQueue'].tableArn}/index/*`
+    ]
+  })
+);
+
 // 📧 Configure Bulk Email Campaign
 backend.bulkEmailCampaign.addEnvironment(
   'AMPLIFY_DATA_GhlIntegration_TABLE_NAME',
@@ -209,6 +220,17 @@ backend.data.resources.tables['GhlIntegration'].grantReadData(
 
 backend.data.resources.tables['OutreachQueue'].grantReadWriteData(
   backend.dailyEmailAgent.resources.lambda
+);
+
+// Grant permission to query GSI indexes
+backend.dailyEmailAgent.resources.lambda.addToRolePolicy(
+  new PolicyStatement({
+    effect: Effect.ALLOW,
+    actions: ['dynamodb:Query'],
+    resources: [
+      `${backend.data.resources.tables['OutreachQueue'].tableArn}/index/*`
+    ]
+  })
 );
 
 

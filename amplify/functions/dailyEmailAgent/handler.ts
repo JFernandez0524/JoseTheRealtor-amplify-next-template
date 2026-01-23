@@ -1,6 +1,7 @@
 import { DynamoDBClient, ScanCommand } from "@aws-sdk/client-dynamodb";
 import axios from "axios";
 import { isWithinBusinessHours, getNextBusinessHourMessage } from '../shared/businessHours';
+import { getValidGhlToken } from '../shared/ghlTokenManager';
 
 const dynamoClient = new DynamoDBClient({});
 
@@ -137,6 +138,15 @@ export const handler = async (event: any) => {
 
       console.log(`\n📧 Processing integration ${integration.id} for location ${integration.locationId}`);
       
+      // Get valid token (auto-refreshes if expired)
+      const tokenData = await getValidGhlToken(integration.userId);
+      if (!tokenData) {
+        console.error(`❌ Failed to get valid token for user ${integration.userId}`);
+        continue;
+      }
+      
+      const validAccessToken = tokenData.token;
+      
       try {
         // 🚀 NEW: Try queue-based approach first (fast, cheap)
         let eligibleContacts: any[] = [];
@@ -187,7 +197,7 @@ export const handler = async (event: any) => {
             },
             {
               headers: {
-                'Authorization': `Bearer ${integration.accessToken}`,
+                'Authorization': `Bearer ${validAccessToken}`,
                 'Content-Type': 'application/json',
                 'Version': '2021-07-28'
               }
@@ -222,7 +232,7 @@ export const handler = async (event: any) => {
               `${process.env.APP_URL}/api/v1/send-email-to-contact`,
               {
                 contactId: contact.id,
-                accessToken: integration.accessToken,
+                accessToken: validAccessToken,
                 fromEmail: integration.campaignEmail
               },
               {
@@ -256,7 +266,7 @@ export const handler = async (event: any) => {
                 },
                 {
                   headers: {
-                    'Authorization': `Bearer ${integration.accessToken}`,
+                    'Authorization': `Bearer ${validAccessToken}`,
                     'Content-Type': 'application/json',
                     'Version': '2021-07-28'
                   }

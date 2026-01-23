@@ -109,6 +109,11 @@ export async function getValidGhlToken(userId: string): Promise<{ token: string;
       console.log(`✅ [TOKEN_MANAGER] Token refreshed and saved for user ${userId}`);
       return { token: access_token, locationId: integration.locationId };
     } catch (refreshError: any) {
+      // Log the actual GHL error response
+      if (refreshError.response?.data) {
+        console.error(`❌ [TOKEN_MANAGER] GHL refresh error:`, JSON.stringify(refreshError.response.data));
+      }
+      
       // If conditional update failed, another process already refreshed - retry once
       if (refreshError.name === 'ConditionalCheckFailedException') {
         console.log(`🔄 [TOKEN_MANAGER] Token was refreshed by another process, re-fetching...`);

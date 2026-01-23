@@ -117,15 +117,14 @@ export async function POST(req: Request) {
       // Workflow root-level fields (fallback)
       id,
       messageType,
-      messageBody,
       first_name,
       last_name,
       phone,
     } = body;
 
-    // Prioritize custom data, then fallback to other formats
+    // Prioritize custom data, then message.body
     const finalContactId = customContactId || contactId || id;
-    const finalMessageBody = customMessageBody || message?.body || messageBody;
+    const finalMessageBody = customMessageBody || message?.body;
 
     // Log payload for debugging
     console.log('📨 [WEBHOOK] Payload:', JSON.stringify({
@@ -133,19 +132,23 @@ export async function POST(req: Request) {
       customMessageBody,
       contactId,
       id,
-      messageBody,
+      hasMessage: !!message,
+      messageBody: message?.body,
       finalContactId,
       finalMessageBody: finalMessageBody?.substring(0, 50)
     }));
     
     // Check if this is an inbound message
-    // If we have custom data (contactId + messageBody), it's from our workflow
+    // Custom data (preferred): contactId + messageBody from workflow
     const hasCustomData = customContactId && customMessageBody;
+    // Native webhook: type === 'InboundMessage' && message.direction === 'inbound'
     const isNativeWebhook = type === 'InboundMessage' || message?.direction === 'inbound';
-    const isInbound = hasCustomData || isNativeWebhook;
+    // Workflow webhook: message.body exists (GHL sends message object with type and body)
+    const isWorkflowWebhook = message?.body && !type && !message?.direction;
+    const isInbound = hasCustomData || isNativeWebhook || isWorkflowWebhook;
     
     if (!isInbound || !finalMessageBody) {
-      console.log(`⚠️ [WEBHOOK] Not inbound message. HasCustomData: ${hasCustomData}, IsNative: ${isNativeWebhook}, HasBody: ${!!finalMessageBody}`);
+      console.log(`⚠️ [WEBHOOK] Not inbound message. HasCustomData: ${hasCustomData}, IsNative: ${isNativeWebhook}, IsWorkflow: ${isWorkflowWebhook}, HasBody: ${!!finalMessageBody}`);
       return NextResponse.json({ success: true, message: 'Ignored - not inbound message' });
     }
 
