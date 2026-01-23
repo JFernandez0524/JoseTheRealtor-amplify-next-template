@@ -109,6 +109,11 @@ export async function POST(req: Request) {
       locationId,
       webhookId,
       id, // GHL workflow sends contact.id as root-level 'id'
+      messageType, // GHL workflow format
+      messageBody, // GHL workflow format
+      first_name,
+      last_name,
+      phone,
     } = body;
 
     // Log payload for debugging
@@ -117,20 +122,27 @@ export async function POST(req: Request) {
       contactId,
       id,
       messageDirection: message?.direction,
-      messageType: message?.type,
-      messageBody: message?.body?.substring(0, 50)
+      messageType: message?.type || messageType,
+      messageBody: message?.body?.substring(0, 50) || messageBody?.substring(0, 50),
+      hasMessage: !!message,
+      hasMessageBody: !!messageBody
     }));
 
     // Extract contact ID (workflow format or webhook format)
     const finalContactId = contactId || id;
     
-    // Check if this is an inbound message
-    // Workflow format: message.direction === 'inbound'
-    // Webhook format: type === 'InboundMessage'
-    const isInbound = type === 'InboundMessage' || message?.direction === 'inbound';
+    // Extract message body (workflow format or webhook format)
+    const finalMessageBody = message?.body || messageBody;
     
-    if (!isInbound || !message?.body) {
-      console.log(`⚠️ [WEBHOOK] Not inbound message. Type: ${type}, Direction: ${message?.direction}, HasBody: ${!!message?.body}`);
+    // Check if this is an inbound message
+    // Native webhook: type === 'InboundMessage' && message.direction === 'inbound'
+    // Workflow webhook: messageBody exists (assume inbound if body present without native webhook fields)
+    const isNativeWebhook = type === 'InboundMessage' || message?.direction === 'inbound';
+    const isWorkflowWebhook = !type && !message && messageBody; // Has body but no native fields
+    const isInbound = isNativeWebhook || isWorkflowWebhook;
+    
+    if (!isInbound || !finalMessageBody) {
+      console.log(`⚠️ [WEBHOOK] Not inbound message. Type: ${type}, Direction: ${message?.direction}, MessageType: ${messageType}, HasBody: ${!!finalMessageBody}, IsNative: ${isNativeWebhook}, IsWorkflow: ${isWorkflowWebhook}`);
       return NextResponse.json({ success: true, message: 'Ignored - not inbound message' });
     }
 
@@ -139,12 +151,12 @@ export async function POST(req: Request) {
     }
 
     // A2P Compliance: Check for opt-out keywords
-    const messageBody = message.body.toLowerCase().trim();
+    const lowerMessageBody = finalMessageBody.toLowerCase().trim();
     const optOutKeywords = ['stop', 'stopall', 'unsubscribe', 'cancel', 'end', 'quit'];
-    const isOptOut = optOutKeywords.some(keyword => messageBody === keyword || messageBody.includes(keyword));
+    const isOptOut = optOutKeywords.some(keyword => lowerMessageBody === keyword || lowerMessageBody.includes(keyword));
     
     if (isOptOut) {
-      console.log(`🛑 [A2P] Opt-out keyword detected: "${message.body}"`);
+      console.log(`🛑 [A2P] Opt-out keyword detected: "${finalMessageBody}"`);
       
       // Update queue status to OPTED_OUT
       if (finalContactId) {
@@ -219,8 +231,21 @@ export async function POST(req: Request) {
     }
 
     // 3. Process asynchronously
+    // Normalize payload for async processor (handle both native and workflow formats)
+    const normalizedBody = {
+      ...body,
+      contactId: finalContactId,
+      message: message || { body: finalMessageBody, type: 'SMS' },
+      contact: contact || { 
+        id: finalContactId,
+        firstName: first_name,
+        lastName: last_name,
+        phone: phone
+      }
+    };
+    
     setImmediate(() => {
-      processConversationAsync(body);
+      processConversationAsync(normalizedBody);
     });
 
     // 4. Mark as processed
