@@ -287,6 +287,16 @@ export async function POST(req: Request) {
 
     // 3. Process conversation and generate AI response
     // Normalize payload for processor (handle both native and workflow formats)
+    
+    // Build customFields array from root-level properties (workflow webhooks)
+    const customFields = body.customFields || [];
+    
+    // Add App User ID if it exists at root level
+    const appUserId = body['App User ID'];
+    if (appUserId && !customFields.find((f: any) => f.id === 'CNoGugInWOC59hAPptxY')) {
+      customFields.push({ id: 'CNoGugInWOC59hAPptxY', value: appUserId });
+    }
+    
     const normalizedBody = {
       ...body,
       contactId: finalContactId,
@@ -296,7 +306,7 @@ export async function POST(req: Request) {
         firstName: first_name,
         lastName: last_name,
         phone: phone,
-        customFields: body.customFields || []
+        customFields
       }
     };
     
