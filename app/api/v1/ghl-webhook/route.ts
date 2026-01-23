@@ -101,6 +101,11 @@ export async function POST(req: Request) {
     }
 
     const {
+      // Custom data fields (preferred - set in GHL workflow)
+      contactId: customContactId,
+      messageBody: customMessageBody,
+      
+      // Native webhook fields (fallback)
       type,
       contactId,
       conversationId,
@@ -108,43 +113,39 @@ export async function POST(req: Request) {
       contact,
       locationId,
       webhookId,
-      id, // GHL workflow sends contact.id as root-level 'id'
-      messageType, // GHL workflow format
-      messageBody, // GHL workflow format
+      
+      // Workflow root-level fields (fallback)
+      id,
+      messageType,
+      messageBody,
       first_name,
       last_name,
       phone,
     } = body;
 
+    // Prioritize custom data, then fallback to other formats
+    const finalContactId = customContactId || contactId || id;
+    const finalMessageBody = customMessageBody || message?.body || messageBody;
+
     // Log payload for debugging
-    console.log('📨 [WEBHOOK] Full message object:', JSON.stringify(message));
     console.log('📨 [WEBHOOK] Payload:', JSON.stringify({
-      type,
+      customContactId,
+      customMessageBody,
       contactId,
       id,
-      messageDirection: message?.direction,
-      messageType: message?.type || messageType,
-      messageBody: message?.body?.substring(0, 50) || messageBody?.substring(0, 50),
-      hasMessage: !!message,
-      hasMessageBody: !!messageBody,
-      hasMessageDotBody: !!message?.body
+      messageBody,
+      finalContactId,
+      finalMessageBody: finalMessageBody?.substring(0, 50)
     }));
-
-    // Extract contact ID (workflow format or webhook format)
-    const finalContactId = contactId || id;
-    
-    // Extract message body (workflow format or webhook format)
-    const finalMessageBody = message?.body || messageBody;
     
     // Check if this is an inbound message
-    // Native webhook: type === 'InboundMessage' && message.direction === 'inbound'
-    // Workflow webhook: messageBody exists at root level (not inside message object)
+    // If we have custom data (contactId + messageBody), it's from our workflow
+    const hasCustomData = customContactId && customMessageBody;
     const isNativeWebhook = type === 'InboundMessage' || message?.direction === 'inbound';
-    const isWorkflowWebhook = !type && messageBody && !message?.body; // Has root messageBody, not message.body
-    const isInbound = isNativeWebhook || isWorkflowWebhook;
+    const isInbound = hasCustomData || isNativeWebhook;
     
     if (!isInbound || !finalMessageBody) {
-      console.log(`⚠️ [WEBHOOK] Not inbound message. Type: ${type}, Direction: ${message?.direction}, MessageType: ${messageType}, HasBody: ${!!finalMessageBody}, IsNative: ${isNativeWebhook}, IsWorkflow: ${isWorkflowWebhook}`);
+      console.log(`⚠️ [WEBHOOK] Not inbound message. HasCustomData: ${hasCustomData}, IsNative: ${isNativeWebhook}, HasBody: ${!!finalMessageBody}`);
       return NextResponse.json({ success: true, message: 'Ignored - not inbound message' });
     }
 
