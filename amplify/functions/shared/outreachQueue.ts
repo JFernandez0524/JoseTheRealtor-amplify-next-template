@@ -129,10 +129,17 @@ export async function getPendingSmsContacts(userId: string, limit: number = 50):
     // First touch - send immediately
     if (attempts === 0) return true;
     
-    // Subsequent touches - wait 4 days
+    // Subsequent touches - wait 4 days (AND at least 1 hour for GSI consistency)
     if (item.lastSmsSent) {
       const lastSent = new Date(item.lastSmsSent);
-      const daysSince = (now.getTime() - lastSent.getTime()) / (1000 * 60 * 60 * 24);
+      const hoursSince = (now.getTime() - lastSent.getTime()) / (1000 * 60 * 60);
+      const daysSince = hoursSince / 24;
+      
+      // Prevent duplicate sends within same hour (GSI eventual consistency protection)
+      if (hoursSince < 1) {
+        console.log(`⏳ Contact ${item.contactId} sent recently - only ${hoursSince.toFixed(1)} hours ago`);
+        return false;
+      }
       
       if (daysSince < 4) {
         console.log(`⏳ Contact ${item.contactId} not ready - only ${daysSince.toFixed(1)} days since last SMS`);
@@ -182,10 +189,17 @@ export async function getPendingEmailContacts(userId: string, limit: number = 50
     // First touch - send immediately
     if (attempts === 0) return true;
     
-    // Subsequent touches - wait 4 days
+    // Subsequent touches - wait 4 days (AND at least 1 hour for GSI consistency)
     if (item.lastEmailSent) {
       const lastSent = new Date(item.lastEmailSent);
-      const daysSince = (now.getTime() - lastSent.getTime()) / (1000 * 60 * 60 * 24);
+      const hoursSince = (now.getTime() - lastSent.getTime()) / (1000 * 60 * 60);
+      const daysSince = hoursSince / 24;
+      
+      // Prevent duplicate sends within same hour (GSI eventual consistency protection)
+      if (hoursSince < 1) {
+        console.log(`⏳ Contact ${item.contactId} emailed recently - only ${hoursSince.toFixed(1)} hours ago`);
+        return false;
+      }
       
       if (daysSince < 4) {
         console.log(`⏳ Contact ${item.contactId} not ready - only ${daysSince.toFixed(1)} days since last email`);
