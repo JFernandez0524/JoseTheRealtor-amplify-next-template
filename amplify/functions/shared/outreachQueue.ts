@@ -293,3 +293,25 @@ export async function getQueueItemByContact(userId: string, contactId: string): 
 
   return result.Item as OutreachQueueItem || null;
 }
+
+/**
+ * Find queue item by contactId only (scan operation)
+ * Used when userId is unknown (e.g., GHL disposition webhooks)
+ * 
+ * @param contactId - GHL contact ID
+ * @returns Queue item or null
+ */
+export async function findQueueItemByContactId(contactId: string): Promise<OutreachQueueItem | null> {
+  const { ScanCommand } = await import('@aws-sdk/lib-dynamodb');
+  
+  const result = await docClient.send(new ScanCommand({
+    TableName: OUTREACH_QUEUE_TABLE,
+    FilterExpression: 'contactId = :contactId',
+    ExpressionAttributeValues: {
+      ':contactId': contactId,
+    },
+    Limit: 1,
+  }));
+
+  return result.Items?.[0] as OutreachQueueItem || null;
+}
