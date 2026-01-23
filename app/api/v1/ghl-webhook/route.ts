@@ -81,14 +81,20 @@ export async function POST(req: Request) {
     const rawBody = await req.text();
     const body = JSON.parse(rawBody);
     
-    // 1. Verify webhook signature
+    // 1. Verify webhook signature (only for native GHL webhooks, not workflow webhooks)
     const signature = req.headers.get('x-wh-signature');
-    if (!signature || !verifyWebhookSignature(rawBody, signature)) {
-      console.error('Invalid webhook signature');
-      return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
+    if (signature) {
+      // Native GHL webhook - verify signature
+      if (!verifyWebhookSignature(rawBody, signature)) {
+        console.error('Invalid webhook signature');
+        return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
+      }
+    } else {
+      // Workflow webhook - no signature, log for debugging
+      console.log('📨 [WORKFLOW] Received workflow webhook (no signature)');
     }
 
-    // 2. Check for duplicates
+    // 2. Check for duplicates (only if webhookId exists)
     if (body.webhookId && processedWebhooks.has(body.webhookId)) {
       console.log('Duplicate webhook, skipping:', body.webhookId);
       return NextResponse.json({ message: 'Already processed' });
@@ -101,12 +107,24 @@ export async function POST(req: Request) {
       message,
       contact,
       locationId,
-      webhookId
+      webhookId,
+      id, // GHL workflow sends contact.id as root-level 'id'
     } = body;
 
-    // Only handle incoming messages from contacts
-    if (type !== 'InboundMessage' || !message?.body) {
-      return NextResponse.json({ success: true, message: 'Ignored' });
+    // Extract contact ID (workflow format or webhook format)
+    const finalContactId = contactId || id;
+    
+    // Check if this is an inbound message
+    // Workflow format: message.direction === 'inbound'
+    // Webhook format: type === 'InboundMessage'
+    const isInbound = type === 'InboundMessage' || message?.direction === 'inbound';
+    
+    if (!isInbound || !message?.body) {
+      return NextResponse.json({ success: true, message: 'Ignored - not inbound message' });
+    }
+
+    if (!finalContactId) {
+      return NextResponse.json({ error: 'Missing contact ID' }, { status: 400 });
     }
 
     // A2P Compliance: Check for opt-out keywords
@@ -118,7 +136,7 @@ export async function POST(req: Request) {
       console.log(`🛑 [A2P] Opt-out keyword detected: "${message.body}"`);
       
       // Update queue status to OPTED_OUT
-      if (contactId) {
+      if (finalContactId) {
         try {
           const userId = contact?.customFields?.find((f: any) => f.id === 'CNoGugInWOC59hAPptxY')?.value;
           
@@ -129,7 +147,7 @@ export async function POST(req: Request) {
             const dynamoClient = new DynamoDBClient({ region: process.env.AWS_REGION });
             const docClient = DynamoDBDocumentClient.from(dynamoClient);
             
-            const queueId = `${userId}_${contactId}`;
+            const queueId = `${userId}_${finalContactId}`;
             
             await docClient.send(new UpdateCommand({
               TableName: process.env.AMPLIFY_DATA_OutreachQueue_TABLE_NAME,
@@ -141,7 +159,7 @@ export async function POST(req: Request) {
               },
             }));
             
-            console.log(`✅ Updated queue status to OPTED_OUT for contact ${contactId}`);
+            console.log(`✅ Updated queue status to OPTED_OUT for contact ${finalContactId}`);
           }
         } catch (queueError) {
           console.error(`⚠️ Failed to update queue status:`, queueError);
@@ -157,7 +175,7 @@ export async function POST(req: Request) {
     }
 
     // 🔄 Update outreach queue status to REPLIED (for non-opt-out messages)
-    if (contactId) {
+    if (finalContactId) {
       try {
         // Get user ID from contact's custom fields (app_user_id)
         const userId = contact?.customFields?.find((f: any) => f.id === 'CNoGugInWOC59hAPptxY')?.value;
@@ -169,7 +187,7 @@ export async function POST(req: Request) {
           const dynamoClient = new DynamoDBClient({ region: process.env.AWS_REGION });
           const docClient = DynamoDBDocumentClient.from(dynamoClient);
           
-          const queueId = `${userId}_${contactId}`;
+          const queueId = `${userId}_${finalContactId}`;
           
           await docClient.send(new UpdateCommand({
             TableName: process.env.AMPLIFY_DATA_OutreachQueue_TABLE_NAME,
@@ -181,7 +199,7 @@ export async function POST(req: Request) {
             },
           }));
           
-          console.log(`✅ Updated queue status to REPLIED for contact ${contactId}`);
+          console.log(`✅ Updated queue status to REPLIED for contact ${finalContactId}`);
         }
       } catch (queueError) {
         console.error(`⚠️ Failed to update queue status:`, queueError);

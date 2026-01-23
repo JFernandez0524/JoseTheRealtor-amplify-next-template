@@ -14,14 +14,20 @@ import { updateSmsStatus, updateEmailStatus, findQueueItemByContactId } from '@/
 
 const CALL_OUTCOME_FIELD_ID = 'LNyfm5JDal955puZGbu3';
 
-// Dispositions that should stop AI outreach
+// Dispositions that should stop AI outreach (dead leads)
 const STOP_DISPOSITIONS = [
-  'Sold Already',
   'Not Interested',
-  'DNC',
+  'Incorrect Number',
   'Listed With Realtor',
-  'Wrong Number / Disconnected / Invalid Number'
+  'Sold Already',
+  'DNC'
 ];
+
+// Dispositions that keep AI outreach active
+// - No Answer: Keep trying
+// - Voicemail: Keep trying
+// - Follow Up: Still interested
+// - Requested Appointment: Hot lead, continue until appointment confirmed
 
 export async function POST(request: Request) {
   try {
