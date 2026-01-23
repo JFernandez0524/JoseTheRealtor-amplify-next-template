@@ -151,11 +151,6 @@ backend.aiFollowUpAgent.resources.lambda.addToRolePolicy(
 
 // 📤 Configure Daily Outreach Agent
 backend.dailyOutreachAgent.addEnvironment(
-  'GHL_INTEGRATION_TABLE',
-  backend.data.resources.tables['GhlIntegration'].tableName
-);
-
-backend.dailyOutreachAgent.addEnvironment(
   'AMPLIFY_DATA_GhlIntegration_TABLE_NAME',
   backend.data.resources.tables['GhlIntegration'].tableName
 );
@@ -203,7 +198,7 @@ backend.data.resources.tables['GhlIntegration'].grantReadData(
 
 // 📧 Configure Daily Email Agent
 backend.dailyEmailAgent.addEnvironment(
-  'GHL_INTEGRATION_TABLE_NAME',
+  'AMPLIFY_DATA_GhlIntegration_TABLE_NAME',
   backend.data.resources.tables['GhlIntegration'].tableName
 );
 
