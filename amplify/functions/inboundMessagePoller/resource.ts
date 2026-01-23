@@ -5,5 +5,8 @@ export const inboundMessagePoller = defineFunction({
   entry: './handler.ts',
   timeoutSeconds: 300,
   memoryMB: 512,
-  schedule: 'every 10m'
+  schedule: 'every 10m',
+  environment: {
+    OPENAI_API_KEY: process.env.OPENAI_API_KEY || ''
+  }
 });

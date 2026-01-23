@@ -7,6 +7,7 @@ export const dailyEmailAgent = defineFunction({
   environment: {
     GHL_INTEGRATION_TABLE_NAME: process.env.GHL_INTEGRATION_TABLE_NAME || '',
     APP_URL: process.env.APP_URL || 'https://leads.josetherealtor.com',
+    OPENAI_API_KEY: process.env.OPENAI_API_KEY || ''
   },
   schedule: 'every 1h', // Run every hour, business hours check inside handler
 });
