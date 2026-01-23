@@ -196,6 +196,27 @@ export async function POST(req: Request) {
             }));
             
             console.log(`✅ Updated queue status to OPTED_OUT for contact ${finalContactId}`);
+            
+            // Also update PropertyLead.ghlOutreachData for UI display
+            const { cookiesClient } = await import('@/app/utils/aws/auth/amplifyServerUtils.server');
+            const { data: leads } = await cookiesClient.models.PropertyLead.list({
+              filter: { ghlContactId: { eq: finalContactId } }
+            });
+            
+            if (leads && leads.length > 0) {
+              const lead = leads[0];
+              const currentData = (lead.ghlOutreachData as any) || {};
+              
+              await cookiesClient.models.PropertyLead.update({
+                id: lead.id,
+                ghlOutreachData: {
+                  ...currentData,
+                  smsStatus: 'OPTED_OUT'
+                }
+              });
+              
+              console.log(`✅ Updated PropertyLead ghlOutreachData for ${finalContactId}`);
+            }
           }
         } catch (queueError) {
           console.error(`⚠️ Failed to update queue status:`, queueError);
@@ -236,6 +257,27 @@ export async function POST(req: Request) {
           }));
           
           console.log(`✅ Updated queue status to REPLIED for contact ${finalContactId}`);
+          
+          // Also update PropertyLead.ghlOutreachData for UI display
+          const { cookiesClient } = await import('@/app/utils/aws/auth/amplifyServerUtils.server');
+          const { data: leads } = await cookiesClient.models.PropertyLead.list({
+            filter: { ghlContactId: { eq: finalContactId } }
+          });
+          
+          if (leads && leads.length > 0) {
+            const lead = leads[0];
+            const currentData = (lead.ghlOutreachData as any) || {};
+            
+            await cookiesClient.models.PropertyLead.update({
+              id: lead.id,
+              ghlOutreachData: {
+                ...currentData,
+                smsStatus: 'REPLIED'
+              }
+            });
+            
+            console.log(`✅ Updated PropertyLead ghlOutreachData for ${finalContactId}`);
+          }
         }
       } catch (queueError) {
         console.error(`⚠️ Failed to update queue status:`, queueError);
@@ -243,8 +285,8 @@ export async function POST(req: Request) {
       }
     }
 
-    // 3. Process asynchronously
-    // Normalize payload for async processor (handle both native and workflow formats)
+    // 3. Process conversation and generate AI response
+    // Normalize payload for processor (handle both native and workflow formats)
     const normalizedBody = {
       ...body,
       contactId: finalContactId,
@@ -253,12 +295,14 @@ export async function POST(req: Request) {
         id: finalContactId,
         firstName: first_name,
         lastName: last_name,
-        phone: phone
+        phone: phone,
+        customFields: body.customFields || []
       }
     };
     
-    setImmediate(() => {
-      processConversationAsync(normalizedBody);
+    // Process synchronously to ensure it completes before Lambda shuts down
+    processConversationAsync(normalizedBody).catch(error => {
+      console.error('❌ [WEBHOOK] Async processing failed:', error);
     });
 
     // 4. Mark as processed
