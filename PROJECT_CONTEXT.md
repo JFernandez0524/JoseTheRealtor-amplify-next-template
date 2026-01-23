@@ -1,8 +1,28 @@
 # Project Context - JoseTheRealtor Platform
 
-**Last Updated:** 2026-01-22 10:37 AM EST
+**Last Updated:** 2026-01-22 8:52 PM EST
 
 ## Current Status
+
+### ✅ Inbound Message Poller - DEPLOYED
+**Deployed:** 2026-01-22 8:52 PM EST
+
+**What Was Implemented:**
+1. **Polling Lambda** - Checks GHL conversations every 10 minutes
+2. **EventBridge Schedule** - Runs automatically using `every 10m` syntax
+3. **AI Response Handler** - Processes inbound messages and generates AI replies
+4. **Webhook Workaround** - Replaces missing InboundMessage webhook until GHL enables it
+
+**Why This Was Needed:**
+- GHL InboundMessage webhook not available in location settings
+- Support ticket submitted to request webhook access
+- Polling provides 10-minute response time until webhooks enabled
+- Once webhooks enabled, responses will be instant
+
+**Files:**
+- ✅ `amplify/functions/inboundMessagePoller/handler.ts` - Polling logic
+- ✅ `amplify/functions/inboundMessagePoller/resource.ts` - Schedule configuration
+- ✅ `amplify/backend.ts` - Environment variables and permissions
 
 ### ✅ OutreachQueue System - DEPLOYED & BACKFILLED
 **Deployed:** 2026-01-22 12:30 PM EST
@@ -48,8 +68,9 @@
 ## Recent Fixes (Today)
 
 1. **Duplicate SMS Messages** - FIXED ✅
-   - Changed rate limit from 5 minutes to 2 seconds
-   - Added OutreachQueue environment variables
+   - Changed rate limit from 5 minutes to 1 second (A2P compliance)
+   - Added daily volume cap (200 messages/day)
+   - Added opt-out keyword detection (STOP, UNSUBSCRIBE, etc.)
    - Lambda no longer times out and restarts
 
 2. **Invalid JWT Errors** - FIXED ✅
@@ -62,6 +83,11 @@
    - All 22 existing contacts added to queue
    - 17 contacts ready for next touch
    - 5 contacts maxed out (8+ attempts)
+
+4. **Inbound Message Polling** - DEPLOYED ✅
+   - Checks for new messages every 10 minutes
+   - Responds with AI within 10 minutes
+   - Workaround until GHL enables InboundMessage webhook
 
 ### Recent Deployments (Today)
 1. **Automated Email Outreach System** - DEPLOYED ✅
@@ -94,10 +120,34 @@
 
 ## Active Issues
 
-### 1. SMS Outreach Not Sending Proper Message
-**Status:** FIXED - Awaiting deployment (10 min)
-**Problem:** 
-- Lambda found 22 contacts with "ai outreach" tag
+### 1. GHL Custom Fields
+**Status:** DISCOVERED
+**Available Fields:**
+- **Call Outcome** (ID: `LNyfm5JDal955puZGbu3`) - Dropdown with options:
+  - No Answer
+  - Left Voicemail
+  - Spoke - Follow Up
+  - Timeline / Not Ready Yet
+  - Appointment Set
+  - Not Interested
+  - DNC
+  - Listed With Realtor
+  - **Sold Already** ← Use for "under contract" responses
+  - Wrong Number / Disconnected / Invalid Number
+
+**Next Steps:**
+- Add auto-detection of "under contract" keywords in conversation handlers
+- Update Call Outcome field to "Sold Already" when detected
+- Add tags: `under-contract`, `dead-lead`, `ai-stop`
+
+### 2. GHL Webhook Access
+**Status:** PENDING SUPPORT TICKET
+**Issue:** InboundMessage webhook not available in location settings
+**Workaround:** Polling every 10 minutes (deployed)
+**Ticket Info:** Prepared at `/tmp/ghl_ticket_info.txt` and `/tmp/webhook_payload.txt`
+**Once Enabled:** Instant AI responses instead of 10-minute delay
+
+## Active Issues (Resolved)
 - All showing "not ready yet (1-2/5 business days)"
 - Dial tracking was preventing immediate sending
 - Contacts receiving fallback message instead of prospecting script
