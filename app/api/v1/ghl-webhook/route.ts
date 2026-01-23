@@ -333,7 +333,10 @@ export async function POST(req: Request) {
 async function processConversationAsync(body: any) {
   console.log('🔄 [ASYNC] Starting async processing for contact:', body.contactId);
   try {
-    const { contactId, conversationId, message, locationId, contact } = body;
+    const { contactId, conversationId, message, contact } = body;
+    const locationId = body.locationId || body.location?.id;
+
+    console.log('🔍 [ASYNC] Location ID:', locationId);
 
     // 1. Get user ID from contact custom fields OR from GhlIntegration by locationId
     let userId = contact?.customFields?.find((f: any) => f.id === 'CNoGugInWOC59hAPptxY')?.value;
@@ -341,15 +344,26 @@ async function processConversationAsync(body: any) {
     if (!userId) {
       console.log('⚠️ [ASYNC] No user ID in custom fields, checking GhlIntegration by locationId...');
       
+      if (!locationId) {
+        console.error('❌ [ASYNC] No locationId available to lookup GhlIntegration');
+        return;
+      }
+      
       // Fallback: Get user ID from GhlIntegration by locationId
       const { cookiesClient } = await import('@/app/utils/aws/auth/amplifyServerUtils.server');
+      console.log('🔍 [ASYNC] Querying GhlIntegration for locationId:', locationId);
+      
       const { data: integrations } = await cookiesClient.models.GhlIntegration.list({
         filter: { locationId: { eq: locationId }, isActive: { eq: true } }
       });
       
+      console.log('🔍 [ASYNC] Found integrations:', integrations?.length || 0);
+      
       if (integrations && integrations.length > 0) {
         userId = integrations[0].userId;
         console.log('✅ [ASYNC] Found user ID from GhlIntegration:', userId);
+      } else {
+        console.error('❌ [ASYNC] No active GhlIntegration found for locationId:', locationId);
       }
     }
     
