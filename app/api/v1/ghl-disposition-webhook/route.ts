@@ -43,8 +43,14 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Missing contact ID' }, { status: 400 });
     }
 
-    // Get call outcome from custom fields (GHL sends as root-level properties)
-    const callOutcome = payload[CALL_OUTCOME_FIELD_ID];
+    // Get call outcome from custom fields array or root-level property
+    let callOutcome = payload[CALL_OUTCOME_FIELD_ID]; // Root-level (custom data)
+    
+    if (!callOutcome && payload.customFields) {
+      // Extract from customFields array
+      const field = payload.customFields.find((f: any) => f.id === CALL_OUTCOME_FIELD_ID);
+      callOutcome = field?.value;
+    }
     
     if (!callOutcome) {
       console.log('⚠️ [DISPOSITION] No call outcome in payload');
