@@ -349,40 +349,38 @@ async function processConversationAsync(body: any) {
         return;
       }
       
-      // Fallback: Get user ID from GhlIntegration by locationId using DynamoDB directly
+      // Fallback: Get user ID from GhlIntegration by locationId using cookiesClient
       try {
-        const { DynamoDBClient } = await import('@aws-sdk/client-dynamodb');
-        const { DynamoDBDocumentClient, ScanCommand } = await import('@aws-sdk/lib-dynamodb');
+        const { cookiesClient } = await import('@/app/utils/aws/auth/amplifyServerUtils.server');
         
-        const dynamoClient = new DynamoDBClient({ region: process.env.AWS_REGION || 'us-east-1' });
-        const docClient = DynamoDBDocumentClient.from(dynamoClient);
+        console.log('🔍 [ASYNC] Querying GhlIntegration for locationId:', locationId);
         
-        // Table name from environment or construct it
-        const tableName = process.env.AMPLIFY_DATA_GhlIntegration_TABLE_NAME || 
-                         `GhlIntegration-${process.env.AMPLIFY_APP_ID}-${process.env.AMPLIFY_BRANCH}`;
-        
-        console.log('🔍 [ASYNC] Querying GhlIntegration table:', tableName);
-        console.log('🔍 [ASYNC] For locationId:', locationId);
-        
-        const result = await docClient.send(new ScanCommand({
-          TableName: tableName,
-          FilterExpression: 'locationId = :locationId AND isActive = :active',
-          ExpressionAttributeValues: {
-            ':locationId': locationId,
-            ':active': true
+        const result = await cookiesClient.models.GhlIntegration.list({
+          filter: { 
+            locationId: { eq: locationId },
+            isActive: { eq: true }
           }
+        });
+        
+        console.log('🔍 [ASYNC] Query result:', JSON.stringify({
+          hasData: !!result.data,
+          dataLength: result.data?.length || 0,
+          hasErrors: !!result.errors,
+          errors: result.errors
         }));
         
-        console.log('🔍 [ASYNC] Found integrations:', result.Items?.length || 0);
-        
-        if (result.Items && result.Items.length > 0) {
-          userId = result.Items[0].userId;
+        if (result.data && result.data.length > 0) {
+          userId = result.data[0].userId;
           console.log('✅ [ASYNC] Found user ID from GhlIntegration:', userId);
         } else {
           console.error('❌ [ASYNC] No active GhlIntegration found for locationId:', locationId);
+          if (result.errors) {
+            console.error('❌ [ASYNC] Query errors:', JSON.stringify(result.errors));
+          }
         }
       } catch (dbError: any) {
         console.error('❌ [ASYNC] Database query failed:', dbError.message);
+        console.error('❌ [ASYNC] Error name:', dbError.name);
         console.error('❌ [ASYNC] Stack:', dbError.stack);
       }
     }
