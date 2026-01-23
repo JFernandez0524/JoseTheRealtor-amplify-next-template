@@ -117,6 +117,7 @@ export async function POST(req: Request) {
     } = body;
 
     // Log payload for debugging
+    console.log('📨 [WEBHOOK] Full message object:', JSON.stringify(message));
     console.log('📨 [WEBHOOK] Payload:', JSON.stringify({
       type,
       contactId,
@@ -125,7 +126,8 @@ export async function POST(req: Request) {
       messageType: message?.type || messageType,
       messageBody: message?.body?.substring(0, 50) || messageBody?.substring(0, 50),
       hasMessage: !!message,
-      hasMessageBody: !!messageBody
+      hasMessageBody: !!messageBody,
+      hasMessageDotBody: !!message?.body
     }));
 
     // Extract contact ID (workflow format or webhook format)
@@ -136,9 +138,9 @@ export async function POST(req: Request) {
     
     // Check if this is an inbound message
     // Native webhook: type === 'InboundMessage' && message.direction === 'inbound'
-    // Workflow webhook: messageBody exists (assume inbound if body present without native webhook fields)
+    // Workflow webhook: messageBody exists at root level (not inside message object)
     const isNativeWebhook = type === 'InboundMessage' || message?.direction === 'inbound';
-    const isWorkflowWebhook = !type && !message && messageBody; // Has body but no native fields
+    const isWorkflowWebhook = !type && messageBody && !message?.body; // Has root messageBody, not message.body
     const isInbound = isNativeWebhook || isWorkflowWebhook;
     
     if (!isInbound || !finalMessageBody) {
