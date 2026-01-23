@@ -1,7 +1,8 @@
 'use client';
 
 import { CardWrapper } from './CardWrapper';
-import { HiOutlinePhone, HiOutlineMail, HiOutlineClock, HiOutlineCheckCircle } from 'react-icons/hi2';
+import { HiOutlinePhone, HiOutlineClock, HiOutlineCheckCircle } from 'react-icons/hi2';
+import { HiOutlineMail } from 'react-icons/hi';
 
 interface OutreachData {
   smsAttempts?: number;
