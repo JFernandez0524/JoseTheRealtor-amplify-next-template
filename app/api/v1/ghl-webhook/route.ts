@@ -111,6 +111,16 @@ export async function POST(req: Request) {
       id, // GHL workflow sends contact.id as root-level 'id'
     } = body;
 
+    // Log payload for debugging
+    console.log('📨 [WEBHOOK] Payload:', JSON.stringify({
+      type,
+      contactId,
+      id,
+      messageDirection: message?.direction,
+      messageType: message?.type,
+      messageBody: message?.body?.substring(0, 50)
+    }));
+
     // Extract contact ID (workflow format or webhook format)
     const finalContactId = contactId || id;
     
@@ -120,6 +130,7 @@ export async function POST(req: Request) {
     const isInbound = type === 'InboundMessage' || message?.direction === 'inbound';
     
     if (!isInbound || !message?.body) {
+      console.log(`⚠️ [WEBHOOK] Not inbound message. Type: ${type}, Direction: ${message?.direction}, HasBody: ${!!message?.body}`);
       return NextResponse.json({ success: true, message: 'Ignored - not inbound message' });
     }
 
