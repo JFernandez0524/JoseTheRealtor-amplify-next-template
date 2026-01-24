@@ -138,7 +138,8 @@ export const handler = async (event: any) => {
       propertyZip,
       leadType,
       locationId,
-      contact: fullContact
+      contact: fullContact,
+      accessToken: token, // Pass the GHL token for sending SMS
     });
 
     console.log('✅ [WEBHOOK_LAMBDA] Successfully processed webhook');
