@@ -215,30 +215,9 @@ export async function POST(req: Request) {
 
     // 3. Get userId from webhook payload (fastest, no database query needed)
     let userId: string | undefined = customUserId; // From GHL workflow custom data
-    let ghlToken: string | undefined;
     
     if (userId) {
       console.log('✅ [WEBHOOK] Found userId from workflow custom data:', userId);
-      
-      // Get GHL token while we have request context
-      try {
-        const { cookiesClient } = await import('@/app/utils/aws/auth/amplifyServerUtils.server');
-        const { data: integrations } = await cookiesClient.models.GhlIntegration.list({
-          filter: {
-            userId: { eq: userId },
-            isActive: { eq: true }
-          }
-        });
-        
-        if (integrations && integrations.length > 0) {
-          ghlToken = integrations[0].accessToken;
-          console.log('✅ [WEBHOOK] Got GHL token for async processing');
-        } else {
-          console.log('⚠️ [WEBHOOK] No active GHL integration found for userId:', userId);
-        }
-      } catch (error) {
-        console.error('❌ [WEBHOOK] Failed to get GHL token:', error);
-      }
     } else {
       // Fallback: Try to get from contact's custom field
       const appUserIdField = contact?.customFields?.find((f: any) => f.id === 'CNoGugInWOC59hAPptxY');
@@ -265,8 +244,7 @@ export async function POST(req: Request) {
     const normalizedBody = {
       ...body,
       contactId: finalContactId,
-      userId, // Pass userId we got while we had cookies context
-      ghlToken, // Pass token we got while we had cookies context
+      userId, // Pass userId from webhook
       message: message || { body: finalMessageBody, type: 'SMS' },
       contact: contact || { 
         id: finalContactId,
@@ -300,7 +278,7 @@ export async function POST(req: Request) {
 async function processConversationAsync(body: any) {
   console.log('🔄 [ASYNC] Starting async processing for contact:', body.contactId);
   try {
-    const { contactId, conversationId, message, contact, userId, ghlToken } = body;
+    const { contactId, conversationId, message, contact, userId } = body;
     const locationId = body.locationId || body.location?.id;
 
     console.log('🔍 [ASYNC] Location ID:', locationId);
@@ -311,15 +289,19 @@ async function processConversationAsync(body: any) {
       return;
     }
 
-    if (!ghlToken) {
-      console.error('❌ [ASYNC] No GHL token provided in body');
+    console.log('🔑 [ASYNC] Using user ID:', userId);
+
+    // Get valid GHL token using Lambda's token manager (has DynamoDB access)
+    const { getValidGhlToken } = await import('@/amplify/functions/shared/ghlTokenManager');
+    const result = await getValidGhlToken(userId);
+    
+    if (!result) {
+      console.error('❌ [ASYNC] No valid GHL token found for user:', userId);
       return;
     }
 
-    console.log('🔑 [ASYNC] Using user ID:', userId);
-    console.log('✅ [ASYNC] Got GHL token from main handler');
-
-    const token = ghlToken;
+    const { token } = result;
+    console.log('✅ [ASYNC] Got valid token from token manager');
 
     // 3. Fetch fresh contact data from GHL API
     let fullContact;
