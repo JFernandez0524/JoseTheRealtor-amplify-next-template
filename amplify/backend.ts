@@ -15,6 +15,7 @@ import { removeUserFromGroup } from './data/remove-user-from-group/resource';
 import { EventType } from 'aws-cdk-lib/aws-s3';
 import { LambdaDestination } from 'aws-cdk-lib/aws-s3-notifications';
 import { PolicyStatement, Effect } from 'aws-cdk-lib/aws-iam';
+import { FunctionUrlAuthType, HttpMethod } from 'aws-cdk-lib/aws-lambda';
 
 const backend = defineBackend({
   auth,
@@ -243,8 +244,6 @@ backend.data.resources.tables['GhlIntegration'].grantReadData(
 );
 
 // Enable Function URL for webhook
-const { FunctionUrlAuthType, HttpMethod } = await import('aws-cdk-lib/aws-lambda');
-
 backend.ghlWebhookHandler.resources.lambda.addFunctionUrl({
   authType: FunctionUrlAuthType.NONE, // Public endpoint for GHL webhook
   cors: {
