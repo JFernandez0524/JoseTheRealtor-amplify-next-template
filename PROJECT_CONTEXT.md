@@ -1,28 +1,49 @@
 # Project Context - JoseTheRealtor Platform
 
-**Last Updated:** 2026-01-22 8:52 PM EST
+**Last Updated:** 2026-01-23 7:59 PM EST
 
 ## Current Status
 
-### ✅ Inbound Message Poller - DEPLOYED
-**Deployed:** 2026-01-22 8:52 PM EST
+### 🚧 AI Response Webhook - IN PROGRESS (FINAL ATTEMPT)
+**Status:** Debugging DynamoDB query for userId lookup
+**Last Tested:** 2026-01-23 7:55 PM EST
 
-**What Was Implemented:**
-1. **Polling Lambda** - Checks GHL conversations every 10 minutes
-2. **EventBridge Schedule** - Runs automatically using `every 10m` syntax
-3. **AI Response Handler** - Processes inbound messages and generates AI replies
-4. **Webhook Workaround** - Replaces missing InboundMessage webhook until GHL enables it
+**Problem:**
+- AI responses not working because webhook can't get userId to fetch GHL OAuth token
+- cookiesClient requires Next.js request context (cookies) which doesn't exist in async functions after HTTP response sent
 
-**Why This Was Needed:**
-- GHL InboundMessage webhook not available in location settings
-- Support ticket submitted to request webhook access
-- Polling provides 10-minute response time until webhooks enabled
-- Once webhooks enabled, responses will be instant
+**Solution Implemented:**
+1. ✅ Replaced cookiesClient with direct DynamoDB query in main handler
+2. ✅ Using Lambda's `getValidGhlToken` (DynamoDB-based) in async function
+3. ✅ Hardcoded correct table name: `GhlIntegration-ahlnflzdejd5jdrulwuqcuxm6i-NONE`
+4. ✅ Verified data exists: userId `44d8f4c8-10c1-7038-744b-271103170819` for locationId `mHaAy3ZaUHgrbPyughDG`
+5. ✅ Added comprehensive logging to track flow
 
-**Files:**
-- ✅ `amplify/functions/inboundMessagePoller/handler.ts` - Polling logic
-- ✅ `amplify/functions/inboundMessagePoller/resource.ts` - Schedule configuration
-- ✅ `amplify/backend.ts` - Environment variables and permissions
+**Files Modified:**
+- `app/api/v1/ghl-webhook/route.ts` - DynamoDB query for userId, Lambda's getValidGhlToken
+
+**Next Steps:**
+1. Deploy with `npx ampx sandbox`
+2. Send test SMS to trigger webhook
+3. Check CloudWatch logs for DynamoDB query results
+4. If still fails → Consider using GHL native AI instead (simpler, no webhook complexity)
+
+**Alternative Approach:**
+- Use GHL's native AI for SMS responses (built-in, no custom webhooks needed)
+- Keep app focused on property data enrichment, skip tracing, lead scoring
+- Cold call leads manually with GHL AI handling follow-ups
+
+---
+
+### ✅ Inbound Message Poller - DELETED
+**Deleted:** 2026-01-23 (replaced by webhooks)
+
+**Why Deleted:**
+- Webhooks are now active and working for SMS
+- Polling was temporary workaround
+- Webhooks provide instant responses vs 10-minute polling delay
+
+---
 
 ### ✅ OutreachQueue System - DEPLOYED & BACKFILLED
 **Deployed:** 2026-01-22 12:30 PM EST

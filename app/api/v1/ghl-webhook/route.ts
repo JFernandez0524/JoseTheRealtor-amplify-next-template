@@ -44,8 +44,7 @@
 import { NextResponse } from 'next/server';
 import { generateAIResponse } from '@/app/utils/ai/conversationHandler';
 import { createVerify } from 'crypto';
-import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, ScanCommand } from '@aws-sdk/lib-dynamodb';
+import { type Schema } from '@/amplify/data/resource';
 
 // GHL Public Key for webhook verification
 const GHL_PUBLIC_KEY = `-----BEGIN PUBLIC KEY-----
@@ -199,27 +198,6 @@ export async function POST(req: Request) {
             }));
             
             console.log(`✅ Updated queue status to OPTED_OUT for contact ${finalContactId}`);
-            
-            // Also update PropertyLead.ghlOutreachData for UI display
-            const { cookiesClient } = await import('@/app/utils/aws/auth/amplifyServerUtils.server');
-            const { data: leads } = await cookiesClient.models.PropertyLead.list({
-              filter: { ghlContactId: { eq: finalContactId } }
-            });
-            
-            if (leads && leads.length > 0) {
-              const lead = leads[0];
-              const currentData = (lead.ghlOutreachData as any) || {};
-              
-              await cookiesClient.models.PropertyLead.update({
-                id: lead.id,
-                ghlOutreachData: {
-                  ...currentData,
-                  smsStatus: 'OPTED_OUT'
-                }
-              });
-              
-              console.log(`✅ Updated PropertyLead ghlOutreachData for ${finalContactId}`);
-            }
           }
         } catch (queueError) {
           console.error(`⚠️ Failed to update queue status:`, queueError);
@@ -234,93 +212,61 @@ export async function POST(req: Request) {
       });
     }
 
-    // 🔄 Update outreach queue status to REPLIED (for non-opt-out messages)
-    if (finalContactId) {
-      try {
-        // Get user ID from contact's custom fields (app_user_id)
-        const userId = contact?.customFields?.find((f: any) => f.id === 'CNoGugInWOC59hAPptxY')?.value;
-        
-        if (userId) {
-          const { DynamoDBClient } = await import('@aws-sdk/client-dynamodb');
-          const { DynamoDBDocumentClient, UpdateCommand } = await import('@aws-sdk/lib-dynamodb');
-          
-          const dynamoClient = new DynamoDBClient({ region: process.env.AWS_REGION });
-          const docClient = DynamoDBDocumentClient.from(dynamoClient);
-          
-          const queueId = `${userId}_${finalContactId}`;
-          
-          await docClient.send(new UpdateCommand({
-            TableName: process.env.AMPLIFY_DATA_OutreachQueue_TABLE_NAME,
-            Key: { id: queueId },
-            UpdateExpression: 'SET smsStatus = :status, updatedAt = :now',
-            ExpressionAttributeValues: {
-              ':status': 'REPLIED',
-              ':now': new Date().toISOString(),
-            },
-          }));
-          
-          console.log(`✅ Updated queue status to REPLIED for contact ${finalContactId}`);
-          
-          // Also update PropertyLead.ghlOutreachData for UI display
-          const { cookiesClient } = await import('@/app/utils/aws/auth/amplifyServerUtils.server');
-          const { data: leads } = await cookiesClient.models.PropertyLead.list({
-            filter: { ghlContactId: { eq: finalContactId } }
-          });
-          
-          if (leads && leads.length > 0) {
-            const lead = leads[0];
-            const currentData = (lead.ghlOutreachData as any) || {};
-            
-            await cookiesClient.models.PropertyLead.update({
-              id: lead.id,
-              ghlOutreachData: {
-                ...currentData,
-                smsStatus: 'REPLIED'
-              }
-            });
-            
-            console.log(`✅ Updated PropertyLead ghlOutreachData for ${finalContactId}`);
-          }
-        }
-      } catch (queueError) {
-        console.error(`⚠️ Failed to update queue status:`, queueError);
-        // Don't fail webhook processing if queue update fails
-      }
-    }
-
-    // 3. Get userId by querying DynamoDB directly (no cookies needed)
+    // 3. Get userId by querying GhlIntegration table using Amplify server context
     let userId: string | undefined;
     
     if (locationId) {
       try {
-        // Use the newer table (check both for compatibility)
-        const tableName = 'GhlIntegration-ahlnflzdejd5jdrulwuqcuxm6i-NONE';
+        console.log(`🔍 [WEBHOOK] Step 1: Starting userId lookup for locationId: ${locationId}`);
         
-        const dynamoClient = new DynamoDBClient({ region: process.env.AWS_REGION || 'us-east-1' });
-        const docClient = DynamoDBDocumentClient.from(dynamoClient);
+        const { runWithAmplifyServerContext } = await import('@/app/utils/aws/auth/amplifyServerUtils.server');
+        console.log(`🔍 [WEBHOOK] Step 2: Imported runWithAmplifyServerContext`);
         
-        console.log(`🔍 [WEBHOOK] Querying table: ${tableName} for locationId: ${locationId}`);
+        const { cookies } = await import('next/headers');
+        console.log(`🔍 [WEBHOOK] Step 3: Imported cookies`);
         
-        const { Items } = await docClient.send(new ScanCommand({
-          TableName: tableName,
-          FilterExpression: 'locationId = :locationId AND isActive = :active',
-          ExpressionAttributeValues: {
-            ':locationId': locationId,
-            ':active': true
+        console.log(`🔍 [WEBHOOK] Step 4: Calling runWithAmplifyServerContext...`);
+        
+        const integrations = await runWithAmplifyServerContext({
+          nextServerContext: { cookies },
+          operation: async (contextSpec) => {
+            console.log(`🔍 [WEBHOOK] Step 5: Inside operation, importing data client...`);
+            const { generateServerClientUsingCookies } = await import('@aws-amplify/adapter-nextjs/api');
+            const outputs = await import('@/amplify_outputs.json');
+            
+            console.log(`🔍 [WEBHOOK] Step 6: Creating client with context...`);
+            const client = generateServerClientUsingCookies<Schema>({
+              config: outputs.default,
+              cookies
+            });
+            
+            console.log(`🔍 [WEBHOOK] Step 7: Querying GhlIntegration.list...`);
+            const { data } = await client.models.GhlIntegration.list({
+              filter: {
+                locationId: { eq: locationId },
+                isActive: { eq: true }
+              }
+            });
+            
+            console.log(`🔍 [WEBHOOK] Step 8: Query complete, found ${data?.length || 0} results`);
+            return data;
           }
-        }));
+        });
         
-        console.log(`🔍 [WEBHOOK] Found ${Items?.length || 0} items`);
+        console.log(`🔍 [WEBHOOK] Step 8: runWithAmplifyServerContext returned ${integrations?.length || 0} integrations`);
         
-        if (Items && Items.length > 0) {
-          userId = Items[0].userId;
-          console.log('✅ [WEBHOOK] Found userId for async processing:', userId);
+        if (integrations && integrations.length > 0) {
+          userId = integrations[0].userId;
+          console.log('✅ [WEBHOOK] Step 9: SUCCESS - Found userId:', userId);
         } else {
-          console.log('⚠️ [WEBHOOK] No active integration found for locationId:', locationId);
+          console.log('⚠️ [WEBHOOK] Step 9: FAIL - No active integration found for locationId:', locationId);
         }
       } catch (error) {
-        console.error('⚠️ [WEBHOOK] Failed to get userId:', error);
+        console.error('❌ [WEBHOOK] EXCEPTION during userId lookup:', error);
+        console.error('❌ [WEBHOOK] Error stack:', (error as Error).stack);
       }
+    } else {
+      console.log('⚠️ [WEBHOOK] No locationId provided, skipping userId lookup');
     }
 
     // 4. Process conversation and generate AI response
