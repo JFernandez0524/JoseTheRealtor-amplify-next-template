@@ -291,17 +291,17 @@ async function processConversationAsync(body: any) {
 
     console.log('🔑 [ASYNC] Using user ID:', userId);
 
-    // Get valid GHL token using Lambda's token manager (has DynamoDB access)
-    const { getValidGhlToken } = await import('@/amplify/functions/shared/ghlTokenManager');
-    const result = await getValidGhlToken(userId);
+    // Get GHL integration using DynamoDB utility (works in webhooks)
+    const { getGhlIntegrationByUserId } = await import('@/app/utils/aws/data/ghlIntegration.dynamodb');
+    const integration = await getGhlIntegrationByUserId(userId);
     
-    if (!result) {
-      console.error('❌ [ASYNC] No valid GHL token found for user:', userId);
+    if (!integration) {
+      console.error('❌ [ASYNC] No active GHL integration found for user:', userId);
       return;
     }
 
-    const { token } = result;
-    console.log('✅ [ASYNC] Got valid token from token manager');
+    const token = integration.accessToken;
+    console.log('✅ [ASYNC] Got GHL token from DynamoDB');
 
     // 3. Fetch fresh contact data from GHL API
     let fullContact;
