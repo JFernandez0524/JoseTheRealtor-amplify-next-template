@@ -44,6 +44,8 @@
 import { NextResponse } from 'next/server';
 import { generateAIResponse } from '@/app/utils/ai/conversationHandler';
 import { createVerify } from 'crypto';
+import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import { DynamoDBDocumentClient, ScanCommand } from '@aws-sdk/lib-dynamodb';
 
 // GHL Public Key for webhook verification
 const GHL_PUBLIC_KEY = `-----BEGIN PUBLIC KEY-----
@@ -286,18 +288,26 @@ export async function POST(req: Request) {
       }
     }
 
-    // 3. Get userId NOW while we have cookies context
+    // 3. Get userId by querying DynamoDB directly (no cookies needed)
     let userId: string | undefined;
     
     if (locationId) {
       try {
-        const { cookiesClient } = await import('@/app/utils/aws/auth/amplifyServerUtils.server');
-        const { data: integrations } = await cookiesClient.models.GhlIntegration.list({
-          filter: { locationId: { eq: locationId }, isActive: { eq: true } }
-        });
+        const tableName = `GhlIntegration-${process.env.AMPLIFY_APP_ID}-${process.env.AMPLIFY_BRANCH}-NONE`;
+        const dynamoClient = new DynamoDBClient({ region: process.env.AWS_REGION || 'us-east-1' });
+        const docClient = DynamoDBDocumentClient.from(dynamoClient);
         
-        if (integrations && integrations.length > 0) {
-          userId = integrations[0].userId;
+        const { Items } = await docClient.send(new ScanCommand({
+          TableName: tableName,
+          FilterExpression: 'locationId = :locationId AND isActive = :active',
+          ExpressionAttributeValues: {
+            ':locationId': locationId,
+            ':active': true
+          }
+        }));
+        
+        if (Items && Items.length > 0) {
+          userId = Items[0].userId;
           console.log('✅ [WEBHOOK] Found userId for async processing:', userId);
         }
       } catch (error) {
@@ -367,15 +377,16 @@ async function processConversationAsync(body: any) {
 
     console.log('🔑 [ASYNC] Using user ID:', userId);
 
-    // 2. Get valid GHL token from database
-    const { getValidGhlToken } = await import('@/app/utils/aws/data/ghlIntegration.server');
-    const token = await getValidGhlToken(userId);
+    // 2. Get valid GHL token from database (Lambda version - uses DynamoDB)
+    const { getValidGhlToken } = await import('@/amplify/functions/shared/ghlTokenManager');
+    const result = await getValidGhlToken(userId);
     
-    if (!token) {
+    if (!result) {
       console.error('❌ [ASYNC] No valid GHL token found for user:', userId);
       return;
     }
 
+    const { token } = result;
     console.log('✅ [ASYNC] Got valid token');
 
     // 3. Fetch fresh contact data from GHL API
