@@ -4,34 +4,45 @@
 
 ## Current Status
 
-### 🚧 AI Response Webhook - IN PROGRESS (FINAL ATTEMPT)
-**Status:** Debugging DynamoDB query for userId lookup
-**Last Tested:** 2026-01-23 7:55 PM EST
+### 🚧 AI Response Webhook - BLOCKED (IAM Permissions Issue)
+**Status:** Cannot proceed with current Amplify architecture
+**Last Tested:** 2026-01-24 1:15 PM EST
 
 **Problem:**
-- AI responses not working because webhook can't get userId to fetch GHL OAuth token
-- cookiesClient requires Next.js request context (cookies) which doesn't exist in async functions after HTTP response sent
+- Next.js API routes (deployed as Lambda) don't have AWS credentials to access DynamoDB
+- Error: `CredentialsProviderError: Could not load credentials from any providers`
+- Amplify's Next.js hosting doesn't get the same IAM permissions as explicit Lambda functions
 
-**Solution Implemented:**
-1. ✅ Replaced cookiesClient with direct DynamoDB query in main handler
-2. ✅ Using Lambda's `getValidGhlToken` (DynamoDB-based) in async function
-3. ✅ Hardcoded correct table name: `GhlIntegration-ahlnflzdejd5jdrulwuqcuxm6i-NONE`
-4. ✅ Verified data exists: userId `44d8f4c8-10c1-7038-744b-271103170819` for locationId `mHaAy3ZaUHgrbPyughDG`
-5. ✅ Added comprehensive logging to track flow
+**What We Tried:**
+1. ✅ Get userId from GHL workflow custom data (`{{contact.app_user_id}}`)
+2. ✅ Create DynamoDB utility for direct table access
+3. ✅ Add environment variable to `amplify.yml` and `next.config.js`
+4. ❌ DynamoDB client can't get credentials in Next.js API route Lambda
 
-**Files Modified:**
-- `app/api/v1/ghl-webhook/route.ts` - DynamoDB query for userId, Lambda's getValidGhlToken
+**Root Cause:**
+- Amplify Gen 2 doesn't expose IAM role for Next.js compute
+- Can't grant DynamoDB permissions to API route Lambdas
+- Only explicit Lambda functions (in `backend.ts`) get proper IAM roles
 
-**Next Steps:**
-1. Deploy with `npx ampx sandbox`
-2. Send test SMS to trigger webhook
-3. Check CloudWatch logs for DynamoDB query results
-4. If still fails → Consider using GHL native AI instead (simpler, no webhook complexity)
+**Alternative Solutions:**
+1. **Use GHL Native AI** (RECOMMENDED)
+   - GHL has built-in AI for SMS responses
+   - No custom webhooks needed
+   - Simpler, more reliable
+   - Keep app focused on lead enrichment, skip tracing, scoring
 
-**Alternative Approach:**
-- Use GHL's native AI for SMS responses (built-in, no custom webhooks needed)
-- Keep app focused on property data enrichment, skip tracing, lead scoring
-- Cold call leads manually with GHL AI handling follow-ups
+2. **Create Dedicated Lambda Function**
+   - Move webhook handler to `amplify/functions/ghlWebhookHandler`
+   - Grant explicit DynamoDB permissions in `backend.ts`
+   - Use Lambda Function URL instead of Next.js API route
+   - More complex but would work
+
+3. **Use Amplify Data Client with Public Access**
+   - Make GhlIntegration table publicly readable
+   - Security risk - exposes OAuth tokens
+   - NOT RECOMMENDED
+
+**Decision:** Recommend using GHL's native AI for SMS responses. Our app excels at lead data enrichment, skip tracing, and AI scoring - let GHL handle the messaging.
 
 ---
 

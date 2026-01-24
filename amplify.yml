@@ -36,7 +36,7 @@ frontend:
     build:
       commands:
         - echo "⚙️ Writing environment variables to .env.production..."
-        - env | grep -e GHL_CLIENT_ID -e GHL_CLIENT_SECRET -e BRIDGE_API_KEY -e GOOGLE_MAPS_API_KEY -e OPENAI_API_KEY -e GOOGLE_CLIENT_ID -e GOOGLE_CLIENT_SECRET -e STRIPE_SECRET_KEY -e STRIPE_WEBHOOK_SECRET -e GHL_AGENCY_TOKEN -e AMPLIFY_DATA_GhlIntegration_TABLE_NAME >> .env.production
+        - env | grep -e GHL_CLIENT_ID -e GHL_CLIENT_SECRET -e BRIDGE_API_KEY -e GOOGLE_MAPS_API_KEY -e OPENAI_API_KEY -e GOOGLE_CLIENT_ID -e GOOGLE_CLIENT_SECRET -e STRIPE_SECRET_KEY -e STRIPE_WEBHOOK_SECRET -e GHL_AGENCY_TOKEN >> .env.production
         - env | grep -e NEXT_PUBLIC_ >> .env.production
         - echo "✅ Environment variables written to .env.production"
         - echo "🏗️ Building Next.js application..."

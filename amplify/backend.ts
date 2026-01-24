@@ -9,6 +9,7 @@ import { aiFollowUpAgent } from './functions/aiFollowUpAgent/resource';
 import { dailyOutreachAgent } from './functions/dailyOutreachAgent/resource';
 import { dailyEmailAgent } from './functions/dailyEmailAgent/resource';
 import { bulkEmailCampaign } from './functions/bulkEmailCampaign/resource';
+import { ghlWebhookHandler } from './functions/ghlWebhookHandler/resource';
 import { addUserToGroup } from './data/add-user-to-group/resource';
 import { removeUserFromGroup } from './data/remove-user-from-group/resource';
 import { EventType } from 'aws-cdk-lib/aws-s3';
@@ -26,6 +27,7 @@ const backend = defineBackend({
   dailyOutreachAgent,
   dailyEmailAgent,
   bulkEmailCampaign,
+  ghlWebhookHandler,
   addUserToGroup,
   removeUserFromGroup,
 });
@@ -225,3 +227,29 @@ backend.dailyEmailAgent.resources.lambda.addToRolePolicy(
     ]
   })
 );
+
+// 📨 Configure GHL Webhook Handler
+backend.ghlWebhookHandler.addEnvironment(
+  'AMPLIFY_DATA_GhlIntegration_TABLE_NAME',
+  backend.data.resources.tables['GhlIntegration'].tableName
+);
+
+backend.ghlWebhookHandler.addEnvironment('GHL_CLIENT_ID', process.env.GHL_CLIENT_ID || '');
+backend.ghlWebhookHandler.addEnvironment('GHL_CLIENT_SECRET', process.env.GHL_CLIENT_SECRET || '');
+backend.ghlWebhookHandler.addEnvironment('OPENAI_API_KEY', process.env.OPENAI_API_KEY || '');
+
+backend.data.resources.tables['GhlIntegration'].grantReadData(
+  backend.ghlWebhookHandler.resources.lambda
+);
+
+// Enable Function URL for webhook
+const { FunctionUrlAuthType, HttpMethod } = await import('aws-cdk-lib/aws-lambda');
+
+backend.ghlWebhookHandler.resources.lambda.addFunctionUrl({
+  authType: FunctionUrlAuthType.NONE, // Public endpoint for GHL webhook
+  cors: {
+    allowedOrigins: ['*'],
+    allowedMethods: [HttpMethod.POST],
+    allowedHeaders: ['*'],
+  }
+});
