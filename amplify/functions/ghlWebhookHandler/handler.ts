@@ -86,11 +86,14 @@ export const handler = async (event: any) => {
       }
     );
 
+    console.log('📡 [WEBHOOK_LAMBDA] Contact response status:', contactResponse.status);
+
     if (!contactResponse.ok) {
-      console.error('❌ [WEBHOOK_LAMBDA] Failed to fetch contact');
+      const errorText = await contactResponse.text();
+      console.error('❌ [WEBHOOK_LAMBDA] Failed to fetch contact:', contactResponse.status, errorText);
       return {
         statusCode: 500,
-        body: JSON.stringify({ error: 'Failed to fetch contact' })
+        body: JSON.stringify({ error: 'Failed to fetch contact', details: errorText })
       };
     }
 
