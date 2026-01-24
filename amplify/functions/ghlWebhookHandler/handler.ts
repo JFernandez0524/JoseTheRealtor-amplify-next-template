@@ -28,7 +28,8 @@ const docClient = DynamoDBDocumentClient.from(dynamoClient);
 const GHL_INTEGRATION_TABLE = process.env.AMPLIFY_DATA_GhlIntegration_TABLE_NAME;
 
 export const handler = async (event: any) => {
-  console.log('📨 [WEBHOOK_LAMBDA] Received event:', JSON.stringify(event));
+  console.log('📨 [WEBHOOK_LAMBDA] Received event');
+  console.log('📨 [WEBHOOK_LAMBDA] Event body:', event.body);
 
   try {
     // Parse body (API Gateway sends stringified JSON)
