@@ -4,9 +4,10 @@
 
 ### Recent Updates (2026-01-24):
 
-1. **Webhook Integration - DEPLOYED**
-   - Dedicated Lambda function for instant SMS responses
+1. **Multi-Channel Webhook Integration - DEPLOYED**
+   - Dedicated Lambda function for instant responses across all channels
    - Lambda Function URL: https://dpw6qwhfwor3hucpbsitt7skzq0itemx.lambda-url.us-east-1.on.aws/
+   - Supports: SMS, Facebook Messenger, Instagram DMs, WhatsApp
    - Direct DynamoDB access with proper IAM permissions
    - Automatic OAuth token refresh
    - No polling delay - instant AI responses
@@ -16,12 +17,18 @@
    - Reason: Next.js API routes don't have AWS credentials for DynamoDB
    - Solution: Lambda functions in `amplify/functions/` get explicit IAM permissions
    - Shared utilities in `amplify/functions/shared/` for code reuse
+   - Multi-channel message type detection (SMS=2, FB=3, IG=4, WhatsApp=5)
 
 3. **AI Enable Logic**
    - Checks for valid lead type (Probate or PREFORECLOSURE)
    - Requires phone number on contact
    - Excludes "Direct Mail" only contacts
    - Future: Will add app plan and account status checks
+
+4. **GHL Workflows Required**
+   - SMS Workflow: Trigger "Customer Replied" → Filter: SMS → Webhook
+   - Social Workflow: Trigger "Customer Replied" → Filter: Facebook + Instagram → Webhook
+   - Both workflows point to same Lambda Function URL
 
 ## Testing Without Sending Live Messages
 

@@ -39,9 +39,10 @@ export const handler = async (event: any) => {
     const userId = customData?.userId;
     const contactId = customData?.contactId || contact?.id;
     const messageBody = customData?.messageBody || message?.body;
+    const messageType = message?.type; // 2 = SMS, 3 = Facebook Messenger
     const locationId = location?.id;
 
-    console.log('📨 [WEBHOOK_LAMBDA] Extracted data:', { userId, contactId, messageBody, locationId });
+    console.log('📨 [WEBHOOK_LAMBDA] Extracted data:', { userId, contactId, messageBody, messageType, locationId });
 
     if (!userId || !contactId || !messageBody) {
       console.error('❌ [WEBHOOK_LAMBDA] Missing required fields');
@@ -139,7 +140,8 @@ export const handler = async (event: any) => {
       leadType,
       locationId,
       contact: fullContact,
-      accessToken: token, // Pass the GHL token for sending SMS
+      accessToken: token, // Pass the GHL token for sending messages
+      messageType: messageType === 3 ? 'FB' : 'SMS', // Facebook Messenger or SMS
     });
 
     console.log('✅ [WEBHOOK_LAMBDA] Successfully processed webhook');

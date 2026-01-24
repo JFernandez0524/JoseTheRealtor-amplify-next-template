@@ -18,6 +18,7 @@ interface ConversationContext {
   testMode?: boolean; // If true, don't send messages to GHL
   fromNumber?: string; // Phone number to send SMS from
   accessToken?: string; // GHL OAuth token for API calls
+  messageType?: 'SMS' | 'FB' | 'IG' | 'WhatsApp'; // Message channel type
 }
 
 interface PropertyAnalysis {
@@ -62,22 +63,22 @@ async function getPropertyAnalysis(address: string, city: string, state: string,
 }
 
 // Send message to GHL
-async function sendGHLMessage(conversationId: string, message: string, accessToken: string, testMode = false, fromNumber?: string, contactId?: string) {
+async function sendGHLMessage(conversationId: string, message: string, accessToken: string, testMode = false, fromNumber?: string, contactId?: string, messageType: string = 'SMS') {
   if (testMode) {
     console.log('🧪 TEST MODE - Would send message:', message);
     return;
   }
   
   try {
-    console.log(`📤 Sending message to GHL ${contactId ? `contact ${contactId}` : `conversation ${conversationId}`}`);
+    console.log(`📤 Sending ${messageType} message to GHL ${contactId ? `contact ${contactId}` : `conversation ${conversationId}`}`);
     
     const messagePayload: any = {
-      type: 'SMS',
+      type: messageType, // SMS, FB, IG, WhatsApp
       message
     };
     
-    // Add fromNumber if provided
-    if (fromNumber) {
+    // Add fromNumber if provided (SMS only)
+    if (fromNumber && messageType === 'SMS') {
       messagePayload.fromNumber = fromNumber;
     }
     
@@ -102,9 +103,9 @@ async function sendGHLMessage(conversationId: string, message: string, accessTok
         }
       }
     );
-    console.log('✅ Message sent successfully to GHL');
+    console.log(`✅ ${messageType} message sent successfully to GHL`);
   } catch (error: any) {
-    console.error('❌ Failed to send GHL message:', error.response?.data || error.message);
+    console.error(`❌ Failed to send GHL ${messageType} message:`, error.response?.data || error.message);
     throw error;
   }
 }
@@ -338,7 +339,7 @@ export async function generateAIResponse(context: ConversationContext): Promise<
       }
 
       const handoffMessage = "Great! I'll have one of our property specialists reach out to you within the next few hours to discuss your options. Thanks for your interest!";
-      await sendGHLMessage(context.conversationId, handoffMessage, context.accessToken || '', context.testMode, context.fromNumber, context.contactId);
+      await sendGHLMessage(context.conversationId, handoffMessage, context.accessToken || '', context.testMode, context.fromNumber, context.contactId, context.messageType || 'SMS');
       return handoffMessage;
     }
 
@@ -357,7 +358,7 @@ export async function generateAIResponse(context: ConversationContext): Promise<
     const aiMessage = await generateOpenAIResponse(context, propertyData || undefined);
 
     // Send response to GHL (skip in test mode)
-    await sendGHLMessage(context.conversationId, aiMessage, context.accessToken || '', context.testMode, context.fromNumber, context.contactId);
+    await sendGHLMessage(context.conversationId, aiMessage, context.accessToken || '', context.testMode, context.fromNumber, context.contactId, context.messageType || 'SMS');
 
     return aiMessage;
 

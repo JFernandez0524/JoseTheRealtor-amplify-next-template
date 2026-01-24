@@ -7,8 +7,8 @@ A comprehensive real estate lead management platform built with AWS Amplify Gen2
 - **Lead Management**: Import and analyze property leads (preforeclosure, probate)
 - **AI Lead Scoring**: Intelligent prioritization with 0-100 scores based on equity, value, timeline, location, and contact availability
 - **AI Insights Dashboard**: View top hottest leads, urgent attention items, and best ROI opportunities
-- **AI SMS Bot**: Automated text conversations with leads using OpenAI, following proven 5-step script for property visits
-- **AI Email Bot**: Automated email conversations using AMMO framework (Hook-Relate-Bridge-Ask) for professional prospecting
+- **AI Messaging Bot**: Automated conversations across SMS, Facebook Messenger, Instagram DMs, and WhatsApp using OpenAI
+- **Multi-Channel Outreach**: Coordinated messaging with instant AI responses on all platforms
 - **Outreach Queue System**: Efficient DynamoDB-based queue for tracking outreach status (90% reduction in API costs)
 - **Automated Email Campaigns**: Bulk prospecting emails with personalized property details, Zestimate values, and cash offers
 - **Multi-Channel Outreach**: Coordinated SMS and email campaigns with automatic reply/bounce detection and tagging
@@ -187,11 +187,12 @@ For detailed deployment instructions, see the [Amplify documentation](https://do
    - All messages will be sent from your selected phone/email
    - Replies route directly to you
 
-10. **AI SMS Messaging (Automated Text Outreach)**
+10. **AI Messaging Bot (Multi-Channel Automated Outreach)**
+   - **Supported Channels**: SMS, Facebook Messenger, Instagram DMs, WhatsApp
    - **Daily Automation**: Runs every hour during business hours
    - **Business Hours**: Mon-Fri 9AM-7PM, Sat 9AM-12PM EST (Sunday closed)
    - **Target Contacts**: New GHL contacts with "AI Outreach" tag who haven't been messaged
-   - **Webhook Integration**: Instant AI responses to inbound SMS via dedicated Lambda function
+   - **Webhook Integration**: Instant AI responses to inbound messages via dedicated Lambda function
    - **Conversation Flow**:
      1. Initial outreach introduces you and mentions the property
      2. AI adapts message based on lead type (preforeclosure vs probate)
@@ -204,12 +205,18 @@ For detailed deployment instructions, see the [Amplify documentation](https://do
      - Tracks conversation history to avoid duplicate messages
      - Automatically detects and tags replies
      - Instant webhook responses (no polling delay)
+     - Same AI intelligence across all channels
    - **Technical Implementation**:
      - Dedicated Lambda function with IAM permissions for DynamoDB access
      - Lambda Function URL for public webhook access (no API Gateway needed)
      - Automatic OAuth token refresh via token manager
      - Shared conversation handler between Lambda and Next.js
-   - **Testing**: Use `/api/v1/test-ai-response` endpoint to test AI responses without sending SMS
+     - Multi-channel message type detection (SMS=2, FB=3, IG=4, WhatsApp=5)
+   - **Facebook/Instagram Setup**:
+     - Connect Facebook Page and Instagram in GHL Settings
+     - Create GHL workflow: Trigger "Customer Replied" → Filter: Facebook + Instagram
+     - Webhook automatically handles all social DMs
+   - **Testing**: Use `/api/v1/test-ai-response` endpoint to test AI responses without sending messages
 
 11. **Outreach Queue System (Performance Optimization)**
    - **Purpose**: Replaces expensive GHL API searches with fast DynamoDB queries
@@ -322,27 +329,34 @@ The platform provides REST APIs and Lambda functions for integration:
 - `POST /api/v1/oauth/refresh` - Refresh GHL OAuth token
 
 **Lambda Function URLs:**
-- `POST https://dpw6qwhfwor3hucpbsitt7skzq0itemx.lambda-url.us-east-1.on.aws/` - GHL SMS webhook handler (instant AI responses)
+- `POST https://dpw6qwhfwor3hucpbsitt7skzq0itemx.lambda-url.us-east-1.on.aws/` - GHL webhook handler (instant AI responses for all channels)
 
 ### AI Messaging System
 
-The platform includes an automated AI messaging system for lead outreach:
+The platform includes an automated AI messaging system for multi-channel lead outreach:
 
 **Features:**
 - Automated daily outreach to new contacts
 - Instant inbound message handling with AI responses via webhook
+- Multi-channel support: SMS, Facebook Messenger, Instagram DMs, WhatsApp
 - 5-step proven script for property visits
 - Adapts to missing property data
 - Human handoff for qualified leads
 
 **Architecture:**
-- `amplify/functions/shared/conversationHandler.ts` - AI message generation (shared)
+- `amplify/functions/shared/conversationHandler.ts` - AI message generation (multi-channel)
 - `amplify/functions/shared/ghlTokenManager.ts` - OAuth token management (shared)
-- `amplify/functions/ghlWebhookHandler/` - Dedicated Lambda for SMS webhooks
+- `amplify/functions/ghlWebhookHandler/` - Dedicated Lambda for all message webhooks
 - `amplify/functions/dailyOutreachAgent/` - Daily automation
 
 **Why Lambda Function Instead of API Route:**
 Next.js API routes don't have AWS credentials to access DynamoDB. Dedicated Lambda functions in `amplify/functions/` get explicit IAM permissions via `backend.ts`, enabling direct DynamoDB access for webhook handling.
+
+**Supported Message Types:**
+- Type 2: SMS
+- Type 3: Facebook Messenger
+- Type 4: Instagram DM
+- Type 5: WhatsApp
 
 **Documentation:**
 - `AI_TESTING_GUIDE.md` - Testing procedures

@@ -4,10 +4,17 @@
 
 ## Current Status
 
-### ✅ AI Response Webhook - DEPLOYED & WORKING
+### ✅ AI Response Webhook - DEPLOYED & WORKING (Multi-Channel)
 **Status:** Fully operational with dedicated Lambda function
 **Deployed:** 2026-01-24 6:24 PM EST
+**Updated:** 2026-01-24 6:52 PM EST (Added Facebook/Instagram support)
 **Lambda Function URL:** https://dpw6qwhfwor3hucpbsitt7skzq0itemx.lambda-url.us-east-1.on.aws/
+
+**Supported Channels:**
+- ✅ SMS (via GHL phone numbers)
+- ✅ Facebook Messenger (via connected Facebook Page)
+- ✅ Instagram DMs (via connected Instagram account)
+- ✅ WhatsApp (ready when connected to GHL)
 
 **The Problem That Gave Us Trouble:**
 Next.js API routes deployed as Lambda functions don't have AWS credentials to access DynamoDB. This is a fundamental limitation of Amplify Gen 2's Next.js hosting architecture.
@@ -105,11 +112,13 @@ When you need a webhook or external API to access AWS resources:
 
 **Current Flow:**
 ```
-GHL SMS Received
+Inbound Message (SMS/Facebook/Instagram/WhatsApp)
   ↓
 GHL Workflow triggers webhook
   ↓
 Lambda Function URL receives event
+  ↓
+Detect message type (SMS=2, FB=3, IG=4, WhatsApp=5)
   ↓
 Query DynamoDB for user's GHL OAuth token
   ↓
@@ -121,19 +130,24 @@ Validate lead type (Preforeclosure/Probate)
   ↓
 Generate AI response with OpenAI
   ↓
-Send SMS back via GHL API
+Send message back via GHL API (correct channel)
   ↓
-✅ Contact receives AI response
+✅ Contact receives AI response on same channel
 ```
 
 **Files Created:**
-- `amplify/functions/ghlWebhookHandler/handler.ts` - Main webhook logic
+- `amplify/functions/ghlWebhookHandler/handler.ts` - Main webhook logic with multi-channel support
 - `amplify/functions/ghlWebhookHandler/resource.ts` - Lambda configuration
-- `amplify/functions/shared/conversationHandler.ts` - AI response generator (copied)
+- `amplify/functions/shared/conversationHandler.ts` - AI response generator (multi-channel)
 
 **Files Modified:**
 - `amplify/backend.ts` - Added Lambda function, IAM permissions, Function URL
+- `amplify/functions/shared/conversationHandler.ts` - Added messageType support (SMS/FB/IG/WhatsApp)
 - Deleted: `app/api/v1/ghl-webhook/` - No longer needed
+
+**GHL Workflows Required:**
+1. **SMS Workflow:** Trigger "Customer Replied" → Filter: SMS → Webhook
+2. **Social Workflow:** Trigger "Customer Replied" → Filter: Facebook + Instagram → Webhook
 
 ---
 
