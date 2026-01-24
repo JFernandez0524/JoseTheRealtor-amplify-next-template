@@ -355,13 +355,21 @@ async function processConversationAsync(body: any) {
         
         console.log('🔍 [ASYNC] Querying GhlIntegration for locationId:', locationId);
         
-        const result = await cookiesClient.models.GhlIntegration.list({
+        // Add timeout to prevent hanging
+        const queryPromise = cookiesClient.models.GhlIntegration.list({
           filter: { 
             locationId: { eq: locationId },
             isActive: { eq: true }
           }
         });
         
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Query timeout after 5s')), 5000)
+        );
+        
+        const result = await Promise.race([queryPromise, timeoutPromise]) as any;
+        
+        console.log('🔍 [ASYNC] Query completed');
         console.log('🔍 [ASYNC] Query result:', JSON.stringify({
           hasData: !!result.data,
           dataLength: result.data?.length || 0,
