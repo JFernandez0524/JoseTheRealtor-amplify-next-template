@@ -212,61 +212,36 @@ export async function POST(req: Request) {
       });
     }
 
-    // 3. Get userId by querying GhlIntegration table using Amplify server context
+    // 3. Get userId BEFORE async processing (while we have request context)
     let userId: string | undefined;
     
-    if (locationId) {
+    // Try to get userId from contact's custom field first (fastest)
+    const appUserIdField = contact?.customFields?.find((f: any) => f.id === 'CNoGugInWOC59hAPptxY');
+    if (appUserIdField?.value) {
+      userId = appUserIdField.value;
+      console.log('✅ [WEBHOOK] Found userId from contact custom field:', userId);
+    } else if (locationId) {
+      // Fallback: Query GhlIntegration table
       try {
-        console.log(`🔍 [WEBHOOK] Step 1: Starting userId lookup for locationId: ${locationId}`);
+        console.log(`🔍 [WEBHOOK] Querying GhlIntegration for locationId: ${locationId}`);
         
-        const { runWithAmplifyServerContext } = await import('@/app/utils/aws/auth/amplifyServerUtils.server');
-        console.log(`🔍 [WEBHOOK] Step 2: Imported runWithAmplifyServerContext`);
-        
-        const { cookies } = await import('next/headers');
-        console.log(`🔍 [WEBHOOK] Step 3: Imported cookies`);
-        
-        console.log(`🔍 [WEBHOOK] Step 4: Calling runWithAmplifyServerContext...`);
-        
-        const integrations = await runWithAmplifyServerContext({
-          nextServerContext: { cookies },
-          operation: async (contextSpec) => {
-            console.log(`🔍 [WEBHOOK] Step 5: Inside operation, importing data client...`);
-            const { generateServerClientUsingCookies } = await import('@aws-amplify/adapter-nextjs/api');
-            const outputs = await import('@/amplify_outputs.json');
-            
-            console.log(`🔍 [WEBHOOK] Step 6: Creating client with context...`);
-            const client = generateServerClientUsingCookies<Schema>({
-              config: outputs.default,
-              cookies
-            });
-            
-            console.log(`🔍 [WEBHOOK] Step 7: Querying GhlIntegration.list...`);
-            const { data } = await client.models.GhlIntegration.list({
-              filter: {
-                locationId: { eq: locationId },
-                isActive: { eq: true }
-              }
-            });
-            
-            console.log(`🔍 [WEBHOOK] Step 8: Query complete, found ${data?.length || 0} results`);
-            return data;
+        const { cookiesClient } = await import('@/app/utils/aws/auth/amplifyServerUtils.server');
+        const { data: integrations } = await cookiesClient.models.GhlIntegration.list({
+          filter: {
+            locationId: { eq: locationId },
+            isActive: { eq: true }
           }
         });
         
-        console.log(`🔍 [WEBHOOK] Step 8: runWithAmplifyServerContext returned ${integrations?.length || 0} integrations`);
-        
         if (integrations && integrations.length > 0) {
           userId = integrations[0].userId;
-          console.log('✅ [WEBHOOK] Step 9: SUCCESS - Found userId:', userId);
+          console.log('✅ [WEBHOOK] Found userId from GhlIntegration:', userId);
         } else {
-          console.log('⚠️ [WEBHOOK] Step 9: FAIL - No active integration found for locationId:', locationId);
+          console.log('⚠️ [WEBHOOK] No active integration found for locationId:', locationId);
         }
       } catch (error) {
-        console.error('❌ [WEBHOOK] EXCEPTION during userId lookup:', error);
-        console.error('❌ [WEBHOOK] Error stack:', (error as Error).stack);
+        console.error('❌ [WEBHOOK] Failed to query GhlIntegration:', error);
       }
-    } else {
-      console.log('⚠️ [WEBHOOK] No locationId provided, skipping userId lookup');
     }
 
     // 4. Process conversation and generate AI response
