@@ -124,6 +124,7 @@ export async function POST(req: Request) {
     // Extract custom data fields (GHL workflow sends them nested)
     const customContactId = customData?.contactId;
     const customMessageBody = customData?.messageBody;
+    const customUserId = customData?.userId;
 
     // DEBUG: Log full payload to see what GHL is actually sending
     console.log('📨 [WEBHOOK] Full payload:', JSON.stringify(body));
@@ -212,35 +213,19 @@ export async function POST(req: Request) {
       });
     }
 
-    // 3. Get userId BEFORE async processing (while we have request context)
-    let userId: string | undefined;
+    // 3. Get userId from webhook payload (fastest, no database query needed)
+    let userId: string | undefined = customUserId; // From GHL workflow custom data
     
-    // Try to get userId from contact's custom field first (fastest)
-    const appUserIdField = contact?.customFields?.find((f: any) => f.id === 'CNoGugInWOC59hAPptxY');
-    if (appUserIdField?.value) {
-      userId = appUserIdField.value;
-      console.log('✅ [WEBHOOK] Found userId from contact custom field:', userId);
-    } else if (locationId) {
-      // Fallback: Query GhlIntegration table
-      try {
-        console.log(`🔍 [WEBHOOK] Querying GhlIntegration for locationId: ${locationId}`);
-        
-        const { cookiesClient } = await import('@/app/utils/aws/auth/amplifyServerUtils.server');
-        const { data: integrations } = await cookiesClient.models.GhlIntegration.list({
-          filter: {
-            locationId: { eq: locationId },
-            isActive: { eq: true }
-          }
-        });
-        
-        if (integrations && integrations.length > 0) {
-          userId = integrations[0].userId;
-          console.log('✅ [WEBHOOK] Found userId from GhlIntegration:', userId);
-        } else {
-          console.log('⚠️ [WEBHOOK] No active integration found for locationId:', locationId);
-        }
-      } catch (error) {
-        console.error('❌ [WEBHOOK] Failed to query GhlIntegration:', error);
+    if (userId) {
+      console.log('✅ [WEBHOOK] Found userId from workflow custom data:', userId);
+    } else {
+      // Fallback: Try to get from contact's custom field
+      const appUserIdField = contact?.customFields?.find((f: any) => f.id === 'CNoGugInWOC59hAPptxY');
+      if (appUserIdField?.value) {
+        userId = appUserIdField.value;
+        console.log('✅ [WEBHOOK] Found userId from contact custom field:', userId);
+      } else {
+        console.log('⚠️ [WEBHOOK] No userId found in webhook payload or contact custom fields');
       }
     }
 
