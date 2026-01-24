@@ -43,7 +43,7 @@
 
 import { NextResponse } from 'next/server';
 import { generateAIResponse } from '@/app/utils/ai/conversationHandler';
-import crypto from 'crypto';
+import { createVerify } from 'crypto';
 
 // GHL Public Key for webhook verification
 const GHL_PUBLIC_KEY = `-----BEGIN PUBLIC KEY-----
@@ -66,7 +66,7 @@ const processedWebhooks = new Set<string>();
 
 function verifyWebhookSignature(payload: string, signature: string): boolean {
   try {
-    const verifier = crypto.createVerify('SHA256');
+    const verifier = createVerify('SHA256');
     verifier.update(payload);
     verifier.end();
     return verifier.verify(GHL_PUBLIC_KEY, signature, 'base64');
@@ -107,7 +107,6 @@ export async function POST(req: Request) {
       conversationId,
       message,
       contact,
-      locationId,
       webhookId,
       customData,
       
@@ -118,6 +117,8 @@ export async function POST(req: Request) {
       last_name,
       phone,
     } = body;
+    
+    const locationId = body.locationId || body.location?.id;
 
     // Extract custom data fields (GHL workflow sends them nested)
     const customContactId = customData?.contactId;
@@ -285,7 +286,26 @@ export async function POST(req: Request) {
       }
     }
 
-    // 3. Process conversation and generate AI response
+    // 3. Get userId NOW while we have cookies context
+    let userId: string | undefined;
+    
+    if (locationId) {
+      try {
+        const { cookiesClient } = await import('@/app/utils/aws/auth/amplifyServerUtils.server');
+        const { data: integrations } = await cookiesClient.models.GhlIntegration.list({
+          filter: { locationId: { eq: locationId }, isActive: { eq: true } }
+        });
+        
+        if (integrations && integrations.length > 0) {
+          userId = integrations[0].userId;
+          console.log('✅ [WEBHOOK] Found userId for async processing:', userId);
+        }
+      } catch (error) {
+        console.error('⚠️ [WEBHOOK] Failed to get userId:', error);
+      }
+    }
+
+    // 4. Process conversation and generate AI response
     // Normalize payload for processor (handle both native and workflow formats)
     
     // Build customFields array from root-level properties (workflow webhooks)
@@ -300,6 +320,7 @@ export async function POST(req: Request) {
     const normalizedBody = {
       ...body,
       contactId: finalContactId,
+      userId, // Pass userId we got while we had cookies context
       message: message || { body: finalMessageBody, type: 'SMS' },
       contact: contact || { 
         id: finalContactId,
@@ -333,72 +354,18 @@ export async function POST(req: Request) {
 async function processConversationAsync(body: any) {
   console.log('🔄 [ASYNC] Starting async processing for contact:', body.contactId);
   try {
-    const { contactId, conversationId, message, contact } = body;
+    const { contactId, conversationId, message, contact, userId } = body;
     const locationId = body.locationId || body.location?.id;
 
     console.log('🔍 [ASYNC] Location ID:', locationId);
-
-    // 1. Get user ID from contact custom fields OR from GhlIntegration by locationId
-    let userId = contact?.customFields?.find((f: any) => f.id === 'CNoGugInWOC59hAPptxY')?.value;
+    console.log('🔍 [ASYNC] User ID from body:', userId);
     
     if (!userId) {
-      console.log('⚠️ [ASYNC] No user ID in custom fields, checking GhlIntegration by locationId...');
-      
-      if (!locationId) {
-        console.error('❌ [ASYNC] No locationId available to lookup GhlIntegration');
-        return;
-      }
-      
-      // Fallback: Get user ID from GhlIntegration by locationId using cookiesClient
-      try {
-        const { cookiesClient } = await import('@/app/utils/aws/auth/amplifyServerUtils.server');
-        
-        console.log('🔍 [ASYNC] Querying GhlIntegration for locationId:', locationId);
-        
-        // Add timeout to prevent hanging
-        const queryPromise = cookiesClient.models.GhlIntegration.list({
-          filter: { 
-            locationId: { eq: locationId },
-            isActive: { eq: true }
-          }
-        });
-        
-        const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Query timeout after 5s')), 5000)
-        );
-        
-        const result = await Promise.race([queryPromise, timeoutPromise]) as any;
-        
-        console.log('🔍 [ASYNC] Query completed');
-        console.log('🔍 [ASYNC] Query result:', JSON.stringify({
-          hasData: !!result.data,
-          dataLength: result.data?.length || 0,
-          hasErrors: !!result.errors,
-          errors: result.errors
-        }));
-        
-        if (result.data && result.data.length > 0) {
-          userId = result.data[0].userId;
-          console.log('✅ [ASYNC] Found user ID from GhlIntegration:', userId);
-        } else {
-          console.error('❌ [ASYNC] No active GhlIntegration found for locationId:', locationId);
-          if (result.errors) {
-            console.error('❌ [ASYNC] Query errors:', JSON.stringify(result.errors));
-          }
-        }
-      } catch (dbError: any) {
-        console.error('❌ [ASYNC] Database query failed:', dbError.message);
-        console.error('❌ [ASYNC] Error name:', dbError.name);
-        console.error('❌ [ASYNC] Stack:', dbError.stack);
-      }
-    }
-    
-    if (!userId) {
-      console.error('❌ [ASYNC] No user ID found in contact custom fields or GhlIntegration');
+      console.error('❌ [ASYNC] No user ID provided in body');
       return;
     }
 
-    console.log('🔑 [ASYNC] Found user ID:', userId);
+    console.log('🔑 [ASYNC] Using user ID:', userId);
 
     // 2. Get valid GHL token from database
     const { getValidGhlToken } = await import('@/app/utils/aws/data/ghlIntegration.server');

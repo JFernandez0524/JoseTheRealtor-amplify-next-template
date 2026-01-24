@@ -9,7 +9,6 @@ import { aiFollowUpAgent } from './functions/aiFollowUpAgent/resource';
 import { dailyOutreachAgent } from './functions/dailyOutreachAgent/resource';
 import { dailyEmailAgent } from './functions/dailyEmailAgent/resource';
 import { bulkEmailCampaign } from './functions/bulkEmailCampaign/resource';
-import { inboundMessagePoller } from './functions/inboundMessagePoller/resource';
 import { addUserToGroup } from './data/add-user-to-group/resource';
 import { removeUserFromGroup } from './data/remove-user-from-group/resource';
 import { EventType } from 'aws-cdk-lib/aws-s3';
@@ -27,7 +26,6 @@ const backend = defineBackend({
   dailyOutreachAgent,
   dailyEmailAgent,
   bulkEmailCampaign,
-  inboundMessagePoller,
   addUserToGroup,
   removeUserFromGroup,
 });
@@ -226,19 +224,4 @@ backend.dailyEmailAgent.resources.lambda.addToRolePolicy(
       `${backend.data.resources.tables['OutreachQueue'].tableArn}/index/*`
     ]
   })
-);
-
-
-// 📬 Configure Inbound Message Poller (runs every 10 minutes via schedule in resource.ts)
-backend.inboundMessagePoller.addEnvironment(
-  'AMPLIFY_DATA_GhlIntegration_TABLE_NAME',
-  backend.data.resources.tables['GhlIntegration'].tableName
-);
-
-backend.inboundMessagePoller.addEnvironment('GHL_CLIENT_ID', process.env.GHL_CLIENT_ID || '');
-backend.inboundMessagePoller.addEnvironment('GHL_CLIENT_SECRET', process.env.GHL_CLIENT_SECRET || '');
-backend.inboundMessagePoller.addEnvironment('API_ENDPOINT', process.env.API_ENDPOINT || 'https://leads.JoseTheRealtor.com');
-
-backend.data.resources.tables['GhlIntegration'].grantReadData(
-  backend.inboundMessagePoller.resources.lambda
 );
