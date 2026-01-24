@@ -70,9 +70,20 @@ export const handler = async (event: any) => {
       };
     }
 
-    const integration = Items[0];
-    const token = integration.accessToken;
-    console.log('✅ [WEBHOOK_LAMBDA] Got GHL token');
+    // Use token manager to get valid token (handles refresh automatically)
+    const { getValidGhlToken } = await import('../shared/ghlTokenManager');
+    const tokenResult = await getValidGhlToken(userId);
+    
+    if (!tokenResult) {
+      console.error('❌ [WEBHOOK_LAMBDA] Failed to get valid token');
+      return {
+        statusCode: 401,
+        body: JSON.stringify({ error: 'Failed to get valid token' })
+      };
+    }
+    
+    const { token } = tokenResult;
+    console.log('✅ [WEBHOOK_LAMBDA] Got valid GHL token');
 
     // Fetch contact data from GHL
     console.log('🔍 [WEBHOOK_LAMBDA] Fetching contact from GHL...');

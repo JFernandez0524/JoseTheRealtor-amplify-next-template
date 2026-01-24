@@ -252,3 +252,10 @@ backend.ghlWebhookHandler.resources.lambda.addFunctionUrl({
     allowedHeaders: ['*'],
   }
 });
+
+// Grant public access to Function URL
+backend.ghlWebhookHandler.resources.lambda.addPermission('AllowPublicFunctionUrl', {
+  principal: '*',
+  action: 'lambda:InvokeFunctionUrl',
+  functionUrlAuthType: FunctionUrlAuthType.NONE,
+});
