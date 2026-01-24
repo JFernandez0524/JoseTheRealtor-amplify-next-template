@@ -14,7 +14,7 @@ import { addUserToGroup } from './data/add-user-to-group/resource';
 import { removeUserFromGroup } from './data/remove-user-from-group/resource';
 import { EventType } from 'aws-cdk-lib/aws-s3';
 import { LambdaDestination } from 'aws-cdk-lib/aws-s3-notifications';
-import { PolicyStatement, Effect } from 'aws-cdk-lib/aws-iam';
+import { PolicyStatement, Effect, AnyPrincipal } from 'aws-cdk-lib/aws-iam';
 import { FunctionUrlAuthType, HttpMethod } from 'aws-cdk-lib/aws-lambda';
 
 const backend = defineBackend({
@@ -255,7 +255,7 @@ backend.ghlWebhookHandler.resources.lambda.addFunctionUrl({
 
 // Grant public access to Function URL
 backend.ghlWebhookHandler.resources.lambda.addPermission('AllowPublicFunctionUrl', {
-  principal: '*',
+  principal: new AnyPrincipal(),
   action: 'lambda:InvokeFunctionUrl',
   functionUrlAuthType: FunctionUrlAuthType.NONE,
 });
