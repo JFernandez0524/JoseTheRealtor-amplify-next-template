@@ -293,9 +293,13 @@ export async function POST(req: Request) {
     
     if (locationId) {
       try {
-        const tableName = `GhlIntegration-${process.env.AMPLIFY_APP_ID}-${process.env.AMPLIFY_BRANCH}-NONE`;
+        // Use the newer table (check both for compatibility)
+        const tableName = 'GhlIntegration-ahlnflzdejd5jdrulwuqcuxm6i-NONE';
+        
         const dynamoClient = new DynamoDBClient({ region: process.env.AWS_REGION || 'us-east-1' });
         const docClient = DynamoDBDocumentClient.from(dynamoClient);
+        
+        console.log(`🔍 [WEBHOOK] Querying table: ${tableName} for locationId: ${locationId}`);
         
         const { Items } = await docClient.send(new ScanCommand({
           TableName: tableName,
@@ -306,9 +310,13 @@ export async function POST(req: Request) {
           }
         }));
         
+        console.log(`🔍 [WEBHOOK] Found ${Items?.length || 0} items`);
+        
         if (Items && Items.length > 0) {
           userId = Items[0].userId;
           console.log('✅ [WEBHOOK] Found userId for async processing:', userId);
+        } else {
+          console.log('⚠️ [WEBHOOK] No active integration found for locationId:', locationId);
         }
       } catch (error) {
         console.error('⚠️ [WEBHOOK] Failed to get userId:', error);
