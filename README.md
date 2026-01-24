@@ -191,10 +191,11 @@ For detailed deployment instructions, see the [Amplify documentation](https://do
    - **Daily Automation**: Runs every hour during business hours
    - **Business Hours**: Mon-Fri 9AM-7PM, Sat 9AM-12PM EST (Sunday closed)
    - **Target Contacts**: New GHL contacts with "AI Outreach" tag who haven't been messaged
+   - **Webhook Integration**: Instant AI responses to inbound SMS via dedicated Lambda function
    - **Conversation Flow**:
      1. Initial outreach introduces you and mentions the property
      2. AI adapts message based on lead type (preforeclosure vs probate)
-     3. Handles inbound replies with contextual responses
+     3. Handles inbound replies with contextual responses (instant via webhook)
      4. Follows proven 5-step script to schedule property visit
      5. Tags contact for human handoff when qualified
    - **Smart Features**:
@@ -202,6 +203,12 @@ For detailed deployment instructions, see the [Amplify documentation](https://do
      - Rate limited (2 seconds between messages)
      - Tracks conversation history to avoid duplicate messages
      - Automatically detects and tags replies
+     - Instant webhook responses (no polling delay)
+   - **Technical Implementation**:
+     - Dedicated Lambda function with IAM permissions for DynamoDB access
+     - Lambda Function URL for public webhook access (no API Gateway needed)
+     - Automatic OAuth token refresh via token manager
+     - Shared conversation handler between Lambda and Next.js
    - **Testing**: Use `/api/v1/test-ai-response` endpoint to test AI responses without sending SMS
 
 11. **Outreach Queue System (Performance Optimization)**
@@ -299,8 +306,9 @@ For detailed deployment instructions, see the [Amplify documentation](https://do
 
 ### API Endpoints
 
-The platform provides REST APIs for integration:
+The platform provides REST APIs and Lambda functions for integration:
 
+**Next.js API Routes:**
 - `POST /api/v1/upload-leads` - Upload lead data
 - `POST /api/v1/analyze-property` - Property analysis
 - `POST /api/v1/send-message-to-contact` - Send AI SMS outreach message (production)
@@ -309,10 +317,12 @@ The platform provides REST APIs for integration:
 - `POST /api/v1/start-email-campaign` - Start bulk email campaign
 - `GET /api/v1/ghl-phone-numbers` - Get available GHL phone numbers
 - `POST /api/v1/ghl-email-webhook` - Handle email replies and bounces (AI responses)
-- `POST /api/v1/ghl-webhook` - Handle SMS replies (AI responses)
 - `POST /api/v1/test-ai-response` - Test AI responses (no SMS sent)
 - `GET /api/v1/oauth/callback` - GHL OAuth callback
 - `POST /api/v1/oauth/refresh` - Refresh GHL OAuth token
+
+**Lambda Function URLs:**
+- `POST https://dpw6qwhfwor3hucpbsitt7skzq0itemx.lambda-url.us-east-1.on.aws/` - GHL SMS webhook handler (instant AI responses)
 
 ### AI Messaging System
 
@@ -320,16 +330,19 @@ The platform includes an automated AI messaging system for lead outreach:
 
 **Features:**
 - Automated daily outreach to new contacts
-- Inbound message handling with AI responses
+- Instant inbound message handling with AI responses via webhook
 - 5-step proven script for property visits
 - Adapts to missing property data
 - Human handoff for qualified leads
 
 **Architecture:**
-- `app/utils/ai/conversationHandler.ts` - AI message generation
-- `app/utils/aws/data/ghlIntegration.server.ts` - OAuth token management
-- `app/api/v1/ghl-webhook/route.ts` - Inbound message handler
+- `amplify/functions/shared/conversationHandler.ts` - AI message generation (shared)
+- `amplify/functions/shared/ghlTokenManager.ts` - OAuth token management (shared)
+- `amplify/functions/ghlWebhookHandler/` - Dedicated Lambda for SMS webhooks
 - `amplify/functions/dailyOutreachAgent/` - Daily automation
+
+**Why Lambda Function Instead of API Route:**
+Next.js API routes don't have AWS credentials to access DynamoDB. Dedicated Lambda functions in `amplify/functions/` get explicit IAM permissions via `backend.ts`, enabling direct DynamoDB access for webhook handling.
 
 **Documentation:**
 - `AI_TESTING_GUIDE.md` - Testing procedures

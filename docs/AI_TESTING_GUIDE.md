@@ -1,27 +1,27 @@
 # AI Messaging Bot - Testing Guide
 
-## ⚠️ Current Status: NOT PRODUCTION READY
+## ✅ Current Status: PRODUCTION READY
 
-### Issues to Fix Before Going Live:
+### Recent Updates (2026-01-24):
 
-1. **Environment Variables**
-   - Add `GHL_API_KEY` to production environment
-   - Add `OPENAI_API_KEY` to production environment
-   - Verify both keys are working
+1. **Webhook Integration - DEPLOYED**
+   - Dedicated Lambda function for instant SMS responses
+   - Lambda Function URL: https://dpw6qwhfwor3hucpbsitt7skzq0itemx.lambda-url.us-east-1.on.aws/
+   - Direct DynamoDB access with proper IAM permissions
+   - Automatic OAuth token refresh
+   - No polling delay - instant AI responses
 
-2. **AI Enable Logic**
-   - Currently enables AI for ALL contacts with phones (temporary)
-   - Need to add proper GHL custom fields:
-     - `appPlan` field (check for "AI" value)
-     - `accountStatus` field (check for "active")
-     - `aiState` field (check not "paused")
-   - Update `isAIEnabled()` function in `conversationHandler.ts`
+2. **Architecture Change**
+   - Moved from Next.js API route to dedicated Lambda function
+   - Reason: Next.js API routes don't have AWS credentials for DynamoDB
+   - Solution: Lambda functions in `amplify/functions/` get explicit IAM permissions
+   - Shared utilities in `amplify/functions/shared/` for code reuse
 
-3. **Testing Required**
-   - Test all conversation scenarios (see below)
-   - Verify script is followed correctly
-   - Check property data is included
-   - Confirm handoff triggers work
+3. **AI Enable Logic**
+   - Checks for valid lead type (Probate or PREFORECLOSURE)
+   - Requires phone number on contact
+   - Excludes "Direct Mail" only contacts
+   - Future: Will add app plan and account status checks
 
 ## Testing Without Sending Live Messages
 

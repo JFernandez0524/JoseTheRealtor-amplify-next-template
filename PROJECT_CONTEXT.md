@@ -4,45 +4,136 @@
 
 ## Current Status
 
-### 🚧 AI Response Webhook - BLOCKED (IAM Permissions Issue)
-**Status:** Cannot proceed with current Amplify architecture
-**Last Tested:** 2026-01-24 1:15 PM EST
+### ✅ AI Response Webhook - DEPLOYED & WORKING
+**Status:** Fully operational with dedicated Lambda function
+**Deployed:** 2026-01-24 6:24 PM EST
+**Lambda Function URL:** https://dpw6qwhfwor3hucpbsitt7skzq0itemx.lambda-url.us-east-1.on.aws/
 
-**Problem:**
-- Next.js API routes (deployed as Lambda) don't have AWS credentials to access DynamoDB
-- Error: `CredentialsProviderError: Could not load credentials from any providers`
-- Amplify's Next.js hosting doesn't get the same IAM permissions as explicit Lambda functions
+**The Problem That Gave Us Trouble:**
+Next.js API routes deployed as Lambda functions don't have AWS credentials to access DynamoDB. This is a fundamental limitation of Amplify Gen 2's Next.js hosting architecture.
 
-**What We Tried:**
+**What We Tried (That Didn't Work):**
 1. ✅ Get userId from GHL workflow custom data (`{{contact.app_user_id}}`)
 2. ✅ Create DynamoDB utility for direct table access
 3. ✅ Add environment variable to `amplify.yml` and `next.config.js`
 4. ❌ DynamoDB client can't get credentials in Next.js API route Lambda
+5. ❌ Tried using Amplify Data client (cookiesClient) - same credential error
+6. ❌ Tried raw DynamoDB SDK - same credential error
 
 **Root Cause:**
 - Amplify Gen 2 doesn't expose IAM role for Next.js compute
 - Can't grant DynamoDB permissions to API route Lambdas
-- Only explicit Lambda functions (in `backend.ts`) get proper IAM roles
+- Only explicit Lambda functions (in `amplify/functions/`) get proper IAM roles
 
-**Alternative Solutions:**
-1. **Use GHL Native AI** (RECOMMENDED)
-   - GHL has built-in AI for SMS responses
-   - No custom webhooks needed
-   - Simpler, more reliable
-   - Keep app focused on lead enrichment, skip tracing, scoring
+**The Solution (That Worked):**
+Created a dedicated Lambda function with explicit IAM permissions and public Function URL:
 
-2. **Create Dedicated Lambda Function**
-   - Move webhook handler to `amplify/functions/ghlWebhookHandler`
-   - Grant explicit DynamoDB permissions in `backend.ts`
-   - Use Lambda Function URL instead of Next.js API route
-   - More complex but would work
+1. **Created Lambda Function** (`amplify/functions/ghlWebhookHandler/`)
+   - `handler.ts` - Webhook logic with full DynamoDB access
+   - `resource.ts` - Function definition with environment variables
 
-3. **Use Amplify Data Client with Public Access**
-   - Make GhlIntegration table publicly readable
-   - Security risk - exposes OAuth tokens
-   - NOT RECOMMENDED
+2. **Granted IAM Permissions** (`amplify/backend.ts`)
+   ```typescript
+   backend.data.resources.tables['GhlIntegration'].grantReadData(
+     backend.ghlWebhookHandler.resources.lambda
+   );
+   ```
 
-**Decision:** Recommend using GHL's native AI for SMS responses. Our app excels at lead data enrichment, skip tracing, and AI scoring - let GHL handle the messaging.
+3. **Configured Public Function URL** (`amplify/backend.ts`)
+   ```typescript
+   const webhookUrl = backend.ghlWebhookHandler.resources.lambda.addFunctionUrl({
+     authType: FunctionUrlAuthType.NONE,
+     cors: { allowedOrigins: ['*'], allowedMethods: [HttpMethod.POST] }
+   });
+   
+   backend.ghlWebhookHandler.resources.lambda.addToRolePolicy(
+     new PolicyStatement({
+       effect: Effect.ALLOW,
+       principals: [new AnyPrincipal()],
+       actions: ['lambda:InvokeFunctionUrl'],
+       resources: [backend.ghlWebhookHandler.resources.lambda.functionArn]
+     })
+   );
+   ```
+
+4. **Copied Shared Utilities**
+   - Copied `conversationHandler.ts` to `amplify/functions/shared/`
+   - Copied `ghlTokenManager.ts` (already existed)
+   - Lambda can now import shared code
+
+5. **Deleted Old API Route**
+   - Removed `app/api/v1/ghl-webhook/` (no longer needed)
+   - GHL workflow now calls Lambda Function URL directly
+
+**Key Lessons Learned:**
+
+1. **Next.js API Routes ≠ Lambda Functions**
+   - API routes don't get IAM roles you can configure
+   - Use dedicated Lambda functions for AWS resource access
+
+2. **Lambda Function URLs Are Perfect for Webhooks**
+   - No API Gateway needed
+   - Simple public URL with CORS support
+   - Requires both `authType: NONE` and resource-based policy
+
+3. **Shared Code Between Lambda and Next.js**
+   - Put shared utilities in `amplify/functions/shared/`
+   - Lambda functions can import from shared folder
+   - Next.js can also import (but won't have AWS credentials)
+
+4. **ESM Modules Required**
+   - Lambda functions need `type: "module"` in `amplify/package.json`
+   - Use `import` instead of `require`
+   - AWS SDK v3 included in Node.js 20 runtime
+
+5. **Token Management Works Perfectly**
+   - `ghlTokenManager.ts` handles OAuth refresh automatically
+   - No manual token refresh needed
+   - Tokens stored securely in DynamoDB
+
+**How to Implement This Pattern Elsewhere:**
+
+When you need a webhook or external API to access AWS resources:
+
+1. Create Lambda function in `amplify/functions/yourFunction/`
+2. Add IAM permissions in `amplify/backend.ts`
+3. Add Function URL with public access
+4. Copy any shared utilities to `amplify/functions/shared/`
+5. Point external service to Lambda Function URL
+
+**DO NOT** try to use Next.js API routes for AWS resource access - it won't work!
+
+**Current Flow:**
+```
+GHL SMS Received
+  ↓
+GHL Workflow triggers webhook
+  ↓
+Lambda Function URL receives event
+  ↓
+Query DynamoDB for user's GHL OAuth token
+  ↓
+Refresh token if expired (automatic)
+  ↓
+Fetch contact data from GHL API
+  ↓
+Validate lead type (Preforeclosure/Probate)
+  ↓
+Generate AI response with OpenAI
+  ↓
+Send SMS back via GHL API
+  ↓
+✅ Contact receives AI response
+```
+
+**Files Created:**
+- `amplify/functions/ghlWebhookHandler/handler.ts` - Main webhook logic
+- `amplify/functions/ghlWebhookHandler/resource.ts` - Lambda configuration
+- `amplify/functions/shared/conversationHandler.ts` - AI response generator (copied)
+
+**Files Modified:**
+- `amplify/backend.ts` - Added Lambda function, IAM permissions, Function URL
+- Deleted: `app/api/v1/ghl-webhook/` - No longer needed
 
 ---
 
