@@ -292,7 +292,10 @@ async function processConversationAsync(body: any) {
     console.log('🔑 [ASYNC] Using user ID:', userId);
 
     // Get GHL integration using DynamoDB utility (works in webhooks)
+    console.log('📦 [ASYNC] Importing DynamoDB utility...');
     const { getGhlIntegrationByUserId } = await import('@/app/utils/aws/data/ghlIntegration.dynamodb');
+    
+    console.log('🔍 [ASYNC] Querying GhlIntegration table...');
     const integration = await getGhlIntegrationByUserId(userId);
     
     if (!integration) {

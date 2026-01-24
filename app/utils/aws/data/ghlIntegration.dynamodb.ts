@@ -28,8 +28,12 @@ interface GhlIntegration {
  * For use in webhooks where no authenticated user context exists
  */
 export async function getGhlIntegrationByUserId(userId: string): Promise<GhlIntegration | null> {
+  console.log('🔍 [DYNAMODB_UTIL] Table name:', GHL_INTEGRATION_TABLE);
+  console.log('🔍 [DYNAMODB_UTIL] Region:', process.env.AWS_REGION);
+  console.log('🔍 [DYNAMODB_UTIL] Querying for userId:', userId);
+  
   if (!GHL_INTEGRATION_TABLE) {
-    console.error('❌ AMPLIFY_DATA_GhlIntegration_TABLE_NAME not set');
+    console.error('❌ [DYNAMODB_UTIL] AMPLIFY_DATA_GhlIntegration_TABLE_NAME not set');
     return null;
   }
 
@@ -43,13 +47,17 @@ export async function getGhlIntegrationByUserId(userId: string): Promise<GhlInte
       }
     }));
 
+    console.log('🔍 [DYNAMODB_UTIL] Query returned', Items?.length || 0, 'items');
+
     if (Items && Items.length > 0) {
+      console.log('✅ [DYNAMODB_UTIL] Found integration');
       return Items[0] as GhlIntegration;
     }
 
+    console.log('⚠️ [DYNAMODB_UTIL] No integration found');
     return null;
   } catch (error) {
-    console.error('❌ Failed to query GhlIntegration:', error);
+    console.error('❌ [DYNAMODB_UTIL] Query failed:', error);
     return null;
   }
 }
