@@ -56,8 +56,11 @@ export async function getGhlIntegrationByUserId(userId: string): Promise<GhlInte
 
     console.log('⚠️ [DYNAMODB_UTIL] No integration found');
     return null;
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ [DYNAMODB_UTIL] Query failed:', error);
+    console.error('❌ [DYNAMODB_UTIL] Error name:', error.name);
+    console.error('❌ [DYNAMODB_UTIL] Error message:', error.message);
+    console.error('❌ [DYNAMODB_UTIL] Error code:', error.code);
     return null;
   }
 }

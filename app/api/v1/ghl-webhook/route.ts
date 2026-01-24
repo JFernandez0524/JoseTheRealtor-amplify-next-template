@@ -255,8 +255,8 @@ export async function POST(req: Request) {
       }
     };
     
-    // Process synchronously to ensure it completes before Lambda shuts down
-    processConversationAsync(normalizedBody).catch(error => {
+    // Process synchronously to ensure Lambda stays alive
+    await processConversationAsync(normalizedBody).catch(error => {
       console.error('❌ [WEBHOOK] Async processing failed:', error);
     });
 
