@@ -433,7 +433,7 @@ Respond to their message:`;
             {
               headers: {
                 'Accept': 'application/json',
-                'Authorization': `Bearer ${process.env.GHL_ACCESS_TOKEN}`,
+                'Authorization': `Bearer ${context.accessToken}`,
                 'Version': '2021-07-28'
               }
             }
@@ -475,19 +475,19 @@ Respond to their message:`;
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              'Authorization': `Bearer ${process.env.GHL_ACCESS_TOKEN}`,
+              'Authorization': `Bearer ${context.accessToken}`,
               'Version': '2021-07-28'
             },
             body: JSON.stringify({
               calendarId: 'tuC1rqAOzPTThWUC7rvS',
-              locationId: process.env.GHL_LOCATION_ID,
+              locationId: context.locationId,
               contactId: context.contact?.id,
               startTime: args.startTime,
               endTime: new Date(new Date(args.startTime).getTime() + 60*60*1000).toISOString(),
               title: isBuyer ? 'Buyer Consultation' : 'Seller Consultation',
               description: description,
               appointmentStatus: 'confirmed',
-              assignedUserId: process.env.GHL_USER_ID,
+              assignedUserId: context.contact?.ownerId || context.contact?.assignedTo,
               meetingLocationType: 'google_conference',
               toNotify: true
             })
