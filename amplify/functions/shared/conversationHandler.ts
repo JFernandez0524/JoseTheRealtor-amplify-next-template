@@ -526,7 +526,7 @@ Respond to their message:`;
             
             await addSearchAlert(kvContact.id, searchCriteria);
             
-            console.log(`✅ Buyer saved in kvCORE with hashtag ${campaignHashtag} and auto-alerts for:`, args.cities.join(', '));
+            console.log(`✅ Buyer saved in kvCORE with hashtag #fbbuyerleads and auto-alerts for:`, args.cities.join(', '));
             
             const cityList = args.cities.length > 1 
               ? `${args.cities.slice(0, -1).join(', ')} and ${args.cities[args.cities.length - 1]}`
