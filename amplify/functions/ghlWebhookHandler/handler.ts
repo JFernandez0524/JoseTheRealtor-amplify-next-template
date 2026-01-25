@@ -140,12 +140,32 @@ export const handler = async (event: any) => {
       cashOffer
     });
 
+    // Fetch conversation ID from GHL
+    console.log('🔍 [WEBHOOK_LAMBDA] Fetching conversations for contact...');
+    let conversationId = '';
+    try {
+      const conversationsResponse = await fetch(
+        `https://services.leadconnectorhq.com/conversations/search?contactId=${contactId}&limit=1`,
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Version': '2021-04-15'
+          }
+        }
+      );
+      const conversationsData = await conversationsResponse.json();
+      conversationId = conversationsData?.conversations?.[0]?.id || '';
+      console.log('✅ [WEBHOOK_LAMBDA] Found conversation:', conversationId);
+    } catch (error) {
+      console.error('⚠️ [WEBHOOK_LAMBDA] Failed to fetch conversation ID:', error);
+    }
+
     // Generate AI response (import from shared utility)
     const { generateAIResponse } = await import('../shared/conversationHandler');
     
     await generateAIResponse({
       contactId,
-      conversationId: '', // Empty string for webhook-initiated conversations
+      conversationId, // Use actual conversation ID for context
       incomingMessage: messageBody,
       contactName: `${fullContact?.firstName || ''} ${fullContact?.lastName || ''}`.trim(),
       propertyAddress,
