@@ -39,7 +39,7 @@ export const handler = async (event: any) => {
     let userId = customData?.userId;
     const contactId = customData?.contactId || contact?.id;
     const messageBody = customData?.messageBody || message?.body;
-    const messageType = message?.type; // 2 = SMS, 3 = Facebook Messenger
+    const messageType = message?.type; // 2 = SMS, 3 = Facebook Messenger, 11 = Facebook (alternate)
     const locationId = location?.id;
 
     console.log('📨 [WEBHOOK_LAMBDA] Extracted data:', { userId, contactId, messageBody, messageType, locationId });
@@ -156,7 +156,7 @@ export const handler = async (event: any) => {
       locationId,
       contact: fullContact,
       accessToken: token, // Pass the GHL token for sending messages
-      messageType: messageType === 3 ? 'FB' : 'SMS', // Facebook Messenger or SMS
+      messageType: [3, 11].includes(messageType) ? 'FB' : 'SMS', // Facebook Messenger (type 3 or 11) or SMS (type 2)
       existingZestimate: zestimate ? parseInt(zestimate) : undefined, // Pass existing Zestimate
       existingCashOffer: cashOffer ? parseInt(cashOffer) : undefined, // Pass existing cash offer
     });
