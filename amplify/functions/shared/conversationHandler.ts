@@ -650,8 +650,11 @@ export async function generateAIResponse(context: ConversationContext): Promise<
       throw new Error('accessToken is required for production mode');
     }
 
-    // 🛡️ Check if AI is enabled for this contact (app is source of truth)
-    if (!context.testMode && !isAIEnabled(context.contact)) {
+    // 🛡️ Check if AI is enabled for this contact (skip for organic social media leads)
+    const isOrganicSocialLead = context.contact?.attributionSource?.medium === 'facebook' || 
+                                 context.contact?.lastAttributionSource?.medium === 'facebook';
+    
+    if (!context.testMode && !isOrganicSocialLead && !isAIEnabled(context.contact)) {
       console.log(`❌ AI disabled for contact ${context.contactId}`);
       throw new Error('AI is not enabled for this contact');
     }
