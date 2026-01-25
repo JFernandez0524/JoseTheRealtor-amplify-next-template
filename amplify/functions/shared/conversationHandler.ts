@@ -279,15 +279,30 @@ Respond to their message:`;
       {
         type: 'function',
         function: {
-          name: 'schedule_consultation',
-          description: 'Schedule a consultation call for seller or buyer. Use when lead is qualified and ready to meet.',
+          name: 'check_availability',
+          description: 'Check available appointment slots. Use this BEFORE scheduling.',
           parameters: {
             type: 'object',
             properties: {
-              lead_type: { type: 'string', enum: ['seller', 'buyer'], description: 'Type of consultation' },
-              notes: { type: 'string', description: 'Any relevant notes about the lead' }
+              startDate: { type: 'string', description: 'Start date (YYYY-MM-DD)' },
+              endDate: { type: 'string', description: 'End date (YYYY-MM-DD)' }
             },
-            required: ['lead_type']
+            required: ['startDate', 'endDate']
+          }
+        }
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'schedule_consultation',
+          description: 'Schedule appointment in an available slot. Use AFTER checking availability.',
+          parameters: {
+            type: 'object',
+            properties: {
+              consultationType: { type: 'string', enum: ['buyer', 'seller'], description: 'Type of consultation' },
+              startTime: { type: 'string', description: 'ISO 8601 datetime from available slots' }
+            },
+            required: ['consultationType', 'startTime']
           }
         }
       },
@@ -396,6 +411,83 @@ Respond to their message:`;
         return `Great! I'll have one of our ${leadType} specialists reach out within the next few hours to schedule your consultation. Thanks for your interest!`;
       }
       
+      if (toolName === 'check_availability') {
+        console.log('📅 Checking availability:', args);
+        
+        try {
+          const response = await fetch(
+            `https://services.leadconnectorhq.com/calendars/tuC1rqAOzPTThWUC7rvS/free-slots?startDate=${args.startDate}&endDate=${args.endDate}`,
+            {
+              headers: {
+                'Accept': 'application/json',
+                'Authorization': `Bearer ${process.env.GHL_ACCESS_TOKEN}`,
+                'Version': '2021-07-28'
+              }
+            }
+          );
+          
+          const data = await response.json();
+          
+          // Format slots for AI
+          if (data.slots && data.slots.length > 0) {
+            const formattedSlots = data.slots.slice(0, 5).map((slot: any) => 
+              new Date(slot).toLocaleString('en-US', { 
+                weekday: 'short', 
+                month: 'short', 
+                day: 'numeric', 
+                hour: 'numeric', 
+                minute: '2-digit' 
+              })
+            );
+            return `Available times: ${formattedSlots.join(', ')}. Raw slots: ${JSON.stringify(data.slots.slice(0, 5))}`;
+          }
+          
+          return 'No available slots found in that date range.';
+        } catch (error) {
+          console.error('Failed to check availability:', error);
+          return 'Unable to check availability right now.';
+        }
+      }
+
+      if (toolName === 'schedule_consultation') {
+        console.log('📅 Scheduling consultation:', args);
+        
+        const isBuyer = args.consultationType === 'buyer';
+        const description = isBuyer 
+          ? 'Join us for a personalized buyer consultation where we\'ll discuss your home search criteria, budget, timeline, and answer all your questions about the buying process. We\'ll also show you how to get pre-approved and find your dream home.'
+          : 'Join us for a seller consultation where we\'ll review your property, discuss current market conditions, pricing strategy, and our comprehensive marketing plan to get you the best price for your home.';
+        
+        try {
+          const response = await fetch('https://services.leadconnectorhq.com/calendars/events/appointments', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${process.env.GHL_ACCESS_TOKEN}`,
+              'Version': '2021-07-28'
+            },
+            body: JSON.stringify({
+              calendarId: 'tuC1rqAOzPTThWUC7rvS',
+              locationId: process.env.GHL_LOCATION_ID,
+              contactId: context.contact?.id,
+              startTime: args.startTime,
+              endTime: new Date(new Date(args.startTime).getTime() + 60*60*1000).toISOString(),
+              title: isBuyer ? 'Buyer Consultation' : 'Seller Consultation',
+              description: description,
+              appointmentStatus: 'confirmed',
+              assignedUserId: process.env.GHL_USER_ID,
+              meetingLocationType: 'google_conference',
+              toNotify: true
+            })
+          });
+          
+          const appointment = await response.json();
+          return `Perfect! I've scheduled your ${args.consultationType} consultation for ${new Date(args.startTime).toLocaleString()}. You'll receive a Google Meet link and reminders via text and email.`;
+        } catch (error) {
+          console.error('Failed to schedule appointment:', error);
+          return 'I had trouble scheduling that appointment. Let me transfer you to someone who can help.';
+        }
+      }
+
       if (toolName === 'save_buyer_search') {
         console.log('💾 Saving buyer search to kvCORE:', args);
         

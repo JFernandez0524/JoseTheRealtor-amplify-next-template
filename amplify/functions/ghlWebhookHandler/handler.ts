@@ -51,7 +51,12 @@ export const handler = async (event: any) => {
     }
 
     if (!contactId || !messageBody) {
-      console.error('❌ [WEBHOOK_LAMBDA] Missing required fields');
+      console.error('❌ [WEBHOOK_LAMBDA] Missing required fields', { 
+        hasContactId: !!contactId, 
+        hasMessageBody: !!messageBody,
+        contactId,
+        messageBody 
+      });
       return {
         statusCode: 400,
         body: JSON.stringify({ error: 'Missing required fields' })
