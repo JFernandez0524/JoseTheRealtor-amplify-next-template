@@ -12,7 +12,7 @@ import { Readable } from 'stream';
 import { randomUUID } from 'crypto';
 import { validateAddressWithGoogle } from '../../../app/utils/google.server';
 import { calculateLeadScore } from '../../../app/utils/ai/leadScoring';
-import { fetchBestZestimate } from '../shared/bridgeUtils';
+import { fetchBestZestimate } from '../../../app/utils/bridge.server';
 
 const s3 = new S3Client({ region: process.env.AWS_REGION });
 const dynamoClient = new DynamoDBClient({ region: process.env.AWS_REGION });

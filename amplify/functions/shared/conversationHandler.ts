@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { analyzeBridgeProperty } from '../../../app/utils/bridge.server';
 
 const GHL_API_KEY = process.env.GHL_API_KEY;
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
@@ -12,6 +13,8 @@ interface ConversationContext {
   propertyCity?: string;
   propertyState?: string;
   propertyZip?: string;
+  propertyLat?: number;
+  propertyLng?: number;
   leadType?: string;
   locationId: string;
   contact?: any; // Full contact object for field checking
@@ -19,6 +22,17 @@ interface ConversationContext {
   fromNumber?: string; // Phone number to send SMS from
   accessToken?: string; // GHL OAuth token for API calls
   messageType?: 'SMS' | 'FB' | 'IG' | 'WhatsApp'; // Message channel type
+  existingZestimate?: number; // Zestimate from database (skip API call)
+  existingCashOffer?: number; // Cash offer from database (skip calculation)
+  // Listing ad context (for buyer leads)
+  listingAddress?: string; // Property from the ad
+  listingPrice?: number;
+  listingBeds?: number;
+  listingBaths?: number;
+  listingType?: string; // Single Family, Condo, etc.
+  listingCity?: string;
+  listingState?: string;
+  leadIntent?: 'buyer' | 'seller'; // Determined from ad or conversation
 }
 
 interface PropertyAnalysis {
@@ -29,35 +43,39 @@ interface PropertyAnalysis {
   yearBuilt?: number;
 }
 
-// Get property analysis using existing route
-async function getPropertyAnalysis(address: string, city: string, state: string, zip: string): Promise<PropertyAnalysis | null> {
+// Get property analysis using Bridge API with address variations and coordinate fallback
+async function getPropertyAnalysis(address: string, city: string, state: string, zip: string, lat?: number, lng?: number): Promise<PropertyAnalysis | null> {
   try {
-    const response = await fetch(`${process.env.NEXTAUTH_URL}/api/v1/analyze-property`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        // Add auth headers if needed for internal calls
-      },
-      body: JSON.stringify({
-        street: address,
-        city,
-        state,
-        zip
-      })
+    console.log('🏠 Fetching property data with address variations...');
+    
+    const result = await analyzeBridgeProperty({
+      street: address,
+      city,
+      state,
+      zip,
+      lat,
+      lng
     });
 
-    if (!response.ok) return null;
+    if (!result.success || !result.valuation) {
+      console.log('⚠️ No property data found');
+      return null;
+    }
     
-    const data = await response.json();
+    console.log('✅ Property data retrieved:', {
+      zestimate: result.valuation.zestimate,
+      address: result.valuation.address
+    });
+    
     return {
-      zestimate: data.valuation?.zestimate,
-      sqft: data.valuation?.livingArea,
-      beds: data.valuation?.bedrooms,
-      baths: data.valuation?.bathrooms,
-      yearBuilt: data.valuation?.yearBuilt
+      zestimate: result.valuation.zestimate,
+      sqft: result.valuation.livingArea,
+      beds: result.valuation.bedrooms,
+      baths: result.valuation.bathrooms,
+      yearBuilt: result.valuation.yearBuilt
     };
-  } catch (error) {
-    console.error('Property analysis error:', error);
+  } catch (error: any) {
+    console.error('❌ Property analysis error:', error.message);
     return null;
   }
 }
@@ -110,24 +128,27 @@ async function sendGHLMessage(conversationId: string, message: string, accessTok
   }
 }
 
-// Generate AI response using OpenAI
+// Generate AI response using OpenAI with tool calling
 async function generateOpenAIResponse(context: ConversationContext, propertyData?: PropertyAnalysis): Promise<string> {
-  const hasPropertyData = propertyData?.zestimate;
+  // Use existing Zestimate from database if available (faster, no API call)
+  const zestimate = context.existingZestimate || propertyData?.zestimate;
+  const cashOffer = context.existingCashOffer || (zestimate ? Math.round(zestimate * 0.70) : null);
+  
+  const hasPropertyData = !!zestimate;
   const hasAddress = context.propertyAddress && context.propertyCity && context.propertyState;
   
-  const propertyInfo = propertyData ? 
+  const propertyInfo = hasPropertyData ? 
     `Property Details: ${context.propertyAddress}, ${context.propertyCity}, ${context.propertyState} ${context.propertyZip}
-    Estimated Value: $${propertyData.zestimate?.toLocaleString() || 'N/A'}
-    ${propertyData.sqft ? `Square Feet: ${propertyData.sqft}` : ''}
-    ${propertyData.beds ? `Bedrooms: ${propertyData.beds}` : ''}
-    ${propertyData.baths ? `Bathrooms: ${propertyData.baths}` : ''}
-    ${propertyData.yearBuilt ? `Year Built: ${propertyData.yearBuilt}` : ''}` : '';
+    Estimated Value: $${zestimate?.toLocaleString() || 'N/A'}
+    ${propertyData?.sqft ? `Square Feet: ${propertyData.sqft}` : ''}
+    ${propertyData?.beds ? `Bedrooms: ${propertyData.beds}` : ''}
+    ${propertyData?.baths ? `Bathrooms: ${propertyData.baths}` : ''}
+    ${propertyData?.yearBuilt ? `Year Built: ${propertyData.yearBuilt}` : ''}` : '';
 
-  const cashOffer = propertyData?.zestimate ? Math.round(propertyData.zestimate * 0.70) : null;
-  const offerInfo = cashOffer && propertyData ? 
+  const offerInfo = cashOffer && hasPropertyData ? 
     `\nOFFER OPTIONS:
     - AS-IS CASH OFFER: $${cashOffer.toLocaleString()} (70% of market value, quick close)
-    - RETAIL LISTING: $${propertyData.zestimate?.toLocaleString()} (maximum value, traditional sale)` : '';
+    - RETAIL LISTING: $${zestimate?.toLocaleString()} (maximum value, traditional sale)` : '';
 
   // Adapt script based on available data
   const isInitialOutreach = context.incomingMessage === 'initial_outreach';
@@ -145,36 +166,156 @@ INSTRUCTIONS:
 - Include the STOP opt-out for compliance
 
 Generate the initial outreach message:`
-    : `You are Jose Fernandez from RE/MAX Homeland Realtors, helping homeowners with ${context.leadType?.toLowerCase() || 'real estate'} situations.
+    : `You are Jose Fernandez from RE/MAX Homeland Realtors.
 
-CONVERSATION STAGE:
-- Initial message was: "Hi ${context.contactName}, Jose from RE/MAX here. I saw the notice about ${hasAddress ? context.propertyAddress : 'your property'}. Is the property still for sale?"
-- Their response: "${context.incomingMessage}"
+CONVERSATION CONTEXT:
+- Contact: ${context.contactName}
+- Their message: "${context.incomingMessage}"
+${hasAddress ? `- Known property: ${context.propertyAddress}` : ''}
+${context.leadType ? `- Lead type: ${context.leadType}` : ''}
 
-IF THEY SHOW INTEREST (yes, maybe, tell me more, etc.):
-Deliver the full pitch following this structure:
-"Great! I wanted to see if I could make you a firm cash offer${hasPropertyData ? ` of around $${cashOffer?.toLocaleString()}` : ''} to buy it directly, or help you list it for maximum value${hasPropertyData ? ` around $${propertyData.zestimate?.toLocaleString()}` : ''}. I work with families in these situations because having both a 'speed' option and a 'top-dollar' option gives you the most control. I just need 10 minutes to see the condition. Are you open to meeting this week?"
+SCENARIO 1: EXISTING LEAD (Has property address in system)
+${hasAddress ? `
+You already know about their ${context.leadType?.toLowerCase() || 'property'} situation at ${context.propertyAddress}.
+
+CONVERSATION APPROACH:
+- Acknowledge their response naturally
+- If interested: Present cash offer vs listing options
+- If asking about value: Use get_property_value tool
+- If hesitant: Address concerns, build trust
+- Goal: Schedule 10-minute property walkthrough
+
+EXAMPLE:
+Them: "Yes, still interested"
+You: "Great! I wanted to see if I could make you a firm cash offer to buy it directly, or help you list it for maximum value. I work with families in these situations because having both options gives you the most control. I just need 10 minutes to see the condition. Are you open to meeting this week?"
+` : `
+SCENARIO 2: NEW LEAD (No property info - FB ad, website, etc.)
+
+DISCOVERY CONVERSATION FLOW:
+
+STEP 1: DETERMINE INTENT
+- Ask: "Are you looking to buy or sell a property?"
+
+STEP 2A: FOR SELLERS - Get Info First
+Ask naturally (one at a time):
+1. "What's the property address?"
+2. "What's motivating you to sell?"
+3. "When are you hoping to move?"
+
+Then use tools:
+- validate_address (when they give address)
+- get_property_value (after validation)
+- Present cash offer vs listing options
+
+STEP 2B: FOR BUYERS - Qualify Needs
+Ask naturally (one at a time):
+1. "What area are you looking in?"
+2. "Are there any other cities or neighborhoods you're interested in?"
+3. "What's your budget range?"
+4. "How many bedrooms do you need?"
+5. "When are you hoping to move?"
+
+Then: save_buyer_search tool (saves to kvCORE with auto-alerts)
+
+IMPORTANT:
+- ASK ONE QUESTION AT A TIME
+- Don't use tools until you have complete info
+- Be conversational, not robotic
+- For buyers: Always ask about additional areas before saving search
+`}
+
+TOOLS AVAILABLE:
+- validate_address: Standardize address (new leads only)
+- get_property_value: Get Zestimate (when address known)
+- schedule_consultation: Book consultation (when qualified)
 
 ${propertyInfo}${offerInfo}
 
-IF THEY'RE NOT INTERESTED OR UNCLEAR:
-- Respond naturally to their message
-- Keep it conversational and under 300 characters
-- Try to understand their situation
-- Look for an opening to present the two options
-
-IMPORTANT:
-${!hasPropertyData ? '- You do NOT have property valuation data yet, so DO NOT mention specific dollar amounts' : '- You have property valuation data, include the specific offer amounts'}
-${!hasAddress ? '- You do NOT have the full property address' : ''}
-- Goal: Get to "Yes, No, or Maybe" on a property visit
-- Present BOTH options: cash offer (speed) and listing (top dollar)
-- Be empathetic and conversational
+RESPONSE STYLE:
+- Keep under 300 characters
+- Be conversational and empathetic
+- Build rapport before details
 
 Respond to their message:`;
 
   try {
     console.log('🤖 Calling OpenAI for message generation...');
     console.log(`📝 Context: ${isInitialOutreach ? 'Initial outreach' : 'Reply'} for ${context.contactName}`);
+    
+    const tools = [
+      {
+        type: 'function',
+        function: {
+          name: 'validate_address',
+          description: 'Validate and standardize an address using Google Maps. Use this FIRST before getting property value.',
+          parameters: {
+            type: 'object',
+            properties: {
+              address: { type: 'string', description: 'Full address string (e.g., "123 Main St, Miami, FL 33101")' }
+            },
+            required: ['address']
+          }
+        }
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'get_property_value',
+          description: 'Get Zestimate and property details. Use AFTER validating address with validate_address tool.',
+          parameters: {
+            type: 'object',
+            properties: {
+              street: { type: 'string', description: 'Street address (e.g., "123 Main St")' },
+              city: { type: 'string', description: 'City name' },
+              state: { type: 'string', description: 'State abbreviation (e.g., "FL")' },
+              zip: { type: 'string', description: 'ZIP code' },
+              lat: { type: 'number', description: 'Latitude from validated address' },
+              lng: { type: 'number', description: 'Longitude from validated address' }
+            },
+            required: ['street', 'city', 'state', 'zip']
+          }
+        }
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'schedule_consultation',
+          description: 'Schedule a consultation call for seller or buyer. Use when lead is qualified and ready to meet.',
+          parameters: {
+            type: 'object',
+            properties: {
+              lead_type: { type: 'string', enum: ['seller', 'buyer'], description: 'Type of consultation' },
+              notes: { type: 'string', description: 'Any relevant notes about the lead' }
+            },
+            required: ['lead_type']
+          }
+        }
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'save_buyer_search',
+          description: 'Save buyer search criteria in kvCORE for automated property alerts. Use ONLY after asking about additional areas.',
+          parameters: {
+            type: 'object',
+            properties: {
+              cities: { 
+                type: 'array', 
+                items: { type: 'string' },
+                description: 'Array of city names buyer is interested in (e.g., ["Miami", "Fort Lauderdale"])' 
+              },
+              state: { type: 'string', description: 'State abbreviation' },
+              minPrice: { type: 'number', description: 'Minimum price' },
+              maxPrice: { type: 'number', description: 'Maximum price' },
+              beds: { type: 'number', description: 'Minimum bedrooms' },
+              baths: { type: 'number', description: 'Minimum bathrooms' },
+              propertyTypes: { type: 'array', items: { type: 'string' }, description: 'Property types (Single Family, Condo, etc.)' }
+            },
+            required: ['cities', 'state', 'maxPrice']
+          }
+        }
+      }
+    ];
     
     const response = await axios.post(
       'https://api.openai.com/v1/chat/completions',
@@ -189,6 +330,8 @@ Respond to their message:`;
               { role: 'system', content: systemPrompt },
               { role: 'user', content: context.incomingMessage }
             ],
+        tools,
+        tool_choice: 'auto',
         max_tokens: 150,
         temperature: 0.7
       },
@@ -200,7 +343,114 @@ Respond to their message:`;
       }
     );
 
-    const aiMessage = response.data.choices[0]?.message?.content || 'Thanks for your message. Let me get back to you shortly.';
+    const choice = response.data.choices[0];
+    
+    // Check if AI wants to use a tool
+    if (choice.finish_reason === 'tool_calls' && choice.message.tool_calls) {
+      console.log('🔧 AI requested tool call:', choice.message.tool_calls[0].function.name);
+      
+      const toolCall = choice.message.tool_calls[0];
+      const toolName = toolCall.function.name;
+      const args = JSON.parse(toolCall.function.arguments);
+      
+      if (toolName === 'validate_address') {
+        console.log('🗺️ Validating address:', args.address);
+        const { validateAddressWithGoogle } = await import('../../../app/utils/google.server');
+        const validated = await validateAddressWithGoogle(args.address);
+        
+        if (validated?.success) {
+          const { street, city, state, zip } = validated.components;
+          const { lat, lng } = validated.location;
+          
+          // Now get property value with validated address
+          const propData = await getPropertyAnalysis(street, city, state, zip, lat, lng);
+          
+          if (propData?.zestimate) {
+            const cashOffer = Math.round(propData.zestimate * 0.70);
+            return `Perfect! I found your property at ${validated.formattedAddress}. Current market value is around $${propData.zestimate.toLocaleString()}. I can offer $${cashOffer.toLocaleString()} cash for a quick close, or help you list it for the full $${propData.zestimate.toLocaleString()}. Which interests you more?`;
+          } else {
+            return `I found your address at ${validated.formattedAddress}, but I'd need to see the property in person to give you an accurate value. Can we schedule a quick 10-minute walkthrough this week?`;
+          }
+        } else {
+          return `I'm having trouble finding that address. Could you provide the full street address, city, and ZIP code?`;
+        }
+      }
+      
+      if (toolName === 'get_property_value') {
+        console.log('📍 Fetching property value for:', args);
+        const propData = await getPropertyAnalysis(args.street, args.city, args.state, args.zip, args.lat, args.lng);
+        
+        if (propData?.zestimate) {
+          const cashOffer = Math.round(propData.zestimate * 0.70);
+          return `Based on current market data, your property at ${args.street} is valued around $${propData.zestimate.toLocaleString()}. I can offer you $${cashOffer.toLocaleString()} cash for a quick close, or help you list it for the full $${propData.zestimate.toLocaleString()}. Which option interests you more?`;
+        } else {
+          return `I'd need to see the property to give you an accurate value. Can we schedule a quick 10-minute walkthrough this week?`;
+        }
+      }
+      
+      if (toolName === 'schedule_consultation') {
+        console.log('📅 Scheduling consultation:', args);
+        const leadType = args.lead_type === 'seller' ? 'seller' : 'buyer';
+        
+        // Tag contact for human handoff
+        return `Great! I'll have one of our ${leadType} specialists reach out within the next few hours to schedule your consultation. Thanks for your interest!`;
+      }
+      
+      if (toolName === 'save_buyer_search') {
+        console.log('💾 Saving buyer search to kvCORE:', args);
+        
+        try {
+          const { createContact, addSearchAlert } = await import('../../../app/utils/kvcore.server');
+          
+          // Create contact in kvCORE with hashtag to trigger Smart Campaign
+          const kvContact = await createContact({
+            firstName: context.contactName.split(' ')[0] || 'Buyer',
+            lastName: context.contactName.split(' ').slice(1).join(' ') || 'Lead',
+            email: context.contact?.email,
+            phone: context.contact?.phone,
+            dealType: 'buyer',
+            source: 'AI Chat - Facebook',
+            notes: `Interested in ${args.beds}BR homes in ${args.cities.join(', ')}, ${args.state} under $${args.maxPrice.toLocaleString()}`,
+            tags: ['#fbbuyerleads'] // Triggers "Facebook Buyer Leads" Smart Campaign
+          });
+          
+          if (kvContact) {
+            // Create areas array from cities
+            const areas = args.cities.map((city: string) => ({
+              type: 'city',
+              name: city
+            }));
+            
+            // Add saved search
+            const searchCriteria = {
+              types: args.propertyTypes || (context.listingType ? [context.listingType] : ['Single Family', 'Condo']),
+              beds: args.beds || context.listingBeds || 3,
+              baths: args.baths || context.listingBaths || 2,
+              minPrice: args.minPrice || (context.listingPrice ? Math.round(context.listingPrice * 0.9) : undefined),
+              maxPrice: args.maxPrice || (context.listingPrice ? Math.round(context.listingPrice * 1.1) : undefined),
+              areas: areas,
+              frequency: 'daily'
+            };
+            
+            await addSearchAlert(kvContact.id, searchCriteria);
+            
+            console.log(`✅ Buyer saved in kvCORE with hashtag ${campaignHashtag} and auto-alerts for:`, args.cities.join(', '));
+            
+            const cityList = args.cities.length > 1 
+              ? `${args.cities.slice(0, -1).join(', ')} and ${args.cities[args.cities.length - 1]}`
+              : args.cities[0];
+            
+            return `Perfect! I've saved your search for ${cityList}. You'll receive daily emails when new properties match your criteria. I'll also keep you updated via text. Looking forward to helping you find your dream home!`;
+          }
+        } catch (error) {
+          console.error('❌ Failed to save buyer in kvCORE:', error);
+        }
+        
+        return `Great! I've saved your search criteria. You'll receive updates when new properties match. Looking forward to helping you!`;
+      }
+    }
+
+    const aiMessage = choice.message?.content || 'Thanks for your message. Let me get back to you shortly.';
     console.log(`✅ OpenAI response: ${aiMessage.substring(0, 100)}...`);
     return aiMessage;
   } catch (error: any) {
@@ -350,7 +600,9 @@ export async function generateAIResponse(context: ConversationContext): Promise<
         context.propertyAddress,
         context.propertyCity,
         context.propertyState,
-        context.propertyZip || ''
+        context.propertyZip || '',
+        context.propertyLat,
+        context.propertyLng
       );
     }
 

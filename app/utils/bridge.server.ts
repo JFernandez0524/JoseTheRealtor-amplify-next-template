@@ -67,7 +67,15 @@ export async function analyzeBridgeProperty(params: {
   zip?: string;
   lat?: number;
   lng?: number;
-}) {
+}): Promise<{
+  success: boolean;
+  valuation?: any;
+  assessment?: any;
+  parcel?: any;
+  history?: any[];
+  debug?: any;
+  error?: string;
+}> {
   const { street: rawStreet, city: rawCity, state, zip, lat, lng } = params;
   const city = cleanCityName(rawCity || '');
   const streetVariations = generateAddressVariations(rawStreet || '');
@@ -202,5 +210,50 @@ export async function analyzeBridgeProperty(params: {
       searched: { originalStreet: rawStreet, variations: streetVariations, successfulVariation, city, state, zip, lat, lng },
       found: { valuation: !!valuation, assessment: !!assessment, zpid: zpid || null },
     },
+  };
+}
+
+/**
+ * Simplified wrapper for CSV upload - returns just the Zestimate data
+ */
+export async function fetchBestZestimate(params: {
+  lat?: number;
+  lng?: number;
+  street: string;
+  city: string;
+  state: string;
+  zip: string;
+}): Promise<{
+  zpid: string;
+  zestimate: number;
+  rentZestimate?: number;
+  url: string;
+  lastUpdated: string;
+  address: string;
+  city: string;
+  state: string;
+  postalCode: string;
+  latitude?: number;
+  longitude?: number;
+} | null> {
+  const result = await analyzeBridgeProperty(params);
+  
+  if (!result.success || !result.valuation) {
+    return null;
+  }
+
+  const best = result.valuation;
+  return {
+    zpid: best.zpid,
+    zestimate: best.zestimate,
+    rentZestimate: best.rentalZestimate,
+    url: best.zillowUrl || `https://www.zillow.com/homes/${best.zpid}_zpid/`,
+    lastUpdated: best.timestamp,
+    address: best.address,
+    city: best.city,
+    state: best.state,
+    postalCode: best.postalCode,
+    latitude: best.Latitude,
+    longitude: best.Longitude,
   };
 }

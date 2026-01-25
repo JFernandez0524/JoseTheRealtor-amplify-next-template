@@ -1,3 +1,40 @@
+/**
+ * POST /api/v1/send-message-to-contact
+ * 
+ * PRODUCTION endpoint for automated AI outreach to GHL contacts.
+ * 
+ * REQUEST BODY:
+ * - contactId: string - GHL contact ID to message
+ * - accessToken: string - GHL OAuth access token
+ * - fromNumber?: string - Phone number to send from (optional)
+ * 
+ * RESPONSE:
+ * - success: boolean
+ * - message: string - AI-generated message that was sent
+ * - error?: string - Error message if failed
+ * 
+ * AUTHENTICATION:
+ * - No user auth required (uses provided GHL access token)
+ * - Called by Lambda functions (dailyOutreachAgent)
+ * 
+ * WORKFLOW:
+ * 1. Fetch contact from GHL API using access token
+ * 2. Extract property data from custom fields (address, city, state, zip, lead type)
+ * 3. Generate AI message using 5-step proven script
+ * 4. Send message via GHL Conversations API
+ * 5. Return success status and message content
+ * 
+ * CUSTOM FIELD IDs:
+ * - p3NOYiInAERYbe0VsLHB: Property Address
+ * - h4UIjKQvFu7oRW4SAY8W: Property City
+ * - 9r9OpQaxYPxqbA6Hvtx7: Property State
+ * - hgbjsTVwcyID7umdhm2o: Property ZIP
+ * - oaf4wCuM3Ub9eGpiddrO: Lead Type (PROBATE/PREFORECLOSURE)
+ * 
+ * USED BY:
+ * - amplify/functions/dailyOutreachAgent (automated daily SMS)
+ * - Manual outreach triggers
+ */
 import { NextResponse } from 'next/server';
 import axios from 'axios';
 import { generateAIResponse } from '@/app/utils/ai/conversationHandler';

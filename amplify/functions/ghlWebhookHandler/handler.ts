@@ -36,7 +36,7 @@ export const handler = async (event: any) => {
     const body = typeof event.body === 'string' ? JSON.parse(event.body) : event.body;
     
     const { customData, message, contact, location } = body;
-    const userId = customData?.userId;
+    let userId = customData?.userId;
     const contactId = customData?.contactId || contact?.id;
     const messageBody = customData?.messageBody || message?.body;
     const messageType = message?.type; // 2 = SMS, 3 = Facebook Messenger
@@ -44,7 +44,13 @@ export const handler = async (event: any) => {
 
     console.log('📨 [WEBHOOK_LAMBDA] Extracted data:', { userId, contactId, messageBody, messageType, locationId });
 
-    if (!userId || !contactId || !messageBody) {
+    // Default to Jose's account for organic leads (no app_user_id)
+    if (!userId) {
+      console.log('⚠️ [WEBHOOK_LAMBDA] No userId found - defaulting to Jose\'s account (organic lead)');
+      userId = '44d8f4c8-10c1-7038-744b-271103170819';
+    }
+
+    if (!contactId || !messageBody) {
       console.error('❌ [WEBHOOK_LAMBDA] Missing required fields');
       return {
         statusCode: 400,
@@ -118,11 +124,15 @@ export const handler = async (event: any) => {
     const propertyState = fullContact?.customFields?.find((f: any) => f.id === '9r9OpQaxYPxqbA6Hvtx7')?.value;
     const propertyZip = fullContact?.customFields?.find((f: any) => f.id === 'hgbjsTVwcyID7umdhm2o')?.value;
     const leadType = fullContact?.customFields?.find((f: any) => f.id === 'oaf4wCuM3Ub9eGpiddrO')?.value;
+    const zestimate = fullContact?.customFields?.find((f: any) => f.id === '7wIe1cRbZYXUnc3WOVb2')?.value;
+    const cashOffer = fullContact?.customFields?.find((f: any) => f.id === 'sM3hEOHCJFoPyWhj1Vc8')?.value;
 
     console.log('📋 [WEBHOOK_LAMBDA] Contact data:', {
       name: `${fullContact.firstName} ${fullContact.lastName}`,
       propertyAddress,
-      leadType
+      leadType,
+      zestimate,
+      cashOffer
     });
 
     // Generate AI response (import from shared utility)
@@ -142,6 +152,8 @@ export const handler = async (event: any) => {
       contact: fullContact,
       accessToken: token, // Pass the GHL token for sending messages
       messageType: messageType === 3 ? 'FB' : 'SMS', // Facebook Messenger or SMS
+      existingZestimate: zestimate ? parseInt(zestimate) : undefined, // Pass existing Zestimate
+      existingCashOffer: cashOffer ? parseInt(cashOffer) : undefined, // Pass existing cash offer
     });
 
     console.log('✅ [WEBHOOK_LAMBDA] Successfully processed webhook');

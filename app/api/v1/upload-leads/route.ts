@@ -1,3 +1,40 @@
+/**
+ * POST /api/v1/upload-leads
+ * 
+ * CSV lead upload endpoint - parses and validates lead data.
+ * 
+ * REQUEST:
+ * - Content-Type: multipart/form-data
+ * - file: CSV file with lead data
+ * 
+ * REQUIRED CSV COLUMNS:
+ * - ownerFirstName, ownerLastName - Owner name
+ * - ownerAddress, ownerCity, ownerState, ownerZip - Property address
+ * - type - Lead type (PREFORECLOSURE or PROBATE)
+ * 
+ * OPTIONAL CSV COLUMNS:
+ * - estimatedValue - Property value estimate
+ * - foreclosureAuctionDate - Auction date (preforeclosure)
+ * - adminFirstName, adminLastName - Admin name (probate)
+ * - adminAddress, adminCity, adminState, adminZip - Mailing address (probate)
+ * 
+ * RESPONSE:
+ * - success: boolean
+ * - leadsFound: number - Total leads in CSV
+ * - leads: array - Preview of first 5 leads
+ * - message: string - Next steps
+ * 
+ * PROCESSING:
+ * This endpoint only parses the CSV. Actual processing happens in:
+ * - Lambda: amplify/functions/uploadCsvHandler (triggered by S3 upload)
+ * - Process: Validate addresses → Fetch Zestimates → Calculate AI scores → Store
+ * 
+ * AUTHENTICATION:
+ * - Required (user must be logged in)
+ * 
+ * USED BY:
+ * - Upload page CSV upload form
+ */
 import { NextResponse } from 'next/server';
 
 export async function POST(req: Request) {
