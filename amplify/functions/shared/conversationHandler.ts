@@ -4,6 +4,16 @@ import { analyzeBridgeProperty } from '../../../app/utils/bridge.server';
 const GHL_API_KEY = process.env.GHL_API_KEY;
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
+// Conversation states
+type ConversationState = 
+  | 'NEW_LEAD'
+  | 'ASK_INTENT'
+  | 'BUYER_QUALIFICATION'
+  | 'SELLER_QUALIFICATION'
+  | 'PROPERTY_VALUATION'
+  | 'APPOINTMENT_BOOKING'
+  | 'QUALIFIED';
+
 interface ConversationContext {
   contactId: string;
   conversationId: string;
@@ -33,6 +43,12 @@ interface ConversationContext {
   listingCity?: string;
   listingState?: string;
   leadIntent?: 'buyer' | 'seller'; // Determined from ad or conversation
+  // State tracking
+  conversationState?: ConversationState;
+  budget?: string;
+  timeline?: string;
+  location?: string;
+  motivation?: string;
 }
 
 interface PropertyAnalysis {
@@ -166,7 +182,13 @@ INSTRUCTIONS:
 - Include the STOP opt-out for compliance
 
 Generate the initial outreach message:`
-    : `You are Jose Fernandez from RE/MAX Homeland Realtors.
+    : `You are an AI assistant helping Jose Fernandez, a licensed real estate agent at RE/MAX Homeland Realtors.
+
+COMPLIANCE RULES (CRITICAL):
+1. IDENTIFY AS AI: If asked, say "I'm Jose's AI assistant helping with initial questions"
+2. NO LEGAL/FINANCIAL ADVICE: Never give tax, legal, or financial advice
+3. HUMAN HANDOFF: If asked complex questions, say "Let me connect you with Jose directly"
+4. DISCLAIMERS: Property values are estimates only, not appraisals
 
 CONVERSATION CONTEXT:
 - Contact: ${context.contactName}
