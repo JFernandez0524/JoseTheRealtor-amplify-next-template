@@ -690,7 +690,8 @@ export async function generateAIResponse(context: ConversationContext): Promise<
           {
             headers: {
               'Authorization': `Bearer ${context.accessToken}`,
-              'Content-Type': 'application/json'
+              'Content-Type': 'application/json',
+              'Version': '2021-07-28'
             }
           }
         );
