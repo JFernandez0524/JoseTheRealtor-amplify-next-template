@@ -638,16 +638,12 @@ function shouldHandoffToHuman(message: string): boolean {
   const handoffKeywords = [
     'speak to someone',
     'talk to a person',
-    'human',
-    'agent',
-    'ready to sell',
-    'schedule',
-    'appointment',
-    'call me',
-    'interested',
-    'yes i want',
-    'how much',
-    'what can you offer'
+    'talk to someone',
+    'human agent',
+    'real person',
+    'ready to sell now',
+    'schedule a call',
+    'call me back'
   ];
 
   return handoffKeywords.some(keyword => 
