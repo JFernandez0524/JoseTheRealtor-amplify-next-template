@@ -114,6 +114,21 @@ export async function getValidGhlToken(userId: string): Promise<{ token: string;
         console.error(`❌ [TOKEN_MANAGER] GHL refresh error:`, JSON.stringify(refreshError.response.data));
       }
       
+      // If refresh token is invalid (400), mark integration as inactive
+      if (refreshError.response?.status === 400) {
+        console.error(`❌ [TOKEN_MANAGER] Refresh token invalid - marking integration as inactive`);
+        await docClient.send(new UpdateCommand({
+          TableName: GHL_INTEGRATION_TABLE,
+          Key: { id: integration.id },
+          UpdateExpression: 'SET isActive = :inactive, updatedAt = :updated',
+          ExpressionAttributeValues: {
+            ':inactive': false,
+            ':updated': new Date().toISOString()
+          }
+        }));
+        throw new Error('GHL_REFRESH_TOKEN_EXPIRED: Please reconnect your GoHighLevel account');
+      }
+      
       // If conditional update failed, another process already refreshed - retry once
       if (refreshError.name === 'ConditionalCheckFailedException') {
         console.log(`🔄 [TOKEN_MANAGER] Token was refreshed by another process, re-fetching...`);
