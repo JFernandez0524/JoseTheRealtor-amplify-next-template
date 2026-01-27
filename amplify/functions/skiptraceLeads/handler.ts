@@ -379,8 +379,11 @@ export const handler: Handler = async (event) => {
         await docClient.send(new UpdateCommand({
           TableName: propertyLeadTableName,
           Key: { id: lead.id },
-          UpdateExpression: 'SET skipTraceStatus = :status',
-          ExpressionAttributeValues: { ':status': finalStatus }
+          UpdateExpression: 'SET skipTraceStatus = :status, skipTraceCompletedAt = :completedAt',
+          ExpressionAttributeValues: { 
+            ':status': finalStatus,
+            ':completedAt': new Date().toISOString()
+          }
         }));
         return { id: lead.id, status: finalStatus };
       }
