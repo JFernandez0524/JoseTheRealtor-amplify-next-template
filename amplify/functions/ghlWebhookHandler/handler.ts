@@ -245,6 +245,14 @@ export const handler = async (event: any) => {
     // Generate AI response (import from shared utility)
     const { generateAIResponse } = await import('../shared/conversationHandler');
     
+    // Determine message type: Instagram (4, 18), Facebook (3, 11), or SMS (2)
+    let messageTypeStr = 'SMS';
+    if ([4, 18].includes(messageType)) {
+      messageTypeStr = 'IG';
+    } else if ([3, 11].includes(messageType)) {
+      messageTypeStr = 'FB';
+    }
+
     await generateAIResponse({
       contactId,
       conversationId, // Use actual conversation ID for context
@@ -258,7 +266,7 @@ export const handler = async (event: any) => {
       locationId,
       contact: fullContact,
       accessToken: token, // Pass the GHL token for sending messages
-      messageType: [3, 11].includes(messageType) ? 'FB' : 'SMS', // Facebook Messenger (type 3 or 11) or SMS (type 2)
+      messageType: messageTypeStr,
       existingZestimate: zestimate ? parseInt(zestimate) : undefined, // Pass existing Zestimate
       existingCashOffer: cashOffer ? parseInt(cashOffer) : undefined, // Pass existing cash offer
     });
