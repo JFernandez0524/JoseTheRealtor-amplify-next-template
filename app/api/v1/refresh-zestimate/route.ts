@@ -38,6 +38,7 @@ export async function POST(request: NextRequest) {
       zestimate: zillowData.zestimate,
       zillowZpid: zillowData.zpid,
       zillowUrl: zillowData.zillowUrl || `https://www.zillow.com/homes/${zillowData.zpid}_zpid/`,
+      zillowAddress: zillowData.address,
       rentZestimate: zillowData.rentalZestimate,
       zillowLastUpdated: new Date().toISOString(),
     });

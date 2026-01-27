@@ -432,7 +432,7 @@ export function LeadTable({
 
                   <td className='px-4 py-4 whitespace-nowrap text-sm text-gray-900 bg-blue-50/30'>
                     <div className='flex items-center gap-2'>
-                      {lead.ownerAddress}
+                      <span className='select-text'>{lead.ownerAddress}</span>
                       {lead.validationStatus === 'INVALID' && (
                         <span
                           className='text-[10px] bg-red-600 text-white px-1.5 py-0.5 rounded font-bold'
@@ -446,7 +446,7 @@ export function LeadTable({
                           e.stopPropagation();
                           handleEditAddress(lead);
                         }}
-                        className='text-gray-400 hover:text-blue-600'
+                        className='text-gray-400 hover:text-blue-600 select-none'
                         title='Edit address'
                       >
                         ✏️
@@ -469,20 +469,28 @@ export function LeadTable({
                       <div className="flex flex-col">
                         {lead.zestimate && typeof lead.zestimate === 'number' ? (
                           <>
-                            <a 
-                              href={
-                                lead.zillowUrl || 
-                                (lead.zillowZpid ? `https://www.zillow.com/homes/${lead.zillowZpid}_zpid/` : '#')
-                              }
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className='font-semibold text-green-700 hover:text-green-900 hover:underline relative group'
-                            >
-                              ${lead.zestimate.toLocaleString()}
-                              <span className='invisible group-hover:visible absolute left-0 top-full mt-1 w-64 bg-gray-900 text-white text-xs rounded p-2 z-50 whitespace-normal'>
-                                ⚠️ Always verify: Click to check if this Zillow property matches the lead address. If wrong property: Search the address manually on Zillow/Google, then use edit button (✏️) to update address and refresh Zestimate.
-                              </span>
-                            </a>
+                            <div className="flex items-center gap-1">
+                              <a 
+                                href={
+                                  lead.zillowUrl || 
+                                  (lead.zillowZpid ? `https://www.zillow.com/homes/${lead.zillowZpid}_zpid/` : '#')
+                                }
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className='font-semibold text-green-700 hover:text-green-900 hover:underline relative group'
+                              >
+                                ${lead.zestimate.toLocaleString()}
+                                <span className='invisible group-hover:visible absolute left-0 top-full mt-1 w-64 bg-gray-900 text-white text-xs rounded p-2 z-50 whitespace-normal'>
+                                  {lead.zillowAddress && lead.zillowAddress.toLowerCase() !== lead.ownerAddress?.toLowerCase() 
+                                    ? `⚠️ ADDRESS MISMATCH: Zillow shows "${lead.zillowAddress}" but lead is "${lead.ownerAddress}". Click to verify, then use edit button (✏️) to fix.`
+                                    : '⚠️ Always verify: Click to check if this Zillow property matches the lead address. If wrong property: Search the address manually on Zillow/Google, then use edit button (✏️) to update address and refresh Zestimate.'
+                                  }
+                                </span>
+                              </a>
+                              {lead.zillowAddress && lead.zillowAddress.toLowerCase() !== lead.ownerAddress?.toLowerCase() && (
+                                <span className="text-red-600 text-xs font-bold" title={`Zillow address: ${lead.zillowAddress}`}>⚠️</span>
+                              )}
+                            </div>
                             {lead.zillowLastUpdated && (() => {
                               const ageInDays = Math.floor((Date.now() - new Date(lead.zillowLastUpdated).getTime()) / (1000 * 60 * 60 * 24));
                               const isStale = ageInDays > 180;

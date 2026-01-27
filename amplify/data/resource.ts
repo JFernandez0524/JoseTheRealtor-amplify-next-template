@@ -137,6 +137,7 @@ const schema = a.schema({
       // Zillow API Response Data (to avoid re-fetching)
       zillowZpid: a.string(), // Zillow Property ID
       zillowUrl: a.string(), // Zillow property URL
+      zillowAddress: a.string(), // Actual address from Zillow (for mismatch detection)
       rentZestimate: a.float(), // Rental estimate
       listingStatus: a.string(), // MLS Status: Active, Sold, Pending, etc.
       listingStatusDate: a.date(), // When status last changed

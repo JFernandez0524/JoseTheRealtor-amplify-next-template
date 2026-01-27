@@ -357,6 +357,7 @@ export const handler: S3Handler = async (event) => {
             zestimateSource: zillowData ? 'ZILLOW' : (row['estimatedValue'] ? 'CSV' : null),
             zillowZpid: zillowData?.zpid || null,
             zillowUrl: zillowData?.url || null,
+            zillowAddress: zillowData?.address || null,
             rentZestimate: zillowData?.rentZestimate || null,
             priceHistory: null,
             taxHistory: null,

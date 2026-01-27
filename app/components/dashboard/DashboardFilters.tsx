@@ -187,17 +187,19 @@ export function DashboardFilters({
             <option value='DIRECT_MAIL'>Direct Mail</option>
           </select>
 
-          {/* 6. AI PRIORITY FILTER */}
-          <select
-            value={filterAiPriority}
-            onChange={(e) => setFilterAiPriority(e.target.value)}
-            className='border border-purple-300 rounded-md px-3 py-1.5 text-sm focus:ring-2 focus:ring-purple-500 outline-none w-full sm:w-auto bg-purple-50'
-          >
-            <option value=''>All AI Priorities</option>
-            <option value='HIGH'>🔥 High Priority</option>
-            <option value='MEDIUM'>⚡ Medium Priority</option>
-            <option value='LOW'>📊 Low Priority</option>
-          </select>
+          {/* 6. AI PRIORITY FILTER - AI PLAN ONLY */}
+          {hasAI && (
+            <select
+              value={filterAiPriority}
+              onChange={(e) => setFilterAiPriority(e.target.value)}
+              className='border border-purple-300 rounded-md px-3 py-1.5 text-sm focus:ring-2 focus:ring-purple-500 outline-none w-full sm:w-auto bg-purple-50'
+            >
+              <option value=''>All AI Priorities</option>
+              <option value='HIGH'>🔥 High Priority</option>
+              <option value='MEDIUM'>⚡ Medium Priority</option>
+              <option value='LOW'>📊 Low Priority</option>
+            </select>
+          )}
 
           {/* 7. SKIP TRACE DATE FILTERS */}
           <div className='flex flex-col sm:flex-row gap-2 items-center'>
