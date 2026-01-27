@@ -59,6 +59,47 @@ export async function POST(request: Request) {
 
     console.log(`📞 [DISPOSITION] Call outcome: ${callOutcome}`);
 
+    // Update Last Call Date for ALL dispositions (manual calls)
+    try {
+      const { data: integrations } = await cookiesClient.models.GhlIntegration.list({
+        filter: { 
+          locationId: { eq: locationId },
+          isActive: { eq: true }
+        }
+      });
+
+      if (integrations && integrations.length > 0) {
+        const { getValidGhlToken } = await import('@/app/utils/aws/data/ghlIntegration.server');
+        const accessToken = await getValidGhlToken(integrations[0].userId);
+
+        if (accessToken) {
+          const axios = (await import('axios')).default;
+          const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
+          
+          await axios.put(
+            `https://services.leadconnectorhq.com/contacts/${contactId}`,
+            { 
+              customFields: [
+                { id: 'dWNGeSckpRoVUxXLgxMj', value: today } // Last Call Date
+              ]
+            },
+            {
+              headers: {
+                'Authorization': `Bearer ${accessToken}`,
+                'Content-Type': 'application/json',
+                'Version': '2021-07-28'
+              }
+            }
+          );
+          
+          console.log(`✅ [DISPOSITION] Updated Last Call Date to ${today}`);
+        }
+      }
+    } catch (dateError) {
+      console.error(`⚠️ [DISPOSITION] Failed to update Last Call Date:`, dateError);
+      // Don't fail the webhook if date update fails
+    }
+
     // Check if this disposition should stop AI outreach
     if (STOP_DISPOSITIONS.includes(callOutcome)) {
       console.log(`🛑 [DISPOSITION] Stopping AI outreach for contact ${contactId}`);
