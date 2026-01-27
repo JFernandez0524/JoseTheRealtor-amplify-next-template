@@ -83,6 +83,7 @@ export async function POST(req: Request) {
     const propertyState = contact?.customFields?.find((f: any) => f.id === '9r9OpQaxYPxqbA6Hvtx7')?.value;
     const propertyZip = contact?.customFields?.find((f: any) => f.id === 'hgbjsTVwcyID7umdhm2o')?.value;
     const leadType = contact?.customFields?.find((f: any) => f.id === 'oaf4wCuM3Ub9eGpiddrO')?.value;
+    const zestimate = contact?.customFields?.find((f: any) => f.id === '7wIe1cRbZYXUnc3WOVb2')?.value;
 
     // Use placeholder conversationId - the email handler will send directly to contact
     const conversationId = 'auto';
@@ -98,6 +99,7 @@ export async function POST(req: Request) {
       propertyState,
       propertyZip,
       leadType,
+      zestimate: zestimate ? parseFloat(zestimate) : undefined,
       locationId: contact.locationId,
       contact,
       fromEmail,

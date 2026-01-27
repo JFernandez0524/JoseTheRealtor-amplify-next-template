@@ -43,6 +43,7 @@ interface EmailConversationContext {
   propertyState?: string;
   propertyZip?: string;
   leadType?: string;
+  zestimate?: number;
   locationId: string;
   contact?: any;
   testMode?: boolean;
@@ -371,7 +372,11 @@ export async function generateEmailAIResponse(context: EmailConversationContext)
 
     // Get property analysis for context
     let propertyData: PropertyAnalysis | null = null;
-    if (context.propertyAddress && context.propertyCity && context.propertyState) {
+    
+    // Use provided zestimate if available, otherwise fetch from API
+    if (context.zestimate) {
+      propertyData = { zestimate: context.zestimate };
+    } else if (context.propertyAddress && context.propertyCity && context.propertyState) {
       propertyData = await getPropertyAnalysis(
         context.propertyAddress,
         context.propertyCity,
