@@ -50,6 +50,7 @@ const schema = a.schema({
       // 📞 CAMPAIGN SETTINGS
       selectedPhoneNumber: a.string(), // User's selected phone for campaigns
       selectedEmail: a.string(), // User's selected email for campaigns
+      emailSignature: a.string(), // User's GHL email signature (HTML)
       // 🚦 RATE LIMITING FIELDS
       dailyMessageCount: a.integer().default(0),
       hourlyMessageCount: a.integer().default(0),
