@@ -26,6 +26,7 @@ import { LeadStatusBadge } from './LeadStatusBadge';
 import { CardWrapper } from './CardWrapper';
 import { TagsManager } from './TagsManager';
 import { OutreachStatus } from './OutreachStatus';
+import { SkipTraceHistory } from './SkipTraceHistory';
 
 // Utils
 import { client } from '@/app/utils/aws/data/frontEndClient';
@@ -499,6 +500,9 @@ export function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
                   </div>
                   );
                 })()}
+                
+                {/* Skip Trace History */}
+                <SkipTraceHistory history={lead.skipTraceHistory} />
               </div>
             </CardWrapper>
 

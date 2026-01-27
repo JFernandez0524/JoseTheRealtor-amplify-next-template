@@ -99,6 +99,76 @@ export default function AdminDashboard({ initialUsers, initialLeads, currentUser
         </div>
       </div>
 
+      {/* Skip Trace Failures Section */}
+      {(() => {
+        const failedLeads = leads.filter(lead => 
+          lead.skipTraceStatus === 'FAILED' || lead.skipTraceStatus === 'NO_MATCH'
+        );
+        
+        // Get today's failures from history
+        const today = new Date().toISOString().split('T')[0];
+        const todayFailures = failedLeads.filter(lead => {
+          if (!lead.skipTraceHistory) return false;
+          const history = typeof lead.skipTraceHistory === 'string' 
+            ? JSON.parse(lead.skipTraceHistory) 
+            : lead.skipTraceHistory;
+          return history.some((attempt: any) => 
+            attempt.timestamp.startsWith(today) && 
+            (attempt.status === 'FAILED' || attempt.status === 'NO_MATCH')
+          );
+        });
+
+        if (failedLeads.length === 0) return null;
+
+        return (
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6">
+            <h3 className="text-lg font-bold text-yellow-900 mb-4">
+              ⚠️ Skip Trace Failures ({failedLeads.length} total, {todayFailures.length} today)
+            </h3>
+            <div className="space-y-2 max-h-96 overflow-y-auto">
+              {failedLeads.slice(0, 50).map(lead => {
+                const history = lead.skipTraceHistory 
+                  ? (typeof lead.skipTraceHistory === 'string' ? JSON.parse(lead.skipTraceHistory) : lead.skipTraceHistory)
+                  : [];
+                const lastAttempt = history[history.length - 1];
+                
+                return (
+                  <div key={lead.id} className="bg-white p-3 rounded border border-yellow-200">
+                    <div className="flex justify-between items-start">
+                      <div className="flex-1">
+                        <p className="font-semibold text-gray-900">
+                          {lead.ownerAddress}, {lead.ownerCity}, {lead.ownerState}
+                        </p>
+                        <p className="text-sm text-gray-600">
+                          Type: {lead.type} | Status: {lead.skipTraceStatus}
+                        </p>
+                        {lastAttempt && (
+                          <p className="text-xs text-gray-500 mt-1">
+                            Last attempt: {new Date(lastAttempt.timestamp).toLocaleString()}
+                            {history.length > 1 && ` (${history.length} total attempts)`}
+                          </p>
+                        )}
+                      </div>
+                      <a
+                        href={`/lead/${lead.id}`}
+                        className="text-xs text-blue-600 hover:text-blue-800 ml-4"
+                      >
+                        View Details →
+                      </a>
+                    </div>
+                  </div>
+                );
+              })}
+              {failedLeads.length > 50 && (
+                <p className="text-sm text-gray-500 text-center pt-2">
+                  Showing first 50 of {failedLeads.length} failed leads
+                </p>
+              )}
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Invalid Leads Section */}
       {invalidLeads.length > 0 && (
         <div className="bg-red-50 border border-red-200 rounded-lg p-6">
