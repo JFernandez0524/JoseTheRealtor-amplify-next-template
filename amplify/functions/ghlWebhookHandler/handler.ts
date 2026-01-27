@@ -128,6 +128,16 @@ export const handler = async (event: any) => {
         if (messagesResponse.ok) {
           const messagesData = await messagesResponse.json();
           const latestMessage = messagesData.messages?.[0];
+          
+          // Check if message is media (image, video, audio) - skip AI response
+          if (latestMessage?.contentType && latestMessage.contentType !== 'text/plain') {
+            console.log('⏭️ [WEBHOOK_LAMBDA] Skipping media message:', latestMessage.contentType);
+            return {
+              statusCode: 200,
+              body: JSON.stringify({ message: 'Media message - no AI response needed' })
+            };
+          }
+          
           if (latestMessage?.body) {
             messageBody = latestMessage.body;
             console.log('✅ [WEBHOOK_LAMBDA] Fetched message body from conversation:', messageBody);
