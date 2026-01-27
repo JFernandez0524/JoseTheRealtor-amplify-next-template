@@ -481,9 +481,12 @@ export const handler: Handler = async (event) => {
     results.push(...updateResults);
 
     const processedSuccessfully = updateResults.filter(r => r.status === 'SUCCESS').length;
+    const noQualityContacts = updateResults.filter(r => r.status === 'NO_QUALITY_CONTACTS').length;
+    const noMatch = updateResults.filter(r => r.status === 'NO_MATCH').length;
+    const failed = updateResults.filter(r => r.status === 'FAILED').length;
 
     console.log(`✅ Database updates complete`);
-    console.log(`📊 Results: ${processedSuccessfully} successful, ${updateResults.length - processedSuccessfully} failed`);
+    console.log(`📊 Results: ${processedSuccessfully} successful, ${noQualityContacts} no quality contacts, ${noMatch} no match, ${failed} failed`);
 
     // 💰 7. Deduct Credits (all users except OWNER)
     if (processedSuccessfully > 0 && !isOwner && userAccount) {
