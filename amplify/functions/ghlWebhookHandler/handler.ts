@@ -238,7 +238,8 @@ export const handler = async (event: any) => {
         conversationId = conversationsData?.conversations?.[0]?.id || '';
         console.log('✅ [WEBHOOK_LAMBDA] Found conversation:', conversationId);
       } catch (error) {
-      console.error('⚠️ [WEBHOOK_LAMBDA] Failed to fetch conversation ID:', error);
+        console.error('⚠️ [WEBHOOK_LAMBDA] Failed to fetch conversation ID:', error);
+      }
     }
 
     // Generate AI response (import from shared utility)
