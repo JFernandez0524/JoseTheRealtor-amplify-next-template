@@ -27,7 +27,7 @@ interface Props {}
 export default function LeadDashboardClient({}: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { hasPaidPlan, isAdmin } = useAccess();
+  const { hasPaidPlan, isAdmin, isAI } = useAccess();
 
   // --- State ---
   const [leads, setLeads] = useState<Lead[]>([]);
@@ -778,6 +778,7 @@ export default function LeadDashboardClient({}: Props) {
         setSkipTraceFromDate={setSkipTraceFromDate}
         skipTraceToDate={skipTraceToDate}
         setSkipTraceToDate={setSkipTraceToDate}
+        hasAI={isAI}
         selectedLeadsCount={selectedIds.length}
         selectedLeadTypes={leads.filter(l => selectedIds.includes(l.id)).map(l => l.type)}
         isSkipTracing={isProcessing}

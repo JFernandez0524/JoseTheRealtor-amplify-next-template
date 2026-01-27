@@ -23,6 +23,9 @@ type Props = {
   skipTraceToDate: string;
   setSkipTraceToDate: (val: string) => void;
 
+  // Access Control
+  hasAI?: boolean;
+
   // Bulk Action Props
   selectedLeadsCount: number;
   selectedLeadTypes: string[]; // NEW: Array of types of selected leads
@@ -64,6 +67,7 @@ export function DashboardFilters({
   setSkipTraceFromDate,
   skipTraceToDate,
   setSkipTraceToDate,
+  hasAI = false,
   selectedLeadsCount,
   selectedLeadTypes,
   handleBulkSkipTrace,
