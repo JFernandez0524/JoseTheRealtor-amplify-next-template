@@ -107,13 +107,22 @@ async function sendGHLEmail(
     return;
   }
   
+  // Add unsubscribe link to email body
+  const unsubscribeLink = contactId 
+    ? `${process.env.NEXTAUTH_URL || 'https://leads.josetherealtor.com'}/unsubscribe?contact=${contactId}`
+    : '';
+  
+  const emailWithUnsubscribe = unsubscribeLink
+    ? `${body}<br><br><div style="font-size: 11px; color: #999; text-align: center; margin-top: 20px; padding-top: 20px; border-top: 1px solid #eee;">If you no longer wish to receive these emails, you may <a href="${unsubscribeLink}" style="color: #999; text-decoration: underline;">unsubscribe here</a>.</div>`
+    : body;
+  
   try {
     console.log(`📧 Sending email to GHL ${contactId ? `contact ${contactId}` : `conversation ${conversationId}`}`);
     
     const messagePayload: any = {
       type: 'Email',
       subject,
-      html: body
+      html: emailWithUnsubscribe
     };
     
     if (fromEmail) {
