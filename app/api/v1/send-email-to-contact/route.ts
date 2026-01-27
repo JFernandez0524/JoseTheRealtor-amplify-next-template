@@ -55,13 +55,26 @@ import { generateEmailAIResponse } from '@/app/utils/ai/emailConversationHandler
  */
 export async function POST(req: Request) {
   try {
-    const { contactId, accessToken, fromEmail } = await req.json();
+    const { contactId, accessToken, fromEmail, userId } = await req.json();
     
     if (!contactId || !accessToken) {
       return NextResponse.json(
         { error: 'contactId and accessToken are required' },
         { status: 400 }
       );
+    }
+
+    // Fetch GHL integration to get email signature
+    let emailSignature = '';
+    if (userId) {
+      const { cookiesClient } = await import('@/app/utils/aws/data/amplifyServerUtils.server');
+      const { data: integrations } = await cookiesClient.models.GhlIntegration.list({
+        filter: {
+          userId: { eq: userId },
+          isActive: { eq: true }
+        }
+      });
+      emailSignature = integrations?.[0]?.emailSignature || '';
     }
 
     // Fetch contact from GHL
@@ -100,6 +113,7 @@ export async function POST(req: Request) {
       propertyZip,
       leadType,
       zestimate: zestimate ? parseFloat(zestimate) : undefined,
+      emailSignature,
       locationId: contact.locationId,
       contact,
       fromEmail,

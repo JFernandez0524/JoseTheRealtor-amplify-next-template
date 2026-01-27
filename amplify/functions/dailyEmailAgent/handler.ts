@@ -233,7 +233,8 @@ export const handler = async (event: any) => {
               {
                 contactId: contact.id,
                 accessToken: validAccessToken,
-                fromEmail: integration.campaignEmail
+                fromEmail: integration.campaignEmail,
+                userId: integration.userId
               },
               {
                 headers: {

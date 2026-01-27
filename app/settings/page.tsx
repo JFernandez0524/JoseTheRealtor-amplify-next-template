@@ -13,6 +13,7 @@ export default function SettingsPage() {
   const [phoneNumbers, setPhoneNumbers] = useState<any[]>([]);
   const [selectedPhone, setSelectedPhone] = useState('');
   const [selectedEmail, setSelectedEmail] = useState('');
+  const [emailSignature, setEmailSignature] = useState('');
 
   useEffect(() => {
     loadSettings();
@@ -44,6 +45,7 @@ export default function SettingsPage() {
       setIntegration(userIntegration);
       setSelectedPhone(userIntegration.selectedPhoneNumber || '');
       setSelectedEmail(userIntegration.selectedEmail || '');
+      setEmailSignature(userIntegration.emailSignature || '');
 
       // Fetch available phone numbers from GHL
       const response = await fetch('/api/v1/ghl-phone-numbers');
@@ -68,7 +70,8 @@ export default function SettingsPage() {
       await client.models.GhlIntegration.update({
         id: integration.id,
         selectedPhoneNumber: selectedPhone,
-        selectedEmail: selectedEmail
+        selectedEmail: selectedEmail,
+        emailSignature: emailSignature
       });
 
       alert('✅ Settings saved successfully!');
@@ -146,6 +149,26 @@ export default function SettingsPage() {
               placeholder="jose.fernandez@josetherealtor.com"
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
+          </div>
+
+          {/* Email Signature */}
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-2">
+              Email Signature (HTML)
+            </label>
+            <p className="text-xs text-gray-500 mb-3">
+              Paste your GHL email signature HTML here. This will be appended to all automated emails.
+            </p>
+            <textarea
+              value={emailSignature}
+              onChange={(e) => setEmailSignature(e.target.value)}
+              placeholder="<table>...</table>"
+              rows={8}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono text-sm"
+            />
+            <p className="text-xs text-gray-500 mt-2">
+              💡 Tip: Copy your signature HTML from GHL Settings → Email → Signature
+            </p>
           </div>
 
           {/* Connection Info */}

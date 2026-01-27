@@ -44,6 +44,7 @@ interface EmailConversationContext {
   propertyZip?: string;
   leadType?: string;
   zestimate?: number;
+  emailSignature?: string;
   locationId: string;
   contact?: any;
   testMode?: boolean;
@@ -189,16 +190,16 @@ I just need 10 minutes to see the property condition so I can give you accurate 
 
 Are you open to meeting with me to discuss your options?
 
-Jose Fernandez
+${context.emailSignature || `Jose Fernandez
 RE/MAX Homeland Realtors
-(732) 810-0182
+(732) 810-0182`}
 
 RULES:
 - NO "Hi" or "Hello" - use name only with comma
 - Keep professional but empathetic tone
 - Include dollar amounts if available
 - Use bullet points for options
-- End with signature block
+- End with signature block (use provided HTML signature if available)
 
 Generate the email (return as JSON with "subject" and "body" fields):`
     : `You are Jose Fernandez from RE/MAX Homeland Realtors responding to ${context.contactName}'s email about their ${context.leadType?.toLowerCase()} situation.
