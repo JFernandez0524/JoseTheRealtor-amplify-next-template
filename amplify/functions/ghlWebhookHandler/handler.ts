@@ -38,11 +38,12 @@ export const handler = async (event: any) => {
     const { customData, message, contact, location } = body;
     let userId = customData?.userId;
     const contactId = customData?.contactId || contact?.id;
-    const messageBody = customData?.messageBody || message?.body;
-    const messageType = message?.type; // 2 = SMS, 3 = Facebook Messenger, 11 = Facebook (alternate)
+    let messageBody = customData?.messageBody || message?.body;
+    const messageType = message?.type; // 2 = SMS, 3 = Facebook Messenger, 4 = Instagram, 18 = Instagram Story Reply
     const locationId = location?.id;
+    const conversationId = customData?.conversationId;
 
-    console.log('📨 [WEBHOOK_LAMBDA] Extracted data:', { userId, contactId, messageBody, messageType, locationId });
+    console.log('📨 [WEBHOOK_LAMBDA] Extracted data:', { userId, contactId, messageBody, messageType, locationId, conversationId });
 
     // Default to Jose's account for organic leads (no app_user_id)
     if (!userId) {
@@ -50,12 +51,25 @@ export const handler = async (event: any) => {
       userId = '44d8f4c8-10c1-7038-744b-271103170819';
     }
 
-    if (!contactId || !messageBody) {
-      console.error('❌ [WEBHOOK_LAMBDA] Missing required fields', { 
+    if (!contactId) {
+      console.error('❌ [WEBHOOK_LAMBDA] Missing contact ID');
+      return {
+        statusCode: 400,
+        body: JSON.stringify({ error: 'Missing contact ID' })
+      };
+    }
+
+    // For Instagram type 18 (story replies), message body might be empty in webhook
+    // We'll fetch it from the conversation API after getting the token
+    if (!messageBody && messageType === 18) {
+      console.log('⚠️ [WEBHOOK_LAMBDA] Empty message body for Instagram type 18 - will fetch from conversation API');
+    } else if (!messageBody) {
+      console.error('❌ [WEBHOOK_LAMBDA] Missing message body', { 
         hasContactId: !!contactId, 
         hasMessageBody: !!messageBody,
         contactId,
-        messageBody 
+        messageBody,
+        messageType
       });
       return {
         statusCode: 400,
@@ -96,6 +110,42 @@ export const handler = async (event: any) => {
     
     const { token } = tokenResult;
     console.log('✅ [WEBHOOK_LAMBDA] Got valid GHL token');
+
+    // If message body is empty (Instagram type 18), fetch from conversation API
+    if (!messageBody && conversationId) {
+      console.log('🔍 [WEBHOOK_LAMBDA] Fetching latest message from conversation API...');
+      try {
+        const messagesResponse = await fetch(
+          `https://services.leadconnectorhq.com/conversations/${conversationId}/messages?limit=1`,
+          {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Version': '2021-07-28'
+            }
+          }
+        );
+        
+        if (messagesResponse.ok) {
+          const messagesData = await messagesResponse.json();
+          const latestMessage = messagesData.messages?.[0];
+          if (latestMessage?.body) {
+            messageBody = latestMessage.body;
+            console.log('✅ [WEBHOOK_LAMBDA] Fetched message body from conversation:', messageBody);
+          }
+        }
+      } catch (error) {
+        console.error('⚠️ [WEBHOOK_LAMBDA] Failed to fetch message from conversation:', error);
+      }
+    }
+
+    // If still no message body, skip processing
+    if (!messageBody) {
+      console.log('⚠️ [WEBHOOK_LAMBDA] No message body available - skipping');
+      return {
+        statusCode: 200,
+        body: JSON.stringify({ message: 'No message body to process' })
+      };
+    }
 
     // Fetch contact data from GHL
     console.log('🔍 [WEBHOOK_LAMBDA] Fetching contact from GHL...');
