@@ -807,7 +807,9 @@ export async function generateAIResponse(context: ConversationContext): Promise<
 
     // 🛡️ Check if AI is enabled for this contact (skip for organic social media leads)
     const isOrganicSocialLead = context.contact?.attributionSource?.medium === 'facebook' || 
-                                 context.contact?.lastAttributionSource?.medium === 'facebook';
+                                 context.contact?.lastAttributionSource?.medium === 'facebook' ||
+                                 context.contact?.attributionSource?.medium === 'instagram' || 
+                                 context.contact?.lastAttributionSource?.medium === 'instagram';
     
     if (!context.testMode && !isOrganicSocialLead && !isAIEnabled(context.contact)) {
       console.log(`❌ AI disabled for contact ${context.contactId}`);
