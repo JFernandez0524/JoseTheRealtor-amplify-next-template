@@ -106,7 +106,7 @@ export const handler = async (event: any) => {
   try {
     // Get all GHL integrations (TEMPORARILY BYPASS campaignEmail requirement)
     const scanCommand = new ScanCommand({
-      TableName: process.env.GHL_INTEGRATION_TABLE_NAME,
+      TableName: process.env.AMPLIFY_DATA_GhlIntegration_TABLE_NAME,
       FilterExpression: 'attribute_exists(accessToken)',
     });
     
