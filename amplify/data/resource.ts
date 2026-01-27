@@ -106,6 +106,7 @@ const schema = a.schema({
       // Statuses
       skipTraceStatus: a.enum(['PENDING', 'COMPLETED', 'FAILED', 'NO_MATCH', 'NO_QUALITY_CONTACTS']),
       skipTraceCompletedAt: a.datetime(),
+      skipTraceHistory: a.json(), // Array of { timestamp, status, phonesFound, emailsFound }
       rawSkipTraceData: a.json(), // Store all skip trace results even if they don't pass filters
       validationStatus: a.enum(['VALID', 'INVALID']),
       validationErrors: a.string().array(), // Track validation issues for admin review

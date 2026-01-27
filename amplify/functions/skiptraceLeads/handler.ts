@@ -376,13 +376,25 @@ export const handler: Handler = async (event) => {
       const enrichedData = enrichmentMap.get(lead.id);
       if (!enrichedData || (enrichedData.status !== 'SUCCESS' && enrichedData.status !== 'NO_QUALITY_CONTACTS')) {
         const finalStatus = enrichedData?.status === 'ERROR' ? 'FAILED' : 'NO_MATCH';
+        const timestamp = new Date().toISOString();
+        
+        // Get existing history
+        const existingHistory = lead.skipTraceHistory || [];
+        const newHistory = [...existingHistory, {
+          timestamp,
+          status: finalStatus,
+          phonesFound: 0,
+          emailsFound: 0
+        }];
+        
         await docClient.send(new UpdateCommand({
           TableName: propertyLeadTableName,
           Key: { id: lead.id },
-          UpdateExpression: 'SET skipTraceStatus = :status, skipTraceCompletedAt = :completedAt',
+          UpdateExpression: 'SET skipTraceStatus = :status, skipTraceCompletedAt = :completedAt, skipTraceHistory = :history',
           ExpressionAttributeValues: { 
             ':status': finalStatus,
-            ':completedAt': new Date().toISOString()
+            ':completedAt': timestamp,
+            ':history': newHistory
           }
         }));
         return { id: lead.id, status: finalStatus };
@@ -396,22 +408,33 @@ export const handler: Handler = async (event) => {
 
       // Determine status based on quality filters
       const hasQualityContacts = enrichedData.foundPhones.length > 0 || enrichedData.foundEmails.length > 0;
+      const timestamp = new Date().toISOString();
       
       if (!hasQualityContacts) {
         const currentLabels = lead.leadLabels || [];
         const updatedLabels = [...new Set([...currentLabels, 'DIRECT_MAIL_ONLY'])];
         
+        // Get existing history
+        const existingHistory = lead.skipTraceHistory || [];
+        const newHistory = [...existingHistory, {
+          timestamp,
+          status: 'NO_QUALITY_CONTACTS',
+          phonesFound: enrichedData.rawPersonData?.phoneNumbers?.length || 0,
+          emailsFound: enrichedData.rawPersonData?.emails?.length || 0
+        }];
+        
         await docClient.send(new UpdateCommand({
           TableName: propertyLeadTableName,
           Key: { id: lead.id },
-          UpdateExpression: 'SET mailingAddress = :mailingAddress, mailingCity = :mailingCity, mailingState = :mailingState, mailingZip = :mailingZip, skipTraceStatus = :status, skipTraceCompletedAt = :completedAt, leadLabels = :labels, rawSkipTraceData = :rawData',
+          UpdateExpression: 'SET mailingAddress = :mailingAddress, mailingCity = :mailingCity, mailingState = :mailingState, mailingZip = :mailingZip, skipTraceStatus = :status, skipTraceCompletedAt = :completedAt, skipTraceHistory = :history, leadLabels = :labels, rawSkipTraceData = :rawData',
           ExpressionAttributeValues: {
             ':mailingAddress': enrichedData.mailingData?.mailingAddress || null,
             ':mailingCity': enrichedData.mailingData?.mailingCity || null,
             ':mailingState': enrichedData.mailingData?.mailingState || null,
             ':mailingZip': enrichedData.mailingData?.mailingZip || null,
             ':status': 'NO_QUALITY_CONTACTS',
-            ':completedAt': new Date().toISOString(),
+            ':completedAt': timestamp,
+            ':history': newHistory,
             ':labels': updatedLabels,
             ':rawData': rawData
           }
@@ -422,10 +445,19 @@ export const handler: Handler = async (event) => {
       const newPhones = [...new Set([...(lead.phones || []), ...enrichedData.foundPhones])];
       const newEmails = [...new Set([...(lead.emails || []), ...enrichedData.foundEmails])];
 
+      // Get existing history
+      const existingHistory = lead.skipTraceHistory || [];
+      const newHistory = [...existingHistory, {
+        timestamp,
+        status: 'COMPLETED',
+        phonesFound: enrichedData.foundPhones.length,
+        emailsFound: enrichedData.foundEmails.length
+      }];
+
       await docClient.send(new UpdateCommand({
         TableName: propertyLeadTableName,
         Key: { id: lead.id },
-        UpdateExpression: 'SET phones = :phones, emails = :emails, mailingAddress = :mailingAddress, mailingCity = :mailingCity, mailingState = :mailingState, mailingZip = :mailingZip, skipTraceStatus = :status, skipTraceCompletedAt = :completedAt, rawSkipTraceData = :rawData',
+        UpdateExpression: 'SET phones = :phones, emails = :emails, mailingAddress = :mailingAddress, mailingCity = :mailingCity, mailingState = :mailingState, mailingZip = :mailingZip, skipTraceStatus = :status, skipTraceCompletedAt = :completedAt, skipTraceHistory = :history, rawSkipTraceData = :rawData',
         ExpressionAttributeValues: {
           ':phones': newPhones,
           ':emails': newEmails,
@@ -434,7 +466,8 @@ export const handler: Handler = async (event) => {
           ':mailingState': enrichedData.mailingData?.mailingState || lead.ownerState,
           ':mailingZip': enrichedData.mailingData?.mailingZip || lead.ownerZip,
           ':status': 'COMPLETED',
-          ':completedAt': new Date().toISOString(),
+          ':completedAt': timestamp,
+          ':history': newHistory,
           ':rawData': rawData
         }
       }));
