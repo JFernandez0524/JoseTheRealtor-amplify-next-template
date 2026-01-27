@@ -245,9 +245,9 @@ export const handler = async (event: any) => {
     // Generate AI response (import from shared utility)
     const { generateAIResponse } = await import('../shared/conversationHandler');
     
-    // Determine message type: Instagram (4, 18), Facebook (3, 11), or SMS (2)
+    // Determine message type: Instagram (18), Facebook (3, 11), or SMS (2)
     let messageTypeStr = 'SMS';
-    if ([4, 18].includes(messageType)) {
+    if (messageType === 18) {
       messageTypeStr = 'IG';
     } else if ([3, 11].includes(messageType)) {
       messageTypeStr = 'FB';
