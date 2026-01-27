@@ -48,11 +48,17 @@ export default function SettingsPage() {
       setEmailSignature(userIntegration.emailSignature || '');
 
       // Fetch available phone numbers from GHL
-      const response = await fetch('/api/v1/ghl-phone-numbers');
-      const data = await response.json();
-      
-      if (data.success) {
-        setPhoneNumbers(data.phoneNumbers);
+      try {
+        const response = await fetch('/api/v1/ghl-phone-numbers');
+        const data = await response.json();
+        
+        if (data.success) {
+          setPhoneNumbers(data.phoneNumbers);
+        } else {
+          console.error('Failed to fetch phone numbers:', data.error);
+        }
+      } catch (phoneError) {
+        console.error('Error fetching phone numbers:', phoneError);
       }
 
     } catch (error) {
