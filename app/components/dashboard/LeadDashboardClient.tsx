@@ -378,14 +378,24 @@ export default function LeadDashboardClient({}: Props) {
       }).length;
       
       const failed = results.filter(
-        (r: any) => r?.status === 'FAILED' || r?.status === 'ERROR' || r?.status === 'NO_MATCH'
+        (r: any) => r?.status === 'FAILED' || r?.status === 'ERROR'
+      ).length;
+      
+      const noMatch = results.filter(
+        (r: any) => r?.status === 'NO_MATCH'
+      ).length;
+      
+      const noQuality = results.filter(
+        (r: any) => r?.status === 'NO_QUALITY_CONTACTS'
       ).length;
 
       console.log('Successful count:', successful);
       console.log('Failed count:', failed);
+      console.log('No Match count:', noMatch);
+      console.log('No Quality count:', noQuality);
 
       alert(
-        `Skip-trace complete!\n✅ Successful: ${successful}\n❌ Failed/No Match: ${failed}`
+        `Skip-trace complete!\n✅ Successful: ${successful}\n❌ Failed: ${failed}\n⚠️ No Match: ${noMatch}\n📭 No Quality Contacts: ${noQuality}`
       );
 
       setSelectedIds([]);
