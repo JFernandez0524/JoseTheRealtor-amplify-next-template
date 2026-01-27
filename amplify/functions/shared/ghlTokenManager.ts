@@ -78,12 +78,20 @@ export async function getValidGhlToken(userId: string): Promise<{ token: string;
 
     try {
       console.log(`🔄 [TOKEN_MANAGER] Calling GHL token refresh endpoint...`);
-      const response = await axios.post('https://services.leadconnectorhq.com/oauth/token', {
-        client_id: GHL_CLIENT_ID,
-        client_secret: GHL_CLIENT_SECRET,
-        grant_type: 'refresh_token',
-        refresh_token: integration.refreshToken,
-      });
+      const response = await axios.post(
+        'https://services.leadconnectorhq.com/oauth/token',
+        new URLSearchParams({
+          client_id: GHL_CLIENT_ID,
+          client_secret: GHL_CLIENT_SECRET,
+          grant_type: 'refresh_token',
+          refresh_token: integration.refreshToken,
+        }).toString(),
+        {
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded'
+          }
+        }
+      );
 
       const { access_token, refresh_token, expires_in } = response.data;
       const newExpiresAt = new Date(Date.now() + expires_in * 1000).toISOString();
