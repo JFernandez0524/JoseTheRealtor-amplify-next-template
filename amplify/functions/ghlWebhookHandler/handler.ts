@@ -129,15 +129,6 @@ export const handler = async (event: any) => {
           const messagesData = await messagesResponse.json();
           const latestMessage = messagesData.messages?.[0];
           
-          // Check if message is media (image, video, audio) - skip AI response
-          if (latestMessage?.contentType && latestMessage.contentType !== 'text/plain') {
-            console.log('⏭️ [WEBHOOK_LAMBDA] Skipping media message:', latestMessage.contentType);
-            return {
-              statusCode: 200,
-              body: JSON.stringify({ message: 'Media message - no AI response needed' })
-            };
-          }
-          
           if (latestMessage?.body) {
             messageBody = latestMessage.body;
             console.log('✅ [WEBHOOK_LAMBDA] Fetched message body from conversation:', messageBody);
@@ -145,6 +136,36 @@ export const handler = async (event: any) => {
         }
       } catch (error) {
         console.error('⚠️ [WEBHOOK_LAMBDA] Failed to fetch message from conversation:', error);
+      }
+    }
+
+    // Check if message is media (image, video, audio) - skip AI response for ALL message types
+    if (conversationId) {
+      try {
+        const messagesResponse = await fetch(
+          `https://services.leadconnectorhq.com/conversations/${conversationId}/messages?limit=1`,
+          {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Version': '2021-07-28'
+            }
+          }
+        );
+        
+        if (messagesResponse.ok) {
+          const messagesData = await messagesResponse.json();
+          const latestMessage = messagesData.messages?.[0];
+          
+          if (latestMessage?.contentType && latestMessage.contentType !== 'text/plain') {
+            console.log('⏭️ [WEBHOOK_LAMBDA] Skipping media message:', latestMessage.contentType);
+            return {
+              statusCode: 200,
+              body: JSON.stringify({ message: 'Media message - no AI response needed' })
+            };
+          }
+        }
+      } catch (error) {
+        console.error('⚠️ [WEBHOOK_LAMBDA] Failed to check message type:', error);
       }
     }
 
