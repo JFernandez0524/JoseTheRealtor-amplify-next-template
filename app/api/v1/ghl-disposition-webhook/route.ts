@@ -75,7 +75,7 @@ export async function POST(request: Request) {
           });
 
           if (integrations && integrations.length > 0) {
-            const { getGhlAccessToken } = await import('@/app/utils/aws/data/ghlIntegration.server.js');
+            const { getGhlAccessToken } = await import('@/app/utils/aws/data/ghlIntegration.server');
             const accessToken = await getGhlAccessToken(integrations[0].userId);
 
             // Clear phone number via GHL API
