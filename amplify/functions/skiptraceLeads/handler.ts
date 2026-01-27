@@ -284,15 +284,17 @@ export const handler: Handler = async (event) => {
     }));
     
     const userAccount = accounts?.[0];
+    const isOwner = ownerId === '44d8f4c8-10c1-7038-744b-271103170819'; // Jose - unlimited credits
     const isAdmin = groups.includes('ADMINS');
     const isPro = groups.includes('PRO');
 
     console.log(`💳 User account found: ${!!userAccount}`);
     console.log(`💰 Credits: ${userAccount?.credits || 0}`);
-    console.log(`👑 Is Admin: ${isAdmin}`);
+    console.log(`👑 Is Owner: ${isOwner}`);
+    console.log(`🔧 Is Admin: ${isAdmin}`);
 
-    // All users (FREE and PRO) need credits for skip tracing, except ADMIN
-    if (!isAdmin) {
+    // All users need credits for skip tracing, except OWNER
+    if (!isOwner) {
       // Check credit expiration for FREE users only
       if (!isPro && userAccount?.creditsExpiresAt) {
         const expirationDate = new Date(userAccount.creditsExpiresAt);
@@ -483,8 +485,8 @@ export const handler: Handler = async (event) => {
     console.log(`✅ Database updates complete`);
     console.log(`📊 Results: ${processedSuccessfully} successful, ${updateResults.length - processedSuccessfully} failed`);
 
-    // 💰 7. Deduct Credits (all users except ADMIN)
-    if (processedSuccessfully > 0 && !isAdmin && userAccount) {
+    // 💰 7. Deduct Credits (all users except OWNER)
+    if (processedSuccessfully > 0 && !isOwner && userAccount) {
       console.log(`💳 Deducting ${processedSuccessfully} credits...`);
       await docClient.send(new UpdateCommand({
         TableName: userAccountTableName,
