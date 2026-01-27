@@ -400,7 +400,9 @@ export default function LeadDashboardClient({}: Props) {
 
       setSelectedIds([]);
       
-      // Wait for database to update, then refresh
+      // Wait for database to propagate, then force refresh multiple times
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      await refreshLeads();
       await new Promise(resolve => setTimeout(resolve, 2000));
       await refreshLeads();
     } catch (err: any) {
