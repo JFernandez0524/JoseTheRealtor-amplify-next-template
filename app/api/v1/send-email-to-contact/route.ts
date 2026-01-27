@@ -67,7 +67,7 @@ export async function POST(req: Request) {
     // Fetch GHL integration to get email signature
     let emailSignature = '';
     if (userId) {
-      const { cookiesClient } = await import('@/app/utils/aws/data/amplifyServerUtils.server');
+      const { cookiesClient } = await import('@/app/utils/aws/data/amplifyServerUtils.server.js');
       const { data: integrations } = await cookiesClient.models.GhlIntegration.list({
         filter: {
           userId: { eq: userId },

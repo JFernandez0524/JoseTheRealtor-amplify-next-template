@@ -29,7 +29,7 @@ export async function POST(req: Request) {
     }
 
     // Get contact to find userId
-    const { cookiesClient } = await import('@/app/utils/aws/data/amplifyServerUtils.server');
+    const { cookiesClient } = await import('@/app/utils/aws/data/amplifyServerUtils.server.js');
     
     // Fetch contact from GHL to get locationId
     // We need to find the integration first - try to get it from the contact's location
