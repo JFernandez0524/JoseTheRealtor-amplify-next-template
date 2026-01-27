@@ -170,9 +170,9 @@ async function generateOpenAIResponse(context: ConversationContext, propertyData
   const isInitialOutreach = context.incomingMessage === 'initial_outreach';
   
   // Use provided state or calculate it
-  const calculatedCurrentState = currentState || getCurrentState(context.contact);
+  const calculatedCurrentState = currentState ?? getCurrentState(context.contact);
   const hasAddressForState = !!(context.propertyAddress && context.propertyCity && context.propertyState);
-  const calculatedNextState = nextState || getNextState(calculatedCurrentState, context.incomingMessage, hasAddressForState, context.leadIntent);
+  const calculatedNextState = nextState ?? getNextState(calculatedCurrentState, context.incomingMessage, hasAddressForState, context.leadIntent);
 
   const systemPrompt = isInitialOutreach 
     ? `You are Jose Fernandez from RE/MAX Homeland Realtors reaching out to ${context.contactName} for the FIRST TIME via SMS.
@@ -792,8 +792,16 @@ export async function generateAIResponse(context: ConversationContext): Promise<
       throw new Error('accessToken is required for production mode');
     }
 
-    // 🛡️ Check if AI is enabled for this contact (skip for organic social media leads)
-    const isOrganicSocialLead = context.contact?.attributionSource?.medium === 'facebook' ||
+    // Calculate conversation state
+    const currentState = getCurrentState(context.contact);
+    const hasAddress = !!(context.propertyAddress && context.propertyCity && context.propertyState);
+    const nextState = getNextState(currentState, context.incomingMessage, hasAddress, context.leadIntent);
+    
+    console.log(`📊 Current state: ${currentState}`);
+    console.log(`➡️ Next state: ${nextState}`);
+    
+    // Update state if changed
+    if (nextState !== currentState && !context.testMode && context.accessToken) {
       await updateAIState(context.contactId, nextState, context.accessToken);
     }
 
@@ -850,7 +858,7 @@ export async function generateAIResponse(context: ConversationContext): Promise<
     }
 
     // Generate AI response
-    const aiMessage = await generateOpenAIResponse(context, propertyData || undefined);
+    const aiMessage = await generateOpenAIResponse(context, propertyData || undefined, currentState, nextState);
 
     // Send response to GHL (skip in test mode)
     await sendGHLMessage(context.conversationId, aiMessage, context.accessToken || '', context.testMode, context.fromNumber, context.contactId, context.messageType || 'SMS');
