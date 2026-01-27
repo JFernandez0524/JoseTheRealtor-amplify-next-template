@@ -645,13 +645,33 @@ export function LeadTable({
 
                   {/* Skip Trace Date Column */}
                   <td className='px-4 py-4 whitespace-nowrap text-sm text-gray-900 bg-green-50/30'>
-                    {lead.skipTraceCompletedAt ? (
-                      <span className='text-xs font-mono'>
-                        {new Date(lead.skipTraceCompletedAt).toLocaleDateString()}
-                      </span>
-                    ) : (
-                      <span className='text-gray-400 text-xs'>-</span>
-                    )}
+                    {(() => {
+                      // Try skipTraceCompletedAt first
+                      if (lead.skipTraceCompletedAt) {
+                        return (
+                          <span className='text-xs font-mono'>
+                            {new Date(lead.skipTraceCompletedAt).toLocaleDateString()}
+                          </span>
+                        );
+                      }
+                      
+                      // Fallback: get last attempt from history
+                      if (lead.skipTraceHistory) {
+                        const history = typeof lead.skipTraceHistory === 'string' 
+                          ? JSON.parse(lead.skipTraceHistory) 
+                          : lead.skipTraceHistory;
+                        if (history && history.length > 0) {
+                          const lastAttempt = history[history.length - 1];
+                          return (
+                            <span className='text-xs font-mono text-yellow-600'>
+                              {new Date(lastAttempt.timestamp).toLocaleDateString()}
+                            </span>
+                          );
+                        }
+                      }
+                      
+                      return <span className='text-gray-400 text-xs'>-</span>;
+                    })()}
                   </td>
 
                   <td className='px-4 py-4 whitespace-nowrap text-sm text-gray-600'>
