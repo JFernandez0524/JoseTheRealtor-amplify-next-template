@@ -10,7 +10,7 @@ interface SkipTraceAttempt {
 }
 
 interface SkipTraceHistoryProps {
-  history: SkipTraceAttempt[] | string | null;
+  history: any; // Accept any type from database
 }
 
 export function SkipTraceHistory({ history }: SkipTraceHistoryProps) {
