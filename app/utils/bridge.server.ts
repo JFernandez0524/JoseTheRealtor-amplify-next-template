@@ -127,7 +127,7 @@ export async function analyzeBridgeProperty(params: {
   // If no valuation found by address, try coordinate search as fallback
   if (!valuation && lat && lng) {
     console.log('🌍 Trying coordinate-based search as fallback...');
-    const radii = ['0.01', '0.05', '0.1'];
+    const radii = ['0.0005', '0.001', '0.002']; // ~55m, ~110m, ~220m
     for (const radius of radii) {
       try {
         const res = await bridgeClient.get('/zestimates_v2/zestimates', {
