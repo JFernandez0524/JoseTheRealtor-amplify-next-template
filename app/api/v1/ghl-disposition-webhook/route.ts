@@ -63,6 +63,43 @@ export async function POST(request: Request) {
     if (STOP_DISPOSITIONS.includes(callOutcome)) {
       console.log(`🛑 [DISPOSITION] Stopping AI outreach for contact ${contactId}`);
 
+      // Clear phone number for "Incorrect Number" disposition
+      if (callOutcome === 'Incorrect Number') {
+        try {
+          // Get GHL access token
+          const { data: integrations } = await cookiesClient.models.GhlIntegration.list({
+            filter: { 
+              locationId: { eq: locationId },
+              isActive: { eq: true }
+            }
+          });
+
+          if (integrations && integrations.length > 0) {
+            const { getGhlAccessToken } = await import('@/app/utils/aws/data/ghlIntegration.server.js');
+            const accessToken = await getGhlAccessToken(integrations[0].userId);
+
+            // Clear phone number via GHL API
+            const axios = (await import('axios')).default;
+            await axios.put(
+              `https://services.leadconnectorhq.com/contacts/${contactId}`,
+              { phone: '' },
+              {
+                headers: {
+                  'Authorization': `Bearer ${accessToken}`,
+                  'Content-Type': 'application/json',
+                  'Version': '2021-07-28'
+                }
+              }
+            );
+            
+            console.log(`✅ [DISPOSITION] Cleared phone number for contact ${contactId}`);
+          }
+        } catch (phoneError) {
+          console.error(`⚠️ [DISPOSITION] Failed to clear phone:`, phoneError);
+          // Don't fail the webhook if phone clearing fails
+        }
+      }
+
       // Find queue item by contactId (scan operation)
       const queueItem = await findQueueItemByContactId(contactId);
       
