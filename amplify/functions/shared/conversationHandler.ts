@@ -190,11 +190,54 @@ COMPLIANCE RULES (CRITICAL):
 3. HUMAN HANDOFF: If asked complex questions, say "Let me connect you with Jose directly"
 4. DISCLAIMERS: Property values are estimates only, not appraisals
 
+CONVERSATION STATE: ${nextState}
+
+STATE-SPECIFIC GUIDANCE:
+
+${nextState === 'NEW_LEAD' || nextState === 'ASK_INTENT' ? `
+🎯 GOAL: Determine if buyer or seller
+ASK: "Are you looking to buy or thinking about selling?"
+` : ''}
+
+${nextState === 'SELLER_QUALIFICATION' ? `
+🎯 GOAL: Get property address
+ASK: "What's the address?" (if not provided)
+THEN: Use validate_address tool
+` : ''}
+
+${nextState === 'PROPERTY_VALUATION' ? `
+🎯 GOAL: Show property value and present options
+ACTION: Use get_property_value tool
+THEN: "Based on current market data, your property is valued around $X. I can offer you $Y cash for a quick close, or help you list it for the full $X. Which interests you more?"
+` : ''}
+
+${nextState === 'BUYER_QUALIFICATION' ? `
+🎯 GOAL: Qualify buyer and save search
+ASK ONE AT A TIME:
+1. "What area are you looking in?"
+2. "What's your budget?"
+3. "How many bedrooms?"
+4. "When are you hoping to move?"
+THEN: Use save_buyer_search tool
+` : ''}
+
+${nextState === 'APPOINTMENT_BOOKING' ? `
+🎯 GOAL: Book consultation
+ACTION: Use check_availability tool
+THEN: Present 2-3 time slots
+THEN: Use schedule_consultation tool
+` : ''}
+
+${nextState === 'QUALIFIED' ? `
+🎯 GOAL: Confirm appointment and set expectations
+SAY: "Perfect! I'll send you a calendar invite. Looking forward to meeting you!"
+` : ''}
+
 CONVERSATION CONTEXT:
 - Contact: ${context.contactName}
 - Their message: "${context.incomingMessage}"
 ${hasAddress ? `- Known property: ${context.propertyAddress}` : ''}
-${context.leadType ? `- Lead type: ${context.leadType}` : ''}
+${context.leadIntent ? `- Intent: ${context.leadIntent}` : ''}
 
 SCENARIO 1: EXISTING LEAD (Has property address in system)
 ${hasAddress ? `
@@ -656,6 +699,69 @@ async function updateAIState(contactId: string, newState: string, accessToken: s
     console.error('Failed to update AI state:', error);
   }
 }
+
+// Get current conversation state from contact
+function getCurrentState(contact: any): ConversationState {
+  const aiStateField = contact?.customFields?.find((f: any) => f.id === '1NxQW2kKMVgozjSUuu7s');
+  const currentState = aiStateField?.value;
+  
+  // Map old states to new state machine
+  if (currentState === 'handoff' || currentState === 'qualified') return 'QUALIFIED';
+  if (currentState === 'valuation') return 'PROPERTY_VALUATION';
+  
+  // Default to NEW_LEAD if no state
+  return currentState as ConversationState || 'NEW_LEAD';
+}
+
+// Determine next state based on current state and message
+function getNextState(currentState: ConversationState, message: string, hasAddress: boolean, intent?: string): ConversationState {
+  const msg = message.toLowerCase();
+  
+  // Check for explicit booking intent
+  if (msg.includes('schedule') || msg.includes('appointment') || msg.includes('meet')) {
+    return 'APPOINTMENT_BOOKING';
+  }
+  
+  switch (currentState) {
+    case 'NEW_LEAD':
+      // Determine if buyer or seller
+      if (intent === 'seller' || msg.includes('sell') || msg.includes('value') || msg.includes('worth')) {
+        return hasAddress ? 'PROPERTY_VALUATION' : 'SELLER_QUALIFICATION';
+      }
+      if (intent === 'buyer' || msg.includes('buy') || msg.includes('looking for')) {
+        return 'BUYER_QUALIFICATION';
+      }
+      return 'ASK_INTENT';
+      
+    case 'ASK_INTENT':
+      if (msg.includes('sell')) return hasAddress ? 'PROPERTY_VALUATION' : 'SELLER_QUALIFICATION';
+      if (msg.includes('buy')) return 'BUYER_QUALIFICATION';
+      return 'ASK_INTENT';
+      
+    case 'SELLER_QUALIFICATION':
+      // Once we have address, move to valuation
+      if (hasAddress) return 'PROPERTY_VALUATION';
+      return 'SELLER_QUALIFICATION';
+      
+    case 'PROPERTY_VALUATION':
+      // After showing value, push to booking
+      return 'APPOINTMENT_BOOKING';
+      
+    case 'BUYER_QUALIFICATION':
+      // After qualifying buyer, push to booking
+      if (msg.includes('yes') || msg.includes('interested')) {
+        return 'APPOINTMENT_BOOKING';
+      }
+      return 'BUYER_QUALIFICATION';
+      
+    case 'APPOINTMENT_BOOKING':
+      return 'QUALIFIED';
+      
+    default:
+      return currentState;
+  }
+}
+
 function shouldHandoffToHuman(message: string): boolean {
   const handoffKeywords = [
     'speak to someone',
@@ -679,6 +785,20 @@ export async function generateAIResponse(context: ConversationContext): Promise<
     // Require accessToken for non-test mode
     if (!context.testMode && !context.accessToken) {
       throw new Error('accessToken is required for production mode');
+    }
+
+    // Get current conversation state
+    const currentState = getCurrentState(context.contact);
+    console.log(`📊 Current state: ${currentState}`);
+    
+    // Determine next state based on message
+    const hasAddress = !!(context.propertyAddress && context.propertyCity && context.propertyState);
+    const nextState = getNextState(currentState, context.incomingMessage, hasAddress, context.leadIntent);
+    console.log(`➡️ Next state: ${nextState}`);
+    
+    // Update state if changed
+    if (nextState !== currentState && !context.testMode && context.accessToken) {
+      await updateAIState(context.contactId, nextState, context.accessToken);
     }
 
     // 🛡️ Check if AI is enabled for this contact (skip for organic social media leads)
