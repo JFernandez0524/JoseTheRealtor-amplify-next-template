@@ -145,7 +145,7 @@ async function sendGHLMessage(conversationId: string, message: string, accessTok
 }
 
 // Generate AI response using OpenAI with tool calling
-async function generateOpenAIResponse(context: ConversationContext, propertyData?: PropertyAnalysis): Promise<string> {
+async function generateOpenAIResponse(context: ConversationContext, propertyData?: PropertyAnalysis, currentState?: ConversationState, nextState?: ConversationState): Promise<string> {
   // Use existing Zestimate from database if available (faster, no API call)
   const zestimate = context.existingZestimate || propertyData?.zestimate;
   const cashOffer = context.existingCashOffer || (zestimate ? Math.round(zestimate * 0.70) : null);
@@ -168,6 +168,11 @@ async function generateOpenAIResponse(context: ConversationContext, propertyData
 
   // Adapt script based on available data
   const isInitialOutreach = context.incomingMessage === 'initial_outreach';
+  
+  // Use provided state or calculate it
+  const calculatedCurrentState = currentState || getCurrentState(context.contact);
+  const hasAddressForState = !!(context.propertyAddress && context.propertyCity && context.propertyState);
+  const calculatedNextState = nextState || getNextState(calculatedCurrentState, context.incomingMessage, hasAddressForState, context.leadIntent);
 
   const systemPrompt = isInitialOutreach 
     ? `You are Jose Fernandez from RE/MAX Homeland Realtors reaching out to ${context.contactName} for the FIRST TIME via SMS.
@@ -190,28 +195,28 @@ COMPLIANCE RULES (CRITICAL):
 3. HUMAN HANDOFF: If asked complex questions, say "Let me connect you with Jose directly"
 4. DISCLAIMERS: Property values are estimates only, not appraisals
 
-CONVERSATION STATE: ${nextState}
+CONVERSATION STATE: ${calculatedNextState}
 
 STATE-SPECIFIC GUIDANCE:
 
-${nextState === 'NEW_LEAD' || nextState === 'ASK_INTENT' ? `
+${calculatedNextState === 'NEW_LEAD' || calculatedNextState === 'ASK_INTENT' ? `
 🎯 GOAL: Determine if buyer or seller
 ASK: "Are you looking to buy or thinking about selling?"
 ` : ''}
 
-${nextState === 'SELLER_QUALIFICATION' ? `
+${calculatedNextState === 'SELLER_QUALIFICATION' ? `
 🎯 GOAL: Get property address
 ASK: "What's the address?" (if not provided)
 THEN: Use validate_address tool
 ` : ''}
 
-${nextState === 'PROPERTY_VALUATION' ? `
+${calculatedNextState === 'PROPERTY_VALUATION' ? `
 🎯 GOAL: Show property value and present options
 ACTION: Use get_property_value tool
 THEN: "Based on current market data, your property is valued around $X. I can offer you $Y cash for a quick close, or help you list it for the full $X. Which interests you more?"
 ` : ''}
 
-${nextState === 'BUYER_QUALIFICATION' ? `
+${calculatedNextState === 'BUYER_QUALIFICATION' ? `
 🎯 GOAL: Qualify buyer and save search
 ASK ONE AT A TIME:
 1. "What area are you looking in?"
@@ -221,14 +226,14 @@ ASK ONE AT A TIME:
 THEN: Use save_buyer_search tool
 ` : ''}
 
-${nextState === 'APPOINTMENT_BOOKING' ? `
+${calculatedNextState === 'APPOINTMENT_BOOKING' ? `
 🎯 GOAL: Book consultation
 ACTION: Use check_availability tool
 THEN: Present 2-3 time slots
 THEN: Use schedule_consultation tool
 ` : ''}
 
-${nextState === 'QUALIFIED' ? `
+${calculatedNextState === 'QUALIFIED' ? `
 🎯 GOAL: Confirm appointment and set expectations
 SAY: "Perfect! I'll send you a calendar invite. Looking forward to meeting you!"
 ` : ''}
@@ -787,17 +792,8 @@ export async function generateAIResponse(context: ConversationContext): Promise<
       throw new Error('accessToken is required for production mode');
     }
 
-    // Get current conversation state
-    const currentState = getCurrentState(context.contact);
-    console.log(`📊 Current state: ${currentState}`);
-    
-    // Determine next state based on message
-    const hasAddress = !!(context.propertyAddress && context.propertyCity && context.propertyState);
-    const nextState = getNextState(currentState, context.incomingMessage, hasAddress, context.leadIntent);
-    console.log(`➡️ Next state: ${nextState}`);
-    
-    // Update state if changed
-    if (nextState !== currentState && !context.testMode && context.accessToken) {
+    // 🛡️ Check if AI is enabled for this contact (skip for organic social media leads)
+    const isOrganicSocialLead = context.contact?.attributionSource?.medium === 'facebook' ||
       await updateAIState(context.contactId, nextState, context.accessToken);
     }
 
