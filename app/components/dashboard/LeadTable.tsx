@@ -126,6 +126,40 @@ export function LeadTable({
     zip: '',
   });
 
+  // Normalize address for comparison (handles abbreviations and variations)
+  const normalizeAddress = (addr: string | undefined | null): string => {
+    if (!addr) return '';
+    return addr
+      .toLowerCase()
+      .trim()
+      // Remove common prefixes
+      .replace(/\b(city|town|borough|township|village)\s+of\s+/gi, '')
+      // Normalize street suffixes
+      .replace(/\bstreet\b/g, 'st')
+      .replace(/\bavenue\b/g, 'ave')
+      .replace(/\bboulevard\b/g, 'blvd')
+      .replace(/\bdrive\b/g, 'dr')
+      .replace(/\broad\b/g, 'rd')
+      .replace(/\blane\b/g, 'ln')
+      .replace(/\bcourt\b/g, 'ct')
+      .replace(/\bcircle\b/g, 'cir')
+      .replace(/\bplace\b/g, 'pl')
+      .replace(/\bterrace\b/g, 'ter')
+      .replace(/\bparkway\b/g, 'pkwy')
+      // Normalize directions
+      .replace(/\bnorth\b/g, 'n')
+      .replace(/\bsouth\b/g, 's')
+      .replace(/\beast\b/g, 'e')
+      .replace(/\bwest\b/g, 'w')
+      // Remove extra spaces
+      .replace(/\s+/g, ' ')
+      .trim();
+  };
+
+  const addressesMatch = (addr1: string | undefined | null, addr2: string | undefined | null): boolean => {
+    return normalizeAddress(addr1) === normalizeAddress(addr2);
+  };
+
   const scrollLeft = () => {
     if (tableRef.current) {
       tableRef.current.scrollBy({ left: -200, behavior: 'smooth' });
@@ -482,13 +516,13 @@ export function LeadTable({
                               >
                                 ${lead.zestimate.toLocaleString()}
                                 <span className='invisible group-hover:visible absolute left-0 top-full mt-1 w-64 bg-gray-900 text-white text-xs rounded p-2 z-50 whitespace-normal'>
-                                  {lead.zillowAddress && lead.zillowAddress.toLowerCase() !== lead.ownerAddress?.toLowerCase() 
+                                  {lead.zillowAddress && !addressesMatch(lead.zillowAddress, lead.ownerAddress)
                                     ? `⚠️ ADDRESS MISMATCH: Zillow shows "${lead.zillowAddress}" but lead is "${lead.ownerAddress}". Click to verify, then use edit button (✏️) to fix.`
-                                    : '⚠️ Always verify: Click to check if this Zillow property matches the lead address. If wrong property: Search the address manually on Zillow/Google, then use edit button (✏️) to update address and refresh Zestimate.'
+                                    : 'Click to view property on Zillow'
                                   }
                                 </span>
                               </a>
-                              {lead.zillowAddress && lead.zillowAddress.toLowerCase() !== lead.ownerAddress?.toLowerCase() && (
+                              {lead.zillowAddress && !addressesMatch(lead.zillowAddress, lead.ownerAddress) && (
                                 <span className="text-red-600 text-xs font-bold" title={`Zillow address: ${lead.zillowAddress}`}>⚠️</span>
                               )}
                             </div>
