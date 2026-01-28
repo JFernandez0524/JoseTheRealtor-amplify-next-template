@@ -3,7 +3,7 @@ import { defineFunction, secret } from '@aws-amplify/backend';
 export const uploadCsvHandler = defineFunction({
   name: 'uploadCsvHandler',
   entry: './handler.ts',
-  timeoutSeconds: 61,
+  timeoutSeconds: 900,
   resourceGroupName: 'storage',
   memoryMB: 512,
   environment: {
