@@ -430,7 +430,7 @@ export const handler: Handler = async (event) => {
         }];
         
         const updateExpression = lead.type?.toUpperCase() === 'PROBATE'
-          ? 'SET ownerFirstName = :firstName, ownerLastName = :lastName, mailingAddress = :mailingAddress, mailingCity = :mailingCity, mailingState = :mailingState, mailingZip = :mailingZip, skipTraceStatus = :status, skipTraceCompletedAt = :completedAt, skipTraceHistory = :history, leadLabels = :labels, rawSkipTraceData = :rawData'
+          ? 'SET mailingAddress = :mailingAddress, mailingCity = :mailingCity, mailingState = :mailingState, mailingZip = :mailingZip, skipTraceStatus = :status, skipTraceCompletedAt = :completedAt, skipTraceHistory = :history, leadLabels = :labels, rawSkipTraceData = :rawData'
           : 'SET ownerFirstName = :firstName, ownerLastName = :lastName, mailingAddress = :mailingAddress, mailingCity = :mailingCity, mailingState = :mailingState, mailingZip = :mailingZip, skipTraceStatus = :status, skipTraceCompletedAt = :completedAt, skipTraceHistory = :history, leadLabels = :labels, rawSkipTraceData = :rawData';
         
         await docClient.send(new UpdateCommand({
@@ -438,8 +438,10 @@ export const handler: Handler = async (event) => {
           Key: { id: lead.id },
           UpdateExpression: updateExpression,
           ExpressionAttributeValues: {
-            ':firstName': enrichedData.firstName || null,
-            ':lastName': enrichedData.lastName || null,
+            ...(lead.type?.toUpperCase() !== 'PROBATE' && {
+              ':firstName': enrichedData.firstName || null,
+              ':lastName': enrichedData.lastName || null,
+            }),
             ':mailingAddress': enrichedData.mailingData?.mailingAddress || null,
             ':mailingCity': enrichedData.mailingData?.mailingCity || null,
             ':mailingState': enrichedData.mailingData?.mailingState || null,
@@ -467,7 +469,7 @@ export const handler: Handler = async (event) => {
       }];
 
       const updateExpression = lead.type?.toUpperCase() === 'PROBATE'
-        ? 'SET ownerFirstName = :firstName, ownerLastName = :lastName, phones = :phones, emails = :emails, mailingAddress = :mailingAddress, mailingCity = :mailingCity, mailingState = :mailingState, mailingZip = :mailingZip, skipTraceStatus = :status, skipTraceCompletedAt = :completedAt, skipTraceHistory = :history, rawSkipTraceData = :rawData'
+        ? 'SET phones = :phones, emails = :emails, mailingAddress = :mailingAddress, mailingCity = :mailingCity, mailingState = :mailingState, mailingZip = :mailingZip, skipTraceStatus = :status, skipTraceCompletedAt = :completedAt, skipTraceHistory = :history, rawSkipTraceData = :rawData'
         : 'SET ownerFirstName = :firstName, ownerLastName = :lastName, phones = :phones, emails = :emails, mailingAddress = :mailingAddress, mailingCity = :mailingCity, mailingState = :mailingState, mailingZip = :mailingZip, skipTraceStatus = :status, skipTraceCompletedAt = :completedAt, skipTraceHistory = :history, rawSkipTraceData = :rawData';
 
       await docClient.send(new UpdateCommand({
@@ -475,8 +477,10 @@ export const handler: Handler = async (event) => {
         Key: { id: lead.id },
         UpdateExpression: updateExpression,
         ExpressionAttributeValues: {
-          ':firstName': enrichedData.firstName || null,
-          ':lastName': enrichedData.lastName || null,
+          ...(lead.type?.toUpperCase() !== 'PROBATE' && {
+            ':firstName': enrichedData.firstName || null,
+            ':lastName': enrichedData.lastName || null,
+          }),
           ':phones': newPhones,
           ':emails': newEmails,
           ':mailingAddress': enrichedData.mailingData?.mailingAddress || lead.ownerAddress,
