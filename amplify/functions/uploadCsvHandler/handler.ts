@@ -248,6 +248,8 @@ export const handler: S3Handler = async (event) => {
           let adminFirstName = null,
             adminLastName = null,
             adminStandardizedAddress = null;
+          let ownerFirstName = formatName(row['ownerFirstName'] || row['First Name']);
+          let ownerLastName = formatName(row['ownerLastName'] || row['Last Name']);
           const labels: string[] = [leadType];
 
           if (leadType === 'PROBATE') {
@@ -351,8 +353,8 @@ export const handler: S3Handler = async (event) => {
             id: randomUUID(),
             owner: ownerId,
             type: leadType,
-            ownerFirstName: formatName(row['ownerFirstName'] || row['First Name']),
-            ownerLastName: formatName(row['ownerLastName'] || row['Last Name']),
+            ownerFirstName,
+            ownerLastName,
             ownerAddress: finalPropAddr,
             ownerCity: finalPropCity,
             ownerState: finalPropState,
