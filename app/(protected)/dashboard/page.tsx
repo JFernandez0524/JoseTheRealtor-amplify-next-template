@@ -1,6 +1,7 @@
 'use client';
 
 import LeadDashboardClient from '@/app/components/dashboard/LeadDashboardClient';
+import { UploadProgress } from '@/app/components/dashboard/UploadProgress';
 
 export default function DashboardPage() {
   return (
@@ -15,6 +16,7 @@ export default function DashboardPage() {
       </div>
 
       <LeadDashboardClient />
+      <UploadProgress />
     </div>
   );
 }
