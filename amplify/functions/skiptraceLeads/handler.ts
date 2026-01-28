@@ -430,7 +430,7 @@ export const handler: Handler = async (event) => {
         }];
         
         const updateExpression = lead.type?.toUpperCase() === 'PROBATE'
-          ? 'SET adminFirstName = :firstName, adminLastName = :lastName, mailingAddress = :mailingAddress, mailingCity = :mailingCity, mailingState = :mailingState, mailingZip = :mailingZip, skipTraceStatus = :status, skipTraceCompletedAt = :completedAt, skipTraceHistory = :history, leadLabels = :labels, rawSkipTraceData = :rawData'
+          ? 'SET ownerFirstName = :firstName, ownerLastName = :lastName, mailingAddress = :mailingAddress, mailingCity = :mailingCity, mailingState = :mailingState, mailingZip = :mailingZip, skipTraceStatus = :status, skipTraceCompletedAt = :completedAt, skipTraceHistory = :history, leadLabels = :labels, rawSkipTraceData = :rawData'
           : 'SET ownerFirstName = :firstName, ownerLastName = :lastName, mailingAddress = :mailingAddress, mailingCity = :mailingCity, mailingState = :mailingState, mailingZip = :mailingZip, skipTraceStatus = :status, skipTraceCompletedAt = :completedAt, skipTraceHistory = :history, leadLabels = :labels, rawSkipTraceData = :rawData';
         
         await docClient.send(new UpdateCommand({
@@ -467,7 +467,7 @@ export const handler: Handler = async (event) => {
       }];
 
       const updateExpression = lead.type?.toUpperCase() === 'PROBATE'
-        ? 'SET adminFirstName = :firstName, adminLastName = :lastName, phones = :phones, emails = :emails, mailingAddress = :mailingAddress, mailingCity = :mailingCity, mailingState = :mailingState, mailingZip = :mailingZip, skipTraceStatus = :status, skipTraceCompletedAt = :completedAt, skipTraceHistory = :history, rawSkipTraceData = :rawData'
+        ? 'SET ownerFirstName = :firstName, ownerLastName = :lastName, phones = :phones, emails = :emails, mailingAddress = :mailingAddress, mailingCity = :mailingCity, mailingState = :mailingState, mailingZip = :mailingZip, skipTraceStatus = :status, skipTraceCompletedAt = :completedAt, skipTraceHistory = :history, rawSkipTraceData = :rawData'
         : 'SET ownerFirstName = :firstName, ownerLastName = :lastName, phones = :phones, emails = :emails, mailingAddress = :mailingAddress, mailingCity = :mailingCity, mailingState = :mailingState, mailingZip = :mailingZip, skipTraceStatus = :status, skipTraceCompletedAt = :completedAt, skipTraceHistory = :history, rawSkipTraceData = :rawData';
 
       await docClient.send(new UpdateCommand({
