@@ -6,7 +6,7 @@ import {
   DeleteObjectCommand,
 } from '@aws-sdk/client-s3';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, PutCommand, ScanCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, PutCommand, ScanCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { parse } from 'csv-parse';
 import { Readable } from 'stream';
 import { randomUUID } from 'crypto';

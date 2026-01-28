@@ -8,7 +8,7 @@ const schema = a.schema({
       userId: a.string().required(),
       fileName: a.string().required(),
       leadType: a.string().required(),
-      status: a.enum(['PENDING', 'PROCESSING', 'COMPLETED', 'FAILED']).required(),
+      status: a.enum(['PENDING', 'PROCESSING', 'COMPLETED', 'FAILED']),
       totalRows: a.integer().default(0),
       processedRows: a.integer().default(0),
       successCount: a.integer().default(0),
