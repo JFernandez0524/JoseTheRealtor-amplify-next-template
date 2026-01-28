@@ -1,10 +1,12 @@
 'use client';
 
+import { useState } from 'react';
 import { useGhl } from '@/app/context/GhlContext';
 import { client } from '@/app/utils/aws/data/frontEndClient';
 
 export default function GhlSettingsCard() {
   const { isConnected, locationId, integrationId, isLoading } = useGhl();
+  const [disconnecting, setDisconnecting] = useState(false);
 
   const handleConnect = () => {
     window.location.href = '/api/v1/oauth/start';
@@ -15,6 +17,7 @@ export default function GhlSettingsCard() {
     
     if (!confirm('Are you sure you want to disconnect your GHL account?')) return;
 
+    setDisconnecting(true);
     try {
       await client.models.GhlIntegration.update({
         id: integrationId,
@@ -25,6 +28,8 @@ export default function GhlSettingsCard() {
     } catch (error) {
       console.error('Error disconnecting GHL:', error);
       alert('Failed to disconnect GHL account');
+    } finally {
+      setDisconnecting(false);
     }
   };
 
@@ -80,10 +85,10 @@ export default function GhlSettingsCard() {
             </a>
             <button
               onClick={handleDisconnect}
-              disabled={loading}
+              disabled={disconnecting}
               className='px-6 py-3 bg-red-100 text-red-700 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-red-200 transition-colors disabled:opacity-50'
             >
-              {loading ? 'Disconnecting...' : 'Disconnect'}
+              {disconnecting ? 'Disconnecting...' : 'Disconnect'}
             </button>
           </div>
         </>
