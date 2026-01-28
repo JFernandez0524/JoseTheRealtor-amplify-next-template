@@ -1,84 +1,25 @@
 // app/components/dashboard/GhlConnection.tsx
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useGhl } from '@/app/context/GhlContext';
 import { client } from '@/app/utils/aws/data/frontEndClient';
-import { getFrontEndUser } from '@/app/utils/aws/auth/amplifyFrontEndUser';
 
 export function GhlConnection() {
-  const [isConnected, setIsConnected] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-  const [connectionInfo, setConnectionInfo] = useState<any>(null);
-
-  useEffect(() => {
-    checkGhlConnection();
-    
-    // Re-check when window regains focus (after OAuth redirect)
-    const handleFocus = () => checkGhlConnection();
-    window.addEventListener('focus', handleFocus);
-    
-    return () => window.removeEventListener('focus', handleFocus);
-  }, []);
-
-  const checkGhlConnection = async () => {
-    try {
-      const user = await getFrontEndUser();
-      if (!user) return;
-
-      const { data: integrations } = await client.models.GhlIntegration.list({
-        filter: { 
-          userId: { eq: user.userId },
-          isActive: { eq: true }
-        }
-      });
-
-      if (integrations && integrations.length > 0) {
-        const integration = integrations[0];
-        const isExpired = new Date(integration.expiresAt) < new Date();
-        
-        if (isExpired && integration.refreshToken) {
-          // Try to refresh the token automatically
-          try {
-            const refreshResponse = await fetch('/api/v1/oauth/refresh', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' }
-            });
-
-            if (refreshResponse.ok) {
-              // Token already updated in database by the endpoint
-              // Just re-fetch to get the updated integration
-              await checkGhlConnection();
-              return;
-            }
-          } catch (refreshError) {
-            console.error('Token refresh failed:', refreshError);
-          }
-        }
-        
-        setIsConnected(!isExpired);
-        setConnectionInfo(integration);
-      }
-    } catch (error) {
-      console.error('Error checking GHL connection:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  const { isConnected, locationId, integrationId, isLoading } = useGhl();
 
   const handleConnect = () => {
     window.location.href = '/api/v1/oauth/start';
   };
 
   const handleDisconnect = async () => {
-    if (!connectionInfo) return;
+    if (!integrationId) return;
     
     try {
       await client.models.GhlIntegration.update({
-        id: connectionInfo.id,
+        id: integrationId,
         isActive: false
       });
-      setIsConnected(false);
-      setConnectionInfo(null);
+      window.location.reload(); // Refresh to update context
     } catch (error) {
       console.error('Error disconnecting GHL:', error);
     }
@@ -102,7 +43,7 @@ export function GhlConnection() {
           <h3 className="text-sm font-semibold text-gray-900">GoHighLevel Integration</h3>
           <p className="text-xs text-gray-500 mt-1">
             {isConnected 
-              ? `Connected to location: ${connectionInfo?.locationId}`
+              ? `Connected to location: ${locationId}`
               : 'Connect to enable automated messaging'
             }
           </p>

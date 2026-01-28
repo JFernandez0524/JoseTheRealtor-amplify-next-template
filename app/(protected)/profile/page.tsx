@@ -38,19 +38,7 @@ export default async function ProfilePage() {
   });
   const userAccount = accounts?.[0];
 
-  // 3. Fetch GHL Integration status
-  const { data: integrations } = await cookiesClient.models.GhlIntegration.list({
-    filter: { 
-      userId: { eq: user.userId },
-      isActive: { eq: true }
-    }
-  });
-  const ghlIntegration = integrations?.[0];
-  
-  // Check if token is expired
-  const isGhlConnected = ghlIntegration && new Date(ghlIntegration.expiresAt) > new Date();
-
-  // 4. Determine Subscription Level
+  // 3. Determine Subscription Level
   // We filter out the system "Google" group to show only app-specific tiers
   const subscriptionTier = groups.includes('ADMINS')
     ? 'Admin (Full Access)'
@@ -177,11 +165,7 @@ export default async function ProfilePage() {
           </div>
 
           {/* GHL Integration Settings Card */}
-          <GhlSettingsCard 
-            isConnected={isGhlConnected}
-            locationId={ghlIntegration?.locationId}
-            integrationId={ghlIntegration?.id}
-          />
+          <GhlSettingsCard />
         </div>
 
         {/* --- RIGHT COLUMN: SUBSCRIPTION & WALLET --- */}

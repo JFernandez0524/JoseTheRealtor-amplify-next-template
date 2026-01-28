@@ -5,6 +5,7 @@ import AuthProvider from './components/AuthProvider';
 import Navbar from './components/Navbar';
 import { ConversationsProvider } from './context/ConversationsContext';
 import { AccessProvider } from './context/AccessContext';
+import { GhlProvider } from './context/GhlContext';
 import SessionTimeout from './components/SessionTimeout';
 
 const inter = Inter({ subsets: ['latin'] });
@@ -44,11 +45,13 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
         )}
         <AuthProvider>
           <AccessProvider>
-            <ConversationsProvider>
-              <SessionTimeout />
-              <Navbar />
-              {children}
-            </ConversationsProvider>
+            <GhlProvider>
+              <ConversationsProvider>
+                <SessionTimeout />
+                <Navbar />
+                {children}
+              </ConversationsProvider>
+            </GhlProvider>
           </AccessProvider>
         </AuthProvider>
       </body>

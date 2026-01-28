@@ -1,17 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useGhl } from '@/app/context/GhlContext';
 import { client } from '@/app/utils/aws/data/frontEndClient';
 
-interface GhlSettingsCardProps {
-  isConnected: boolean;
-  locationId?: string;
-  integrationId?: string;
-}
-
-export default function GhlSettingsCard({ isConnected, locationId, integrationId }: GhlSettingsCardProps) {
-  const [connected, setConnected] = useState(isConnected);
-  const [loading, setLoading] = useState(false);
+export default function GhlSettingsCard() {
+  const { isConnected, locationId, integrationId, isLoading } = useGhl();
 
   const handleConnect = () => {
     window.location.href = '/api/v1/oauth/start';
@@ -22,19 +15,16 @@ export default function GhlSettingsCard({ isConnected, locationId, integrationId
     
     if (!confirm('Are you sure you want to disconnect your GHL account?')) return;
 
-    setLoading(true);
     try {
       await client.models.GhlIntegration.update({
         id: integrationId,
         isActive: false
       });
-      setConnected(false);
       alert('✅ GHL account disconnected');
+      window.location.reload(); // Refresh to update context
     } catch (error) {
       console.error('Error disconnecting GHL:', error);
       alert('Failed to disconnect GHL account');
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -44,10 +34,15 @@ export default function GhlSettingsCard({ isConnected, locationId, integrationId
         <h3 className='text-lg font-black text-slate-900 flex items-center gap-2'>
           ⚙️ GoHighLevel Settings
         </h3>
-        <div className={`w-3 h-3 rounded-full ${connected ? 'bg-green-500' : 'bg-red-500'}`}></div>
+        <div className={`w-3 h-3 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`}></div>
       </div>
 
-      {connected ? (
+      {isLoading ? (
+        <div className="animate-pulse">
+          <div className="h-4 bg-gray-200 rounded w-3/4 mb-2"></div>
+          <div className="h-3 bg-gray-200 rounded w-1/2"></div>
+        </div>
+      ) : isConnected ? (
         <>
           <div className='bg-green-50 border border-green-200 rounded-xl p-4 mb-6'>
             <p className='text-xs font-bold text-green-900 mb-1'>✅ Connected</p>
