@@ -13,7 +13,7 @@ const libraries: 'places'[] = ['places'];
 
 // 🎯 CSV Template Headers matching your updated Probate file requirements
 const PROBATE_TEMPLATE =
-  'ownerFirstName,ownerLastName,ownerAddress,ownerCity,ownerState,ownerZip,adminFirstName,adminLastName,adminAddress,adminCity,adminState,adminZip,phone';
+  'OWNERSHIP,ownerAddress,ownerCity,ownerState,ownerZip,adminFirstName,adminLastName,adminAddress,adminCity,adminState,adminZip,phone';
 const PREFORECLOSURE_TEMPLATE =
   'ownerFirstName,ownerLastName,ownerAddress,ownerCity,ownerState,ownerZip';
 
