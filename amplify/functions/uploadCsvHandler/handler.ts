@@ -106,8 +106,9 @@ export const handler: S3Handler = async (event) => {
   // Get table names from environment variables (set by backend.ts)
   const propertyLeadTableName = process.env.AMPLIFY_DATA_PropertyLead_TABLE_NAME;
   const userAccountTableName = process.env.AMPLIFY_DATA_UserAccount_TABLE_NAME;
+  const csvUploadJobTableName = process.env.AMPLIFY_DATA_CsvUploadJob_TABLE_NAME;
 
-  if (!propertyLeadTableName || !userAccountTableName) {
+  if (!propertyLeadTableName || !userAccountTableName || !csvUploadJobTableName) {
     console.error('Missing table name environment variables');
     return;
   }
@@ -122,6 +123,7 @@ export const handler: S3Handler = async (event) => {
     let successCount = 0;
     let duplicateCount = 0;
     let ownerId = '';
+    let jobId = '';
 
     try {
       // 1. Extract Metadata from S3 Object
@@ -140,6 +142,30 @@ export const handler: S3Handler = async (event) => {
         );
         return;
       }
+
+      // Create job record
+      jobId = randomUUID();
+      const fileName = decodedKey.split('/').pop() || 'unknown.csv';
+      await docClient.send(new PutCommand({
+        TableName: csvUploadJobTableName,
+        Item: {
+          id: jobId,
+          owner: ownerId,
+          userId: ownerId,
+          fileName,
+          leadType,
+          status: 'PROCESSING',
+          totalRows: 0,
+          processedRows: 0,
+          successCount: 0,
+          duplicateCount: 0,
+          errorCount: 0,
+          startedAt: new Date().toISOString(),
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        }
+      }));
+      console.log(`📝 Created job record: ${jobId}`);
 
       // 🛡️ 2. MEMBERSHIP PROTECTION GUARD
       try {
@@ -427,7 +453,26 @@ export const handler: S3Handler = async (event) => {
         }
       }
 
-      // 4. Cleanup S3 File
+      // 4. Update job record as completed
+      await docClient.send(new UpdateCommand({
+        TableName: csvUploadJobTableName,
+        Key: { id: jobId },
+        UpdateExpression: 'SET #status = :status, successCount = :success, duplicateCount = :duplicate, processedRows = :processed, completedAt = :completed, updatedAt = :updated',
+        ExpressionAttributeNames: {
+          '#status': 'status'
+        },
+        ExpressionAttributeValues: {
+          ':status': 'COMPLETED',
+          ':success': successCount,
+          ':duplicate': duplicateCount,
+          ':processed': currentRow,
+          ':completed': new Date().toISOString(),
+          ':updated': new Date().toISOString(),
+        }
+      }));
+      console.log(`✅ Job ${jobId} completed`);
+
+      // 5. Cleanup S3 File
       await s3.send(
         new DeleteObjectCommand({ Bucket: autoBucketName, Key: decodedKey })
       );
@@ -436,6 +481,24 @@ export const handler: S3Handler = async (event) => {
       );
     } catch (err: any) {
       console.error('❌ Critical Processing Error:', err);
+      
+      // Update job as failed
+      if (jobId && csvUploadJobTableName) {
+        await docClient.send(new UpdateCommand({
+          TableName: csvUploadJobTableName,
+          Key: { id: jobId },
+          UpdateExpression: 'SET #status = :status, errorMessage = :error, completedAt = :completed, updatedAt = :updated',
+          ExpressionAttributeNames: {
+            '#status': 'status'
+          },
+          ExpressionAttributeValues: {
+            ':status': 'FAILED',
+            ':error': err.message || 'Unknown error',
+            ':completed': new Date().toISOString(),
+            ':updated': new Date().toISOString(),
+          }
+        }));
+      }
     }
   }
 };

@@ -3,6 +3,29 @@ import { skipTraceLeads } from '../functions/skiptraceLeads/resource';
 import { manualGhlSync } from '../functions/manualGhlSync/resource';
 
 const schema = a.schema({
+  CsvUploadJob: a
+    .model({
+      userId: a.string().required(),
+      fileName: a.string().required(),
+      leadType: a.string().required(),
+      status: a.enum(['PENDING', 'PROCESSING', 'COMPLETED', 'FAILED']).required(),
+      totalRows: a.integer().default(0),
+      processedRows: a.integer().default(0),
+      successCount: a.integer().default(0),
+      duplicateCount: a.integer().default(0),
+      errorCount: a.integer().default(0),
+      errorMessage: a.string(),
+      startedAt: a.datetime(),
+      completedAt: a.datetime(),
+    })
+    .authorization((allow) => [
+      allow.owner().to(['create', 'read', 'update', 'delete']),
+      allow.groups(['ADMINS']).to(['create', 'read', 'update', 'delete']),
+    ])
+    .secondaryIndexes((index) => [
+      index('userId').sortKeys(['createdAt']).queryField('byUserAndDate'),
+    ]),
+
   OutreachQueue: a
     .model({
       userId: a.string().required(),

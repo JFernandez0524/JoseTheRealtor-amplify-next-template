@@ -171,9 +171,9 @@ export function ManualLeadForm() {
         },
       }).result;
 
-      setMessage('✅ Uploaded! Moving to Dashboard...');
+      setMessage('✅ Upload started! Processing in background...');
       setTimeout(() => {
-        router.push('/dashboard?refresh=true');
+        router.push('/dashboard?upload=processing');
       }, 1500);
     } catch (err: any) {
       setMessage(`❌ Error: ${err.message}`);
