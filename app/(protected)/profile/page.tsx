@@ -46,6 +46,9 @@ export default async function ProfilePage() {
     }
   });
   const ghlIntegration = integrations?.[0];
+  
+  // Check if token is expired
+  const isGhlConnected = ghlIntegration && new Date(ghlIntegration.expiresAt) > new Date();
 
   // 4. Determine Subscription Level
   // We filter out the system "Google" group to show only app-specific tiers
@@ -175,7 +178,7 @@ export default async function ProfilePage() {
 
           {/* GHL Integration Settings Card */}
           <GhlSettingsCard 
-            isConnected={!!ghlIntegration}
+            isConnected={isGhlConnected}
             locationId={ghlIntegration?.locationId}
             integrationId={ghlIntegration?.id}
           />
