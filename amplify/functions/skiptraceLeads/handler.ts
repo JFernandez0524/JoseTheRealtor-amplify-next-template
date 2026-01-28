@@ -36,7 +36,9 @@ type BatchDataResult = {
   foundPhones: string[];
   foundEmails: string[];
   mailingData?: MailingAddressData | null;
-  rawPersonData?: any; // Store full person object for NO_QUALITY_CONTACTS
+  rawPersonData?: any;
+  firstName?: string | null;
+  lastName?: string | null;
 };
 
 // ---------------------------------------------------------
@@ -178,7 +180,9 @@ async function callBatchDataBulk(leads: any[]): Promise<Map<string, BatchDataRes
           foundPhones, 
           foundEmails, 
           mailingData,
-          rawPersonData: person // Always store for NO_QUALITY_CONTACTS case
+          rawPersonData: person,
+          firstName: person.name?.first || null,
+          lastName: person.name?.last || null,
         });
       }
 
@@ -425,11 +429,17 @@ export const handler: Handler = async (event) => {
           emailsFound: enrichedData.rawPersonData?.emails?.length || 0
         }];
         
+        const updateExpression = lead.type?.toUpperCase() === 'PROBATE'
+          ? 'SET adminFirstName = :firstName, adminLastName = :lastName, mailingAddress = :mailingAddress, mailingCity = :mailingCity, mailingState = :mailingState, mailingZip = :mailingZip, skipTraceStatus = :status, skipTraceCompletedAt = :completedAt, skipTraceHistory = :history, leadLabels = :labels, rawSkipTraceData = :rawData'
+          : 'SET ownerFirstName = :firstName, ownerLastName = :lastName, mailingAddress = :mailingAddress, mailingCity = :mailingCity, mailingState = :mailingState, mailingZip = :mailingZip, skipTraceStatus = :status, skipTraceCompletedAt = :completedAt, skipTraceHistory = :history, leadLabels = :labels, rawSkipTraceData = :rawData';
+        
         await docClient.send(new UpdateCommand({
           TableName: propertyLeadTableName,
           Key: { id: lead.id },
-          UpdateExpression: 'SET mailingAddress = :mailingAddress, mailingCity = :mailingCity, mailingState = :mailingState, mailingZip = :mailingZip, skipTraceStatus = :status, skipTraceCompletedAt = :completedAt, skipTraceHistory = :history, leadLabels = :labels, rawSkipTraceData = :rawData',
+          UpdateExpression: updateExpression,
           ExpressionAttributeValues: {
+            ':firstName': enrichedData.firstName || null,
+            ':lastName': enrichedData.lastName || null,
             ':mailingAddress': enrichedData.mailingData?.mailingAddress || null,
             ':mailingCity': enrichedData.mailingData?.mailingCity || null,
             ':mailingState': enrichedData.mailingData?.mailingState || null,
@@ -456,11 +466,17 @@ export const handler: Handler = async (event) => {
         emailsFound: enrichedData.foundEmails.length
       }];
 
+      const updateExpression = lead.type?.toUpperCase() === 'PROBATE'
+        ? 'SET adminFirstName = :firstName, adminLastName = :lastName, phones = :phones, emails = :emails, mailingAddress = :mailingAddress, mailingCity = :mailingCity, mailingState = :mailingState, mailingZip = :mailingZip, skipTraceStatus = :status, skipTraceCompletedAt = :completedAt, skipTraceHistory = :history, rawSkipTraceData = :rawData'
+        : 'SET ownerFirstName = :firstName, ownerLastName = :lastName, phones = :phones, emails = :emails, mailingAddress = :mailingAddress, mailingCity = :mailingCity, mailingState = :mailingState, mailingZip = :mailingZip, skipTraceStatus = :status, skipTraceCompletedAt = :completedAt, skipTraceHistory = :history, rawSkipTraceData = :rawData';
+
       await docClient.send(new UpdateCommand({
         TableName: propertyLeadTableName,
         Key: { id: lead.id },
-        UpdateExpression: 'SET phones = :phones, emails = :emails, mailingAddress = :mailingAddress, mailingCity = :mailingCity, mailingState = :mailingState, mailingZip = :mailingZip, skipTraceStatus = :status, skipTraceCompletedAt = :completedAt, skipTraceHistory = :history, rawSkipTraceData = :rawData',
+        UpdateExpression: updateExpression,
         ExpressionAttributeValues: {
+          ':firstName': enrichedData.firstName || null,
+          ':lastName': enrichedData.lastName || null,
           ':phones': newPhones,
           ':emails': newEmails,
           ':mailingAddress': enrichedData.mailingData?.mailingAddress || lead.ownerAddress,
