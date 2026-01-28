@@ -21,9 +21,6 @@ const schema = a.schema({
     .authorization((allow) => [
       allow.owner().to(['create', 'read', 'update', 'delete']),
       allow.groups(['ADMINS']).to(['create', 'read', 'update', 'delete']),
-    ])
-    .secondaryIndexes((index) => [
-      index('userId').sortKeys(['createdAt']).queryField('byUserAndDate'),
     ]),
 
   OutreachQueue: a
