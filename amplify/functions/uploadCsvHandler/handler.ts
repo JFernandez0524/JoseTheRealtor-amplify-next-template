@@ -64,6 +64,30 @@ const formatName = (val: any): string => {
   return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
 };
 
+const parseOwnershipName = (ownership: string): { firstName: string; lastName: string } => {
+  if (!ownership) return { firstName: '', lastName: '' };
+  
+  // Remove common suffixes and split on separators
+  const cleaned = ownership
+    .replace(/\b(ESTATE|TRUST|TRUSTEE|EXEC|EXECUTOR|ETAL|ET AL|C\/O|%)\b/gi, '')
+    .split(/[&,]/)[0] // Take first person only
+    .trim();
+  
+  if (!cleaned) return { firstName: '', lastName: '' };
+  
+  // Split into words
+  const words = cleaned.split(/\s+/).filter(w => w.length > 0);
+  
+  if (words.length === 0) return { firstName: '', lastName: '' };
+  if (words.length === 1) return { firstName: '', lastName: formatName(words[0]) };
+  
+  // Last word is last name, rest is first name
+  const lastName = formatName(words[words.length - 1]);
+  const firstName = words.slice(0, -1).map(w => formatName(w)).join(' ');
+  
+  return { firstName, lastName };
+};
+
 const cleanCityForGeocoding = (city: string) => {
   if (!city) return '';
   return city
@@ -227,6 +251,12 @@ export const handler: S3Handler = async (event) => {
           const labels: string[] = [leadType];
 
           if (leadType === 'PROBATE') {
+            // Parse ownership name if provided, otherwise use individual fields
+            if (row['OWNERSHIP'] || row['ownership']) {
+              const parsed = parseOwnershipName(row['OWNERSHIP'] || row['ownership']);
+              ownerFirstName = parsed.firstName;
+              ownerLastName = parsed.lastName;
+            }
             adminFirstName = formatName(row['adminFirstName']);
             adminLastName = formatName(row['adminLastName']);
             const rawAdminZip = formatZip(row['adminZip']);
