@@ -410,6 +410,7 @@ export const handler: Handler = async (event) => {
       const rawData = {
         allPhones: enrichedData.rawPersonData?.phoneNumbers || [],
         allEmails: enrichedData.rawPersonData?.emails || [],
+        batchDataMailingAddress: enrichedData.mailingData || null, // Store BatchData's mailing address
       };
 
       // Determine status based on quality filters
@@ -430,7 +431,7 @@ export const handler: Handler = async (event) => {
         }];
         
         const updateExpression = lead.type?.toUpperCase() === 'PROBATE'
-          ? 'SET mailingAddress = :mailingAddress, mailingCity = :mailingCity, mailingState = :mailingState, mailingZip = :mailingZip, skipTraceStatus = :status, skipTraceCompletedAt = :completedAt, skipTraceHistory = :history, leadLabels = :labels, rawSkipTraceData = :rawData'
+          ? 'SET skipTraceStatus = :status, skipTraceCompletedAt = :completedAt, skipTraceHistory = :history, leadLabels = :labels, rawSkipTraceData = :rawData'
           : 'SET ownerFirstName = :firstName, ownerLastName = :lastName, mailingAddress = :mailingAddress, mailingCity = :mailingCity, mailingState = :mailingState, mailingZip = :mailingZip, skipTraceStatus = :status, skipTraceCompletedAt = :completedAt, skipTraceHistory = :history, leadLabels = :labels, rawSkipTraceData = :rawData';
         
         await docClient.send(new UpdateCommand({
@@ -441,11 +442,11 @@ export const handler: Handler = async (event) => {
             ...(lead.type?.toUpperCase() !== 'PROBATE' && {
               ':firstName': enrichedData.firstName || null,
               ':lastName': enrichedData.lastName || null,
+              ':mailingAddress': enrichedData.mailingData?.mailingAddress || null,
+              ':mailingCity': enrichedData.mailingData?.mailingCity || null,
+              ':mailingState': enrichedData.mailingData?.mailingState || null,
+              ':mailingZip': enrichedData.mailingData?.mailingZip || null,
             }),
-            ':mailingAddress': enrichedData.mailingData?.mailingAddress || null,
-            ':mailingCity': enrichedData.mailingData?.mailingCity || null,
-            ':mailingState': enrichedData.mailingData?.mailingState || null,
-            ':mailingZip': enrichedData.mailingData?.mailingZip || null,
             ':status': 'NO_QUALITY_CONTACTS',
             ':completedAt': timestamp,
             ':history': newHistory,
@@ -469,7 +470,7 @@ export const handler: Handler = async (event) => {
       }];
 
       const updateExpression = lead.type?.toUpperCase() === 'PROBATE'
-        ? 'SET phones = :phones, emails = :emails, mailingAddress = :mailingAddress, mailingCity = :mailingCity, mailingState = :mailingState, mailingZip = :mailingZip, skipTraceStatus = :status, skipTraceCompletedAt = :completedAt, skipTraceHistory = :history, rawSkipTraceData = :rawData'
+        ? 'SET phones = :phones, emails = :emails, skipTraceStatus = :status, skipTraceCompletedAt = :completedAt, skipTraceHistory = :history, rawSkipTraceData = :rawData'
         : 'SET ownerFirstName = :firstName, ownerLastName = :lastName, phones = :phones, emails = :emails, mailingAddress = :mailingAddress, mailingCity = :mailingCity, mailingState = :mailingState, mailingZip = :mailingZip, skipTraceStatus = :status, skipTraceCompletedAt = :completedAt, skipTraceHistory = :history, rawSkipTraceData = :rawData';
 
       await docClient.send(new UpdateCommand({
@@ -480,13 +481,11 @@ export const handler: Handler = async (event) => {
           ...(lead.type?.toUpperCase() !== 'PROBATE' && {
             ':firstName': enrichedData.firstName || null,
             ':lastName': enrichedData.lastName || null,
+            ':mailingAddress': enrichedData.mailingData?.mailingAddress || lead.ownerAddress,
+            ':mailingCity': enrichedData.mailingData?.mailingCity || lead.ownerCity,
+            ':mailingState': enrichedData.mailingData?.mailingState || lead.ownerState,
+            ':mailingZip': enrichedData.mailingData?.mailingZip || lead.ownerZip,
           }),
-          ':phones': newPhones,
-          ':emails': newEmails,
-          ':mailingAddress': enrichedData.mailingData?.mailingAddress || lead.ownerAddress,
-          ':mailingCity': enrichedData.mailingData?.mailingCity || lead.ownerCity,
-          ':mailingState': enrichedData.mailingData?.mailingState || lead.ownerState,
-          ':mailingZip': enrichedData.mailingData?.mailingZip || lead.ownerZip,
           ':status': 'COMPLETED',
           ':completedAt': timestamp,
           ':history': newHistory,
