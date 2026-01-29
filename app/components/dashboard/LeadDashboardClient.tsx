@@ -383,6 +383,14 @@ export default function LeadDashboardClient({}: Props) {
     }
 
     setIsProcessing(true);
+    
+    // Safety timeout - reset processing state after 2 minutes max
+    const safetyTimeout = setTimeout(() => {
+      console.warn('⚠️ Skip trace timeout - resetting processing state');
+      setIsProcessing(false);
+      setSkipTraceInProgress(false);
+    }, 120000);
+    
     try {
       const data = await skipTraceLeads(selectedIds);
 
@@ -436,6 +444,7 @@ export default function LeadDashboardClient({}: Props) {
       console.error('Skip-trace error:', err);
       alert(`Error during skip-trace: ${err.message || 'Check your network connection'}`);
     } finally {
+      clearTimeout(safetyTimeout);
       setIsProcessing(false);
     }
   };
