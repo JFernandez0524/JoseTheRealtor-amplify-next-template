@@ -16,8 +16,6 @@ type Props = {
   setFilterHasPhone: (val: string) => void;
   filterManualStatus: string;
   setFilterManualStatus: (val: string) => void;
-  filterListingStatus: string;
-  setFilterListingStatus: (val: string) => void;
   filterAiPriority: string;
   setFilterAiPriority: (val: string) => void;
   skipTraceFromDate: string;
@@ -63,8 +61,6 @@ export function DashboardFilters({
   setFilterHasPhone,
   filterManualStatus,
   setFilterManualStatus,
-  filterListingStatus,
-  setFilterListingStatus,
   filterAiPriority,
   setFilterAiPriority,
   skipTraceFromDate,
@@ -187,6 +183,7 @@ export function DashboardFilters({
             className='border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:ring-2 focus:ring-yellow-500 outline-none w-full sm:w-auto'
           >
             <option value=''>All Statuses</option>
+            <option value='NULL'>No Status</option>
             <option value='ACTIVE'>Active Only</option>
             <option value='SOLD'>Sold</option>
             <option value='PENDING'>Pending</option>
@@ -195,21 +192,7 @@ export function DashboardFilters({
             <option value='DIRECT_MAIL'>Direct Mail</option>
           </select>
 
-          {/* 6. ZILLOW LISTING STATUS FILTER */}
-          <select
-            value={filterListingStatus}
-            onChange={(e) => setFilterListingStatus(e.target.value)}
-            className='border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none w-full sm:w-auto'
-          >
-            <option value=''>All Zillow Statuses</option>
-            <option value='NULL'>No Status (Off Market)</option>
-            <option value='FOR_SALE'>For Sale</option>
-            <option value='PENDING'>Pending</option>
-            <option value='RECENTLY_SOLD'>Recently Sold</option>
-            <option value='FOR_RENT'>For Rent</option>
-          </select>
-
-          {/* 7. AI PRIORITY FILTER - AI PLAN ONLY */}
+          {/* 6. AI PRIORITY FILTER - AI PLAN ONLY */}
           {hasAI && (
             <select
               value={filterAiPriority}

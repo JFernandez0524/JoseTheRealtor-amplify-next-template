@@ -46,7 +46,6 @@ export default function LeadDashboardClient({}: Props) {
   const [filterCrmStatus, setFilterCrmStatus] = useState('');
   const [filterHasPhone, setFilterHasPhone] = useState('');
   const [filterManualStatus, setFilterManualStatus] = useState('');
-  const [filterListingStatus, setFilterListingStatus] = useState('');
   const [filterAiPriority, setFilterAiPriority] = useState('');
   const [skipTraceFromDate, setSkipTraceFromDate] = useState('');
   const [skipTraceToDate, setSkipTraceToDate] = useState('');
@@ -174,13 +173,10 @@ export default function LeadDashboardClient({}: Props) {
               : true);
 
         const matchesManualStatus =
-          !filterManualStatus || lead.manualStatus === filterManualStatus;
-
-        const matchesListingStatus =
-          !filterListingStatus ||
-          (filterListingStatus === 'NULL'
-            ? !lead.listingStatus
-            : lead.listingStatus === filterListingStatus);
+          !filterManualStatus ||
+          (filterManualStatus === 'NULL'
+            ? !lead.manualStatus
+            : lead.manualStatus === filterManualStatus);
 
         const matchesAiPriority =
           !filterAiPriority || lead.aiPriority === filterAiPriority;
@@ -207,7 +203,6 @@ export default function LeadDashboardClient({}: Props) {
           matchesCrm &&
           matchesPhone &&
           matchesManualStatus &&
-          matchesListingStatus &&
           matchesAiPriority &&
           matchesDateRange
         );
@@ -785,8 +780,6 @@ export default function LeadDashboardClient({}: Props) {
         setFilterHasPhone={setFilterHasPhone}
         filterManualStatus={filterManualStatus}
         setFilterManualStatus={setFilterManualStatus}
-        filterListingStatus={filterListingStatus}
-        setFilterListingStatus={setFilterListingStatus}
         filterAiPriority={filterAiPriority}
         setFilterAiPriority={setFilterAiPriority}
         skipTraceFromDate={skipTraceFromDate}
