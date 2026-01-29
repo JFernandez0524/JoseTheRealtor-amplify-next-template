@@ -413,13 +413,13 @@ export default function LeadDashboardClient({}: Props) {
       console.log('No Quality count:', noQuality);
 
       alert(
-        `Skip-trace complete!\n✅ Successful: ${successful}\n❌ Failed: ${failed}\n⚠️ No Match: ${noMatch}\n📭 No Quality Contacts: ${noQuality}`
+        `Skip-trace complete!\n✅ Successful: ${successful}\n❌ Failed: ${failed}\n⚠️ No Match: ${noMatch}\n📭 No Quality Contacts: ${noQuality}\n\nPage will refresh in 3 seconds...`
       );
 
       setSelectedIds([]);
       
-      // Force page refresh to show updated data
-      window.location.reload();
+      // Refresh page after 3 seconds
+      setTimeout(() => window.location.reload(), 3000);
     } catch (err: any) {
       console.error('Skip-trace error:', err);
       alert(`Error during skip-trace: ${err.message || 'Check your network connection'}`);
