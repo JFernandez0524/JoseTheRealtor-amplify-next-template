@@ -80,16 +80,7 @@ export default function LeadDashboardClient({}: Props) {
     return () => sub.unsubscribe();
   }, []);
 
-  // Poll for updates when skip trace is in progress
-  useEffect(() => {
-    if (!skipTraceInProgress) return;
-    
-    const interval = setInterval(async () => {
-      await refreshLeads();
-    }, 3000); // Poll every 3 seconds
-    
-    return () => clearInterval(interval);
-  }, [skipTraceInProgress]);
+
 
   // Manual refresh function for immediate updates
   const refreshLeads = async () => {
