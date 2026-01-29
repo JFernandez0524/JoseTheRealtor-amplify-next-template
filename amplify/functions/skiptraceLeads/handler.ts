@@ -478,6 +478,8 @@ export const handler: Handler = async (event) => {
         Key: { id: lead.id },
         UpdateExpression: updateExpression,
         ExpressionAttributeValues: {
+          ':phones': newPhones,
+          ':emails': newEmails,
           ...(lead.type?.toUpperCase() !== 'PROBATE' && {
             ':firstName': enrichedData.firstName || null,
             ':lastName': enrichedData.lastName || null,
