@@ -497,6 +497,25 @@ export function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
                         </div>
                       </div>
                     )}
+
+                    {rawData.batchDataMailingAddress && (
+                      <div className='mt-4'>
+                        <h4 className='text-[10px] font-black uppercase text-slate-400 mb-3'>
+                          BatchData Mailing Address
+                        </h4>
+                        <div className='p-3 bg-blue-50 rounded-xl border border-blue-100'>
+                          <p className='text-sm text-slate-700'>
+                            {rawData.batchDataMailingAddress.mailingAddress}
+                          </p>
+                          <p className='text-sm text-slate-700'>
+                            {rawData.batchDataMailingAddress.mailingCity}, {rawData.batchDataMailingAddress.mailingState} {rawData.batchDataMailingAddress.mailingZip}
+                          </p>
+                        </div>
+                        <p className='text-xs text-slate-500 mt-2'>
+                          This is the mailing address returned by BatchData. Your current mailing address (from CSV) is shown above.
+                        </p>
+                      </div>
+                    )}
                   </div>
                   );
                 })()}
