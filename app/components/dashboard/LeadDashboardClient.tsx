@@ -34,6 +34,7 @@ export default function LeadDashboardClient({}: Props) {
   const [userAccount, setUserAccount] = useState<UserAccount | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [skipTraceInProgress, setSkipTraceInProgress] = useState(false);
 
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
@@ -79,6 +80,28 @@ export default function LeadDashboardClient({}: Props) {
 
     return () => sub.unsubscribe();
   }, []);
+
+  // Poll for updates when skip trace is in progress
+  useEffect(() => {
+    if (!skipTraceInProgress) return;
+    
+    const interval = setInterval(async () => {
+      await refreshLeads();
+    }, 3000); // Poll every 3 seconds
+    
+    return () => clearInterval(interval);
+  }, [skipTraceInProgress]);
+
+  // Poll for updates when skip trace is in progress
+  useEffect(() => {
+    if (!skipTraceInProgress) return;
+    
+    const interval = setInterval(async () => {
+      await refreshLeads();
+    }, 3000); // Poll every 3 seconds
+    
+    return () => clearInterval(interval);
+  }, [skipTraceInProgress]);
 
   // Manual refresh function for immediate updates
   const refreshLeads = async () => {
@@ -400,13 +423,15 @@ export default function LeadDashboardClient({}: Props) {
 
       setSelectedIds([]);
       
-      // Wait for database to propagate, then force refresh multiple times
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      // Start polling for updates
+      setSkipTraceInProgress(true);
+      
+      // Initial refresh
+      await new Promise(resolve => setTimeout(resolve, 1000));
       await refreshLeads();
-      await new Promise(resolve => setTimeout(resolve, 3000));
-      await refreshLeads();
-      await new Promise(resolve => setTimeout(resolve, 3000));
-      await refreshLeads();
+      
+      // Stop polling after 30 seconds
+      setTimeout(() => setSkipTraceInProgress(false), 30000);
     } catch (err: any) {
       console.error('Skip-trace error:', err);
       alert(`Error during skip-trace: ${err.message || 'Check your network connection'}`);
