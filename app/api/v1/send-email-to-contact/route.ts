@@ -22,9 +22,10 @@ import { generateEmailAIResponse } from '@/app/utils/ai/emailConversationHandler
  * 
  * REQUEST BODY:
  * {
- *   contactId: string,      // GHL contact ID
- *   accessToken: string,    // GHL OAuth token
- *   fromEmail: string       // Verified email address to send from
+ *   contactId: string,        // GHL contact ID
+ *   accessToken: string,      // GHL OAuth token
+ *   fromEmail: string,        // Verified email address to send from
+ *   emailSignature?: string   // Optional email signature HTML
  * }
  * 
  * RESPONSE:
@@ -55,31 +56,13 @@ import { generateEmailAIResponse } from '@/app/utils/ai/emailConversationHandler
  */
 export async function POST(req: Request) {
   try {
-    const { contactId, accessToken, fromEmail, userId } = await req.json();
+    const { contactId, accessToken, fromEmail, emailSignature } = await req.json();
     
     if (!contactId || !accessToken) {
       return NextResponse.json(
         { error: 'contactId and accessToken are required' },
         { status: 400 }
       );
-    }
-
-    // Fetch GHL integration to get email signature (optional)
-    let emailSignature = '';
-    if (userId) {
-      try {
-        const { cookiesClient } = await import('@/app/utils/aws/auth/amplifyServerUtils.server');
-        const { data: integrations } = await cookiesClient.models.GhlIntegration.list({
-          filter: {
-            userId: { eq: userId },
-            isActive: { eq: true }
-          }
-        });
-        emailSignature = integrations?.[0]?.emailSignature || '';
-      } catch (error) {
-        console.log('⚠️ Could not fetch email signature (no auth context)');
-        // Continue without signature - not critical
-      }
     }
 
     // Fetch contact from GHL

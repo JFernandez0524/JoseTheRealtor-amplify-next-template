@@ -11,6 +11,7 @@ interface GHLIntegration {
   locationId: string;
   accessToken: string;
   campaignEmail?: string;
+  emailSignature?: string;
 }
 
 /**
@@ -123,6 +124,7 @@ export const handler = async (event: any) => {
       locationId: item.locationId.S!,
       accessToken: item.accessToken.S!,
       campaignEmail: 'jose.fernandez@JoseTheRealtor.com', // HARDCODED - Remove when GHL scope approved
+      emailSignature: item.emailSignature?.S || '', // Get email signature from DynamoDB
     }));
 
     console.log(`Found ${integrations.length} active integrations`);
@@ -234,7 +236,7 @@ export const handler = async (event: any) => {
                 contactId: contact.id,
                 accessToken: validAccessToken,
                 fromEmail: integration.campaignEmail,
-                userId: integration.userId
+                emailSignature: integration.emailSignature
               },
               {
                 headers: {
