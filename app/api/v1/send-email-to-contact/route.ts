@@ -64,17 +64,22 @@ export async function POST(req: Request) {
       );
     }
 
-    // Fetch GHL integration to get email signature
+    // Fetch GHL integration to get email signature (optional)
     let emailSignature = '';
     if (userId) {
-      const { cookiesClient } = await import('@/app/utils/aws/auth/amplifyServerUtils.server');
-      const { data: integrations } = await cookiesClient.models.GhlIntegration.list({
-        filter: {
-          userId: { eq: userId },
-          isActive: { eq: true }
-        }
-      });
-      emailSignature = integrations?.[0]?.emailSignature || '';
+      try {
+        const { cookiesClient } = await import('@/app/utils/aws/auth/amplifyServerUtils.server');
+        const { data: integrations } = await cookiesClient.models.GhlIntegration.list({
+          filter: {
+            userId: { eq: userId },
+            isActive: { eq: true }
+          }
+        });
+        emailSignature = integrations?.[0]?.emailSignature || '';
+      } catch (error) {
+        console.log('⚠️ Could not fetch email signature (no auth context)');
+        // Continue without signature - not critical
+      }
     }
 
     // Fetch contact from GHL
