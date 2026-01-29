@@ -417,6 +417,9 @@ export default function LeadDashboardClient({}: Props) {
       );
 
       setSelectedIds([]);
+      
+      // Force page refresh to show updated data
+      window.location.reload();
     } catch (err: any) {
       console.error('Skip-trace error:', err);
       alert(`Error during skip-trace: ${err.message || 'Check your network connection'}`);
