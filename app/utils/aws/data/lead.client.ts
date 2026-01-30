@@ -198,11 +198,11 @@ export async function bulkUpdateStatus(
  */
 export async function skipTraceLeads(leadIds: string[]): Promise<any> {
   try {
-    // Check if user is authenticated
-    const { getFrontEndAuthSession } = await import('../auth/amplifyFrontEndUser');
-    const session = await getFrontEndAuthSession();
+    // Force refresh session to get fresh tokens
+    const { fetchAuthSession } = await import('aws-amplify/auth');
+    const session = await fetchAuthSession({ forceRefresh: true });
     
-    if (!session) {
+    if (!session.tokens) {
       throw new Error('You must be signed in to skip trace leads. Please refresh the page and sign in again.');
     }
     
