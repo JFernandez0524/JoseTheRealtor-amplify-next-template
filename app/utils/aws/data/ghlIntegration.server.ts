@@ -191,21 +191,20 @@ export async function createGhlIntegration(userId: string, tokenData: {
   try {
     const { access_token, refresh_token, expires_in, locationId } = tokenData;
 
-    // 1. Deactivate any existing integrations for this user
+    // 1. Delete any existing integrations for this user
     console.log(`🔄 Checking for existing integrations for user ${userId}...`);
     const { data: existingIntegrations } = await cookiesClient.models.GhlIntegration.list({
       filter: { userId: { eq: userId } }
     });
 
     if (existingIntegrations && existingIntegrations.length > 0) {
-      console.log(`⚠️ Found ${existingIntegrations.length} existing integration(s), deactivating...`);
+      console.log(`⚠️ Found ${existingIntegrations.length} existing integration(s), deleting...`);
       
       for (const integration of existingIntegrations) {
-        await cookiesClient.models.GhlIntegration.update({
-          id: integration.id,
-          isActive: false,
+        await cookiesClient.models.GhlIntegration.delete({
+          id: integration.id
         });
-        console.log(`✅ Deactivated integration ${integration.id}`);
+        console.log(`✅ Deleted integration ${integration.id}`);
       }
     }
 
