@@ -155,6 +155,42 @@ export function CoreLeadInfo({
         {renderField('ownerLastName', 'Last Name')}
       </div>
 
+      {/* 👤 ADMIN/EXECUTOR INFO (Probate Only) */}
+      {lead.type === 'PROBATE' && (lead.adminFirstName || lead.adminLastName || lead.adminAddress) && (
+        <div className='pt-4 border-t border-gray-100'>
+          <label className='block text-xs font-bold text-gray-400 uppercase tracking-wider mb-3'>
+            👤 Administrator / Executor
+          </label>
+          <div className='bg-purple-50 p-4 rounded-lg border border-purple-200 space-y-3'>
+            <div className='grid grid-cols-2 gap-4'>
+              <div>
+                <p className='text-xs text-gray-500 mb-1'>First Name</p>
+                <p className='text-base font-medium text-gray-800'>
+                  {lead.adminFirstName || <span className='text-gray-300 italic text-sm'>N/A</span>}
+                </p>
+              </div>
+              <div>
+                <p className='text-xs text-gray-500 mb-1'>Last Name</p>
+                <p className='text-base font-medium text-gray-800'>
+                  {lead.adminLastName || <span className='text-gray-300 italic text-sm'>N/A</span>}
+                </p>
+              </div>
+            </div>
+            {lead.adminAddress && (
+              <div>
+                <p className='text-xs text-gray-500 mb-1'>Address</p>
+                <p className='text-base font-medium text-gray-800'>
+                  {lead.adminAddress}
+                  {lead.adminCity && `, ${lead.adminCity}`}
+                  {lead.adminState && `, ${lead.adminState}`}
+                  {lead.adminZip && ` ${lead.adminZip}`}
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* 🟢 PROSPECTING LABELS DISPLAY */}
       <div className='pt-4 border-t border-gray-100'>
         <label className='block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2'>
