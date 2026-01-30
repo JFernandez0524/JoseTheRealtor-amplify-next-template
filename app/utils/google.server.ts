@@ -32,8 +32,18 @@ function parseAddressComponents(components: AddressComponent[]) {
   }
 
   // Build the final, clean address object
+  const streetNumber = result.street_number || '';
+  const route = result.route || '';
+  const subpremise = result.subpremise || ''; // Unit/Apt number
+  
+  // Construct street address with unit if present
+  let street = `${streetNumber} ${route}`.trim();
+  if (subpremise) {
+    street += ` ${subpremise}`;
+  }
+  
   return {
-    street: `${result.street_number || ''} ${result.route || ''}`.trim(),
+    street: street,
     city: result.locality || result.administrative_area_level_2 || '',
     county: result.administrative_area_level_2 || '', // County information
     state: result.administrative_area_level_1 || '', // Will now contain 'NJ'
