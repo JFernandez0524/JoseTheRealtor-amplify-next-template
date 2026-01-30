@@ -198,6 +198,14 @@ export async function bulkUpdateStatus(
  */
 export async function skipTraceLeads(leadIds: string[]): Promise<any> {
   try {
+    // Check if user is authenticated
+    const { getFrontEndAuthSession } = await import('../auth/amplifyFrontEndUser');
+    const session = await getFrontEndAuthSession();
+    
+    if (!session) {
+      throw new Error('You must be signed in to skip trace leads. Please refresh the page and sign in again.');
+    }
+    
     const { data, errors } = await client.mutations.skipTraceLeads({ leadIds });
     if (errors) {
       console.error('Skip trace errors:', errors);
@@ -208,8 +216,12 @@ export async function skipTraceLeads(leadIds: string[]): Promise<any> {
     const results = typeof data === 'string' ? JSON.parse(data) : data;
     console.log('Skip trace results:', results);
     return results;
-  } catch (err) {
+  } catch (err: any) {
     console.error('Failed to skip trace leads:', err);
+    // Provide more helpful error message for auth issues
+    if (err.message?.includes('No current user') || err.message?.includes('not authenticated')) {
+      throw new Error('Your session has expired. Please refresh the page and sign in again.');
+    }
     throw err;
   }
 }
