@@ -330,7 +330,7 @@ export default function LeadDashboardClient({}: Props) {
       setSelectedIds([]);
       
       // Wait for Lambda to complete processing, then refresh
-      await new Promise(resolve => setTimeout(resolve, 3000));
+      await new Promise(resolve => setTimeout(resolve, 1000));
       await refreshLeads();
     } catch (err) {
       console.error('Sync error:', err);
@@ -407,13 +407,13 @@ export default function LeadDashboardClient({}: Props) {
       console.log('No Quality count:', noQuality);
 
       alert(
-        `Skip-trace complete!\n✅ Successful: ${successful}\n❌ Failed: ${failed}\n⚠️ No Match: ${noMatch}\n📭 No Quality Contacts: ${noQuality}\n\nPage will refresh in 3 seconds...`
+        `Skip-trace complete!\n✅ Successful: ${successful}\n❌ Failed: ${failed}\n⚠️ No Match: ${noMatch}\n📭 No Quality Contacts: ${noQuality}\n\nPage will refresh in 1 second...`
       );
 
       setSelectedIds([]);
       
-      // Refresh page after 3 seconds
-      setTimeout(() => window.location.reload(), 3000);
+      // Refresh page after 1 second
+      setTimeout(() => window.location.reload(), 1000);
     } catch (err: any) {
       console.error('Skip-trace error:', err);
       alert(`Error during skip-trace: ${err.message || 'Check your network connection'}`);

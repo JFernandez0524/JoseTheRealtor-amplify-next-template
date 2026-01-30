@@ -117,6 +117,7 @@ export function LeadTable({
   onSort,
 }: Props) {
   const tableRef = React.useRef<HTMLDivElement>(null);
+  const modalRef = React.useRef<HTMLDivElement>(null);
   const [editingLead, setEditingLead] = useState<Lead | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [editForm, setEditForm] = useState({
@@ -739,8 +740,17 @@ export function LeadTable({
 
       {/* Address Edit Modal */}
       {editingLead && (
-        <div className='fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50' onClick={() => { setEditingLead(null); setIsSaving(false); }}>
-          <div className='bg-white rounded-lg p-6 max-w-md w-full' onClick={(e) => e.stopPropagation()}>
+        <div 
+          className='fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50' 
+          onClick={(e) => {
+            // Only close if clicking the backdrop, not the modal content
+            if (e.target === e.currentTarget) {
+              setEditingLead(null);
+              setIsSaving(false);
+            }
+          }}
+        >
+          <div ref={modalRef} className='bg-white rounded-lg p-6 max-w-md w-full'>
             <h3 className='text-lg font-bold mb-4'>Edit Address</h3>
             <div className='space-y-3'>
               <div>
