@@ -123,7 +123,7 @@ export const handler = async (event: any) => {
       userId: item.userId.S!,
       locationId: item.locationId.S!,
       accessToken: item.accessToken.S!,
-      campaignEmail: 'jose.fernandez@JoseTheRealtor.com', // HARDCODED - Remove when GHL scope approved
+      campaignEmail: 'jose.fernandez@contact.josetherealtor.com', // GHL verified domain
       emailSignature: item.emailSignature?.S || '', // Get email signature from DynamoDB
     }));
 
