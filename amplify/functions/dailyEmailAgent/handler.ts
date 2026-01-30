@@ -105,10 +105,13 @@ export const handler = async (event: any) => {
   console.log('✅ Within business hours. Proceeding with email outreach.');
   
   try {
-    // Get all GHL integrations (TEMPORARILY BYPASS campaignEmail requirement)
+    // Get all active GHL integrations
     const scanCommand = new ScanCommand({
       TableName: process.env.AMPLIFY_DATA_GhlIntegration_TABLE_NAME,
-      FilterExpression: 'attribute_exists(accessToken)',
+      FilterExpression: 'attribute_exists(accessToken) AND isActive = :active',
+      ExpressionAttributeValues: {
+        ':active': { BOOL: true }
+      }
     });
     
     const result = await dynamoClient.send(scanCommand);
