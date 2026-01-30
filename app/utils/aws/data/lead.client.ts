@@ -198,19 +198,6 @@ export async function bulkUpdateStatus(
  */
 export async function skipTraceLeads(leadIds: string[]): Promise<any> {
   try {
-    // Ensure Amplify is configured
-    const { Amplify } = await import('aws-amplify');
-    const outputs = await import('../../../amplify_outputs.json');
-    Amplify.configure(outputs.default, { ssr: true });
-    
-    // Check if user is authenticated
-    const { getFrontEndAuthSession } = await import('../auth/amplifyFrontEndUser');
-    const session = await getFrontEndAuthSession();
-    
-    if (!session) {
-      throw new Error('You must be signed in to skip trace leads. Please refresh the page and sign in again.');
-    }
-    
     const { data, errors } = await client.mutations.skipTraceLeads({ leadIds });
     if (errors) {
       console.error('Skip trace errors:', errors);
@@ -224,7 +211,7 @@ export async function skipTraceLeads(leadIds: string[]): Promise<any> {
   } catch (err: any) {
     console.error('Failed to skip trace leads:', err);
     // Provide more helpful error message for auth issues
-    if (err.message?.includes('No current user') || err.message?.includes('not authenticated')) {
+    if (err.message?.includes('No current user') || err.message?.includes('NoSignedUser') || err.message?.includes('not authenticated')) {
       throw new Error('Authentication error. Please refresh the page and try again.');
     }
     throw err;
