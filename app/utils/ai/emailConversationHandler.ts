@@ -199,18 +199,15 @@ I just need 10 minutes to see the property condition so I can give you accurate 
 
 Are you open to meeting with me to discuss your options?
 
-${context.emailSignature || `Jose Fernandez
-RE/MAX Homeland Realtors
-(732) 810-0182`}
-
 RULES:
 - NO "Hi" or "Hello" - use name only with comma
 - Keep professional but empathetic tone
 - Include dollar amounts if available
 - Use bullet points for options
-- End with signature block (use provided HTML signature if available)
+- End with "Are you open to meeting with me to discuss your options?"
+- DO NOT include signature - it will be added separately
 
-Generate the email (return as JSON with "subject" and "body" fields):`
+Generate the email body only (return as JSON with "subject" and "body" fields):`
     : `You are Jose Fernandez from RE/MAX Homeland Realtors responding to ${context.contactName}'s email about their ${context.leadType?.toLowerCase()} situation.
 
 CONTEXT:
@@ -231,9 +228,9 @@ RULES:
 - Focus on "control" and "options"
 - Goal: Get to "Yes, No, or Maybe" on property visit
 - If they show interest, suggest meeting
-- Include signature block
+- DO NOT include signature - it will be added separately
 
-Generate the email response (return as JSON with "subject" and "body" fields):`;
+Generate the email response body only (return as JSON with "subject" and "body" fields):`;
 
   try {
     const response = await axios.post(
@@ -257,9 +254,45 @@ Generate the email response (return as JSON with "subject" and "body" fields):`;
     );
 
     const result = JSON.parse(response.data.choices[0]?.message?.content || '{}');
+    
+    // Convert plain text to HTML with proper formatting
+    let htmlBody = result.body || 'Thanks for your message. I\'ll get back to you shortly.';
+    
+    // Convert line breaks to paragraphs
+    htmlBody = htmlBody
+      .split('\n\n')  // Split on double line breaks (paragraphs)
+      .map((para: string) => {
+        // Handle bullet points
+        if (para.includes('•') || para.includes('-')) {
+          const lines = para.split('\n');
+          const bullets = lines
+            .filter(line => line.trim().startsWith('•') || line.trim().startsWith('-'))
+            .map(line => `<li>${line.replace(/^[•\-]\s*/, '').trim()}</li>`)
+            .join('');
+          const nonBullets = lines
+            .filter(line => !line.trim().startsWith('•') && !line.trim().startsWith('-'))
+            .join('<br>');
+          return nonBullets ? `<p>${nonBullets}</p><ul>${bullets}</ul>` : `<ul>${bullets}</ul>`;
+        }
+        // Regular paragraph
+        return `<p>${para.replace(/\n/g, '<br>')}</p>`;
+      })
+      .join('');
+    
+    // Append HTML signature if provided, otherwise use default
+    const signature = context.emailSignature || `
+      <p>
+        Jose Fernandez<br>
+        RE/MAX Homeland Realtors<br>
+        (732) 810-0182
+      </p>
+    `;
+    
+    htmlBody += `<br>${signature}`;
+    
     return {
       subject: result.subject || `Re: ${context.propertyAddress || 'Your Property'}`,
-      body: result.body || 'Thanks for your message. I\'ll get back to you shortly.'
+      body: htmlBody
     };
   } catch (error: any) {
     console.error('❌ OpenAI API error:', error);
