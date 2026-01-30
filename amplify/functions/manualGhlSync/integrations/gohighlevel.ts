@@ -296,10 +296,8 @@ export async function syncToGoHighLevel(
       }
     }
     
-    // 📧 Send initial prospecting email if contact has email
-    if (contactId && primaryEmail) {
-      await sendInitialProspectingEmail(ghl, contactId, lead, primaryEmail, ghlLocationId);
-    }
+    // Email outreach is handled by dailyEmailAgent (7-touch cadence over 28 days)
+    // No initial email sent during sync
     
     return contactId;
   } catch (error: any) {
