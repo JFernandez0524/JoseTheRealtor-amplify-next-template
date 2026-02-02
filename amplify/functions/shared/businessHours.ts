@@ -32,10 +32,8 @@
 export function isWithinBusinessHours(): boolean {
   const now = new Date();
   
-  // Convert to EST (UTC-5)
-  const estOffset = -5 * 60; // EST offset in minutes
-  const utcTime = now.getTime() + (now.getTimezoneOffset() * 60000);
-  const estTime = new Date(utcTime + (estOffset * 60000));
+  // Convert UTC to EST (subtract 5 hours)
+  const estTime = new Date(now.getTime() - (5 * 60 * 60 * 1000));
   
   const dayOfWeek = estTime.getDay(); // 0 = Sunday, 6 = Saturday
   const hour = estTime.getHours();
@@ -56,9 +54,7 @@ export function isWithinBusinessHours(): boolean {
 
 export function getNextBusinessHourMessage(): string {
   const now = new Date();
-  const estOffset = -5 * 60;
-  const utcTime = now.getTime() + (now.getTimezoneOffset() * 60000);
-  const estTime = new Date(utcTime + (estOffset * 60000));
+  const estTime = new Date(now.getTime() - (5 * 60 * 60 * 1000));
   
   const dayOfWeek = estTime.getDay();
   const hour = estTime.getHours();
