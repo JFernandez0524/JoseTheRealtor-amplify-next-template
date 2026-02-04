@@ -267,7 +267,7 @@ export const handler = async (event: any) => {
                 `https://services.leadconnectorhq.com/contacts/${contact.id}`,
                 {
                   customFields: [
-                    { id: '0MD4Pp2LCyOSCbCjA5qF', value: 1 }
+                    { id: 'wWlrXoXeMXcM6kUexf2L', value: 1 } // email_attempt_counter
                   ]
                 },
                 {
