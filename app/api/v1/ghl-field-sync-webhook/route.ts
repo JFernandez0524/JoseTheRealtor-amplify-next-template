@@ -54,9 +54,6 @@ export async function POST(request: Request) {
       aiState,
       mailSentCount,
       callOutcome
-      lastCallDate,
-      aiState,
-      mailSentCount
     });
 
     // Find PropertyLead by ghlContactId
