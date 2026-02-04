@@ -209,6 +209,7 @@ export default function LeadDashboardClient({}: Props) {
           !filterAiPriority || lead.aiPriority === filterAiPriority;
 
         const matchesDateAdded = !filterDateAdded || (() => {
+          if (!lead.createdAt) return false;
           const leadDate = new Date(lead.createdAt).toDateString();
           const filterDate = new Date(filterDateAdded).toDateString();
           return leadDate === filterDate;
