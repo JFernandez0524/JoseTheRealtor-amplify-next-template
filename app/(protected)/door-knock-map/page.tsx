@@ -42,7 +42,22 @@ export default function DoorKnockMapPage() {
 
   const fetchDoorKnockLeads = async () => {
     try {
-      // This will be implemented to fetch from DoorKnockQueue table
+      const response = await fetch('/api/v1/door-knock-leads');
+      if (response.ok) {
+        const data = await response.json();
+        setLeads(data.leads || []);
+        
+        // Set map center to first lead if available
+        if (data.leads && data.leads.length > 0) {
+          const firstLead = data.leads[0];
+          if (firstLead.latitude && firstLead.longitude) {
+            setMapCenter({
+              lat: firstLead.latitude,
+              lng: firstLead.longitude
+            });
+          }
+        }
+      }
       setLoading(false);
     } catch (error) {
       console.error('Error fetching door knock leads:', error);
