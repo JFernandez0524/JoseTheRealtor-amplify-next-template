@@ -19,7 +19,7 @@ export async function POST(request: NextRequest) {
     // Fetch the selected leads
     const { data: leads } = await cookiesClient.models.PropertyLead.list({
       filter: {
-        id: { in: leadIds }
+        or: leadIds.map(id => ({ id: { eq: id } }))
       }
     });
 
