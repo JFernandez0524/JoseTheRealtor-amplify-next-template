@@ -2,9 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import { GoogleMap, LoadScript, Marker, InfoWindow } from '@react-google-maps/api';
-import { generateServerClientUsingCookies } from '@aws-amplify/adapter-nextjs/data';
-import { cookies } from 'next/headers';
-import config from '@/amplify_outputs.json';
 
 const mapContainerStyle = {
   width: '100%',
