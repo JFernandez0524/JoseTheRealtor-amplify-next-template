@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getCurrentUser } from '@/app/utils/aws/auth/amplifyServerUtils.server';
+import { AuthGetCurrentUserServer } from '@/app/utils/aws/auth/amplifyServerUtils.server';
 import { generateServerClientUsingCookies } from '@aws-amplify/adapter-nextjs/data';
 import { cookies } from 'next/headers';
 import config from '@/amplify_outputs.json';
@@ -21,7 +21,7 @@ interface GHLContact {
 
 export async function POST(request: NextRequest) {
   try {
-    const user = await getCurrentUser();
+    const user = await AuthGetCurrentUserServer();
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }

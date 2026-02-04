@@ -13,12 +13,12 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getCurrentUser } from '@/app/utils/aws/auth/amplifyServerUtils.server';
+import { AuthGetCurrentUserServer } from '@/app/utils/aws/auth/amplifyServerUtils.server';
 
 export async function POST(request: NextRequest) {
   try {
     // Get current user
-    const user = await getCurrentUser();
+    const user = await AuthGetCurrentUserServer();
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
