@@ -189,16 +189,28 @@ export async function syncToGoHighLevel(
                       lead.skipTraceStatus === 'COMPLETED' && 
                       !(lead.leadLabels || []).filter((tag: any) => tag !== null).some((tag: any) => ['DNC', 'Not_Interested', 'Do_Not_Call'].includes(tag));
     
+    // 🛡️ PROPERTY VALUE FILTER - Only high-value properties get direct mail
+    const propertyValue = lead.zestimate || lead.estimatedValue || 0;
+    const isHighValue = propertyValue >= 300000;
+    
     if (isCallable) {
       tags.push('Multi-Phone-Lead');
       // Removed 'start dialing campaign' - GHL workflow handles routing based on App:Synced tag
     } else if (specificPhone) {
       // Has phone but not callable (failed skip trace, DNC, etc.)
       tags.push('Multi-Phone-Lead');
-      tags.push('Direct-Mail-Only'); // Route to mail instead
+      if (isHighValue) {
+        tags.push('Direct-Mail-Only'); // Route to mail instead
+      } else {
+        tags.push('Digital-Only'); // Under $300k - no direct mail
+      }
     } else {
       // No phone at all
-      tags.push('Direct-Mail-Only');
+      if (isHighValue) {
+        tags.push('Direct-Mail-Only');
+      } else {
+        tags.push('Digital-Only'); // Under $300k - no direct mail
+      }
     }
     
     // 🛡️ Probate leads MUST have admin info
@@ -211,10 +223,13 @@ export async function syncToGoHighLevel(
       throw new Error('Probate leads require admin name. Cannot sync without administrator information.');
     }
 
-    // 🛡️ DIRECT MAIL PROTECTION - Only ONE sibling gets mail eligibility
-    if (isPrimary) {
+    // 🛡️ DIRECT MAIL PROTECTION - Only ONE sibling gets mail eligibility (and only if high value)
+    if (isPrimary && isHighValue) {
       tags.push('Direct_Mail_Eligible');
       tags.push('Primary_Contact');
+    } else if (isPrimary) {
+      tags.push('Primary_Contact');
+      // No Direct_Mail_Eligible tag for low-value properties
     }
 
     const basePayload = {
