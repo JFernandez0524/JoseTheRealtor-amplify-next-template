@@ -618,13 +618,31 @@ export default function LeadDashboardClient({}: Props) {
   const handleBulkDirectMail = async () => {
     if (selectedIds.length === 0) return;
 
-    const cost = selectedIds.length * 1.0; // ~$1 per letter
-    if (
-      !confirm(
-        `Generate and send ${selectedIds.length} letters via Click2Mail?\n\nEstimated cost: $${cost.toFixed(2)}\n\nLetters will be sent automatically.`
-      )
-    )
+    // Filter out properties under $300k
+    const selectedLeads = leads.filter(lead => selectedIds.includes(lead.id));
+    const eligibleLeads = selectedLeads.filter(lead => {
+      const value = lead.zestimate || lead.estimatedValue || 0;
+      return value >= 300000;
+    });
+    const lowValueLeads = selectedLeads.filter(lead => {
+      const value = lead.zestimate || lead.estimatedValue || 0;
+      return value < 300000;
+    });
+
+    if (eligibleLeads.length === 0) {
+      alert('No leads eligible for direct mail.\n\nAll selected properties are under $300k value threshold.');
       return;
+    }
+
+    let confirmMessage = `Generate and send ${eligibleLeads.length} letters via Click2Mail?\n\nEstimated cost: $${(eligibleLeads.length * 1.0).toFixed(2)}`;
+    
+    if (lowValueLeads.length > 0) {
+      confirmMessage += `\n\n⚠️ Excluding ${lowValueLeads.length} properties under $300k value threshold.`;
+    }
+    
+    confirmMessage += '\n\nLetters will be sent automatically.';
+
+    if (!confirm(confirmMessage)) return;
 
     setIsProcessing(true);
     try {
@@ -632,7 +650,7 @@ export default function LeadDashboardClient({}: Props) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          leadIds: selectedIds,
+          leadIds: eligibleLeads.map(lead => lead.id),
           options: {
             includeListingOption: true,
             includeCashOption: true,
