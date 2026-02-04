@@ -122,6 +122,8 @@ export async function POST(request: NextRequest) {
         // Add SMS queue entry if phone exists
         if (contact.phone) {
           const smsEntry = {
+            userId: user.userId,
+            locationId: integration.locationId,
             contactId: contact.id,
             contactMethod: contact.phone,
             channel: 'SMS' as const,
@@ -141,6 +143,8 @@ export async function POST(request: NextRequest) {
         const emails = [contact.email, ...(contact.additionalEmails || [])].filter(Boolean);
         for (const email of emails) {
           const emailEntry = {
+            userId: user.userId,
+            locationId: integration.locationId,
             contactId: contact.id,
             contactMethod: email,
             channel: 'EMAIL' as const,
