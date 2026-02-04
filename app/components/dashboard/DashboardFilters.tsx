@@ -18,6 +18,8 @@ type Props = {
   setFilterManualStatus: (val: string) => void;
   filterAiPriority: string;
   setFilterAiPriority: (val: string) => void;
+  filterDateAdded: string;
+  setFilterDateAdded: (val: string) => void;
   skipTraceFromDate: string;
   setSkipTraceFromDate: (val: string) => void;
   skipTraceToDate: string;
@@ -65,6 +67,8 @@ export function DashboardFilters({
   setFilterManualStatus,
   filterAiPriority,
   setFilterAiPriority,
+  filterDateAdded,
+  setFilterDateAdded,
   skipTraceFromDate,
   setSkipTraceFromDate,
   skipTraceToDate,
@@ -211,7 +215,18 @@ export function DashboardFilters({
             </select>
           )}
 
-          {/* 7. SKIP TRACE DATE FILTERS */}
+          {/* 7. DATE ADDED FILTER */}
+          <div className='flex flex-col gap-1'>
+            <label className='text-xs text-gray-600'>Date Added:</label>
+            <input
+              type='date'
+              value={filterDateAdded}
+              onChange={(e) => setFilterDateAdded(e.target.value)}
+              className='border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none w-full'
+            />
+          </div>
+
+          {/* 8. SKIP TRACE DATE FILTERS */}
           <div className='flex flex-col sm:flex-row gap-2 items-center'>
             <label className='text-xs text-gray-600 whitespace-nowrap'>Skip Traced:</label>
             <input
