@@ -1,9 +1,76 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { cookiesClient } from '@/app/utils/aws/auth/amplifyServerUtils.server';
 
 interface EmailTemplateSettingsProps {
   integration: any;
   onUpdate: () => void;
+}
+
+interface FieldOption {
+  label: string;
+  value: string;
+  description: string;
+}
+
+const AVAILABLE_FIELDS: FieldOption[] = [
+  { label: 'First Name', value: '{firstName}', description: "Contact's first name" },
+  { label: 'Property Address', value: '{propertyAddress}', description: 'Full property address' },
+  { label: 'Market Value', value: '{zestimate}', description: 'Formatted Zestimate value' },
+  { label: 'Cash Offer', value: '{cashOffer}', description: 'Formatted cash offer (70% of value)' },
+];
+
+interface TemplateEditorProps {
+  value: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+  rows?: number;
+}
+
+function TemplateEditor({ value, onChange, placeholder, rows = 10 }: TemplateEditorProps) {
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const insertField = (field: string) => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const newValue = value.substring(0, start) + field + value.substring(end);
+    
+    onChange(newValue);
+    
+    // Set cursor position after inserted field
+    setTimeout(() => {
+      textarea.focus();
+      textarea.setSelectionRange(start + field.length, start + field.length);
+    }, 0);
+  };
+
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-wrap gap-1 mb-2">
+        {AVAILABLE_FIELDS.map((field) => (
+          <button
+            key={field.value}
+            type="button"
+            onClick={() => insertField(field.value)}
+            className="px-2 py-1 text-xs bg-blue-100 hover:bg-blue-200 text-blue-800 rounded border"
+            title={field.description}
+          >
+            + {field.label}
+          </button>
+        ))}
+      </div>
+      <textarea
+        ref={textareaRef}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        rows={rows}
+        className="w-full p-3 border rounded font-mono text-sm resize-y"
+        placeholder={placeholder}
+      />
+    </div>
+  );
 }
 
 export default function EmailTemplateSettings({ integration, onUpdate }: EmailTemplateSettingsProps) {
@@ -99,12 +166,11 @@ RE/MAX Agent`;
         </div>
         <div className="mb-3">
           <label className="block text-sm font-medium mb-1">Email Template</label>
-          <textarea
+          <TemplateEditor
             value={probateTemplate}
-            onChange={(e) => setProbateTemplate(e.target.value)}
-            rows={12}
-            className="w-full p-2 border rounded font-mono text-sm"
+            onChange={setProbateTemplate}
             placeholder="Email template for probate leads"
+            rows={12}
           />
         </div>
       </div>
@@ -124,25 +190,24 @@ RE/MAX Agent`;
         </div>
         <div className="mb-3">
           <label className="block text-sm font-medium mb-1">Email Template</label>
-          <textarea
+          <TemplateEditor
             value={preforeclosureTemplate}
-            onChange={(e) => setPreforeclosureTemplate(e.target.value)}
-            rows={10}
-            className="w-full p-2 border rounded font-mono text-sm"
+            onChange={setPreforeclosureTemplate}
             placeholder="Email template for preforeclosure leads"
+            rows={10}
           />
         </div>
       </div>
 
       {/* Variables Help */}
       <div className="mb-4 p-3 bg-gray-50 rounded">
-        <p className="text-sm font-medium mb-2">Available Variables:</p>
-        <div className="text-xs text-gray-600 grid grid-cols-2 gap-2">
-          <span><code>{'{firstName}'}</code> - Contact's first name</span>
-          <span><code>{'{propertyAddress}'}</code> - Property address</span>
-          <span><code>{'{zestimate}'}</code> - Formatted market value</span>
-          <span><code>{'{cashOffer}'}</code> - Formatted cash offer (70%)</span>
-        </div>
+        <p className="text-sm font-medium mb-2">💡 How to use:</p>
+        <ul className="text-xs text-gray-600 space-y-1">
+          <li>• Click the blue buttons above each editor to insert database fields</li>
+          <li>• Fields will be replaced with actual data when emails are sent</li>
+          <li>• You can type additional variables manually using {'{fieldName}'} format</li>
+          <li>• Preview your template by checking recent sent emails in GHL</li>
+        </ul>
       </div>
 
       <button
