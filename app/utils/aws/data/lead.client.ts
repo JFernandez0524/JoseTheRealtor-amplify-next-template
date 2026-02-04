@@ -297,8 +297,6 @@ export async function syncToGHL(leadIds: string[]): Promise<{ successful: number
     throw err;
   }
 }
-  }
-}
 
 /**
  * Observe leads in real-time
