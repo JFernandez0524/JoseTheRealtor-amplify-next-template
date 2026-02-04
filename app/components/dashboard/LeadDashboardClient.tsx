@@ -156,7 +156,7 @@ export default function LeadDashboardClient({}: Props) {
 
         const matchesType = !filterType || lead.type === filterType;
         const matchesStatus =
-          !filterStatus || 
+          filterStatus === '' || 
           lead.skipTraceStatus === filterStatus;
 
         const matchesCrm =

@@ -129,12 +129,12 @@ export function DashboardFilters({
           <span className='text-sm font-semibold text-gray-600 whitespace-nowrap'>Filter By:</span>
 
           {/* Filter Controls */}
-          <div className='flex flex-col sm:flex-row gap-3 sm:gap-4 w-full sm:w-auto'>
+          <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3 w-full'>
           {/* 1. Lead Type Filter */}
           <select
             value={filterType}
             onChange={(e) => setFilterType(e.target.value)}
-            className='border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none w-full sm:w-auto'
+            className='border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none w-full'
           >
             <option value=''>All Lead Types</option>
             <option value='PREFORECLOSURE'>Pre-Foreclosure</option>
@@ -145,7 +145,7 @@ export function DashboardFilters({
           <select
             value={filterStatus}
             onChange={(e) => setFilterStatus(e.target.value)}
-            className='border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none w-full sm:w-auto'
+            className='border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none w-full'
           >
             <option value=''>All Trace Statuses</option>
             <option value='PENDING'>Pending Trace</option>
@@ -159,7 +159,7 @@ export function DashboardFilters({
           <select
             value={filterGhlStatus}
             onChange={(e) => setFilterGhlStatus(e.target.value)}
-            className='border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:ring-2 focus:ring-purple-500 outline-none w-full sm:w-auto'
+            className='border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:ring-2 focus:ring-purple-500 outline-none w-full'
           >
             <option value=''>All GHL Statuses</option>
             <option value='SUCCESS'>GHL Synced</option>
@@ -173,7 +173,7 @@ export function DashboardFilters({
           <select
             value={filterHasPhone}
             onChange={(e) => setFilterHasPhone(e.target.value)}
-            className='border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:ring-2 focus:ring-green-500 outline-none w-full sm:w-auto'
+            className='border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:ring-2 focus:ring-green-500 outline-none w-full'
           >
             <option value=''>All Phone Statuses</option>
             <option value='HAS_PHONE'>Has Phone Numbers</option>
@@ -184,7 +184,7 @@ export function DashboardFilters({
           <select
             value={filterManualStatus}
             onChange={(e) => setFilterManualStatus(e.target.value)}
-            className='border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:ring-2 focus:ring-yellow-500 outline-none w-full sm:w-auto'
+            className='border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:ring-2 focus:ring-yellow-500 outline-none w-full'
           >
             <option value=''>All Statuses</option>
             <option value='NULL'>No Status</option>
@@ -201,7 +201,7 @@ export function DashboardFilters({
             <select
               value={filterAiPriority}
               onChange={(e) => setFilterAiPriority(e.target.value)}
-              className='border border-purple-300 rounded-md px-3 py-1.5 text-sm focus:ring-2 focus:ring-purple-500 outline-none w-full sm:w-auto bg-purple-50'
+              className='border border-purple-300 rounded-md px-3 py-1.5 text-sm focus:ring-2 focus:ring-purple-500 outline-none w-full bg-purple-50'
             >
               <option value=''>All AI Priorities</option>
               <option value='HIGH'>🔥 High Priority</option>
