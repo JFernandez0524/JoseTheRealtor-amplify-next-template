@@ -24,25 +24,9 @@ type Props = {
   onToggleOne: (id: string) => void;
   onRowClick: (id: string) => void;
   onRefresh?: () => Promise<void>;
-  sortField:
-    | 'createdAt'
-    | 'updatedAt'
-    | 'ownerLastName'
-    | 'ownerCounty'
-    | 'zestimate'
-    | 'skipTraceCompletedAt'
-    | 'aiScore';
+  sortField: string;
   sortDirection: 'asc' | 'desc';
-  onSort: (
-    field:
-      | 'createdAt'
-      | 'updatedAt'
-      | 'ownerLastName'
-      | 'ownerCounty'
-      | 'zestimate'
-      | 'skipTraceCompletedAt'
-      | 'aiScore'
-  ) => void;
+  onSort: (field: string) => void;
 };
 
 // ---------------------------------------------------------
@@ -230,14 +214,7 @@ export function LeadTable({
   };
 
   const renderSortableHeader = (
-    field:
-      | 'createdAt'
-      | 'updatedAt'
-      | 'ownerLastName'
-      | 'ownerCounty'
-      | 'zestimate'
-      | 'skipTraceCompletedAt'
-      | 'aiScore',
+    field: string,
     children: React.ReactNode,
     className: string = ''
   ) => (
@@ -333,49 +310,27 @@ export function LeadTable({
                   )}
                 </div>
               </th>
-              <th className='px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider whitespace-nowrap'>
-                Type
-              </th>
+              {renderSortableHeader('type', 'Type')}
               {renderSortableHeader('aiScore', 'AI Score', 'bg-purple-50')}
-              <th className='px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider whitespace-nowrap'>
-                Status
-              </th>
+              {renderSortableHeader('skipTraceStatus', 'Status')}
               {/* NEW GHL STATUS HEADER */}
-              <th className='px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider whitespace-nowrap bg-purple-50'>
-                GHL Sync
-              </th>
+              {renderSortableHeader('ghlSyncStatus', 'GHL Sync', 'bg-purple-50')}
               {renderSortableHeader(
                 'ownerLastName',
                 'Owner Name',
                 'bg-blue-50'
               )}
-              <th className='px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider whitespace-nowrap bg-blue-50'>
-                Address
-              </th>
-              <th className='px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider whitespace-nowrap bg-blue-50'>
-                City/State/Zip
-              </th>
+              {renderSortableHeader('ownerAddress', 'Address', 'bg-blue-50')}
+              {renderSortableHeader('ownerCity', 'City/State/Zip', 'bg-blue-50')}
               {renderSortableHeader('ownerCounty', 'County', 'bg-blue-50')}
               {renderSortableHeader('zestimate', 'Zestimate', 'bg-yellow-50')}
-              <th className='px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider whitespace-nowrap bg-yellow-50'>
-                Status
-              </th>
-              <th className='px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider whitespace-nowrap bg-purple-50'>
-                Admin Name
-              </th>
-              <th className='px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider whitespace-nowrap bg-purple-50'>
-                Admin Address
-              </th>
-              <th className='px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider whitespace-nowrap bg-green-50'>
-                Phone
-              </th>
-              <th className='px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider whitespace-nowrap bg-green-50'>
-                Email
-              </th>
+              {renderSortableHeader('manualStatus', 'Status', 'bg-yellow-50')}
+              {renderSortableHeader('adminLastName', 'Admin Name', 'bg-purple-50')}
+              {renderSortableHeader('adminAddress', 'Admin Address', 'bg-purple-50')}
+              {renderSortableHeader('phones', 'Phone', 'bg-green-50')}
+              {renderSortableHeader('emails', 'Email', 'bg-green-50')}
               {renderSortableHeader('skipTraceCompletedAt', 'Skip Traced', 'bg-green-50')}
-              <th className='px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider whitespace-nowrap'>
-                Enriched Data
-              </th>
+              {renderSortableHeader('enrichmentData', 'Enriched Data')}
               {renderSortableHeader('createdAt', 'Created At')}
             </tr>
           </thead>

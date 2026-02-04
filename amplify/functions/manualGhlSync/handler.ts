@@ -2,12 +2,15 @@ import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand, UpdateCommand, ScanCommand } from '@aws-sdk/lib-dynamodb';
 import { syncToGoHighLevel } from './integrations/gohighlevel';
 import { getValidGhlToken } from '../shared/ghlTokenManager';
+import { validateLeadForSync, updateLeadSyncStatus, SyncResult } from '../shared/syncUtils';
 
 const dynamoClient = new DynamoDBClient({ region: process.env.AWS_REGION });
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
 
 const propertyLeadTableName = process.env.AMPLIFY_DATA_PropertyLead_TABLE_NAME;
 const userAccountTableName = process.env.AMPLIFY_DATA_UserAccount_TABLE_NAME;
+
+type Handler = (event: { arguments: { leadId: string }; identity: { sub: string } }) => Promise<any>;
 
 console.log('🔧 [GHL_SYNC] Lambda initialized');
 console.log('🔧 [GHL_SYNC] Environment:', {
@@ -16,14 +19,6 @@ console.log('🔧 [GHL_SYNC] Environment:', {
   region: process.env.AWS_REGION
 });
 
-type SyncResult = {
-  status: 'SUCCESS' | 'SKIPPED' | 'FAILED' | 'ERROR' | 'NO_CHANGE';
-  message: string;
-  ghlContactId?: string | null;
-};
-
-type Handler = (event: { arguments: { leadId: string }; identity: { sub: string } }) => Promise<any>;
-
 // ---------------------------------------------------------
 // HELPER: Core GHL Sync Logic
 // ---------------------------------------------------------
@@ -31,6 +26,16 @@ async function processGhlSync(lead: any, groups: string[] = [], ownerId: string 
   console.log(`🔄 [GHL_SYNC] Processing sync for lead: ${lead.id}`);
   console.log(`🔄 [GHL_SYNC] Owner: ${ownerId}, Groups: ${groups.join(', ')}`);
   
+  // ✅ Validate lead before processing
+  const validation = validateLeadForSync(lead);
+  if (!validation.isValid) {
+    console.log(`⏭️ Skipping sync - ${validation.reason}`);
+    return {
+      status: 'SKIPPED',
+      message: validation.reason!,
+    };
+  }
+
   // Get user's GHL token and locationId (auto-refreshes if expired)
   console.log(`🔑 [GHL_SYNC] Getting GHL token...`);
   const ghlData = await getValidGhlToken(ownerId);
@@ -38,14 +43,7 @@ async function processGhlSync(lead: any, groups: string[] = [], ownerId: string 
   if (!ghlData) {
     const message = `GHL not connected or token expired. Please reconnect GoHighLevel.`;
     console.error(`❌ [GHL_SYNC] ${message}`);
-    await docClient.send(new UpdateCommand({
-      TableName: propertyLeadTableName,
-      Key: { id: lead.id },
-      UpdateExpression: 'SET ghlSyncStatus = :status',
-      ExpressionAttributeValues: {
-        ':status': 'FAILED'
-      }
-    }));
+    await updateLeadSyncStatus(docClient, propertyLeadTableName!, lead.id, 'FAILED');
     return { status: 'FAILED', message };
   }
 
@@ -99,106 +97,67 @@ async function processGhlSync(lead: any, groups: string[] = [], ownerId: string 
     console.error('Rate limit check failed (non-critical):', err);
   }
 
-  const currentSkipStatus = lead.skipTraceStatus?.toUpperCase();
-  console.log(`🔍 Lead ${lead.id} skipTraceStatus: ${currentSkipStatus}`);
-  
-  if (currentSkipStatus !== 'COMPLETED') {
-    console.log(`⏭️ Skipping sync - status is ${lead.skipTraceStatus}`);
-    return {
-      status: 'SKIPPED',
-      message: `Lead status is ${lead.skipTraceStatus}`,
-    };
-  }
-
   const phones = lead.phones || [];
-  console.log(`📞 Found ${phones.length} phones:`, phones);
+  const emails = lead.emails || [];
   
-  if (phones.length === 0) {
-    console.log(`📬 No phones found - syncing for direct mail workflow`);
-    // Sync without phone for direct mail workflow
+  console.log(`📞 Found ${phones.length} phones, ${emails.length} emails:`, { phones, emails });
+  
+  // ✅ SYNC LEADS WITH PHONES (multiple contacts for multiple phones)
+  if (phones.length > 0) {
+    console.log(`📞 Syncing ${phones.length} phone contacts`);
     try {
-      const ghlContactId = await syncToGoHighLevel(
-        lead,
-        '', // Empty phone
-        1,
-        true,
-        groups,
-        ownerId,
-        ghlToken,
-        ghlLocationId
-      );
+      const syncResults: string[] = [];
+      for (let i = 0; i < phones.length; i++) {
+        const ghlContactId = await syncToGoHighLevel(
+          lead,
+          phones[i],
+          i + 1,
+          i === 0, // First phone is primary
+          groups,
+          ownerId,
+          ghlToken,
+          ghlLocationId
+        );
+        syncResults.push(ghlContactId);
+      }
 
-      await docClient.send(new UpdateCommand({
-        TableName: propertyLeadTableName,
-        Key: { id: lead.id },
-        UpdateExpression: 'SET ghlSyncStatus = :status, ghlContactId = :contactId, ghlSyncDate = :syncDate',
-        ExpressionAttributeValues: {
-          ':status': 'SUCCESS',
-          ':contactId': ghlContactId,
-          ':syncDate': new Date().toISOString()
-        }
-      }));
+      const primaryGhlId = syncResults[0];
+      await updateLeadSyncStatus(docClient, propertyLeadTableName!, lead.id, 'SUCCESS', primaryGhlId);
 
       return {
         status: 'SUCCESS',
-        message: 'Synced for direct mail workflow (no phone).',
-        ghlContactId: ghlContactId,
+        message: `Synced ${phones.length} phone contact(s).`,
+        ghlContactId: primaryGhlId,
       };
     } catch (error: any) {
-      await docClient.send(new UpdateCommand({
-        TableName: propertyLeadTableName,
-        Key: { id: lead.id },
-        UpdateExpression: 'SET ghlSyncStatus = :status',
-        ExpressionAttributeValues: {
-          ':status': 'FAILED'
-        }
-      }));
+      await updateLeadSyncStatus(docClient, propertyLeadTableName!, lead.id, 'FAILED');
       return { status: 'FAILED', message: error.message };
     }
   }
 
+  // ✅ SYNC EMAIL-ONLY LEADS (direct mail workflow)
+  console.log(`📧 Syncing email-only contact for direct mail`);
   try {
-    const syncResults: string[] = [];
-    for (let i = 0; i < phones.length; i++) {
-      const ghlContactId = await syncToGoHighLevel(
-        lead,
-        phones[i],
-        i + 1,
-        i === 0,
-        groups,
-        ownerId,
-        ghlToken,
-        ghlLocationId
-      );
-      syncResults.push(ghlContactId);
-    }
+    const ghlContactId = await syncToGoHighLevel(
+      lead,
+      '', // No phone
+      1,
+      true, // Primary contact
+      groups,
+      ownerId,
+      ghlToken,
+      ghlLocationId
+    );
 
-    const primaryGhlId = syncResults[0];
-    await docClient.send(new UpdateCommand({
-      TableName: propertyLeadTableName,
-      Key: { id: lead.id },
-      UpdateExpression: 'SET ghlSyncStatus = :status, ghlContactId = :contactId, ghlSyncDate = :syncDate',
-      ExpressionAttributeValues: {
-        ':status': 'SUCCESS',
-        ':contactId': primaryGhlId,
-        ':syncDate': new Date().toISOString()
-      }
-    }));
+    await updateLeadSyncStatus(docClient, propertyLeadTableName!, lead.id, 'SUCCESS', ghlContactId);
 
     return {
       status: 'SUCCESS',
-      message: `Synced ${phones.length} contacts.`,
-      ghlContactId: primaryGhlId,
+      message: 'Synced email contact for direct mail workflow.',
+      ghlContactId: ghlContactId,
     };
   } catch (error: any) {
-    await docClient.send(new UpdateCommand({
-      TableName: propertyLeadTableName,
-      Key: { id: lead.id },
-      UpdateExpression: 'SET ghlSyncStatus = :status',
-      ExpressionAttributeValues: {
-        ':status': 'FAILED'
-      }
-    }));
+    await updateLeadSyncStatus(docClient, propertyLeadTableName!, lead.id, 'FAILED');
     return { status: 'FAILED', message: error.message };
   }
 }

@@ -215,12 +215,11 @@ export async function syncToGoHighLevel(
     
     // 🛡️ Probate leads MUST have admin info
     if (lead.type?.toUpperCase() === 'PROBATE' && (!lead.adminFirstName || !lead.adminLastName)) {
-      // Mark lead as invalid and skip sync
-      await ghl.put(`/contacts/${lead.ghlContactId}`, {
-        tags: ['Validation_Error_Missing_Admin_Info']
-      }).catch(() => {}); // Best effort tag
-      
-      throw new Error('Probate leads require admin name. Cannot sync without administrator information.');
+      console.warn(`⚠️ Probate lead ${lead.id} missing admin info - using owner info as fallback`);
+      // Use owner info as fallback instead of failing
+      if (!lead.ownerFirstName && !lead.ownerLastName) {
+        throw new Error('Probate leads require admin name or owner name. Cannot sync without contact information.');
+      }
     }
 
     // 🛡️ DIRECT MAIL PROTECTION - Only ONE sibling gets mail eligibility (and only if high value)
@@ -233,7 +232,7 @@ export async function syncToGoHighLevel(
     }
 
     const basePayload = {
-      firstName: lead.adminFirstName || lead.ownerFirstName || 'Unknown',
+      firstName: lead.adminFirstName || lead.ownerFirstName || 'Property',
       lastName: `${lead.adminLastName || lead.ownerLastName || 'Owner'}${specificPhone && phoneIndex > 1 ? ` (${phoneIndex})` : ''}`,
       email: isPrimary ? primaryEmail : undefined, // Attach email only to primary to avoid duplicates
       phone: specificPhone || undefined, // Don't send empty phone

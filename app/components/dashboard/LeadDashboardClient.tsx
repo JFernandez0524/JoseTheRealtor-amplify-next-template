@@ -59,15 +59,7 @@ export default function LeadDashboardClient({}: Props) {
   }, [leads]);
 
   // Sort States
-  const [sortField, setSortField] = useState<
-    | 'createdAt'
-    | 'updatedAt'
-    | 'ownerLastName'
-    | 'ownerCounty'
-    | 'zestimate'
-    | 'skipTraceCompletedAt'
-    | 'aiScore'
-  >('createdAt');
+  const [sortField, setSortField] = useState<string>('createdAt');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
 
   // --- Effects ---
@@ -244,8 +236,8 @@ export default function LeadDashboardClient({}: Props) {
       })
       .sort((a, b) => {
         // Sort the filtered results
-        let aValue: any = a[sortField];
-        let bValue: any = b[sortField];
+        let aValue: any = a[sortField as keyof Lead];
+        let bValue: any = b[sortField as keyof Lead];
 
         // Handle date sorting
         if (
@@ -263,11 +255,22 @@ export default function LeadDashboardClient({}: Props) {
           bValue = parseFloat(bValue || 0);
         }
 
+        // Handle array sorting (phones, emails)
+        if (Array.isArray(aValue) || Array.isArray(bValue)) {
+          aValue = (aValue || []).length;
+          bValue = (bValue || []).length;
+        }
+
         // Handle string sorting
         if (typeof aValue === 'string') {
           aValue = aValue.toLowerCase();
           bValue = (bValue || '').toLowerCase();
         }
+
+        // Handle null/undefined values
+        if (aValue == null && bValue == null) return 0;
+        if (aValue == null) return sortDirection === 'asc' ? -1 : 1;
+        if (bValue == null) return sortDirection === 'asc' ? 1 : -1;
 
         if (sortDirection === 'asc') {
           return aValue > bValue ? 1 : -1;
@@ -321,16 +324,7 @@ export default function LeadDashboardClient({}: Props) {
   ]);
 
   // --- Sort Handler ---
-  const handleSort = (
-    field:
-      | 'createdAt'
-      | 'updatedAt'
-      | 'ownerLastName'
-      | 'ownerCounty'
-      | 'zestimate'
-      | 'skipTraceCompletedAt'
-      | 'aiScore'
-  ) => {
+  const handleSort = (field: string) => {
     if (sortField === field) {
       setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
     } else {
