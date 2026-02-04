@@ -1,3 +1,5 @@
+'use client';
+
 import React, { useState, useEffect, useRef } from 'react';
 import { cookiesClient } from '@/app/utils/aws/auth/amplifyServerUtils.server';
 
