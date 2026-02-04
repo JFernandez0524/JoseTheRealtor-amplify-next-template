@@ -78,6 +78,48 @@ export default function DoorKnockMapPage() {
     }
   };
 
+  const exportToGoogleMaps = () => {
+    // Create CSV data formatted for Google My Maps
+    const csvData = leads.map(lead => ({
+      'Name': lead.ownerName,
+      'Address': `${lead.propertyAddress}, ${lead.propertyCity}, ${lead.propertyState} ${lead.propertyZip}`,
+      'Description': `${lead.leadType || 'Lead'} - $${lead.estimatedValue?.toLocaleString() || 'Unknown'} - Status: ${lead.status}`,
+      'Priority': lead.priority,
+      'Status': lead.status,
+      'Lead Type': lead.leadType,
+      'Property Value': lead.estimatedValue ? `$${lead.estimatedValue.toLocaleString()}` : '',
+      'Notes': lead.notes || '',
+      'Latitude': lead.latitude,
+      'Longitude': lead.longitude
+    }));
+
+    // Convert to CSV
+    const headers = Object.keys(csvData[0] || {});
+    const csvContent = [
+      headers.join(','),
+      ...csvData.map(row => 
+        headers.map(header => {
+          const value = row[header as keyof typeof row] || '';
+          // Escape commas and quotes
+          return `"${String(value).replace(/"/g, '""')}"`;
+        }).join(',')
+      )
+    ].join('\n');
+
+    // Download CSV file
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `door-knock-leads-${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    alert('📍 CSV exported! Import this file to Google My Maps:\n\n1. Go to mymaps.google.com\n2. Create New Map\n3. Click "Import"\n4. Upload the downloaded CSV file\n5. Share the map with your team!');
+  };
+
   const getMarkerColor = (status: string, priority: string) => {
     if (status === 'COMPLETED') return '#22c55e'; // Green
     if (status === 'VISITED') return '#3b82f6'; // Blue
@@ -101,9 +143,17 @@ export default function DoorKnockMapPage() {
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
-        <div className="mb-6">
-          <h1 className="text-3xl font-bold text-gray-900">Door Knock Map</h1>
-          <p className="mt-2 text-gray-600">Plan and track your door knocking visits</p>
+        <div className="mb-6 flex justify-between items-center">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">Door Knock Map</h1>
+            <p className="mt-2 text-gray-600">Plan and track your door knocking visits</p>
+          </div>
+          <button
+            onClick={exportToGoogleMaps}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition flex items-center gap-2"
+          >
+            📍 Export to Google Maps
+          </button>
         </div>
 
         {/* Stats */}
