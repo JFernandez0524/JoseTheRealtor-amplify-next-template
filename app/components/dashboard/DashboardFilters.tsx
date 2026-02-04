@@ -36,6 +36,7 @@ type Props = {
   handleBulkEnrichLeads: () => Promise<void>;
   handleBulkDirectMail: () => Promise<void>;
   handleBulkEmailCampaign: () => Promise<void>;
+  handlePopulateQueue: () => Promise<void>;
   handleDelete: () => Promise<void>;
   handleExport: () => void;
   handleDownloadSkipTraced: () => void;
@@ -46,6 +47,7 @@ type Props = {
   isEnriching: boolean;
   isGeneratingLetters: boolean;
   isEmailCampaigning: boolean;
+  isPopulatingQueue: boolean;
 };
 
 export function DashboardFilters({
@@ -77,6 +79,7 @@ export function DashboardFilters({
   handleBulkEnrichLeads,
   handleBulkDirectMail,
   handleBulkEmailCampaign,
+  handlePopulateQueue,
   handleDelete,
   handleExport,
   handleDownloadSkipTraced,
@@ -87,6 +90,7 @@ export function DashboardFilters({
   isEnriching,
   isGeneratingLetters,
   isEmailCampaigning,
+  isPopulatingQueue,
 }: Props) {
   // Determine if selected leads are all same type
   const hasPreforeclosure = selectedLeadTypes.includes('PREFORECLOSURE');
@@ -399,6 +403,22 @@ export function DashboardFilters({
                 </>
               ) : (
                 <>📧 Start Email Campaign</>
+              )}
+            </button>
+
+            {/* Populate Queue Button */}
+            <button
+              onClick={handlePopulateQueue}
+              disabled={isPopulatingQueue || isSkipTracing || isGhlSyncing}
+              className={`text-sm px-3 py-1.5 rounded transition-colors flex items-center justify-center gap-1.5 shadow-sm w-full sm:w-auto
+                                ${isPopulatingQueue ? 'bg-purple-300 text-white cursor-not-allowed' : 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white hover:from-purple-700 hover:to-indigo-700'}`}
+            >
+              {isPopulatingQueue ? (
+                <>
+                  <Loader size='small' variation='linear' /> Populating...
+                </>
+              ) : (
+                <>🔄 Populate Queue</>
               )}
             </button>
 

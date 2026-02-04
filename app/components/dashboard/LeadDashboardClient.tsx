@@ -34,6 +34,7 @@ export default function LeadDashboardClient({}: Props) {
   const [userAccount, setUserAccount] = useState<UserAccount | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isPopulatingQueue, setIsPopulatingQueue] = useState(false);
 
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
@@ -655,6 +656,36 @@ export default function LeadDashboardClient({}: Props) {
     }
   };
 
+  const handlePopulateQueue = async () => {
+    if (
+      !confirm(
+        `Populate outreach queue from GHL?\n\nThis will fetch ALL contacts with "ai outreach" tag from GHL and add them to the outreach queue for automated messaging.`
+      )
+    )
+      return;
+
+    setIsPopulatingQueue(true);
+    try {
+      const response = await fetch('/api/v1/populate-queue-from-ghl', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) throw new Error(result.error);
+
+      alert(
+        `✅ Queue Population Complete!\n\nTotal GHL contacts: ${result.totalContacts}\nAI outreach contacts: ${result.aiOutreachContacts}\nQueue entries added: ${result.queueEntriesAdded}${result.errors ? `\nErrors: ${result.errors.length}` : ''}`
+      );
+    } catch (err: any) {
+      console.error('Queue population error:', err);
+      alert(`Error populating queue: ${err.message}`);
+    } finally {
+      setIsPopulatingQueue(false);
+    }
+  };
+
   const handleDownloadSkipTraced = () => {
     if (selectedIds.length === 0) {
       alert('Please select leads to download.');
@@ -801,11 +832,13 @@ export default function LeadDashboardClient({}: Props) {
         handleBulkEnrichLeads={handleBulkEnrichLeads}
         handleBulkDirectMail={handleBulkDirectMail}
         handleBulkEmailCampaign={handleBulkEmailCampaign}
+        handlePopulateQueue={handlePopulateQueue}
         handleDelete={handleDeleteLeads}
         handleExport={() => alert('Exporting leads to CSV...')}
         handleDownloadSkipTraced={handleDownloadSkipTraced}
         handleViewDetails={handleViewDetails}
         isEmailCampaigning={isProcessing}
+        isPopulatingQueue={isPopulatingQueue}
       />
 
       {/* GHL Connection Status */}
