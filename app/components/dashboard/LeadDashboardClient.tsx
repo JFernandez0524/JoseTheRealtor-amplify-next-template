@@ -386,13 +386,13 @@ export default function LeadDashboardClient({}: Props) {
       await new Promise(resolve => setTimeout(resolve, 1000));
       await refreshLeads();
       
-      // Force page refresh to ensure all data is updated
-      window.location.reload();
     } catch (err) {
       console.error('Sync error:', err);
       alert('Error initiating CRM sync. Ensure leads are skip-traced first.');
     } finally {
       setIsProcessing(false);
+      // Force page refresh to ensure all data is updated - regardless of success/failure
+      window.location.reload();
     }
   };
 
