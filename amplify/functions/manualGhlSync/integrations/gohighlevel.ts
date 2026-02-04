@@ -189,6 +189,15 @@ export async function syncToGoHighLevel(
                       lead.skipTraceStatus === 'COMPLETED' && 
                       !(lead.leadLabels || []).filter((tag: any) => tag !== null).some((tag: any) => ['DNC', 'Not_Interested', 'Do_Not_Call'].includes(tag));
     
+    // 🏷️ LEAD TYPE TAGS - For GHL automation routing
+    if (lead.type?.toUpperCase() === 'PREFORECLOSURE') {
+      tags.push('Preforeclosure');
+      tags.push('lead-type:preforeclosure');
+    } else if (lead.type?.toUpperCase() === 'PROBATE') {
+      tags.push('Probate');
+      tags.push('lead-type:probate');
+    }
+
     // 🛡️ PROPERTY VALUE FILTER - Only high-value properties get direct mail
     const propertyValue = lead.zestimate || lead.estimatedValue || 0;
     const isHighValue = propertyValue >= 300000;
@@ -225,11 +234,11 @@ export async function syncToGoHighLevel(
 
     // 🛡️ DIRECT MAIL PROTECTION - Only ONE sibling gets mail eligibility (and only if high value)
     if (isPrimary && isHighValue) {
-      tags.push('Direct_Mail_Eligible');
+      tags.push('Thanks_IO_Eligible'); // Updated for Thanks.io
       tags.push('Primary_Contact');
     } else if (isPrimary) {
       tags.push('Primary_Contact');
-      // No Direct_Mail_Eligible tag for low-value properties
+      // No Thanks_IO_Eligible tag for low-value properties
     }
 
     const basePayload = {
