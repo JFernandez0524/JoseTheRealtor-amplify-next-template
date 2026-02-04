@@ -1,13 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { AuthGetCurrentUserServer } from '@/app/utils/aws/auth/amplifyServerUtils.server';
-import { generateServerClientUsingCookies } from '@aws-amplify/adapter-nextjs/data';
-import { cookies } from 'next/headers';
-import config from '@/amplify_outputs.json';
-
-const client = generateServerClientUsingCookies({
-  config,
-  cookies,
-});
+import { AuthGetCurrentUserServer, cookiesClient } from '@/app/utils/aws/auth/amplifyServerUtils.server';
 
 interface GHLContact {
   id: string;
@@ -29,7 +21,7 @@ export async function POST(request: NextRequest) {
     console.log('🚀 Starting queue population from GHL...');
 
     // Get GHL integration for this user
-    const { data: integrations } = await client.models.GhlIntegration.list({
+    const { data: integrations } = await cookiesClient.models.GhlIntegration.list({
       filter: { userId: { eq: user.userId } }
     });
 
@@ -140,7 +132,7 @@ export async function POST(request: NextRequest) {
             updatedAt: new Date().toISOString()
           };
 
-          await client.models.OutreachQueue.create(smsEntry);
+          await cookiesClient.models.OutreachQueue.create(smsEntry);
           queueEntriesAdded++;
           console.log(`✅ Added SMS queue entry for ${contact.firstName} ${contact.lastName} (${contact.phone})`);
         }
@@ -159,7 +151,7 @@ export async function POST(request: NextRequest) {
             updatedAt: new Date().toISOString()
           };
 
-          await client.models.OutreachQueue.create(emailEntry);
+          await cookiesClient.models.OutreachQueue.create(emailEntry);
           queueEntriesAdded++;
           console.log(`✅ Added EMAIL queue entry for ${contact.firstName} ${contact.lastName} (${email})`);
         }
