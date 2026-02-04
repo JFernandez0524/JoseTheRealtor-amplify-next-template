@@ -50,6 +50,9 @@ backend.data.resources.tables['PropertyLead'].grantReadWriteData(
 backend.data.resources.tables['UserAccount'].grantReadWriteData(
   backend.uploadCsvHandler.resources.lambda
 );
+backend.data.resources.tables['CsvUploadJob'].grantReadWriteData(
+  backend.uploadCsvHandler.resources.lambda
+);
 
 // 🛡️ Add table name environment variables
 backend.uploadCsvHandler.addEnvironment(
@@ -59,6 +62,10 @@ backend.uploadCsvHandler.addEnvironment(
 backend.uploadCsvHandler.addEnvironment(
   'AMPLIFY_DATA_UserAccount_TABLE_NAME',
   backend.data.resources.tables['UserAccount'].tableName
+);
+backend.uploadCsvHandler.addEnvironment(
+  'AMPLIFY_DATA_CsvUploadJob_TABLE_NAME',
+  backend.data.resources.tables['CsvUploadJob'].tableName
 );
 
 // 🛡️ Add table name environment variables to data stack functions
