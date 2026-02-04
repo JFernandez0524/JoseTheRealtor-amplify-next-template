@@ -253,8 +253,25 @@ export async function syncToGHL(leadIds: string[]): Promise<{ successful: number
       leadIds.map((id) => client.mutations.manualGhlSync({ leadId: id }))
     );
     
-    const successful = results.filter(r => r.status === 'fulfilled').length;
-    const failed = results.filter(r => r.status === 'rejected').length;
+    let successful = 0;
+    let failed = 0;
+    
+    results.forEach((result, index) => {
+      if (result.status === 'fulfilled') {
+        // Check the actual sync result status, not just if Lambda executed
+        const syncResult = result.value?.data?.manualGhlSync;
+        if (syncResult?.status === 'SUCCESS') {
+          successful++;
+          console.log(`✅ Lead ${leadIds[index]} synced successfully`);
+        } else {
+          failed++;
+          console.log(`❌ Lead ${leadIds[index]} sync failed: ${syncResult?.message || 'Unknown error'}`);
+        }
+      } else {
+        failed++;
+        console.log(`❌ Lead ${leadIds[index]} Lambda execution failed: ${result.reason}`);
+      }
+    });
     
     console.log(`✅ GHL Sync complete: ${successful} successful, ${failed} failed`);
     return { successful, failed };
