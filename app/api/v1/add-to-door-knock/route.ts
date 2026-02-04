@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { AuthGetCurrentUserServer, cookiesClient } from '@/app/utils/aws/auth/amplifyServerUtils.server';
-import { geocodeAddress } from '@/app/utils/geocoding.server';
 
 export async function POST(request: NextRequest) {
   try {
@@ -47,11 +46,7 @@ export async function POST(request: NextRequest) {
           continue;
         }
 
-        // Geocode address for map display
-        const fullAddress = `${lead.ownerAddress}, ${lead.ownerCity}, ${lead.ownerState} ${lead.ownerZip}`;
-        const geocodeResult = await geocodeAddress(fullAddress);
-        
-        // Create door knock queue entry
+        // Use existing coordinates from PropertyLead (already geocoded during upload)
         await cookiesClient.models.DoorKnockQueue.create({
           userId: user.userId,
           leadId: lead.id,
@@ -64,8 +59,8 @@ export async function POST(request: NextRequest) {
           estimatedValue: lead.zestimate || lead.estimatedValue || 0,
           status: 'PENDING',
           priority: 'MEDIUM',
-          latitude: geocodeResult?.latitude || null,
-          longitude: geocodeResult?.longitude || null
+          latitude: lead.latitude || null,
+          longitude: lead.longitude || null
         });
 
         addedCount++;
