@@ -34,6 +34,30 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'GHL access token not found' }, { status: 400 });
     }
 
+    // Check if token needs refresh (if expires soon)
+    if (integration.expiresAt && new Date(integration.expiresAt) <= new Date(Date.now() + 5 * 60 * 1000)) {
+      console.log('Token expires soon, attempting refresh...');
+      // Token expires in 5 minutes or less, try to refresh
+      try {
+        const refreshResponse = await fetch('/api/v1/oauth/refresh', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' }
+        });
+        
+        if (refreshResponse.ok) {
+          // Refetch integration after refresh
+          const { data: refreshedIntegrations } = await cookiesClient.models.GhlIntegration.list({
+            filter: { userId: { eq: user.userId } }
+          });
+          if (refreshedIntegrations && refreshedIntegrations.length > 0) {
+            integration = refreshedIntegrations[0];
+          }
+        }
+      } catch (refreshError) {
+        console.error('Token refresh failed:', refreshError);
+      }
+    }
+
     // Fetch ALL contacts with pagination using GHL contacts endpoint
     let allContacts: GHLContact[] = [];
     let startAfter: number | undefined;
@@ -60,9 +84,11 @@ export async function POST(request: NextRequest) {
       });
 
       if (!response.ok) {
-        console.error('GHL API error:', response.status, response.statusText);
+        const errorText = await response.text();
+        console.error('GHL API error:', response.status, response.statusText, errorText);
         return NextResponse.json({ 
-          error: `GHL API error: ${response.status} ${response.statusText}` 
+          error: `GHL API error: ${response.status} ${response.statusText}`,
+          details: errorText
         }, { status: 500 });
       }
 
