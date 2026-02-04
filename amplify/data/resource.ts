@@ -85,6 +85,37 @@ const schema = a.schema({
       allow.groups(['ADMINS']).to(['create', 'read', 'update', 'delete']),
     ]),
 
+  DoorKnockQueue: a
+    .model({
+      userId: a.string().required(),
+      leadId: a.string().required(),
+      
+      // Lead details for map display
+      ownerName: a.string().required(),
+      propertyAddress: a.string().required(),
+      propertyCity: a.string().required(),
+      propertyState: a.string().required(),
+      propertyZip: a.string(),
+      
+      // Map coordinates
+      latitude: a.float(),
+      longitude: a.float(),
+      
+      // Door knock status
+      status: a.enum(['PENDING', 'VISITED', 'NOT_HOME', 'COMPLETED']).default('PENDING'),
+      visitedAt: a.datetime(),
+      notes: a.string(),
+      
+      // Lead context
+      leadType: a.string(),
+      estimatedValue: a.integer(),
+      priority: a.enum(['HIGH', 'MEDIUM', 'LOW']).default('MEDIUM'),
+    })
+    .authorization((allow) => [
+      allow.owner().to(['create', 'read', 'update', 'delete']),
+      allow.groups(['ADMINS']).to(['create', 'read', 'update', 'delete']),
+    ]),
+
   PropertyLead: a
     .model({
       // 🔒 Security: Make 'owner' read-only so it can't be reassigned

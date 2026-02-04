@@ -134,6 +134,14 @@ const Navbar = () => {
                     Upload Leads
                   </Link>
                   <Link
+                    href='/door-knock-map'
+                    className={
+                      pathname === '/door-knock-map' ? activeLinkClass : baseLinkClass
+                    }
+                  >
+                    Door Knock Map
+                  </Link>
+                  <Link
                     href='/docs'
                     className={
                       pathname === '/docs' ? activeLinkClass : baseLinkClass
