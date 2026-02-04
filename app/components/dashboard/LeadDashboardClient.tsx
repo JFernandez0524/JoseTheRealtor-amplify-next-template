@@ -741,6 +741,37 @@ export default function LeadDashboardClient({}: Props) {
     }
   };
 
+  const handleAddToDoorKnock = async () => {
+    if (selectedIds.length === 0) {
+      alert('Please select leads to add to door knock queue.');
+      return;
+    }
+
+    if (!confirm(`Add ${selectedIds.length} leads to door knock queue?`)) return;
+
+    setIsProcessing(true);
+    try {
+      const response = await fetch('/api/v1/add-to-door-knock', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ leadIds: selectedIds })
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) throw new Error(result.error);
+
+      alert(`✅ Added ${result.added} leads to door knock queue!`);
+      setSelectedIds([]);
+      
+    } catch (err: any) {
+      console.error('Door knock add error:', err);
+      alert(`Error adding leads to door knock queue: ${err.message}`);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   const handleDownloadSkipTraced = () => {
     if (selectedIds.length === 0) {
       alert('Please select leads to download.');
@@ -890,6 +921,7 @@ export default function LeadDashboardClient({}: Props) {
         handleBulkDirectMail={handleBulkDirectMail}
         handleBulkEmailCampaign={handleBulkEmailCampaign}
         handlePopulateQueue={handlePopulateQueue}
+        handleAddToDoorKnock={handleAddToDoorKnock}
         handleDelete={handleDeleteLeads}
         handleExport={() => alert('Exporting leads to CSV...')}
         handleDownloadSkipTraced={handleDownloadSkipTraced}

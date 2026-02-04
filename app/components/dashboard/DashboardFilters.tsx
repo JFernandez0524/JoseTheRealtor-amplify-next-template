@@ -39,6 +39,7 @@ type Props = {
   handleBulkDirectMail: () => Promise<void>;
   handleBulkEmailCampaign: () => Promise<void>;
   handlePopulateQueue: () => Promise<void>;
+  handleAddToDoorKnock: () => Promise<void>;
   handleDelete: () => Promise<void>;
   handleExport: () => void;
   handleDownloadSkipTraced: () => void;
@@ -84,6 +85,7 @@ export function DashboardFilters({
   handleBulkDirectMail,
   handleBulkEmailCampaign,
   handlePopulateQueue,
+  handleAddToDoorKnock,
   handleDelete,
   handleExport,
   handleDownloadSkipTraced,
@@ -437,6 +439,15 @@ export function DashboardFilters({
               ) : (
                 <>🔄 Populate Queue</>
               )}
+            </button>
+
+            {/* Add to Door Knock Button */}
+            <button
+              onClick={handleAddToDoorKnock}
+              disabled={isPopulatingQueue || isSkipTracing || isGhlSyncing}
+              className='text-sm px-3 py-1.5 rounded bg-amber-600 text-white hover:bg-amber-700 transition shadow-sm w-full'
+            >
+              🚪 Add to Door Knock
             </button>
 
             {/* Export Button */}
