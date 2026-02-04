@@ -259,7 +259,7 @@ export async function syncToGHL(leadIds: string[]): Promise<{ successful: number
     results.forEach((result, index) => {
       if (result.status === 'fulfilled') {
         // Check the actual sync result status, not just if Lambda executed
-        const syncResult = result.value?.data?.manualGhlSync;
+        const syncResult = (result.value as any)?.data;
         if (syncResult?.status === 'SUCCESS') {
           successful++;
           console.log(`✅ Lead ${leadIds[index]} synced successfully`);
