@@ -30,12 +30,13 @@ export async function POST(request: NextRequest) {
     }
 
     const integration = integrations[0];
-    if (!integration.accessToken) {
+    let currentIntegration = integration;
+    if (!currentIntegration.accessToken) {
       return NextResponse.json({ error: 'GHL access token not found' }, { status: 400 });
     }
 
     // Check if token needs refresh (if expires soon)
-    if (integration.expiresAt && new Date(integration.expiresAt) <= new Date(Date.now() + 5 * 60 * 1000)) {
+    if (currentIntegration.expiresAt && new Date(currentIntegration.expiresAt) <= new Date(Date.now() + 5 * 60 * 1000)) {
       console.log('Token expires soon, attempting refresh...');
       // Token expires in 5 minutes or less, try to refresh
       try {
@@ -50,7 +51,7 @@ export async function POST(request: NextRequest) {
             filter: { userId: { eq: user.userId } }
           });
           if (refreshedIntegrations && refreshedIntegrations.length > 0) {
-            integration = refreshedIntegrations[0];
+            currentIntegration = refreshedIntegrations[0];
           }
         }
       } catch (refreshError) {
@@ -70,14 +71,14 @@ export async function POST(request: NextRequest) {
       console.log(`📄 Fetching page ${page}...`);
       
       // Build URL with pagination parameters
-      let url = `https://services.leadconnectorhq.com/contacts/?locationId=${integration.locationId}&limit=100`;
+      let url = `https://services.leadconnectorhq.com/contacts/?locationId=${currentIntegration.locationId}&limit=100`;
       if (startAfter && startAfterId) {
         url += `&startAfter=${startAfter}&startAfterId=${startAfterId}`;
       }
 
       const response = await fetch(url, {
         headers: {
-          'Authorization': `Bearer ${integration.accessToken}`,
+          'Authorization': `Bearer ${currentIntegration.accessToken}`,
           'Version': '2021-07-28',
           'Content-Type': 'application/json'
         }
@@ -149,7 +150,7 @@ export async function POST(request: NextRequest) {
         if (contact.phone) {
           const smsEntry = {
             userId: user.userId,
-            locationId: integration.locationId,
+            locationId: currentIntegration.locationId,
             contactId: contact.id,
             contactMethod: contact.phone,
             channel: 'SMS' as const,
@@ -170,7 +171,7 @@ export async function POST(request: NextRequest) {
         for (const email of emails) {
           const emailEntry = {
             userId: user.userId,
-            locationId: integration.locationId,
+            locationId: currentIntegration.locationId,
             contactId: contact.id,
             contactMethod: email,
             channel: 'EMAIL' as const,
