@@ -73,6 +73,11 @@ const schema = a.schema({
       campaignPhone: a.string(), // Hardcoded phone number for campaigns
       campaignEmail: a.string(), // Hardcoded email address for campaigns
       emailSignature: a.string(), // User's GHL email signature (HTML)
+      // 📧 EMAIL TEMPLATES
+      probateEmailSubject: a.string(), // Custom subject for probate leads
+      probateEmailTemplate: a.string(), // Custom email template for probate leads
+      preforeclosureEmailSubject: a.string(), // Custom subject for preforeclosure leads
+      preforeclosureEmailTemplate: a.string(), // Custom email template for preforeclosure leads
       // 🚦 RATE LIMITING FIELDS
       dailyMessageCount: a.integer().default(0),
       hourlyMessageCount: a.integer().default(0),

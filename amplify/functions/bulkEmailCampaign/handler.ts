@@ -240,6 +240,50 @@ async function sendProspectingEmail(accessToken: string, contact: any): Promise<
   const cashOffer = parseInt(getCustomField('sM3hEOHCJFoPyWhj1Vc8')) || 0;
   const leadType = getCustomField('oaf4wCuM3Ub9eGpiddrO')?.toLowerCase() || 'property';
   
+  // Get user's custom email templates
+  const { DynamoDBClient } = await import('@aws-sdk/client-dynamodb');
+  const { DynamoDBDocumentClient, ScanCommand } = await import('@aws-sdk/lib-dynamodb');
+  
+  const dynamoClient = new DynamoDBClient({ region: process.env.AWS_REGION });
+  const docClient = DynamoDBDocumentClient.from(dynamoClient);
+  
+  let customSubject = 'Two options for {propertyAddress} (Preliminary Analysis)';
+  let customTemplate = getDefaultTemplate(leadType);
+  
+  try {
+    const { Items } = await docClient.send(new ScanCommand({
+      TableName: process.env.AMPLIFY_DATA_GhlIntegration_TABLE_NAME,
+      FilterExpression: 'locationId = :locationId',
+      ExpressionAttributeValues: {
+        ':locationId': contact.locationId
+      }
+    }));
+    
+    if (Items && Items[0]) {
+      const integration = Items[0];
+      if (leadType === 'probate') {
+        customSubject = integration.probateEmailSubject || customSubject;
+        customTemplate = integration.probateEmailTemplate || customTemplate;
+      } else {
+        customSubject = integration.preforeclosureEmailSubject || customSubject;
+        customTemplate = integration.preforeclosureEmailTemplate || customTemplate;
+      }
+    }
+  } catch (error) {
+    console.error('Failed to fetch custom templates, using defaults:', error);
+  }
+  
+  // Replace template variables
+  const subject = customSubject.replace('{propertyAddress}', propertyAddress);
+  const html = `<p>${customTemplate
+    .replace('{firstName}', contact.firstName || 'Property Owner')
+    .replace('{propertyAddress}', propertyAddress)
+    .replace('{zestimate}', `$${zestimate.toLocaleString()}`)
+    .replace('{cashOffer}', `$${cashOffer.toLocaleString()}`)
+    .split('\n')
+    .map(line => line.trim())
+    .join('</p><p>')}</p>`;
+  
   // Get all email addresses
   const email2 = getCustomField('JY5nf3NzRwfCGvN5u00E');
   const email3 = getCustomField('1oy6TLKItn5RkebjI7kD');
@@ -257,29 +301,6 @@ async function sendProspectingEmail(accessToken: string, contact: any): Promise<
   );
   
   const fromEmail = locationResponse.data.location?.email || 'jose.fernandez@josetherealtor.com';
-  
-  const fullAddress = `${propertyAddress}, ${propertyCity}, ${propertyState} ${propertyZip}`;
-  
-  const subject = `Interested in Your Property at ${propertyAddress}`;
-  const html = `
-    <p>Hi ${contact.firstName || 'there'},</p>
-    
-    <p>I noticed your ${leadType} property at <strong>${fullAddress}</strong> and wanted to reach out.</p>
-    
-    <p>We specialize in helping property owners in situations like yours. Based on current market data:</p>
-    <ul>
-      <li><strong>Estimated Property Value:</strong> $${zestimate.toLocaleString()}</li>
-      <li><strong>Our Cash Offer:</strong> $${cashOffer.toLocaleString()} (as-is condition)</li>
-    </ul>
-    
-    <p>We can close quickly with no repairs needed, or we can help you list it for full market value if you prefer.</p>
-    
-    <p>Would you be open to a quick conversation about your options?</p>
-    
-    <p>Best regards,<br>
-    Jose Fernandez<br>
-    RE/MAX Agent</p>
-  `;
   
   // Send email to each address
   for (const email of emails) {
@@ -321,4 +342,46 @@ async function sendProspectingEmail(accessToken: string, contact: any): Promise<
       }
     }
   );
+}
+
+function getDefaultTemplate(leadType: string): string {
+  if (leadType === 'probate') {
+    return `{firstName},
+
+I specialize in helping NJ families navigate the complexity of settling estates. As a partner at The Borrero Group (a Top 10 RE/MAX Team with 751 properties sold), I believe in giving families clear data, not sales pitches.
+
+Based on a preliminary analysis of {propertyAddress}, here are two potential paths for the estate:
+
+AS-IS CASH OFFER: {cashOffer} (Quick close, no repairs, we handle the cleanout)
+
+RETAIL LISTING: {zestimate} (Maximum market value, utilizing our Diamond Award marketing)
+
+We have successfully sold homes ranging from $80k to $5.2 million, so we have the experience to execute either option depending on your goals.
+
+I just need 10 minutes to walk through the property to confirm the condition and firm up these numbers.
+
+Are you open to meeting briefly to discuss which option is best for the family?
+
+Best regards,
+Jose Fernandez
+Partner, The Borrero Group
+RE/MAX Agent`;
+  } else {
+    return `{firstName},
+
+I noticed your property at {propertyAddress} and wanted to reach out with some options that might help your situation.
+
+Based on current market data:
+
+AS-IS CASH OFFER: {cashOffer} (Quick close, no repairs needed)
+RETAIL LISTING: {zestimate} (Maximum market value if you have time)
+
+We can close quickly with no repairs needed, or we can help you list it for full market value if you prefer.
+
+Would you be open to a quick conversation about your options?
+
+Best regards,
+Jose Fernandez
+RE/MAX Agent`;
+  }
 }
