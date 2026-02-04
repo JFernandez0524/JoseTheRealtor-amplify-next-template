@@ -275,14 +275,28 @@ async function sendProspectingEmail(accessToken: string, contact: any): Promise<
   
   // Replace template variables
   const subject = customSubject.replace('{propertyAddress}', propertyAddress);
-  const html = `<p>${customTemplate
+  
+  let processedTemplate = customTemplate
     .replace('{firstName}', contact.firstName || 'Property Owner')
     .replace('{propertyAddress}', propertyAddress)
     .replace('{zestimate}', `$${zestimate.toLocaleString()}`)
-    .replace('{cashOffer}', `$${cashOffer.toLocaleString()}`)
-    .split('\n')
-    .map(line => line.trim())
-    .join('</p><p>')}</p>`;
+    .replace('{cashOffer}', `$${cashOffer.toLocaleString()}`);
+  
+  // Check if template contains HTML tags
+  const containsHTML = /<[^>]+>/.test(processedTemplate);
+  
+  let html;
+  if (containsHTML) {
+    // Template already contains HTML, use as-is
+    html = processedTemplate;
+  } else {
+    // Plain text template, convert to HTML paragraphs
+    html = `<p>${processedTemplate
+      .split('\n')
+      .map(line => line.trim())
+      .filter(line => line.length > 0)
+      .join('</p><p>')}</p>`;
+  }
   
   // Get all email addresses
   const email2 = getCustomField('JY5nf3NzRwfCGvN5u00E');

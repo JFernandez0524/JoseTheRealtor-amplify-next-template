@@ -8,7 +8,7 @@ import {
   cookiesClient,
 } from '@/app/utils/aws/auth/amplifyServerUtils.server';
 import GhlSettingsCard from '@/app/components/profile/GhlSettingsCard';
-import GhlCampaignSettings from '@/app/components/profile/GhlCampaignSettings';
+import EmailTemplateSettings from '@/app/components/profile/EmailTemplateSettings';
 
 import {
   HiOutlineUserCircle,
@@ -38,6 +38,12 @@ export default async function ProfilePage() {
     filter: { owner: { eq: user.userId } },
   });
   const userAccount = accounts?.[0];
+
+  // 3. Fetch GHL Integration for email templates
+  const { data: ghlIntegrations } = await cookiesClient.models.GhlIntegration.list({
+    filter: { userId: { eq: user.userId } },
+  });
+  const ghlIntegration = ghlIntegrations?.[0];
 
   // 3. Determine Subscription Level
   // We filter out the system "Google" group to show only app-specific tiers
@@ -168,8 +174,16 @@ export default async function ProfilePage() {
           {/* GHL Integration Settings Card */}
           <GhlSettingsCard />
           
-          {/* GHL Campaign Settings Card */}
-          <GhlCampaignSettings />
+          {/* Email Template Settings Card */}
+          {ghlIntegration && (
+            <EmailTemplateSettings 
+              integration={ghlIntegration} 
+              onUpdate={() => {
+                // This will be handled by the component internally
+                // The page will need to be refreshed to see changes
+              }} 
+            />
+          )}
         </div>
 
         {/* --- RIGHT COLUMN: SUBSCRIPTION & WALLET --- */}

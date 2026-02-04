@@ -20,10 +20,20 @@ interface AccountDashboardProps {
 export default function AccountDashboard({ initialAccount, initialLeads }: AccountDashboardProps) {
   const [leads] = useState(initialLeads);
 
-  // Calculate stats
+  // Calculate stats from actual lead data (more reliable than counters)
   const totalLeads = leads.length;
-  const totalSkips = initialAccount?.totalSkipsPerformed || 0;
-  const totalSynced = initialAccount?.totalLeadsSynced || 0;
+  
+  // Count successful skip traces
+  const totalSkips = leads.filter(lead => 
+    lead.skipTraceStatus === 'COMPLETED' && 
+    (lead.phones?.length > 0 || lead.emails?.length > 0)
+  ).length;
+  
+  // Count successful GHL syncs
+  const totalSynced = leads.filter(lead => 
+    lead.ghlSyncStatus === 'SUCCESS'
+  ).length;
+  
   const credits = initialAccount?.credits || 0;
 
   // Failed skip traces
