@@ -27,6 +27,14 @@ import axios, { AxiosInstance } from 'axios';
 const KVCORE_API_KEY = process.env.KVCORE_API_KEY;
 const KVCORE_BASE_URL = 'https://api.kvcore.com/v2';
 
+function isKvCoreEnabled(): boolean {
+  if (!KVCORE_API_KEY) {
+    console.log('⏭️ Skipping kvCORE operation - API key not configured');
+    return false;
+  }
+  return true;
+}
+
 if (!KVCORE_API_KEY) {
   console.warn('⚠️ KVCORE_API_KEY not configured');
 }
@@ -58,6 +66,8 @@ export async function createContact(contact: {
   notes?: string;
   tags?: string[];
 }) {
+  if (!isKvCoreEnabled()) return null;
+
   try {
     console.log('👤 Creating kvCORE contact:', contact.email);
     
@@ -90,6 +100,8 @@ export async function getContacts(params?: {
   search?: string;
   dealType?: 'buyer' | 'seller';
 }) {
+  if (!isKvCoreEnabled()) return { data: [], total: 0 };
+
   try {
     console.log('📇 Fetching kvCORE contacts');
     
@@ -115,6 +127,11 @@ export async function getContacts(params?: {
  * Endpoint: GET /public/contacts/{id}
  */
 export async function getContactDetails(contactId: string) {
+  if (!KVCORE_API_KEY) {
+    console.log('⏭️ Skipping kvCORE contact details - API key not configured');
+    return null;
+  }
+
   try {
     console.log('👤 Fetching contact details:', contactId);
     
@@ -141,6 +158,11 @@ export async function updateContact(contactId: string, updates: {
   notes?: string;
   status?: string;
 }) {
+  if (!KVCORE_API_KEY) {
+    console.log('⏭️ Skipping kvCORE contact update - API key not configured');
+    return null;
+  }
+
   try {
     console.log('📝 Updating kvCORE contact:', contactId);
     
@@ -167,6 +189,11 @@ export async function updateContact(contactId: string, updates: {
  * Endpoint: DELETE /public/contacts/{id}
  */
 export async function deleteContact(contactId: string) {
+  if (!KVCORE_API_KEY) {
+    console.log('⏭️ Skipping kvCORE contact deletion - API key not configured');
+    return false;
+  }
+
   try {
     console.log('🗑️ Deleting kvCORE contact:', contactId);
     
@@ -193,6 +220,11 @@ export async function sendEmailToContact(contactId: string, email: {
   body: string;
   fromEmail?: string;
 }) {
+  if (!KVCORE_API_KEY) {
+    console.log('⏭️ Skipping kvCORE email send - API key not configured');
+    return null;
+  }
+
   try {
     console.log('📧 Sending email to contact:', contactId);
     

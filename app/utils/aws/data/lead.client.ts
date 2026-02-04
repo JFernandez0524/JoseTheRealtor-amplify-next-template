@@ -247,37 +247,56 @@ export async function skipTraceLeads(leadIds: string[]): Promise<any> {
  * - Includes property details, Zestimate, and cash offer
  * - UI should refresh after operation completes
  */
-export async function syncToGHL(leadIds: string[]): Promise<{ successful: number; failed: number }> {
+export async function syncToGHL(leadIds: string[]): Promise<{ successful: number; failed: number; isAsync?: boolean }> {
   try {
-    const results = await Promise.allSettled(
-      leadIds.map((id) => client.mutations.manualGhlSync({ leadId: id }))
-    );
+    const BATCH_SIZE = 10;
+    const DELAY_MS = 2000;
     
     let successful = 0;
     let failed = 0;
     
-    results.forEach((result, index) => {
-      if (result.status === 'fulfilled') {
-        // Check the actual sync result status, not just if Lambda executed
-        const syncResult = (result.value as any)?.data;
-        if (syncResult?.status === 'SUCCESS') {
-          successful++;
-          console.log(`✅ Lead ${leadIds[index]} synced successfully`);
+    console.log(`🔄 Syncing ${leadIds.length} leads in batches of ${BATCH_SIZE}...`);
+    
+    // Process leads in batches
+    for (let i = 0; i < leadIds.length; i += BATCH_SIZE) {
+      const batch = leadIds.slice(i, i + BATCH_SIZE);
+      console.log(`📦 Processing batch ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(leadIds.length / BATCH_SIZE)} (${batch.length} leads)`);
+      
+      const results = await Promise.allSettled(
+        batch.map((id) => client.mutations.manualGhlSync({ leadId: id }))
+      );
+      
+      results.forEach((result, index) => {
+        if (result.status === 'fulfilled') {
+          // Check the actual sync result status, not just if Lambda executed
+          const syncResult = (result.value as any)?.data;
+          if (syncResult?.status === 'SUCCESS') {
+            successful++;
+            console.log(`✅ Lead ${batch[index]} synced successfully`);
+          } else {
+            failed++;
+            console.log(`❌ Lead ${batch[index]} sync failed: ${syncResult?.message || 'Unknown error'}`);
+          }
         } else {
           failed++;
-          console.log(`❌ Lead ${leadIds[index]} sync failed: ${syncResult?.message || 'Unknown error'}`);
+          console.log(`❌ Lead ${batch[index]} Lambda execution failed: ${result.reason}`);
         }
-      } else {
-        failed++;
-        console.log(`❌ Lead ${leadIds[index]} Lambda execution failed: ${result.reason}`);
+      });
+      
+      // Add delay between batches (except for the last batch)
+      if (i + BATCH_SIZE < leadIds.length) {
+        console.log(`⏳ Waiting ${DELAY_MS}ms before next batch...`);
+        await new Promise(resolve => setTimeout(resolve, DELAY_MS));
       }
-    });
+    }
     
     console.log(`✅ GHL Sync complete: ${successful} successful, ${failed} failed`);
     return { successful, failed };
   } catch (err) {
     console.error('Failed to sync to GHL:', err);
     throw err;
+  }
+}
   }
 }
 

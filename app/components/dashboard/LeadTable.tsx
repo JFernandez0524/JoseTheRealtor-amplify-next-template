@@ -315,6 +315,7 @@ export function LeadTable({
               {renderSortableHeader('skipTraceStatus', 'Status')}
               {/* NEW GHL STATUS HEADER */}
               {renderSortableHeader('ghlSyncStatus', 'GHL Sync', 'bg-purple-50')}
+              {renderSortableHeader('ghlSyncDate', 'Sync Date', 'bg-purple-50')}
               {renderSortableHeader(
                 'ownerLastName',
                 'Owner Name',
@@ -415,6 +416,18 @@ export function LeadTable({
                   {/* NEW GHL STATUS CELL */}
                   <td className='px-4 py-4 whitespace-nowrap text-sm'>
                     <GhlStatusBadge status={lead.ghlSyncStatus} />
+                  </td>
+
+                  {/* GHL SYNC DATE CELL */}
+                  <td className='px-4 py-4 whitespace-nowrap text-xs text-gray-600 bg-purple-50/30'>
+                    {lead.ghlSyncDate ? (
+                      <div className='flex flex-col'>
+                        <span>{new Date(lead.ghlSyncDate).toLocaleDateString()}</span>
+                        <span className='text-gray-400'>{new Date(lead.ghlSyncDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                      </div>
+                    ) : (
+                      <span className='text-gray-400'>Not synced</span>
+                    )}
                   </td>
 
                   <td className='px-4 py-4 whitespace-nowrap text-sm text-gray-900 bg-blue-50/30'>

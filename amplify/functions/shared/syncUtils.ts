@@ -15,12 +15,18 @@ export async function updateLeadSyncStatus(
   contactId?: string
 ): Promise<void> {
   const updateExpression = status === 'SUCCESS' 
-    ? 'SET ghlSyncStatus = :status, ghlContactId = :contactId, ghlSyncDate = :syncDate'
-    : 'SET ghlSyncStatus = :status';
+    ? 'SET #ghlSyncStatus = :status, #ghlContactId = :contactId, #ghlSyncDate = :syncDate'
+    : 'SET #ghlSyncStatus = :status';
     
+  const expressionAttributeNames: any = {
+    '#ghlSyncStatus': 'ghlSyncStatus'
+  };
+  
   const expressionValues: any = { ':status': status };
   
   if (status === 'SUCCESS' && contactId) {
+    expressionAttributeNames['#ghlContactId'] = 'ghlContactId';
+    expressionAttributeNames['#ghlSyncDate'] = 'ghlSyncDate';
     expressionValues[':contactId'] = contactId;
     expressionValues[':syncDate'] = new Date().toISOString();
   }
@@ -29,6 +35,7 @@ export async function updateLeadSyncStatus(
     TableName: tableName,
     Key: { id: leadId },
     UpdateExpression: updateExpression,
+    ExpressionAttributeNames: expressionAttributeNames,
     ExpressionAttributeValues: expressionValues
   }));
 }
