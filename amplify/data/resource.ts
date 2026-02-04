@@ -106,7 +106,7 @@ const schema = a.schema({
       visitedAt: a.datetime(),
       notes: a.string(),
       
-      // Lead context
+      // Lead context  
       leadType: a.string(),
       estimatedValue: a.integer(),
       priority: a.enum(['HIGH', 'MEDIUM', 'LOW']),
