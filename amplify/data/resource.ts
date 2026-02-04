@@ -102,14 +102,14 @@ const schema = a.schema({
       longitude: a.float(),
       
       // Door knock status
-      status: a.enum(['PENDING', 'VISITED', 'NOT_HOME', 'COMPLETED']).default('PENDING'),
+      status: a.enum(['PENDING', 'VISITED', 'NOT_HOME', 'COMPLETED']),
       visitedAt: a.datetime(),
       notes: a.string(),
       
       // Lead context
       leadType: a.string(),
       estimatedValue: a.integer(),
-      priority: a.enum(['HIGH', 'MEDIUM', 'LOW']).default('MEDIUM'),
+      priority: a.enum(['HIGH', 'MEDIUM', 'LOW']),
     })
     .authorization((allow) => [
       allow.owner().to(['create', 'read', 'update', 'delete']),
