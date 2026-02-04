@@ -22,7 +22,8 @@ const CUSTOM_FIELD_IDS = {
   EMAIL_ATTEMPT_COUNTER: 'wWlrXoXeMXcM6kUexf2L',
   LAST_CALL_DATE: 'dWNGeSckpRoVUxXLgxMj',
   AI_STATE: '1NxQW2kKMVgozjSUuu7s',
-  MAIL_SENT_COUNT: 'DTEW0PLqxp35WHOiDLWR'
+  MAIL_SENT_COUNT: 'DTEW0PLqxp35WHOiDLWR',
+  CALL_OUTCOME: 'LNyfm5JDal955puZGbu3'
 };
 
 export async function POST(request: Request) {
@@ -43,11 +44,16 @@ export async function POST(request: Request) {
     const lastCallDate = payload[CUSTOM_FIELD_IDS.LAST_CALL_DATE];
     const aiState = payload[CUSTOM_FIELD_IDS.AI_STATE];
     const mailSentCount = payload[CUSTOM_FIELD_IDS.MAIL_SENT_COUNT];
+    const callOutcome = payload[CUSTOM_FIELD_IDS.CALL_OUTCOME];
 
     console.log('🔄 [FIELD_SYNC] Extracted values:', {
       contactId,
       callAttempts,
       emailAttempts,
+      lastCallDate,
+      aiState,
+      mailSentCount,
+      callOutcome
       lastCallDate,
       aiState,
       mailSentCount
@@ -83,6 +89,9 @@ export async function POST(request: Request) {
     }
     if (mailSentCount !== undefined) {
       updatedOutreachData.mailSentCount = parseInt(mailSentCount) || 0;
+    }
+    if (callOutcome) {
+      updatedOutreachData.callOutcome = callOutcome;
     }
 
     // Update PropertyLead

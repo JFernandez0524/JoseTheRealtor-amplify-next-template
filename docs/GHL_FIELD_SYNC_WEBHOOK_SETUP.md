@@ -26,6 +26,7 @@ https://your-app-domain.com/api/v1/ghl-field-sync-webhook
 - `last_call_date` (ID: dWNGeSckpRoVUxXLgxMj)
 - `AI state` (ID: 1NxQW2kKMVgozjSUuu7s)
 - `mail_sent_count` (ID: DTEW0PLqxp35WHOiDLWR)
+- `Call Outcome` (ID: LNyfm5JDal955puZGbu3)
 
 ### 3. Add Webhook Action
 
@@ -46,7 +47,8 @@ https://your-app-domain.com/api/v1/ghl-field-sync-webhook
   "wWlrXoXeMXcM6kUexf2L": "{{contact.email_attempt_counter}}",
   "dWNGeSckpRoVUxXLgxMj": "{{contact.last_call_date}}",
   "1NxQW2kKMVgozjSUuu7s": "{{contact.AI_state}}",
-  "DTEW0PLqxp35WHOiDLWR": "{{contact.mail_sent_count}}"
+  "DTEW0PLqxp35WHOiDLWR": "{{contact.mail_sent_count}}",
+  "LNyfm5JDal955puZGbu3": "{{contact.Call_Outcome}}"
 }
 ```
 
@@ -68,6 +70,7 @@ Click **Save** and **Publish** the workflow.
 | last_call_date | dWNGeSckpRoVUxXLgxMj | ghlOutreachData.lastSmsSent |
 | AI state | 1NxQW2kKMVgozjSUuu7s | ghlOutreachData.aiState |
 | mail_sent_count | DTEW0PLqxp35WHOiDLWR | ghlOutreachData.mailSentCount |
+| Call Outcome | LNyfm5JDal955puZGbu3 | ghlOutreachData.callOutcome |
 
 ## Testing
 

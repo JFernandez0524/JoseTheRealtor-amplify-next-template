@@ -68,8 +68,10 @@ const schema = a.schema({
       scope: a.string(),
       isActive: a.boolean().default(true),
       // 📞 CAMPAIGN SETTINGS
-      selectedPhoneNumber: a.string(), // User's selected phone for campaigns
-      selectedEmail: a.string(), // User's selected email for campaigns
+      selectedPhoneNumber: a.string(), // User's selected phone for campaigns (deprecated - use campaignPhone)
+      selectedEmail: a.string(), // User's selected email for campaigns (deprecated - use campaignEmail)
+      campaignPhone: a.string(), // Hardcoded phone number for campaigns
+      campaignEmail: a.string(), // Hardcoded email address for campaigns
       emailSignature: a.string(), // User's GHL email signature (HTML)
       // 🚦 RATE LIMITING FIELDS
       dailyMessageCount: a.integer().default(0),

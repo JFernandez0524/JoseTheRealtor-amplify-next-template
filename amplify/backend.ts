@@ -209,6 +209,8 @@ backend.dailyEmailAgent.addEnvironment(
 );
 
 backend.dailyEmailAgent.addEnvironment('APP_URL', process.env.APP_URL || 'https://leads.josetherealtor.com');
+backend.dailyEmailAgent.addEnvironment('GHL_CLIENT_ID', process.env.GHL_CLIENT_ID || '');
+backend.dailyEmailAgent.addEnvironment('GHL_CLIENT_SECRET', process.env.GHL_CLIENT_SECRET || '');
 
 backend.data.resources.tables['GhlIntegration'].grantReadData(
   backend.dailyEmailAgent.resources.lambda

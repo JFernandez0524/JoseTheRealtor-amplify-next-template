@@ -190,7 +190,7 @@ const Navbar = () => {
               )}
             </div>
           ) : (
-            !isLoading && (
+            !isLoading && pathname !== '/login' && (
               <Link
                 href='/login'
                 className='bg-blue-600 text-white px-5 py-2 rounded-lg font-bold text-sm'
@@ -297,7 +297,7 @@ const Navbar = () => {
               </div>
             </>
           )}
-          {!isAuthenticated && !isLoading && (
+          {!isAuthenticated && !isLoading && pathname !== '/login' && (
             <Link
               href='/login'
               className='mt-8 bg-blue-600 text-white w-full py-5 rounded-2xl font-bold text-xl text-center shadow-lg'

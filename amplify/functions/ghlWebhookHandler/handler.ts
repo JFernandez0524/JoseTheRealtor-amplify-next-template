@@ -218,8 +218,124 @@ export const handler = async (event: any) => {
       propertyAddress,
       leadType,
       zestimate,
-      cashOffer
+      cashOffer,
+      tags: fullContact?.tags
     });
+
+    // Check if this is actually a lead (has ai outreach tag or property data)
+    const hasAiOutreachTag = fullContact?.tags?.some((tag: string) => 
+      tag.toLowerCase().includes('ai outreach')
+    );
+    const hasPropertyData = propertyAddress || leadType;
+    
+    if (!hasAiOutreachTag && !hasPropertyData) {
+      console.log('🚫 [WEBHOOK_LAMBDA] Contact is not a lead (no ai outreach tag or property data) - skipping AI response');
+      return {
+        statusCode: 200,
+        body: JSON.stringify({ 
+          message: 'Skipped - not a lead contact',
+          contactId,
+          hasAiOutreachTag,
+          hasPropertyData
+        })
+      };
+    }
+
+    // Check if conversation is being handled manually
+    const isManualHandling = fullContact?.tags?.some((tag: string) => 
+      tag.toLowerCase().includes('manual') || tag.toLowerCase().includes('human')
+    );
+    
+    if (isManualHandling) {
+      console.log('🚫 [WEBHOOK_LAMBDA] Contact has manual/human tag - skipping AI response');
+      return {
+        statusCode: 200,
+        body: JSON.stringify({ 
+          message: 'Skipped - manual handling active',
+          contactId,
+          tags: fullContact?.tags
+        })
+      };
+    }
+
+    // Auto-detect manual intervention by checking recent conversation history
+    if (conversationId) {
+      try {
+        console.log('🔍 [WEBHOOK_LAMBDA] Checking for recent manual messages...');
+        const messagesResponse = await fetch(
+          `https://services.leadconnectorhq.com/conversations/${conversationId}/messages?limit=10`,
+          {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Version': '2021-07-28'
+            }
+          }
+        );
+        
+        if (messagesResponse.ok) {
+          const messagesData = await messagesResponse.json();
+          const recentMessages = messagesData.messages || [];
+          
+          // Look for outbound messages sent in the last 5 minutes that weren't from AI
+          const fiveMinutesAgo = Date.now() - (5 * 60 * 1000);
+          const recentManualMessage = recentMessages.find((msg: any) => {
+            const messageTime = new Date(msg.dateAdded).getTime();
+            const isRecent = messageTime > fiveMinutesAgo;
+            const isOutbound = msg.direction === 'outbound';
+            
+            // AI message detection patterns
+            const messageBody = msg.body?.toLowerCase() || '';
+            const isFromAI = 
+              messageBody.includes('jose from re/max') ||
+              messageBody.includes('ai assistant') ||
+              messageBody.includes('reply stop to opt out') ||
+              messageBody.includes('based on current market data') ||
+              messageBody.includes('what area are you looking in') ||
+              messageBody.includes('what\'s your budget') ||
+              messageBody.includes('how many bedrooms') ||
+              messageBody.includes('when are you hoping to move') ||
+              messageBody.includes('let me connect you with jose directly') ||
+              (messageBody.length > 100 && messageBody.includes('property')); // Long property-related messages are likely AI
+            
+            return isRecent && isOutbound && !isFromAI;
+          });
+          
+          if (recentManualMessage) {
+            console.log('🚫 [WEBHOOK_LAMBDA] Detected recent manual message - auto-enabling manual mode');
+            
+            // Auto-add manual tag
+            const currentTags = fullContact?.tags || [];
+            if (!currentTags.includes('manual')) {
+              const newTags = [...currentTags, 'manual'];
+              
+              await fetch(`https://services.leadconnectorhq.com/contacts/${contactId}`, {
+                method: 'PUT',
+                headers: {
+                  'Authorization': `Bearer ${token}`,
+                  'Version': '2021-07-28',
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ tags: newTags })
+              });
+              
+              console.log('✅ [WEBHOOK_LAMBDA] Auto-added manual tag');
+            }
+            
+            return {
+              statusCode: 200,
+              body: JSON.stringify({ 
+                message: 'Auto-detected manual intervention - manual mode enabled',
+                contactId,
+                manualMessage: recentManualMessage.body
+              })
+            };
+          }
+        }
+      } catch (error) {
+        console.error('⚠️ [WEBHOOK_LAMBDA] Failed to check conversation history:', error);
+        // Continue with normal flow if history check fails
+      }
+    }
 
     // Fetch conversation ID from GHL if not provided
     console.log('🔍 [WEBHOOK_LAMBDA] Fetching conversations for contact...');
