@@ -173,7 +173,7 @@ export async function syncToGoHighLevel(
       
       // 🤖 AI OUTREACH - Only for AI plan users and admins
       if (isAIPlan || isAdmin) {
-        tags.push('AI Outreach'); // Enable AI outreach for skip traced leads
+        tags.push('ai outreach'); // Enable AI outreach for skip traced leads (lowercase to match queue check)
       }
     } else if (specificPhone) {
       tags.push('Data:OriginalUpload'); // Phone was in original upload

@@ -242,16 +242,17 @@ export const handler: S3Handler = async (event) => {
             await validateAddressWithGoogle(fullPropString);
 
           const std = propValidation?.components;
-          const finalPropAddr = std?.street || rawPropAddr;
-          const finalPropCity = std?.city || rawPropCity;
-          const finalPropState = std?.state || rawPropState;
-          const finalPropZip = std?.zip || rawPropZip;
+          // Keep original CSV address for Zillow links, use standardized for geocoding
+          const finalPropAddr = rawPropAddr; // Use original CSV address
+          const finalPropCity = rawPropCity; // Use original CSV city
+          const finalPropState = std?.state || rawPropState; // Use standardized state (NJ vs New Jersey)
+          const finalPropZip = std?.zip || rawPropZip; // Use standardized zip
           const finalPropCounty = std?.county || null;
 
           const standardizedAddress = propValidation
             ? {
-                street: finalPropAddr,
-                city: finalPropCity,
+                street: std?.street || rawPropAddr, // Keep Google's standardized version for geocoding
+                city: std?.city || rawPropCity,
                 state: finalPropState,
                 zip: finalPropZip,
                 county: finalPropCounty,
