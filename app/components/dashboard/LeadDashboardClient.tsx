@@ -71,6 +71,31 @@ export default function LeadDashboardClient({}: Props) {
 
   // --- Effects ---
 
+  // Check for upload completion and refresh
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('upload') === 'processing') {
+      // Remove the parameter from URL
+      const newUrl = window.location.pathname;
+      window.history.replaceState({}, '', newUrl);
+      
+      // Set up polling to check for upload completion
+      const checkUploadStatus = async () => {
+        try {
+          // Refresh leads to see if new ones appeared
+          await refreshLeads();
+        } catch (error) {
+          console.error('Error checking upload status:', error);
+        }
+      };
+
+      // Check immediately and then every 3 seconds for 30 seconds
+      checkUploadStatus();
+      const interval = setInterval(checkUploadStatus, 3000);
+      setTimeout(() => clearInterval(interval), 30000);
+    }
+  }, []);
+
   // Fetch leads with observeQuery
   useEffect(() => {
     const sub = observeLeads((items) => {
@@ -333,6 +358,9 @@ export default function LeadDashboardClient({}: Props) {
       // Wait for Lambda to complete processing, then refresh
       await new Promise(resolve => setTimeout(resolve, 1000));
       await refreshLeads();
+      
+      // Force page refresh to ensure all data is updated
+      window.location.reload();
     } catch (err) {
       console.error('Sync error:', err);
       alert('Error initiating CRM sync. Ensure leads are skip-traced first.');

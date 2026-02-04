@@ -194,6 +194,7 @@ export function DashboardFilters({
             <option value='OFF_MARKET'>Off Market</option>
             <option value='SKIP'>Skip</option>
             <option value='DIRECT_MAIL'>Direct Mail</option>
+            <option value='FSBO'>FSBO</option>
           </select>
 
           {/* 6. AI PRIORITY FILTER - AI PLAN ONLY */}
