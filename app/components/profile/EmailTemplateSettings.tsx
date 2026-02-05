@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { cookiesClient } from '@/app/utils/aws/auth/amplifyServerUtils.server';
+import { generateClient } from 'aws-amplify/data';
+import type { Schema } from '@/amplify/data/resource';
 
 interface EmailTemplateSettingsProps {
   integration: any;
@@ -76,6 +77,7 @@ function TemplateEditor({ value, onChange, placeholder, rows = 10 }: TemplateEdi
 }
 
 export default function EmailTemplateSettings({ integration, onUpdate }: EmailTemplateSettingsProps) {
+  const client = generateClient<Schema>();
   const [probateSubject, setProbateSubject] = useState('');
   const [probateTemplate, setProbateTemplate] = useState('');
   const [preforeclosureSubject, setPreforeclosureSubject] = useState('');
@@ -132,7 +134,7 @@ RE/MAX Agent`;
   const handleSave = async () => {
     setSaving(true);
     try {
-      await cookiesClient.models.GhlIntegration.update({
+      await client.models.GhlIntegration.update({
         id: integration.id,
         probateEmailSubject: probateSubject,
         probateEmailTemplate: probateTemplate,
