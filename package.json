@@ -15,6 +15,7 @@
     "@aws-amplify/ui-react-core": "^3.4.7",
     "@aws-sdk/client-bedrock-runtime": "^3.964.0",
     "@aws-sdk/client-dynamodb": "^3.943.0",
+    "@aws-sdk/client-lex-runtime-v2": "^3.983.0",
     "@aws-sdk/client-s3": "^3.943.0",
     "@aws-sdk/lib-dynamodb": "^3.943.0",
     "@googlemaps/addressvalidation": "^3.2.1",

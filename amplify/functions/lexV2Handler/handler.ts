@@ -1,7 +1,3 @@
-import { LexRuntimeV2Client, RecognizeTextCommand } from '@aws-sdk/client-lex-runtime-v2';
-
-const lexClient = new LexRuntimeV2Client({ region: process.env.AWS_REGION });
-
 type LexEvent = {
   sessionState: {
     intent: {
