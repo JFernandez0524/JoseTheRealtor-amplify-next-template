@@ -306,6 +306,218 @@ For detailed deployment instructions, see the [Amplify documentation](https://do
      - Stops future emails to that address
    - **Rate Limiting**: 2 seconds between emails to prevent API throttling
 
+## AI Agent System
+
+### Overview
+
+The AI messaging agent uses OpenAI GPT-4o-mini to handle multi-channel conversations with leads. It's designed to qualify prospects, present options, and schedule appointments while maintaining a natural, conversational tone.
+
+### How the AI Works
+
+**Architecture:**
+- **Conversation Handler**: `amplify/functions/shared/conversationHandler.ts`
+- **Token Manager**: `amplify/functions/shared/ghlTokenManager.ts`
+- **Webhook Handler**: `amplify/functions/ghlWebhookHandler/` (instant responses)
+- **Daily Agent**: `amplify/functions/dailyOutreachAgent/` (scheduled outreach)
+
+**Conversation States:**
+1. `NEW_LEAD` - Initial contact, determine intent
+2. `ASK_INTENT` - Ask if buyer or seller
+3. `SELLER_QUALIFICATION` - Get property address
+4. `PROPERTY_VALUATION` - Show value and present options
+5. `BUYER_QUALIFICATION` - Qualify buyer needs
+6. `APPOINTMENT_BOOKING` - Schedule consultation
+7. `QUALIFIED` - Ready for human handoff
+
+### AI Training & Customization
+
+**System Prompt Location:**
+The AI's behavior is controlled by the system prompt in `conversationHandler.ts` (lines 190-320).
+
+**Key Training Areas:**
+
+1. **Compliance Rules** (Lines 195-210)
+   - How AI identifies itself
+   - When to hand off to human
+   - Legal disclaimers
+   - Already listed property protocol
+
+2. **Conversation Style** (Lines 250-280)
+   - Tone and personality
+   - Message length (1-2 sentences)
+   - Casual vs professional language
+   - Question pacing
+
+3. **Lead Qualification** (Lines 220-250)
+   - Questions to ask
+   - Information to gather
+   - When to present offers
+   - Appointment booking criteria
+
+### Modifying AI Behavior
+
+**To Change Conversation Flow:**
+
+1. Edit the system prompt in `conversationHandler.ts`
+2. Modify state-specific guidance sections
+3. Update conversation rules
+4. Test using `/api/v1/test-ai-response` endpoint
+
+**Example: Make AI More Aggressive**
+```typescript
+// In conversationHandler.ts, update CONVERSATION RULES:
+CONVERSATION RULES:
+- Ask 2-3 questions per message (instead of 1)
+- Push for appointment in every response
+- Emphasize urgency and scarcity
+```
+
+**Example: Make AI More Casual**
+```typescript
+RESPONSE STYLE:
+- Use emojis occasionally 😊
+- More contractions (gonna, wanna)
+- Shorter sentences
+- More enthusiasm!
+```
+
+### Handling Special Situations
+
+**Already Listed Properties:**
+The AI automatically detects and exits gracefully when prospects mention:
+- "Working with [realtor name]"
+- "Already listed"
+- "Have a realtor"
+
+**Response:** "I understand you're already working with [name]. I respect that relationship and wish you the best!"
+
+**Not Interested:**
+AI tags contact with `conversation_ended` to stop follow-ups.
+
+**Complex Questions:**
+AI hands off to human: "Let me connect you with Jose directly for that."
+
+### Available AI Tools
+
+The AI can call these functions during conversations:
+
+1. **validate_address** - Standardize addresses using Google Maps
+2. **get_property_value** - Fetch Zestimate and property details
+3. **check_availability** - Check calendar for open slots
+4. **schedule_consultation** - Book appointments
+5. **save_buyer_search** - Save buyer criteria in kvCORE
+6. **end_conversation** - Exit and stop follow-ups
+
+### Testing AI Responses
+
+**Test Endpoint:** `POST /api/v1/test-ai-response`
+
+```json
+{
+  "contactId": "GHL_CONTACT_ID",
+  "message": "Yes, I'm interested in selling"
+}
+```
+
+This tests AI responses without actually sending messages.
+
+### Email Template Customization
+
+**Location:** Profile → Email Templates
+
+**Available Variables:**
+- `{firstName}` - Contact's first name
+- `{propertyAddress}` - Full property address
+- `{zestimate}` - Formatted market value
+- `{cashOffer}` - Formatted cash offer (70%)
+
+**Template Types:**
+1. **Probate Email Template** - For estate/probate leads
+2. **Preforeclosure Email Template** - For foreclosure leads
+
+**HTML Support:**
+Templates automatically detect HTML tags. You can use:
+- Full HTML formatting
+- Inline styles
+- Tables and images
+- Custom layouts
+
+**Plain Text Example:**
+```
+{firstName},
+
+I noticed your property at {propertyAddress}...
+
+Cash Offer: {cashOffer}
+Market Value: {zestimate}
+
+Best regards,
+Jose
+```
+
+**HTML Example:**
+```html
+<div style="font-family: Arial;">
+  <h2>Hello {firstName},</h2>
+  <p>Property: <strong>{propertyAddress}</strong></p>
+  <ul>
+    <li>Cash: {cashOffer}</li>
+    <li>Retail: {zestimate}</li>
+  </ul>
+</div>
+```
+
+### Best Practices
+
+**DO:**
+- ✅ Keep messages under 160 characters when possible
+- ✅ Ask one question at a time
+- ✅ Use natural, conversational language
+- ✅ Respect business hours (Mon-Fri 9AM-7PM, Sat 9AM-12PM EST)
+- ✅ Tag contacts appropriately for human handoff
+- ✅ Test changes using the test endpoint
+
+**DON'T:**
+- ❌ Give legal or financial advice
+- ❌ Make promises about property values
+- ❌ Continue pursuing already listed properties
+- ❌ Send messages outside business hours
+- ❌ Use overly salesy language
+- ❌ Ask multiple questions in one message
+
+### Monitoring & Analytics
+
+**CloudWatch Logs:**
+- View AI conversation logs in AWS CloudWatch
+- Search for specific contact IDs or error messages
+- Monitor tool usage and response times
+
+**GHL Custom Fields:**
+- `ai_state` - Current conversation state
+- `email_attempt_counter` - Number of emails sent
+- `last_email_date` - Last email timestamp
+- `call_attempt_counter` - Number of SMS sent
+- `last_call_date` - Last SMS timestamp
+
+### Troubleshooting
+
+**AI Not Responding:**
+1. Check GHL webhook configuration
+2. Verify OAuth token is valid
+3. Check CloudWatch logs for errors
+4. Test using `/api/v1/test-ai-response`
+
+**Wrong Responses:**
+1. Review conversation history in GHL
+2. Check system prompt for conflicting instructions
+3. Verify contact has correct custom fields
+4. Test with different message variations
+
+**Rate Limiting:**
+1. Check hourly/daily message counts
+2. Verify 2-second delays between messages
+3. Review GHL rate limit settings
+
 14. **AI Analysis**
    - Use Chat feature for property insights
    - Get automated follow-up suggestions
