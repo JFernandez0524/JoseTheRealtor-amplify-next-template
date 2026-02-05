@@ -189,9 +189,9 @@ export async function syncToGoHighLevel(
                       lead.skipTraceStatus === 'COMPLETED' && 
                       !(lead.leadLabels || []).filter((tag: any) => tag !== null).some((tag: any) => ['DNC', 'Not_Interested', 'Do_Not_Call'].includes(tag));
     
-    // 🛡️ PROPERTY VALUE FILTER - Only high-value properties get direct mail
+    // 🛡️ PROPERTY VALUE FILTER - Only mid-range properties get direct mail ($300k-$850k)
     const propertyValue = lead.zestimate || lead.estimatedValue || 0;
-    const isHighValue = propertyValue >= 300000;
+    const isDirectMailEligible = propertyValue >= 300000 && propertyValue <= 850000;
     
     if (isCallable) {
       tags.push('Multi-Phone-Lead');
@@ -199,17 +199,17 @@ export async function syncToGoHighLevel(
     } else if (specificPhone) {
       // Has phone but not callable (failed skip trace, DNC, etc.)
       tags.push('Multi-Phone-Lead');
-      if (isHighValue) {
-        tags.push('Direct-Mail-Only'); // Route to mail instead
+      if (isDirectMailEligible) {
+        tags.push('Direct-Mail-Only'); // Route to mail for $300k-$850k properties
       } else {
-        tags.push('Digital-Only'); // Under $300k - no direct mail
+        tags.push('Digital-Only'); // Outside $300k-$850k range - no direct mail
       }
     } else {
       // No phone at all
-      if (isHighValue) {
+      if (isDirectMailEligible) {
         tags.push('Direct-Mail-Only');
       } else {
-        tags.push('Digital-Only'); // Under $300k - no direct mail
+        tags.push('Digital-Only'); // Outside $300k-$850k range - no direct mail
       }
     }
     
@@ -222,13 +222,13 @@ export async function syncToGoHighLevel(
       }
     }
 
-    // 🛡️ DIRECT MAIL PROTECTION - Only ONE sibling gets mail eligibility (and only if high value)
-    if (isPrimary && isHighValue) {
+    // 🛡️ DIRECT MAIL PROTECTION - Only ONE sibling gets mail eligibility (and only if in $300k-$850k range)
+    if (isPrimary && isDirectMailEligible) {
       tags.push('Thanks_IO_Eligible'); // Updated for Thanks.io
       tags.push('Primary_Contact');
     } else if (isPrimary) {
       tags.push('Primary_Contact');
-      // No Thanks_IO_Eligible tag for low-value properties
+      // No Thanks_IO_Eligible tag for properties outside $300k-$850k range
     }
 
     const basePayload = {
