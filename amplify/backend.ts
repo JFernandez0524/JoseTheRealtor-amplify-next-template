@@ -19,8 +19,6 @@ import { FunctionUrlAuthType, HttpMethod } from 'aws-cdk-lib/aws-lambda';
 
 import { lexV2Handler } from './functions/lexV2Handler/resource';
 
-import { lexV2Handler } from './functions/lexV2Handler/resource';
-
 const backend = defineBackend({
   auth,
   data,
