@@ -263,7 +263,9 @@ export const handler: Handler = async (event) => {
       }
     }
 
-    return { ...syncResult, leadId: leadId };
+    const finalResult = { ...syncResult, leadId: leadId };
+    console.log('🔄 [GHL_SYNC] Handler returning:', JSON.stringify(finalResult, null, 2));
+    return finalResult;
   } catch (error: any) {
     console.error('🔥 Critical Handler Error:', error);
     return {
@@ -273,3 +275,5 @@ export const handler: Handler = async (event) => {
     };
   }
 };
+
+console.log('✅ [GHL_SYNC] Handler module loaded successfully');
