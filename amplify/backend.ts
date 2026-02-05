@@ -17,6 +17,10 @@ import { LambdaDestination } from 'aws-cdk-lib/aws-s3-notifications';
 import { PolicyStatement, Effect, AnyPrincipal } from 'aws-cdk-lib/aws-iam';
 import { FunctionUrlAuthType, HttpMethod } from 'aws-cdk-lib/aws-lambda';
 
+import { lexV2Handler } from './functions/lexV2Handler/resource';
+
+import { lexV2Handler } from './functions/lexV2Handler/resource';
+
 const backend = defineBackend({
   auth,
   data,
@@ -29,8 +33,38 @@ const backend = defineBackend({
   dailyEmailAgent,
   bulkEmailCampaign,
   ghlWebhookHandler,
+  lexV2Handler, // Add Lex V2 handler
   addUserToGroup,
   removeUserFromGroup,
+});
+
+// 🤖 LEX V2 PERMISSIONS
+backend.lexV2Handler.resources.lambda.addToRolePolicy(
+  new PolicyStatement({
+    effect: Effect.ALLOW,
+    actions: [
+      'lex:RecognizeText',
+      'bedrock:InvokeModel',
+      'bedrock:Retrieve'
+    ],
+    resources: ['*']
+  })
+);
+
+// 🔗 LEX V2 FUNCTION URL (for GHL webhook testing)
+const lexV2FunctionUrl = backend.lexV2Handler.resources.lambda.addFunctionUrl({
+  authType: FunctionUrlAuthType.NONE,
+  cors: {
+    allowedOrigins: ['*'],
+    allowedMethods: [HttpMethod.POST],
+    allowedHeaders: ['*']
+  }
+});
+
+backend.addOutput({
+  custom: {
+    lexV2HandlerUrl: lexV2FunctionUrl.url
+  }
 });
 
 // 🚀 S3 Trigger - uploadCsvHandler is in storage stack (no cross-stack reference)

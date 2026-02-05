@@ -34,6 +34,7 @@ export default function LeadDashboardClient({}: Props) {
   const [userAccount, setUserAccount] = useState<UserAccount | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [processingMessage, setProcessingMessage] = useState('');
   const [isPopulatingQueue, setIsPopulatingQueue] = useState(false);
 
   // Pagination State
@@ -371,21 +372,23 @@ export default function LeadDashboardClient({}: Props) {
     if (!confirm(confirmMessage)) return;
 
     setIsProcessing(true);
+    setProcessingMessage('Starting GHL sync...');
     try {
-      const { successful, failed } = await syncToGHL(selectedIds);
+      const { successful, failed } = await syncToGHL(selectedIds, (current, total, message) => {
+        setProcessingMessage(`${message} (${current}/${total})`);
+      });
       alert(`CRM Sync Complete!\n✅ Successful: ${successful}\n❌ Failed: ${failed}`);
-      setSelectedIds([]);
-      
-      // Wait for Lambda to complete processing, then refresh
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      await refreshLeads();
       
     } catch (err) {
       console.error('Sync error:', err);
       alert('Error initiating CRM sync. Ensure leads are skip-traced first.');
     } finally {
       setIsProcessing(false);
-      // Force page refresh to ensure all data is updated - regardless of success/failure
+      setProcessingMessage('');
+      setSelectedIds([]);
+      
+      // Refresh data and force page reload after all operations
+      await refreshLeads();
       window.location.reload();
     }
   };
@@ -889,6 +892,16 @@ export default function LeadDashboardClient({}: Props) {
           router.push(`/lead/${leadId}`);
         }}
       />
+
+      {/* Processing Status */}
+      {isProcessing && (
+        <div className="fixed top-4 right-4 bg-blue-500 text-white px-4 py-2 rounded-lg shadow-lg z-50">
+          <div className="flex items-center space-x-2">
+            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+            <span>{processingMessage || 'Processing...'}</span>
+          </div>
+        </div>
+      )}
 
       <DashboardFilters
         filterType={filterType}

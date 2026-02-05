@@ -247,7 +247,7 @@ export async function skipTraceLeads(leadIds: string[]): Promise<any> {
  * - Includes property details, Zestimate, and cash offer
  * - UI should refresh after operation completes
  */
-export async function syncToGHL(leadIds: string[]): Promise<{ successful: number; failed: number; isAsync?: boolean }> {
+export async function syncToGHL(leadIds: string[], onProgress?: (current: number, total: number, message: string) => void): Promise<{ successful: number; failed: number; isAsync?: boolean }> {
   try {
     const BATCH_SIZE = 10;
     const DELAY_MS = 2000;
@@ -260,7 +260,15 @@ export async function syncToGHL(leadIds: string[]): Promise<{ successful: number
     // Process leads in batches
     for (let i = 0; i < leadIds.length; i += BATCH_SIZE) {
       const batch = leadIds.slice(i, i + BATCH_SIZE);
-      console.log(`📦 Processing batch ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(leadIds.length / BATCH_SIZE)} (${batch.length} leads)`);
+      const batchNum = Math.floor(i / BATCH_SIZE) + 1;
+      const totalBatches = Math.ceil(leadIds.length / BATCH_SIZE);
+      
+      console.log(`📦 Processing batch ${batchNum}/${totalBatches} (${batch.length} leads)`);
+      
+      // Update progress
+      if (onProgress) {
+        onProgress(i, leadIds.length, `Processing batch ${batchNum}/${totalBatches}...`);
+      }
       
       const results = await Promise.allSettled(
         batch.map((id) => client.mutations.manualGhlSync({ leadId: id }))
@@ -300,9 +308,16 @@ export async function syncToGHL(leadIds: string[]): Promise<{ successful: number
       
       // Add delay between batches (except for the last batch)
       if (i + BATCH_SIZE < leadIds.length) {
+        if (onProgress) {
+          onProgress(i + batch.length, leadIds.length, `Waiting 2 seconds before next batch...`);
+        }
         console.log(`⏳ Waiting ${DELAY_MS}ms before next batch...`);
         await new Promise(resolve => setTimeout(resolve, DELAY_MS));
       }
+    }
+    
+    if (onProgress) {
+      onProgress(leadIds.length, leadIds.length, `Complete! ${successful} successful, ${failed} failed`);
     }
     
     console.log(`✅ GHL Sync complete: ${successful} successful, ${failed} failed`);
