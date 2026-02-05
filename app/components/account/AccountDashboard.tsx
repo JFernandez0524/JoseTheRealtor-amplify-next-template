@@ -26,7 +26,7 @@ export default function AccountDashboard({ initialAccount, initialLeads }: Accou
   // Count successful skip traces
   const totalSkips = leads.filter(lead => 
     lead.skipTraceStatus === 'COMPLETED' && 
-    (lead.phones?.length > 0 || lead.emails?.length > 0)
+    ((lead.phones?.length || 0) > 0 || (lead.emails?.length || 0) > 0)
   ).length;
   
   // Count successful GHL syncs
