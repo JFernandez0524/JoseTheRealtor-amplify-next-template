@@ -1,8 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { generateClient } from 'aws-amplify/data';
-import type { Schema } from '@/amplify/data/resource';
+import { client } from '@/app/utils/aws/data/frontEndClient';
 
 interface EmailTemplateSettingsProps {
   integration: any;
@@ -77,7 +76,6 @@ function TemplateEditor({ value, onChange, placeholder, rows = 10 }: TemplateEdi
 }
 
 export default function EmailTemplateSettings({ integration, onUpdate }: EmailTemplateSettingsProps) {
-  const client = generateClient<Schema>();
   const [probateSubject, setProbateSubject] = useState('');
   const [probateTemplate, setProbateTemplate] = useState('');
   const [preforeclosureSubject, setPreforeclosureSubject] = useState('');
