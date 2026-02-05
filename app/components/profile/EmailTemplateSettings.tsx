@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { client } from '@/app/utils/aws/data/frontEndClient';
+import { type Schema } from '@/amplify/data/resource';
 
 interface EmailTemplateSettingsProps {
   integration: any;
