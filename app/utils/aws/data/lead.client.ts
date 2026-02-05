@@ -269,15 +269,24 @@ export async function syncToGHL(leadIds: string[]): Promise<{ successful: number
       results.forEach((result, index) => {
         if (result.status === 'fulfilled') {
           // Check the actual sync result status, not just if Lambda executed
-          const syncResult = (result.value as any)?.data;
-          console.log(`🔍 Debug - Lead ${batch[index]} response:`, result.value);
+          const response = result.value as any;
+          const syncResult = response?.data || response;
+          console.log(`🔍 Debug - Lead ${batch[index]} full response:`, response);
           console.log(`🔍 Debug - Sync result:`, syncResult);
           
-          if (syncResult?.status === 'SUCCESS') {
+          // Check multiple possible response formats
+          const isSuccess = syncResult?.status === 'SUCCESS' || 
+                           response?.status === 'SUCCESS' ||
+                           syncResult === 'SUCCESS';
+          
+          if (isSuccess) {
             successful++;
             console.log(`✅ Lead ${batch[index]} synced successfully`);
           } else {
             failed++;
+            console.log(`❌ Lead ${batch[index]} sync failed: ${syncResult?.message || syncResult || 'Unknown error'}`);
+          }
+        } else {
             console.log(`❌ Lead ${batch[index]} sync failed: ${syncResult?.message || 'Unknown error'}`);
           }
         } else {

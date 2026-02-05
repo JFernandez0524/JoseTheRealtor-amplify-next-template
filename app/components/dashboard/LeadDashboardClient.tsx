@@ -494,6 +494,8 @@ export default function LeadDashboardClient({}: Props) {
       console.error('Delete error:', err);
     } finally {
       setIsProcessing(false);
+      // Force page refresh to ensure all data is updated
+      window.location.reload();
     }
   };
 
@@ -516,6 +518,8 @@ export default function LeadDashboardClient({}: Props) {
       alert('Error updating lead statuses');
     } finally {
       setIsProcessing(false);
+      // Force page refresh to ensure all data is updated
+      window.location.reload();
     }
   };
 
@@ -564,6 +568,8 @@ export default function LeadDashboardClient({}: Props) {
       alert('Error calculating AI scores');
     } finally {
       setIsProcessing(false);
+      // Force page refresh to ensure all data is updated
+      window.location.reload();
     }
   };
 
@@ -625,6 +631,8 @@ export default function LeadDashboardClient({}: Props) {
       );
     } finally {
       setIsProcessing(false);
+      // Force page refresh to ensure all data is updated
+      window.location.reload();
     }
   };
 
@@ -672,6 +680,8 @@ export default function LeadDashboardClient({}: Props) {
       alert('Error sending letters via Click2Mail');
     } finally {
       setIsProcessing(false);
+      // Force page refresh to ensure all data is updated
+      window.location.reload();
     }
   };
 
@@ -702,6 +712,8 @@ export default function LeadDashboardClient({}: Props) {
       alert(`Error starting email campaign: ${err.message}`);
     } finally {
       setIsProcessing(false);
+      // Force page refresh to ensure all data is updated
+      window.location.reload();
     }
   };
 
