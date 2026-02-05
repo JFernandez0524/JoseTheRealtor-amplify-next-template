@@ -1,4 +1,4 @@
-import { defineFunction, secret } from '@aws-amplify/backend';
+import { defineFunction } from '@aws-amplify/backend';
 
 // Define the name of the Lambda function resource.
 export const manualGhlSync = defineFunction({
@@ -10,15 +10,10 @@ export const manualGhlSync = defineFunction({
   // 1. Setting a longer timeout is good practice for external API calls (like GHL).
   timeoutSeconds: 30, // 30 seconds should be safe for external API calls
   resourceGroupName: 'data',
-  // 2. Define the required environment variables (secrets are preferred for keys).
+  // 2. OAuth tokens are now managed via DynamoDB - no hardcoded secrets needed
   environment: {
-    // 💥 The GHL_API_KEY is a sensitive secret and should be managed securely.
-    // Amplify will look up this secret at deployment time.
-    GHL_API_KEY: secret('GHL_API_KEY'),
-    GHL_LOCATION_ID: secret('GHL_LOCATION_ID'),
-    // You may also need the table name, which Amplify usually injects automatically.
-    // However, if your 'lead.server.ts' needs an explicit reference, you can add it here.
-    // For now, we rely on the utility file handling the database connection setup.
+    // OAuth tokens and location IDs are retrieved from GhlIntegration table
+    // No hardcoded secrets required
   },
 
   // 3. (Optional but Recommended) Increase memory if the GHL sync involves heavy data processing

@@ -1,15 +1,43 @@
 import { NextResponse } from 'next/server';
 import axios from 'axios';
 import crypto from 'crypto';
+import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import { DynamoDBDocumentClient, ScanCommand } from '@aws-sdk/lib-dynamodb';
 
-const GHL_API_KEY = process.env.GHL_API_KEY;
+const dynamoClient = new DynamoDBClient({ region: process.env.AWS_REGION });
+const docClient = DynamoDBDocumentClient.from(dynamoClient);
+
 const GHL_BASE = 'https://services.leadconnectorhq.com';
-const GHL_HEADERS = {
-  Authorization: `Bearer ${GHL_API_KEY}`,
-  'Content-Type': 'application/json',
-  Accept: 'application/json',
-  Version: '2021-07-28'
-};
+
+// Helper to get OAuth token for a locationId
+async function getGhlTokenForLocation(locationId: string) {
+  try {
+    const tableName = process.env.AMPLIFY_DATA_GhlIntegration_TABLE_NAME;
+    if (!tableName) {
+      console.error('GhlIntegration table name not found');
+      return null;
+    }
+
+    const result = await docClient.send(new ScanCommand({
+      TableName: tableName,
+      FilterExpression: 'locationId = :locationId',
+      ExpressionAttributeValues: {
+        ':locationId': locationId
+      }
+    }));
+
+    const integration = result.Items?.[0];
+    if (!integration?.accessToken) {
+      console.error(`No OAuth token found for locationId: ${locationId}`);
+      return null;
+    }
+
+    return integration.accessToken;
+  } catch (error) {
+    console.error('Error getting GHL token:', error);
+    return null;
+  }
+}
 
 // GHL Public Key for webhook verification
 const GHL_PUBLIC_KEY = `-----BEGIN PUBLIC KEY-----
@@ -123,6 +151,20 @@ async function handleCampaignStatus({
     
     // 🚨 SAFETY GUARD: Don't proceed if missing required data
     if (!leadSourceId || !locationId) return;
+
+    // Get OAuth token for this location
+    const accessToken = await getGhlTokenForLocation(locationId);
+    if (!accessToken) {
+      console.error(`No OAuth token available for locationId: ${locationId}`);
+      return;
+    }
+
+    const headers = {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+      Version: '2021-07-28'
+    };
     
     // 🚨 TODO: Adjust these status values based on real GHL payload logs
     const isNoResponse = status === 'no_response' || status === 'failed';
@@ -138,7 +180,7 @@ async function handleCampaignStatus({
             { field: 'customField', customFieldId: 'PBInTgsd2nMCD3Ngmy0a', operator: 'eq', value: leadSourceId }
           ]
         },
-        { headers: GHL_HEADERS }
+        { headers }
       );
 
       const siblings = searchResponse.data?.contacts || [];
@@ -149,14 +191,14 @@ async function handleCampaignStatus({
         if (tags.includes('primary_contact')) return;
         
         // Delete this specific contact (bad number)
-        await axios.delete(`${GHL_BASE}/contacts/${contactId}`, { headers: GHL_HEADERS });
+        await axios.delete(`${GHL_BASE}/contacts/${contactId}`, { headers });
         console.log(`Deleted contact ${contactId} - bad number with siblings`);
       } else {
         // Last contact for this lead - move to direct mail
         await axios.post(
           `${GHL_BASE}/contacts/${contactId}/tags`,
           { tags: ['Move-To-Direct-Mail'] },
-          { headers: GHL_HEADERS }
+          { headers }
         );
 
         // Update contact type to Direct Mail
@@ -168,7 +210,7 @@ async function handleCampaignStatus({
               { id: '1NxQW2kKMVgozjSUuu7s', value: 'paused' } // Pause AI for direct mail
             ]
           },
-          { headers: GHL_HEADERS }
+          { headers }
         );
 
         console.log(`Moved contact ${contactId} to direct mail - last number for lead`);
@@ -180,7 +222,7 @@ async function handleCampaignStatus({
       await axios.post(
         `${GHL_BASE}/contacts/${contactId}/tags`,
         { tags: ['Qualified-Lead', 'Ready-For-Human-Contact'] },
-        { headers: GHL_HEADERS }
+        { headers }
       );
       console.log(`Tagged contact ${contactId} as qualified lead`);
     }
@@ -204,6 +246,20 @@ async function handleBadNumber({
     
     // 🚨 SAFETY GUARD: Don't proceed if missing required data
     if (!leadSourceId || !locationId) return;
+
+    // Get OAuth token for this location
+    const accessToken = await getGhlTokenForLocation(locationId);
+    if (!accessToken) {
+      console.error(`No OAuth token available for locationId: ${locationId}`);
+      return;
+    }
+
+    const headers = {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+      Version: '2021-07-28'
+    };
     
     // Find siblings with same lead_source_id
     const searchResponse = await axios.post(
@@ -214,7 +270,7 @@ async function handleBadNumber({
           { field: 'customField', customFieldId: 'PBInTgsd2nMCD3Ngmy0a', operator: 'eq', value: leadSourceId }
         ]
       },
-      { headers: GHL_HEADERS }
+      { headers }
     );
 
     const siblings = searchResponse.data?.contacts || [];
@@ -225,7 +281,7 @@ async function handleBadNumber({
       if (tags.includes('primary_contact')) return;
       
       // Delete this bad number contact
-      await axios.delete(`${GHL_BASE}/contacts/${contactId}`, { headers: GHL_HEADERS });
+      await axios.delete(`${GHL_BASE}/contacts/${contactId}`, { headers });
       console.log(`Deleted bad number contact ${contactId}`);
     } else {
       // Last contact - convert to direct mail
@@ -238,13 +294,13 @@ async function handleBadNumber({
             { id: '1NxQW2kKMVgozjSUuu7s', value: 'paused' } // Pause AI
           ]
         },
-        { headers: GHL_HEADERS }
+        { headers }
       );
 
       await axios.post(
         `${GHL_BASE}/contacts/${contactId}/tags`,
         { tags: ['Direct-Mail-Only', 'Bad-Phone-Removed'] }, // Outcome tag
-        { headers: GHL_HEADERS }
+        { headers }
       );
 
       console.log(`Converted contact ${contactId} to direct mail only`);
