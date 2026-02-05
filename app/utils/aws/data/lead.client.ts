@@ -287,9 +287,6 @@ export async function syncToGHL(leadIds: string[]): Promise<{ successful: number
             console.log(`❌ Lead ${batch[index]} sync failed: ${syncResult?.message || syncResult || 'Unknown error'}`);
           }
         } else {
-            console.log(`❌ Lead ${batch[index]} sync failed: ${syncResult?.message || 'Unknown error'}`);
-          }
-        } else {
           failed++;
           console.log(`❌ Lead ${batch[index]} Lambda execution failed: ${result.reason}`);
         }
