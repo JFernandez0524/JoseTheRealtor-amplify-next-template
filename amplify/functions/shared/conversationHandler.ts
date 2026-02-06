@@ -284,13 +284,13 @@ GOAL: Get a reply (curiosity > clarity on first touch)
 
 SEND ONLY THIS MESSAGE (soft, human, non-threatening):
 
-"Hi ${context.contactName.split(' ')[0]}, this is Jose with RE/MAX. I had a quick question about a property on ${hasAddress && context.propertyAddress ? context.propertyAddress.split(',')[0].replace(/^\d+\s+/, '') : 'your street'} — is it something you're planning to sell, or are you keeping it? Reply STOP to opt out."
+"Hi ${context.contactName.split(' ')[0]}, this is Jose with RE/MAX. I'm reaching out based on public information about a property on ${hasAddress && context.propertyAddress ? context.propertyAddress.split(',')[0].replace(/^\d+\s+/, '') : 'your street'} — just wanted to confirm whether it's something you're planning to sell or keep. Reply STOP to opt out."
 
 RULES FOR FIRST CONTACT:
 - Use FIRST NAME only (not full name)
 - Mention STREET NAME only (not full address)
-- NO "I saw the notice" (sounds legal/intimidating)
-- Frame as question, not sales pitch
+- Say "based on public information" upfront (transparency)
+- Frame as confirmation, not sales pitch
 - Keep it conversational and human
 
 CRITICAL: Return ONLY the message text above. Do NOT include:
@@ -302,12 +302,35 @@ CRITICAL: Return ONLY the message text above. Do NOT include:
 Just return the exact message to send.`
     : `You are an AI assistant helping Jose Fernandez, a licensed real estate agent at RE/MAX Homeland Realtors.
 
+🔒 TRUST QUESTION OVERRIDE (HIGHEST PRIORITY):
+
+If the user asks ANY of these questions:
+- "Where did you see this?"
+- "How did you get my info?"
+- "What notice?"
+- "Who gave you my number?"
+- "Where did you see the notice?"
+
+IMMEDIATELY respond with ONLY this (no selling, no questions):
+
+"Good question — it came from publicly available county records. Nothing private or paid. If this isn't a good time, no worries at all."
+
+DO NOT:
+- Ask questions back
+- Mention selling
+- Mention options
+- Mention offers
+- Repeat the property address
+
+Just answer directly and stop. Trust must be restored before continuing.
+
 COMPLIANCE RULES (CRITICAL):
 1. IDENTIFY AS AI: If asked, say "I'm Jose's AI assistant helping with initial questions"
 2. NO LEGAL/FINANCIAL ADVICE: Never give tax, legal, or financial advice
 3. HUMAN HANDOFF: If asked complex questions, say "Let me connect you with Jose directly"
 4. DISCLAIMERS: Property values are estimates only, not appraisals
 5. ALREADY LISTED PROPERTIES: If they mention working with another realtor or property being listed, IMMEDIATELY exit gracefully
+6. NEVER REPEAT FULL ADDRESS: After initial outreach, do not repeat the full property address unless the user mentions it first
 
 ALREADY LISTED PROPERTY PROTOCOL:
 If they mention:
@@ -820,8 +843,11 @@ Respond to their message:`;
 
     const aiMessage = choice.message?.content || 'Thanks for your message. Let me get back to you shortly.';
     
-    // Clean up any step-by-step breakdowns that slip through
+    // Clean up any step-by-step breakdowns and tool call syntax
     let cleanedMessage = aiMessage;
+    
+    // Remove tool call syntax like (end_conversation), (validate_address), etc.
+    cleanedMessage = cleanedMessage.replace(/\([a-z_]+\)/g, '').trim();
     
     // Remove "Step 1:", "Step 2:", etc.
     if (cleanedMessage.includes('Step 1:') || cleanedMessage.includes('Combined Message:')) {
