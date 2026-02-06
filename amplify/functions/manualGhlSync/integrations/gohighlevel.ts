@@ -249,44 +249,84 @@ export async function syncToGoHighLevel(
       return res.data?.contact?.id || ghlId;
     };
 
-    // 🎯 SEARCH: Find existing contact
+    // 🎯 SEARCH: Find existing contact with multiple fallback strategies
     let existingContact: any = null;
     
-    if (specificPhone) {
-      // Search by phone if available
-      const searchBody = {
-        locationId: ghlLocationId,
-        pageLimit: 1,
-        filters: [{ field: 'phone', operator: 'eq', value: specificPhone }],
-      };
-      const searchRes = await ghl.post('/contacts/search', searchBody);
-      if (searchRes.data?.contacts?.length > 0) {
-        existingContact = searchRes.data.contacts[0];
+    try {
+      if (specificPhone) {
+        // Try multiple phone formats
+        const phoneVariations = [
+          specificPhone,
+          specificPhone.replace(/\D/g, ''), // Remove all non-digits
+          `+1${specificPhone.replace(/\D/g, '')}`, // Add +1 prefix
+          specificPhone.replace(/^\+1/, ''), // Remove +1 prefix
+        ].filter((v, i, arr) => arr.indexOf(v) === i); // Unique values only
+
+        console.log(`🔍 Searching for existing contact by phone variations:`, phoneVariations);
+        
+        for (const phoneVar of phoneVariations) {
+          const searchBody = {
+            locationId: ghlLocationId,
+            pageLimit: 1,
+            filters: [{ field: 'phone', operator: 'eq', value: phoneVar }],
+          };
+          const searchRes = await ghl.post('/contacts/search', searchBody);
+          if (searchRes.data?.contacts?.length > 0) {
+            existingContact = searchRes.data.contacts[0];
+            console.log(`✅ Found existing contact by phone (${phoneVar}): ${existingContact.id}`);
+            break;
+          }
+        }
+        
+        if (!existingContact) {
+          console.log(`📭 No existing contact found by any phone variation`);
+        }
+      } else if (primaryEmail) {
+        // Search by email (case-insensitive)
+        console.log(`🔍 Searching for existing contact by email: ${primaryEmail}`);
+        const searchBody = {
+          locationId: ghlLocationId,
+          pageLimit: 1,
+          filters: [{ field: 'email', operator: 'eq', value: primaryEmail.toLowerCase() }],
+        };
+        const searchRes = await ghl.post('/contacts/search', searchBody);
+        if (searchRes.data?.contacts?.length > 0) {
+          existingContact = searchRes.data.contacts[0];
+          console.log(`✅ Found existing contact by email: ${existingContact.id}`);
+        } else {
+          console.log(`📭 No existing contact found by email`);
+        }
+      } else if (basePayload.firstName && basePayload.lastName) {
+        // Try multiple name formats
+        const nameVariations = [
+          `${basePayload.firstName} ${basePayload.lastName}`,
+          `${basePayload.lastName}, ${basePayload.firstName}`,
+          `${basePayload.firstName.toLowerCase()} ${basePayload.lastName.toLowerCase()}`,
+        ];
+        
+        console.log(`🔍 Searching for existing contact by name variations:`, nameVariations);
+        
+        for (const nameVar of nameVariations) {
+          const searchBody = {
+            locationId: ghlLocationId,
+            pageLimit: 1,
+            filters: [{ field: 'name', operator: 'eq', value: nameVar }],
+          };
+          const searchRes = await ghl.post('/contacts/search', searchBody);
+          if (searchRes.data?.contacts?.length > 0) {
+            existingContact = searchRes.data.contacts[0];
+            console.log(`✅ Found existing contact by name (${nameVar}): ${existingContact.id}`);
+            break;
+          }
+        }
+        
+        if (!existingContact) {
+          console.log(`📭 No existing contact found by any name variation`);
+        }
       }
-    } else if (primaryEmail) {
-      // Search by email if no phone
-      const searchBody = {
-        locationId: ghlLocationId,
-        pageLimit: 1,
-        filters: [{ field: 'email', operator: 'eq', value: primaryEmail }],
-      };
-      const searchRes = await ghl.post('/contacts/search', searchBody);
-      if (searchRes.data?.contacts?.length > 0) {
-        existingContact = searchRes.data.contacts[0];
-      }
-    } else if (basePayload.firstName && basePayload.lastName) {
-      // Search by full name if no phone or email
-      const searchBody = {
-        locationId: ghlLocationId,
-        pageLimit: 1,
-        filters: [
-          { field: 'name', operator: 'eq', value: `${basePayload.firstName} ${basePayload.lastName}` }
-        ],
-      };
-      const searchRes = await ghl.post('/contacts/search', searchBody);
-      if (searchRes.data?.contacts?.length > 0) {
-        existingContact = searchRes.data.contacts[0];
-      }
+    } catch (searchError: any) {
+      console.error(`⚠️ Contact search failed:`, searchError.response?.data || searchError.message);
+      // Continue to create new contact if search fails
     }
 
     if (existingContact) return await performUpdate(existingContact.id);

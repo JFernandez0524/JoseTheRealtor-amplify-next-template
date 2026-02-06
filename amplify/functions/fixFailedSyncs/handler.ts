@@ -48,8 +48,28 @@ export const handler: Handler = async () => {
     return { statusCode: 200, body: 'No failed syncs to fix' };
   }
 
+  // Filter out leads without userId (can't sync without owner)
+  const validLeads = failedLeads.filter(lead => lead.userId);
+  const invalidLeads = failedLeads.filter(lead => !lead.userId);
+
+  if (invalidLeads.length > 0) {
+    console.log(`⚠️ Skipping ${invalidLeads.length} leads without userId:`, invalidLeads.map(l => l.id));
+  }
+
+  if (validLeads.length === 0) {
+    return { 
+      statusCode: 200, 
+      body: JSON.stringify({ 
+        created: 0, 
+        failed: invalidLeads.length, 
+        total: failedLeads.length,
+        message: 'All failed leads are missing userId - cannot sync'
+      })
+    };
+  }
+
   const leadsByUser = new Map<string, FailedLead[]>();
-  for (const lead of failedLeads) {
+  for (const lead of validLeads) {
     if (!leadsByUser.has(lead.userId)) {
       leadsByUser.set(lead.userId, []);
     }
@@ -135,8 +155,9 @@ export const handler: Handler = async () => {
 
   const summary = {
     created, 
-    failed, 
-    total: failedLeads.length 
+    failed: failed + invalidLeads.length, 
+    total: failedLeads.length,
+    skippedNoUserId: invalidLeads.length
   };
 
   console.log('\n✅ Fix failed syncs complete:', summary);
