@@ -38,11 +38,11 @@ function getBusinessDaysDiff(startDate: Date, endDate: Date): number {
 
 /**
  * Check if contact is ready for next outreach message
- * 
- * DIAL TRACKING DISABLED - Always returns true for immediate sending
+ * Prevents duplicate messages on the same day
  */
 export function shouldSendNextMessage(contact: any): boolean {
   const callAttempts = parseInt(contact.customFields?.find((f: any) => f.id === '0MD4Pp2LCyOSCbCjA5qF')?.value || '0');
+  const lastCallDate = contact.customFields?.find((f: any) => f.id === 'dWNGeSckpRoVUxXLgxMj')?.value;
   
   // Max attempts reached
   if (callAttempts >= MAX_OUTREACH_ATTEMPTS) {
@@ -50,7 +50,18 @@ export function shouldSendNextMessage(contact: any): boolean {
     return false;
   }
   
-  // DIAL TRACKING DISABLED - Send immediately
+  // Check if already messaged today (prevent duplicates)
+  if (lastCallDate) {
+    const lastCall = new Date(lastCallDate);
+    const now = new Date();
+    const hoursSinceLastCall = (now.getTime() - lastCall.getTime()) / (1000 * 60 * 60);
+    
+    if (hoursSinceLastCall < 24) {
+      console.log(`⏸️ Contact ${contact.id} was messaged ${Math.round(hoursSinceLastCall)} hours ago - skipping`);
+      return false;
+    }
+  }
+  
   return true;
 }
 

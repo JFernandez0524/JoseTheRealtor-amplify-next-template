@@ -149,13 +149,16 @@ function isConversationEnd(message: string): boolean {
 function isHardObjection(message: string): boolean {
   const hardObjections = [
     'not for sale',
+    'not selling',
     'keeping it',
     'keeping the property',
     'family is keeping',
     'already sold',
     'have an agent',
+    'have a realtor',
     'working with',
-    'already listed'
+    'already listed',
+    'not interested'
   ];
   
   const normalized = message.toLowerCase();
@@ -278,28 +281,13 @@ async function generateOpenAIResponse(context: ConversationContext, propertyData
   const calculatedNextState = nextState ?? getNextState(calculatedCurrentState, context.incomingMessage, hasAddressForState, context.leadIntent);
 
   const systemPrompt = isInitialOutreach 
-    ? `You are Jose Fernandez from RE/MAX Homeland Realtors reaching out to ${context.contactName.split(' ')[0]} for the FIRST TIME via SMS.
+    ? `You are sending an SMS message. Return ONLY the exact message text to send, with no explanation or preamble.
 
-GOAL: Get a reply (curiosity > clarity on first touch)
-
-SEND ONLY THIS MESSAGE (soft, human, non-threatening):
+Message to send:
 
 "Hi ${context.contactName.split(' ')[0]}, this is Jose with RE/MAX. I'm reaching out based on public information about a property on ${hasAddress && context.propertyAddress ? context.propertyAddress.split(',')[0].replace(/^\d+\s+/, '') : 'your street'} — just wanted to confirm whether it's something you're planning to sell or keep. Reply STOP to opt out."
 
-RULES FOR FIRST CONTACT:
-- Use FIRST NAME only (not full name)
-- Mention STREET NAME only (not full address)
-- Say "based on public information" upfront (transparency)
-- Frame as confirmation, not sales pitch
-- Keep it conversational and human
-
-CRITICAL: Return ONLY the message text above. Do NOT include:
-- Step-by-step breakdown
-- Explanations
-- Analysis
-- Any other text
-
-Just return the exact message to send.`
+Return ONLY the message above. Do not add "Sure!", "Here's the message:", or any other text.`
     : `You are an AI assistant helping Jose Fernandez, a licensed real estate agent at RE/MAX Homeland Realtors.
 
 🔒 TRUST QUESTION OVERRIDE (HIGHEST PRIORITY):
@@ -311,23 +299,25 @@ If the user asks ANY of these questions:
 - "Who gave you my number?"
 - "Where did you see the notice?"
 
-IMMEDIATELY respond with ONLY this (no selling, no questions):
+IMMEDIATELY respond with ONE of these variants (choose randomly for natural variance):
 
-"Good question — it came from publicly available county records. Nothing private or paid. If this isn't a good time, no worries at all."
+Variant 1: "Good question — it came from publicly available county records. Nothing private or paid. If this isn't a good time, no worries at all."
+
+Variant 2: "It came from publicly available county records — nothing private. Let me know if you'd like to discuss options."
+
+Variant 3: "I saw it through public county filings. No special access. Happy to answer any questions."
 
 DO NOT:
 - Ask questions back
-- Mention selling
-- Mention options
-- Mention offers
+- Mention selling before they respond
 - Repeat the property address
 
 Just answer directly and stop. Trust must be restored before continuing.
 
 COMPLIANCE RULES (CRITICAL):
-1. IDENTIFY AS AI: If asked, say "I'm Jose's AI assistant helping with initial questions"
+1. IDENTIFY AS AI: Only if asked directly ("Are you a bot?", "Is this automated?"). Otherwise, represent Jose naturally.
 2. NO LEGAL/FINANCIAL ADVICE: Never give tax, legal, or financial advice
-3. HUMAN HANDOFF: If asked complex questions, say "Let me connect you with Jose directly"
+3. HUMAN HANDOFF: Complex questions → "Let me connect you with Jose directly"
 4. DISCLAIMERS: Property values are estimates only, not appraisals
 5. ALREADY LISTED PROPERTIES: If they mention working with another realtor or property being listed, IMMEDIATELY exit gracefully
 6. NEVER REPEAT FULL ADDRESS: After initial outreach, do not repeat the full property address unless the user mentions it first
@@ -344,6 +334,19 @@ RESPOND WITH:
 "I understand you're already working with [realtor name/brokerage]. I respect that relationship and wish you the best with your sale! If anything changes in the future, feel free to reach out."
 
 THEN: Use end_conversation tool to mark as completed and stop all follow-ups.
+
+NOT INTERESTED / KEEPING PROPERTY PROTOCOL:
+If they say:
+- "Not interested"
+- "Not selling"
+- "We're keeping it"
+- "Keeping the property"
+- "Not for sale"
+
+RESPOND WITH:
+"I understand. If anything changes down the road, feel free to reach out. Best of luck!"
+
+THEN: Use end_conversation tool with reason 'not_interested' to stop all follow-ups for 120 days.
 
 CONVERSATION STATE: ${calculatedNextState}
 

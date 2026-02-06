@@ -193,16 +193,16 @@ async function processUserContacts(integration: GhlIntegration): Promise<number>
         return await processQueueContacts(queueContacts, integrationWithToken, phoneNumber);
       }
       
-      console.log(`📋 [QUEUE] No pending contacts in queue, falling back to GHL search`);
+      console.log(`📋 [QUEUE] No pending contacts in queue - no outreach needed`);
+      return 0; // Don't fall back to GHL search - queue is source of truth
     } catch (queueError) {
-      console.error(`⚠️ [QUEUE] Queue query failed, falling back to GHL search:`, queueError);
+      console.error(`⚠️ [QUEUE] Queue query failed:`, queueError);
+      return 0; // Don't fall back on error - prevents duplicates
     }
 
-    // 4. 🔄 FALLBACK: Use old GHL search method (slower, more expensive)
-    const contacts = await fetchGHLContacts(integrationWithToken);
-    const newContacts = await filterNewContacts(contacts, integrationWithToken);
-    
-    console.log(`Found ${newContacts.length} new contacts without outreach`);
+    // FALLBACK DISABLED: Queue is the source of truth for outreach
+    // If queue is empty, no outreach should be sent
+    // This prevents duplicate messages that caused GHL suspension
     
     // 5. Send initial outreach to each new contact
     let processed = 0;
@@ -338,8 +338,28 @@ async function filterNewContacts(contacts: any[], integration: GhlIntegration): 
       continue;
     }
 
-    // Check if contact has required tag (ai outreach - all lowercase)
+    // Skip if already contacted by human (exclusion tags)
     const hasTags = contact.tags && Array.isArray(contact.tags);
+    const exclusionTags = [
+      'human contacted',
+      'spoke with',
+      'conversation_ended',
+      'qualified',
+      'appointment set',
+      'not interested',
+      'do not contact'
+    ];
+    
+    const hasExclusionTag = hasTags && contact.tags.some((tag: string) => 
+      exclusionTags.some(exclusion => tag.toLowerCase().includes(exclusion))
+    );
+
+    if (hasExclusionTag) {
+      console.log(`⏭️ Skipping ${contact.firstName} ${contact.lastName} - Exclusion tag found: ${contact.tags.filter((t: string) => exclusionTags.some(e => t.toLowerCase().includes(e))).join(', ')}`);
+      continue;
+    }
+
+    // Check if contact has required tag (ai outreach - all lowercase)
     const hasAIOutreachTag = hasTags && contact.tags.some((tag: string) => 
       tag.toLowerCase() === 'ai outreach'
     );
@@ -380,14 +400,23 @@ async function sendInitialOutreach(contact: any, integration: GhlIntegration, ph
     const currentCounter = parseInt(contact.customFields?.find((f: any) => f.id === '0MD4Pp2LCyOSCbCjA5qF')?.value || '0');
     const newCounter = currentCounter + 1;
     
+    const customFieldUpdates: any[] = [
+      { id: '0MD4Pp2LCyOSCbCjA5qF', value: newCounter.toString() },
+      { id: 'dWNGeSckpRoVUxXLgxMj', value: new Date().toISOString() }
+    ];
+    
+    // If this was the 7th touch and no reply, mark as DEAD
+    if (newCounter >= 7) {
+      customFieldUpdates.push({
+        id: 'LNyfm5JDal955puZGbu3', // call_outcome field
+        value: 'DEAD / Never Responded'
+      });
+      console.log(`🔴 Marking contact as DEAD after ${newCounter} touches with no response`);
+    }
+    
     await axios.put(
       `https://services.leadconnectorhq.com/contacts/${contact.id}`,
-      {
-        customFields: [
-          { id: '0MD4Pp2LCyOSCbCjA5qF', value: newCounter.toString() },
-          { id: 'dWNGeSckpRoVUxXLgxMj', value: new Date().toISOString() }
-        ]
-      },
+      { customFields: customFieldUpdates },
       {
         headers: {
           'Authorization': `Bearer ${integration.accessToken}`,

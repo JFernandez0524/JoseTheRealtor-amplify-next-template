@@ -103,6 +103,58 @@ async function sendGHLMessage(conversationId: string, message: string, accessTok
       }
     );
     console.log('✅ Message sent successfully to GHL');
+    
+    // Increment call counter ONLY for initial outreach (not replies)
+    // Once lead responds, conversation is active - no need to count AI replies
+    if (contactId && conversationId === 'auto') {
+      try {
+        const contactRes = await axios.get(
+          `https://services.leadconnectorhq.com/contacts/${contactId}`,
+          {
+            headers: {
+              'Authorization': `Bearer ${accessToken}`,
+              'Version': '2021-07-28'
+            }
+          }
+        );
+        
+        const currentCounter = parseInt(contactRes.data.contact.customFields?.find((f: any) => f.id === '0MD4Pp2LCyOSCbCjA5qF')?.value || '0');
+        const newCounter = currentCounter + 1;
+        
+        const customFieldUpdates: any[] = [
+          { id: '0MD4Pp2LCyOSCbCjA5qF', value: newCounter.toString() },
+          { id: 'dWNGeSckpRoVUxXLgxMj', value: new Date().toISOString() }
+        ];
+        
+        // If this was the 7th touch and no reply, mark as DEAD
+        if (newCounter >= 7) {
+          customFieldUpdates.push({
+            id: 'LNyfm5JDal955puZGbu3', // call_outcome field
+            value: 'DEAD / Never Responded'
+          });
+          console.log(`🔴 Marking contact as DEAD after ${newCounter} touches with no response`);
+        }
+        
+        await axios.put(
+          `https://services.leadconnectorhq.com/contacts/${contactId}`,
+          { customFields: customFieldUpdates },
+          {
+            headers: {
+              'Authorization': `Bearer ${accessToken}`,
+              'Content-Type': 'application/json',
+              'Version': '2021-07-28'
+            }
+          }
+        );
+        
+        console.log(`📊 Updated call counter to ${newCounter} for contact ${contactId}`);
+      } catch (counterError: any) {
+        console.error('⚠️ Failed to update call counter:', counterError.message);
+        // Don't fail the whole operation if counter update fails
+      }
+    } else if (contactId) {
+      console.log(`⏭️ Skipping counter increment - this is a reply to an active conversation`);
+    }
   } catch (error: any) {
     console.error('❌ Failed to send GHL message:', error.response?.data || error.message);
     throw error;

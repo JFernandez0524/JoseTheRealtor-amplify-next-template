@@ -10,7 +10,7 @@ export const dailyOutreachAgent = defineFunction({
     API_ENDPOINT: process.env.API_ENDPOINT || 'https://leads.JoseTheRealtor.com',
     OPENAI_API_KEY: process.env.OPENAI_API_KEY || ''
   },
-  // Run every hour from 9 AM - 7 PM EST (14:00-23:00 UTC)
-  schedule: '0 14-23 * * ? *'
+  // DISABLED: SMS outreach suspended
+  // schedule: '0 14-23 * * ? *'
 });
 
