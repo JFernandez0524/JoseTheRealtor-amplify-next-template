@@ -62,6 +62,22 @@ interface OutreachQueueItem {
 export async function addToOutreachQueue(item: OutreachQueueItem): Promise<string> {
   const id = item.id || `${item.userId}_${item.contactId}`;
   
+  // Check if contact already exists in queue
+  try {
+    const existing = await docClient.send(new GetCommand({
+      TableName: OUTREACH_QUEUE_TABLE,
+      Key: { id }
+    }));
+
+    if (existing.Item) {
+      console.log(`⚠️ Contact ${item.contactId} already in queue - skipping to preserve progress`);
+      return id;
+    }
+  } catch (error) {
+    console.error(`Error checking for existing queue item:`, error);
+    // Continue to add if check fails
+  }
+  
   const queueItem = {
     id,
     userId: item.userId,

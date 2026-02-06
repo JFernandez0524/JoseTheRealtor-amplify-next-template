@@ -105,29 +105,35 @@ export const handler: Handler = async () => {
     console.log(`📊 AI outreach contacts for user: ${aiOutreachContacts.length}`);
     console.log(`Sample contact tags:`, aiOutreachContacts[0]?.tags);
 
-    // Add to queue
-    for (const contact of aiOutreachContacts) {
-      try {
-        await addToOutreachQueue({
-          userId: integration.userId,
-          locationId: tokenData.locationId,
-          contactId: contact.id,
-          contactName: `${contact.firstName || ''} ${contact.lastName || ''}`.trim(),
-          contactPhone: contact.phone,
-          contactEmail: contact.email,
-        });
-        
-        totalAdded++;
-        console.log(`✅ Added to queue: ${contact.firstName} ${contact.lastName}`);
+    // Add to queue in batches (parallel processing)
+    const BATCH_SIZE = 25;
+    for (let i = 0; i < aiOutreachContacts.length; i += BATCH_SIZE) {
+      const batch = aiOutreachContacts.slice(i, i + BATCH_SIZE);
+      
+      const results = await Promise.allSettled(
+        batch.map(contact => 
+          addToOutreachQueue({
+            userId: integration.userId,
+            locationId: tokenData.locationId,
+            contactId: contact.id,
+            contactName: `${contact.firstName || ''} ${contact.lastName || ''}`.trim(),
+            contactPhone: contact.phone,
+            contactEmail: contact.email,
+          })
+        )
+      );
 
-        await new Promise(resolve => setTimeout(resolve, 100));
-      } catch (err: any) {
-        console.error(`❌ Failed to add ${contact.firstName} ${contact.lastName}:`, {
-          error: err.message,
-          contactId: contact.id,
-          phone: contact.phone,
-          email: contact.email
-        });
+      const succeeded = results.filter(r => r.status === 'fulfilled').length;
+      const failed = results.filter(r => r.status === 'rejected').length;
+      
+      totalAdded += succeeded;
+      
+      console.log(`✅ Batch ${Math.floor(i / BATCH_SIZE) + 1}: ${succeeded} added, ${failed} failed`);
+      
+      // Log first failure for debugging
+      const firstFailure = results.find(r => r.status === 'rejected') as PromiseRejectedResult;
+      if (firstFailure) {
+        console.error(`❌ Sample error:`, firstFailure.reason?.message || firstFailure.reason);
       }
     }
   }
