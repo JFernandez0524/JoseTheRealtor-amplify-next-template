@@ -295,17 +295,30 @@ export default function AdminDashboard({
 
           <button
             onClick={async () => {
-              if (
-                !confirm(
-                  'Fix all failed GHL syncs? This will search GHL for existing contacts and create them if missing.',
-                )
-              )
-                return;
-
+              if (!confirm('Fix all failed GHL syncs? This will search GHL for existing contacts and create them if missing.')) return;
+              
               setLoading(true);
               try {
-                alert('🔧 Fix Failed GHL Syncs\n\nThis will:\n• Find all leads marked as "sync failed"\n• Create them in GoHighLevel if missing\n• Update sync status to "success"\n\nThis process may take several minutes.\n\nContinue?');
-                // Note: Actual execution happens via Lambda - admin runs manually from AWS Console
+                const { generateClient } = await import('aws-amplify/data');
+                const dataClient = generateClient();
+                
+                // @ts-ignore - Custom query types not yet generated
+                const { data, errors } = await dataClient.queries.fixFailedSyncs();
+                
+                if (errors) {
+                  alert(`Error: ${errors[0].message}`);
+                } else if (data) {
+                  const result = JSON.parse(data as string);
+                  alert(
+                    `✅ Found & Updated: ${result.fixed || 0}\n` +
+                    `🆕 Created New: ${result.created || 0}\n` +
+                    `❌ Failed: ${result.failed || 0}\n` +
+                    `📊 Total: ${result.total || 0}`
+                  );
+                  window.location.reload();
+                }
+              } catch (err: any) {
+                alert(`Error: ${err.message}`);
               } finally {
                 setLoading(false);
               }

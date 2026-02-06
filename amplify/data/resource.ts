@@ -1,6 +1,8 @@
 import { type ClientSchema, a, defineData } from '@aws-amplify/backend';
 import { skipTraceLeads } from '../functions/skiptraceLeads/resource';
 import { manualGhlSync } from '../functions/manualGhlSync/resource';
+import { fixFailedSyncs } from '../functions/fixFailedSyncs/resource';
+import { populateQueueFromGhl } from '../functions/populateQueueFromGhl/resource';
 
 const schema = a.schema({
   CsvUploadJob: a
@@ -324,6 +326,18 @@ const schema = a.schema({
     .returns(a.json())
     .handler(a.handler.function(manualGhlSync))
     .authorization((allow) => [allow.groups(['PRO', 'ADMINS'])]),
+
+  fixFailedSyncs: a
+    .query()
+    .returns(a.json())
+    .handler(a.handler.function(fixFailedSyncs))
+    .authorization((allow) => [allow.group('ADMINS')]),
+
+  populateQueueFromGhl: a
+    .query()
+    .returns(a.json())
+    .handler(a.handler.function(populateQueueFromGhl))
+    .authorization((allow) => [allow.group('ADMINS')]),
 
   Notification: a
     .model({
