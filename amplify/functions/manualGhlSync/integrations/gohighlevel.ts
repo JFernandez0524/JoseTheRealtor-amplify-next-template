@@ -261,18 +261,29 @@ export async function syncToGoHighLevel(
       if (searchRes.data?.contacts?.length > 0) {
         existingContact = searchRes.data.contacts[0];
       }
-    } else {
-      // Search by email or name for direct mail leads
-      if (primaryEmail) {
-        const searchBody = {
-          locationId: ghlLocationId,
-          pageLimit: 1,
-          filters: [{ field: 'email', operator: 'eq', value: primaryEmail }],
-        };
-        const searchRes = await ghl.post('/contacts/search', searchBody);
-        if (searchRes.data?.contacts?.length > 0) {
-          existingContact = searchRes.data.contacts[0];
-        }
+    } else if (primaryEmail) {
+      // Search by email if no phone
+      const searchBody = {
+        locationId: ghlLocationId,
+        pageLimit: 1,
+        filters: [{ field: 'email', operator: 'eq', value: primaryEmail }],
+      };
+      const searchRes = await ghl.post('/contacts/search', searchBody);
+      if (searchRes.data?.contacts?.length > 0) {
+        existingContact = searchRes.data.contacts[0];
+      }
+    } else if (basePayload.firstName && basePayload.lastName) {
+      // Search by full name if no phone or email
+      const searchBody = {
+        locationId: ghlLocationId,
+        pageLimit: 1,
+        filters: [
+          { field: 'name', operator: 'eq', value: `${basePayload.firstName} ${basePayload.lastName}` }
+        ],
+      };
+      const searchRes = await ghl.post('/contacts/search', searchBody);
+      if (searchRes.data?.contacts?.length > 0) {
+        existingContact = searchRes.data.contacts[0];
       }
     }
 

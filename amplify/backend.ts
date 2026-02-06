@@ -10,6 +10,7 @@ import { dailyOutreachAgent } from './functions/dailyOutreachAgent/resource';
 import { dailyEmailAgent } from './functions/dailyEmailAgent/resource';
 import { bulkEmailCampaign } from './functions/bulkEmailCampaign/resource';
 import { ghlWebhookHandler } from './functions/ghlWebhookHandler/resource';
+import { fixFailedSyncs } from './functions/fixFailedSyncs/resource';
 import { addUserToGroup } from './data/add-user-to-group/resource';
 import { removeUserFromGroup } from './data/remove-user-from-group/resource';
 import { EventType } from 'aws-cdk-lib/aws-s3';
@@ -29,6 +30,7 @@ const backend = defineBackend({
   dailyEmailAgent,
   bulkEmailCampaign,
   ghlWebhookHandler,
+  fixFailedSyncs,
   addUserToGroup,
   removeUserFromGroup,
 });
@@ -236,6 +238,23 @@ backend.dailyEmailAgent.resources.lambda.addToRolePolicy(
       `${backend.data.resources.tables['OutreachQueue'].tableArn}/index/*`
     ]
   })
+);
+
+// 🔧 Configure Fix Failed Syncs Lambda
+backend.fixFailedSyncs.addEnvironment(
+  'AMPLIFY_DATA_PropertyLead_TABLE_NAME',
+  backend.data.resources.tables['PropertyLead'].tableName
+);
+backend.fixFailedSyncs.addEnvironment(
+  'AMPLIFY_DATA_GhlIntegration_TABLE_NAME',
+  backend.data.resources.tables['GhlIntegration'].tableName
+);
+
+backend.data.resources.tables['PropertyLead'].grantReadWriteData(
+  backend.fixFailedSyncs.resources.lambda
+);
+backend.data.resources.tables['GhlIntegration'].grantReadData(
+  backend.fixFailedSyncs.resources.lambda
 );
 
 // 📨 Configure GHL Webhook Handler
