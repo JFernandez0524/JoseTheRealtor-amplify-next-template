@@ -201,7 +201,7 @@ export default function AdminDashboard({ initialUsers, initialLeads, currentUser
       {/* Admin Actions */}
       <div className="bg-white rounded-lg shadow-sm border p-6">
         <h2 className="text-lg font-semibold text-gray-900 mb-4">Admin Actions</h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <button
             onClick={() => window.location.reload()}
             className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
@@ -241,6 +241,41 @@ export default function AdminDashboard({ initialUsers, initialLeads, currentUser
             className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors"
           >
             Export Leads CSV
+          </button>
+
+          <button
+            onClick={async () => {
+              if (!confirm('Fix all failed GHL syncs? This will search GHL for existing contacts and create them if missing.')) return;
+              
+              setLoading(true);
+              try {
+                const response = await fetch('/api/v1/fix-failed-syncs', {
+                  method: 'POST',
+                });
+                const result = await response.json();
+                
+                if (response.ok) {
+                  const body = result.body || {};
+                  alert(
+                    `✅ Found & Updated: ${body.fixed || 0}\n` +
+                    `🆕 Created New: ${body.created || 0}\n` +
+                    `❌ Failed: ${body.failed || 0}\n` +
+                    `📊 Total: ${body.total || 0}`
+                  );
+                  window.location.reload();
+                } else {
+                  alert(`Error: ${result.error || 'Failed to fix syncs'}`);
+                }
+              } catch (err: any) {
+                alert(`Error: ${err.message}`);
+              } finally {
+                setLoading(false);
+              }
+            }}
+            disabled={loading}
+            className="bg-orange-600 text-white px-4 py-2 rounded-lg hover:bg-orange-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {loading ? '⏳ Fixing...' : '🔧 Fix Failed Syncs'}
           </button>
         </div>
       </div>

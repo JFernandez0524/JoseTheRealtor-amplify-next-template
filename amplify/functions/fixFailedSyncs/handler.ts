@@ -1,11 +1,9 @@
 import type { Handler } from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, ScanCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
-import axios from 'axios';
+import { DynamoDBDocumentClient, ScanCommand, UpdateCommand, GetCommand } from '@aws-sdk/lib-dynamodb';
 
 const dynamodb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 
-const GHL_BASE = 'https://services.leadconnectorhq.com';
 const LEAD_TABLE = process.env.AMPLIFY_DATA_PropertyLead_TABLE_NAME!;
 const GHL_INTEGRATION_TABLE = process.env.AMPLIFY_DATA_GhlIntegration_TABLE_NAME!;
 
@@ -16,6 +14,15 @@ interface FailedLead {
   ownerLastName?: string;
   ownerEmail?: string;
   ownerPhone?: string;
+  ghlSyncStatus?: string;
+}
+
+async function getFullLead(leadId: string) {
+  const result = await dynamodb.send(new GetCommand({
+    TableName: LEAD_TABLE,
+    Key: { id: leadId }
+  }));
+  return result.Item;
 }
 
 async function getGhlToken(userId: string) {
@@ -29,45 +36,6 @@ async function getGhlToken(userId: string) {
     accessToken: result.Items?.[0]?.accessToken,
     locationId: result.Items?.[0]?.locationId
   };
-}
-
-async function searchGhlContact(
-  accessToken: string,
-  locationId: string,
-  lead: FailedLead
-): Promise<string | null> {
-  const ghl = axios.create({
-    baseURL: GHL_BASE,
-    headers: {
-      'Authorization': `Bearer ${accessToken}`,
-      'Version': '2021-07-28'
-    }
-  });
-
-  const searches = [
-    lead.ownerPhone ? { field: 'phone', value: lead.ownerPhone } : null,
-    lead.ownerEmail ? { field: 'email', value: lead.ownerEmail } : null,
-    lead.ownerFirstName && lead.ownerLastName 
-      ? { field: 'name', value: `${lead.ownerFirstName} ${lead.ownerLastName}` }
-      : null
-  ].filter(Boolean);
-
-  for (const search of searches) {
-    try {
-      const res = await ghl.post('/contacts/search', {
-        locationId,
-        pageLimit: 1,
-        filters: [{ field: search!.field, operator: 'eq', value: search!.value }]
-      });
-      if (res.data?.contacts?.length > 0) {
-        return res.data.contacts[0].id;
-      }
-    } catch (err) {
-      console.warn(`Search failed for ${search!.field}:`, err);
-    }
-  }
-
-  return null;
 }
 
 async function updateLeadStatus(leadId: string, ghlContactId: string) {
@@ -108,26 +76,55 @@ export const handler: Handler = async () => {
   }
 
   let fixed = 0;
-  let notFound = 0;
+  let created = 0;
+  let failed = 0;
+
+  // Import the actual sync function
+  const { syncToGoHighLevel } = await import('../manualGhlSync/integrations/gohighlevel');
 
   for (const [userId, leads] of leadsByUser) {
     const { accessToken, locationId } = await getGhlToken(userId);
     
     if (!accessToken || !locationId) {
       console.log(`⚠️ No GHL credentials for user ${userId}`);
+      failed += leads.length;
       continue;
     }
 
     for (const lead of leads) {
-      const ghlContactId = await searchGhlContact(accessToken, locationId, lead);
-      
-      if (ghlContactId) {
-        await updateLeadStatus(lead.id, ghlContactId);
-        console.log(`✅ Fixed: ${lead.ownerFirstName} ${lead.ownerLastName}`);
-        fixed++;
-      } else {
-        console.log(`❌ Not found: ${lead.ownerFirstName} ${lead.ownerLastName}`);
-        notFound++;
+      try {
+        // Get full lead data
+        const fullLead = await getFullLead(lead.id);
+        if (!fullLead) {
+          console.log(`❌ Lead not found: ${lead.id}`);
+          failed++;
+          continue;
+        }
+
+        // Use the actual sync function with proper parameters
+        const primaryPhone = fullLead.ownerPhone || fullLead.phone1;
+        const ghlContactId = await syncToGoHighLevel(
+          fullLead as any, // Cast to bypass type checking - DynamoDB item matches DBLead structure
+          primaryPhone,
+          1, // phoneIndex
+          true, // isPrimary
+          [], // userGroups
+          userId,
+          accessToken,
+          locationId
+        );
+
+        if (ghlContactId) {
+          await updateLeadStatus(lead.id, ghlContactId);
+          console.log(`✅ Synced: ${lead.ownerFirstName} ${lead.ownerLastName}`);
+          created++;
+        } else {
+          console.log(`❌ Sync failed: ${lead.ownerFirstName} ${lead.ownerLastName}`);
+          failed++;
+        }
+      } catch (err: any) {
+        console.error(`❌ Error syncing ${lead.id}:`, err.message);
+        failed++;
       }
 
       await new Promise(resolve => setTimeout(resolve, 2000));
@@ -136,6 +133,11 @@ export const handler: Handler = async () => {
 
   return {
     statusCode: 200,
-    body: JSON.stringify({ fixed, notFound, total: failedLeads.length })
+    body: JSON.stringify({ 
+      fixed: 0, // No longer searching, only creating
+      created, 
+      failed, 
+      total: failedLeads.length 
+    })
   };
 };
