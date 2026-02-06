@@ -4,6 +4,8 @@ backend:
   phases:
     preBuild:
       commands:
+        - echo "🧹 Clearing npm cache..."
+        - rm -rf node_modules .npm
         - echo "🧩 Installing backend dependencies..."
         - npm ci --cache .npm --prefer-offline
         #
