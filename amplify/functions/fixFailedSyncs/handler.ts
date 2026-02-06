@@ -51,6 +51,19 @@ async function updateLeadStatus(leadId: string, ghlContactId: string) {
   }));
 }
 
+async function markLeadAsRetryable(leadId: string, errorMessage: string) {
+  await dynamodb.send(new UpdateCommand({
+    TableName: LEAD_TABLE,
+    Key: { id: leadId },
+    UpdateExpression: 'SET ghlSyncStatus = :status, ghlSyncError = :error, updatedAt = :now',
+    ExpressionAttributeValues: {
+      ':status': 'FAILED',
+      ':error': errorMessage.substring(0, 500), // Truncate long errors
+      ':now': new Date().toISOString()
+    }
+  }));
+}
+
 export const handler: Handler = async () => {
   console.log('🔍 Scanning for failed GHL syncs...');
 
@@ -119,10 +132,14 @@ export const handler: Handler = async () => {
           console.log(`✅ Synced: ${lead.ownerFirstName} ${lead.ownerLastName}`);
           created++;
         } else {
+          // This shouldn't happen since syncToGoHighLevel throws on error
+          await markLeadAsRetryable(lead.id, 'No contact ID returned');
           console.log(`❌ Sync failed: ${lead.ownerFirstName} ${lead.ownerLastName}`);
           failed++;
         }
       } catch (err: any) {
+        // Keep as FAILED so it can be retried later
+        await markLeadAsRetryable(lead.id, err.message);
         console.error(`❌ Error syncing ${lead.id}:`, err.message);
         failed++;
       }

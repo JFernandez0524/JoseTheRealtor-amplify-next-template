@@ -14,6 +14,14 @@ type ConversationState =
   | 'APPOINTMENT_BOOKING'
   | 'QUALIFIED';
 
+// Conversation goal tracking
+type ConversationGoal = {
+  primary: 'schedule_visit' | 'get_price_expectation' | 'disqualify';
+  blockers: string[];
+  urgencyLevel: 'low' | 'medium' | 'high';
+  sentiment?: 'POSITIVE' | 'NEUTRAL' | 'FRUSTRATED' | 'URGENT' | 'DISENGAGING';
+};
+
 interface ConversationContext {
   contactId: string;
   conversationId: string;
@@ -45,6 +53,7 @@ interface ConversationContext {
   leadIntent?: 'buyer' | 'seller'; // Determined from ad or conversation
   // State tracking
   conversationState?: ConversationState;
+  conversationGoal?: ConversationGoal;
   budget?: string;
   timeline?: string;
   location?: string;
@@ -57,6 +66,100 @@ interface PropertyAnalysis {
   beds?: number;
   baths?: number;
   yearBuilt?: number;
+}
+
+// Simple sentiment detection (only for messages > 10 chars)
+async function detectSentiment(message: string): Promise<'POSITIVE' | 'NEUTRAL' | 'FRUSTRATED' | 'URGENT' | 'DISENGAGING' | null> {
+  if (message.length <= 10) return null;
+  
+  // Check for objection keywords first (fast path)
+  const objectionKeywords = ['not interested', 'stop', 'remove', 'unsubscribe', 'leave me alone', 'busy', 'later'];
+  if (objectionKeywords.some(kw => message.toLowerCase().includes(kw))) {
+    return 'DISENGAGING';
+  }
+
+  try {
+    const response = await axios.post(
+      'https://api.openai.com/v1/chat/completions',
+      {
+        model: 'gpt-4o-mini', // Cheap for simple classification
+        messages: [{
+          role: 'system',
+          content: 'Classify the user\'s message as: POSITIVE | NEUTRAL | FRUSTRATED | URGENT | DISENGAGING\n\nOnly return the label.'
+        }, {
+          role: 'user',
+          content: message
+        }],
+        temperature: 0,
+        max_tokens: 10
+      },
+      {
+        headers: {
+          'Authorization': `Bearer ${OPENAI_API_KEY}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+
+    const sentiment = response.data.choices[0].message.content.trim().toUpperCase();
+    if (['POSITIVE', 'NEUTRAL', 'FRUSTRATED', 'URGENT', 'DISENGAGING'].includes(sentiment)) {
+      return sentiment as any;
+    }
+    return 'NEUTRAL';
+  } catch (error) {
+    console.error('Sentiment detection failed:', error);
+    return null;
+  }
+}
+
+// Detect conversation-ending signals (CRITICAL for preventing over-messaging)
+function isConversationEnd(message: string): boolean {
+  const endSignals = [
+    'ok thanks',
+    'thanks',
+    'thank you',
+    'all good',
+    'all set',
+    'appreciate it',
+    "we're fine",
+    "we're good",
+    'got it',
+    'okay',
+    'ok',
+    'thx',
+    'ty'
+  ];
+  
+  const normalized = message.toLowerCase().trim();
+  
+  // Exact match or very short acknowledgment
+  if (endSignals.includes(normalized)) {
+    return true;
+  }
+  
+  // Short message (< 15 chars) containing end signal
+  if (normalized.length < 15 && endSignals.some(signal => normalized.includes(signal))) {
+    return true;
+  }
+  
+  return false;
+}
+
+// Detect hard objections (property not for sale)
+function isHardObjection(message: string): boolean {
+  const hardObjections = [
+    'not for sale',
+    'keeping it',
+    'keeping the property',
+    'family is keeping',
+    'already sold',
+    'have an agent',
+    'working with',
+    'already listed'
+  ];
+  
+  const normalized = message.toLowerCase();
+  return hardObjections.some(objection => normalized.includes(objection));
 }
 
 // Get property analysis using Bridge API with address variations and coordinate fallback
@@ -175,18 +278,28 @@ async function generateOpenAIResponse(context: ConversationContext, propertyData
   const calculatedNextState = nextState ?? getNextState(calculatedCurrentState, context.incomingMessage, hasAddressForState, context.leadIntent);
 
   const systemPrompt = isInitialOutreach 
-    ? `You are Jose Fernandez from RE/MAX Homeland Realtors reaching out to ${context.contactName} for the FIRST TIME via SMS.
+    ? `You are Jose Fernandez from RE/MAX Homeland Realtors reaching out to ${context.contactName.split(' ')[0]} for the FIRST TIME via SMS.
 
-DELIVER THIS EXACT INITIAL MESSAGE:
+GOAL: Get a reply (curiosity > clarity on first touch)
 
-"Hi ${context.contactName}, Jose from RE/MAX here. I saw the notice about ${hasAddress ? context.propertyAddress : 'your property'}. Is the property still for sale? Reply STOP to opt out."
+SEND ONLY THIS MESSAGE (soft, human, non-threatening):
 
-INSTRUCTIONS:
-- Use the exact message above
-- Keep it under 160 characters if possible
-- Include the STOP opt-out for compliance
+"Hi ${context.contactName.split(' ')[0]}, this is Jose with RE/MAX. I had a quick question about a property on ${hasAddress && context.propertyAddress ? context.propertyAddress.split(',')[0].replace(/^\d+\s+/, '') : 'your street'} — is it something you're planning to sell, or are you keeping it? Reply STOP to opt out."
 
-Generate the initial outreach message:`
+RULES FOR FIRST CONTACT:
+- Use FIRST NAME only (not full name)
+- Mention STREET NAME only (not full address)
+- NO "I saw the notice" (sounds legal/intimidating)
+- Frame as question, not sales pitch
+- Keep it conversational and human
+
+CRITICAL: Return ONLY the message text above. Do NOT include:
+- Step-by-step breakdown
+- Explanations
+- Analysis
+- Any other text
+
+Just return the exact message to send.`
     : `You are an AI assistant helping Jose Fernandez, a licensed real estate agent at RE/MAX Homeland Realtors.
 
 COMPLIANCE RULES (CRITICAL):
@@ -311,12 +424,33 @@ Ask one at a time:
 
 Then: save_buyer_search tool
 
+${context.conversationGoal ? `
+CONVERSATION GOAL:
+Primary Objective: ${context.conversationGoal.primary.replace(/_/g, ' ').toUpperCase()}
+Urgency Level: ${context.conversationGoal.urgencyLevel.toUpperCase()}
+${context.conversationGoal.sentiment ? `Current Sentiment: ${context.conversationGoal.sentiment}` : ''}
+
+${context.conversationGoal.sentiment === 'FRUSTRATED' ? 
+  '⚠️ IMPORTANT: User seems frustrated. Slow down, empathize, offer human assistance. Keep response to 2 sentences max.' : ''}
+${context.conversationGoal.sentiment === 'URGENT' ? 
+  '⚡ IMPORTANT: User is urgent. Move quickly to CTA, be direct and action-oriented.' : ''}
+${context.conversationGoal.sentiment === 'DISENGAGING' ? 
+  '🚨 CRITICAL: User is disengaging. Keep response to 1 sentence. Ask ONE simple yes/no question.' : ''}
+` : ''}
+
 CONVERSATION RULES:
 - ONE question at a time
 - Sound like texting a friend
 - No corporate speak
 - Use contractions (I'm, you're, let's)
 - Be brief - 1-2 sentences max
+
+🛑 CRITICAL - WHEN TO STOP:
+- If user says "ok thanks", "thanks", "all good" → DO NOT RESPOND
+- If user says "keeping it", "not for sale" → Send ONE polite close, then STOP
+- After a polite close, if they acknowledge → SILENCE IS SUCCESS
+- In outbound conversations, silence after acknowledgment is professional, not failure
+- DO NOT try to "save the deal" after a clear exit signal
 `}
 
 TOOLS AVAILABLE:
@@ -449,7 +583,7 @@ Respond to their message:`;
     const response = await axios.post(
       'https://api.openai.com/v1/chat/completions',
       {
-        model: 'gpt-4o-mini',
+        model: 'gpt-4o-mini', // Using 4o-mini for now (4.1-mini when available)
         messages: isInitialOutreach 
           ? [
               { role: 'system', content: systemPrompt },
@@ -462,7 +596,7 @@ Respond to their message:`;
         tools,
         tool_choice: 'auto',
         max_tokens: 150,
-        temperature: 0.7
+        temperature: 0.6, // Slightly lower for more consistent responses
       },
       {
         headers: {
@@ -685,8 +819,28 @@ Respond to their message:`;
     }
 
     const aiMessage = choice.message?.content || 'Thanks for your message. Let me get back to you shortly.';
-    console.log(`✅ OpenAI response: ${aiMessage.substring(0, 100)}...`);
-    return aiMessage;
+    
+    // Clean up any step-by-step breakdowns that slip through
+    let cleanedMessage = aiMessage;
+    
+    // Remove "Step 1:", "Step 2:", etc.
+    if (cleanedMessage.includes('Step 1:') || cleanedMessage.includes('Combined Message:')) {
+      // Extract just the combined message if present
+      const combinedMatch = cleanedMessage.match(/Combined Message:\s*"([^"]+)"/);
+      if (combinedMatch) {
+        cleanedMessage = combinedMatch[1];
+      } else {
+        // Remove all step labels and combine
+        cleanedMessage = cleanedMessage
+          .replace(/Step \d+:.*?\n/g, '')
+          .replace(/Combined Message:\s*/g, '')
+          .replace(/"/g, '')
+          .trim();
+      }
+    }
+    
+    console.log(`✅ OpenAI response: ${cleanedMessage.substring(0, 100)}...`);
+    return cleanedMessage;
   } catch (error: any) {
     console.error('❌ OpenAI API error:', error.response?.data || error.message);
     console.error('❌ Full error details:', JSON.stringify(error, null, 2));
@@ -858,6 +1012,117 @@ export async function generateAIResponse(context: ConversationContext): Promise<
     
     console.log(`📊 Current state: ${currentState}`);
     console.log(`➡️ Next state: ${nextState}`);
+
+    // 🛑 HARD STOP: Check for conversation-ending signals
+    if (isConversationEnd(context.incomingMessage)) {
+      console.log('🛑 Conversation end signal detected - suppressing AI');
+      
+      if (!context.testMode && context.accessToken) {
+        // Tag as conversation ended
+        await axios.post(
+          `https://services.leadconnectorhq.com/contacts/${context.contactId}/tags`,
+          { tags: ['conversation_ended'] },
+          {
+            headers: {
+              'Authorization': `Bearer ${context.accessToken}`,
+              'Content-Type': 'application/json',
+              'Version': '2021-07-28'
+            }
+          }
+        );
+        
+        // Update AI state to stopped
+        await updateAIState(context.contactId, 'stopped', context.accessToken);
+      }
+      
+      // DO NOT RESPOND - silence is professionalism
+      throw new Error('CONVERSATION_ENDED');
+    }
+
+    // 🛑 HARD STOP: Check for hard objections (keeping property, already sold, etc.)
+    if (isHardObjection(context.incomingMessage)) {
+      console.log('🛑 Hard objection detected - ending conversation gracefully');
+      
+      if (!context.testMode && context.accessToken) {
+        await axios.post(
+          `https://services.leadconnectorhq.com/contacts/${context.contactId}/tags`,
+          { tags: ['not_for_sale', 'conversation_ended'] },
+          {
+            headers: {
+              'Authorization': `Bearer ${context.accessToken}`,
+              'Content-Type': 'application/json',
+              'Version': '2021-07-28'
+            }
+          }
+        );
+        
+        await updateAIState(context.contactId, 'stopped', context.accessToken);
+      }
+      
+      // Send ONE polite close, then stop
+      const closeMessage = "I understand. If you ever want to explore options in the future, feel free to reach out. Best of luck!";
+      await sendGHLMessage(context.conversationId, closeMessage, context.accessToken || '', context.testMode, context.fromNumber, context.contactId, context.messageType || 'SMS');
+      return closeMessage;
+    }
+
+    // Detect sentiment for longer messages
+    const sentiment = await detectSentiment(context.incomingMessage);
+    if (sentiment) {
+      console.log(`😊 Sentiment detected: ${sentiment}`);
+      
+      // Update sentiment in GHL (both tag and custom field)
+      if (!context.testMode && context.accessToken) {
+        try {
+          const sentimentTag = `sentiment:${sentiment.toLowerCase()}`;
+          
+          // Add sentiment tag
+          await axios.post(
+            `https://services.leadconnectorhq.com/contacts/${context.contactId}/tags`,
+            { tags: [sentimentTag] },
+            {
+              headers: {
+                'Authorization': `Bearer ${context.accessToken}`,
+                'Content-Type': 'application/json',
+                'Version': '2021-07-28'
+              }
+            }
+          );
+          
+          // Update sentiment custom field
+          await axios.put(
+            `https://services.leadconnectorhq.com/contacts/${context.contactId}`,
+            {
+              customFields: [
+                { id: 'vjhwCk3Ns0ekDEbMsuy5', value: sentiment }
+              ]
+            },
+            {
+              headers: {
+                'Authorization': `Bearer ${context.accessToken}`,
+                'Content-Type': 'application/json',
+                'Version': '2021-07-28'
+              }
+            }
+          );
+          
+          console.log(`✅ Updated sentiment: ${sentimentTag} + custom field`);
+        } catch (error) {
+          console.error('Failed to update sentiment:', error);
+        }
+      }
+    }
+
+    // Determine conversation goal
+    const conversationGoal: ConversationGoal = {
+      primary: nextState === 'APPOINTMENT_BOOKING' ? 'schedule_visit' : 
+               nextState === 'PROPERTY_VALUATION' ? 'get_price_expectation' : 
+               'schedule_visit',
+      blockers: [],
+      urgencyLevel: sentiment === 'URGENT' ? 'high' : 
+                    context.leadType === 'PREFORECLOSURE' ? 'high' : 'medium',
+      sentiment: sentiment || undefined
+    };
+    context.conversationGoal = conversationGoal;
     
     // Update state if changed
     if (nextState !== currentState && !context.testMode && context.accessToken) {

@@ -34,6 +34,8 @@ const GHL_CUSTOM_FIELD_ID_MAP: Record<string, string> = {
   // 📧 EMAIL TRACKING FIELDS
   email_attempt_counter: 'wWlrXoXeMXcM6kUexf2L',
   last_email_date: '3xOBr4GvgRc22kBRNYCE',
+  // 🎭 SENTIMENT TRACKING
+  conversation_sentiment: 'vjhwCk3Ns0ekDEbMsuy5',
 };
 
 // Opportunity field (separate from contact fields)
