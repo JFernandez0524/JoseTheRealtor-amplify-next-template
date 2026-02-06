@@ -1,6 +1,6 @@
 # Project Context - JoseTheRealtor Platform
 
-**Last Updated:** 2026-01-23 7:59 PM EST
+**Last Updated:** 2026-02-05 8:22 PM EST
 
 ## Current Status
 
@@ -201,6 +201,46 @@ Send message back via GHL API (correct channel)
 - ✅ `amplify/functions/manualGhlSync/integrations/gohighlevel.ts` - Queue population documented
 - ✅ `README.md` - Complete architecture section added
 - ✅ `PROJECT_CONTEXT.md` - Full system documentation added
+
+## Recent Work (2026-02-05)
+
+### ✅ Lex V2 Integration Attempt - REVERTED
+**Attempted:** 2026-02-05 8:00 PM EST
+**Reverted:** 2026-02-05 8:20 PM EST
+
+**What We Tried:**
+- Integrate AWS Lex V2 for chatbot functionality
+- Created bot with Traditional builder (SellProperty, ScheduleViewing intents)
+- Added Lambda fulfillment handler
+- Installed `@aws-sdk/client-lex-runtime-v2` package
+
+**Why It Failed:**
+- npm dependency conflicts with @smithy packages
+- Peer dependency version mismatches between AWS SDK packages
+- `npm ci` (used in Amplify builds) requires perfect package-lock.json
+- Transitive dependencies not properly resolved
+
+**What We Learned:**
+- OpenAI function calling already provides equivalent functionality
+- Existing conversation handler has state management and slot filling
+- No deployment complexity needed - current system works well
+- Lex V2 adds unnecessary complexity for our use case
+
+**Files Created (Then Removed):**
+- `amplify/functions/lexV2Handler/` - Lambda handler for Lex
+- `app/api/test-lex-v2/route.ts` - Test endpoint
+- `lex-v2-testing.js` - A/B testing guide
+
+**Files Created (Kept as Documentation):**
+- `CONVERSATION_HANDLER_GUIDE.md` - Comprehensive guide to existing OpenAI system
+- `openai-function-calling-guide.ts` - Guide for OpenAI function calling patterns
+
+**Decision:**
+- Stick with OpenAI conversation handler
+- No need for Lex V2 complexity
+- Current system handles all requirements
+
+---
 
 ## Recent Fixes (Today)
 

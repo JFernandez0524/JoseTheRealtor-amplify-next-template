@@ -4,7 +4,7 @@
  * Add this to your conversationHandler.ts OpenAI API call
  */
 
-const INTENT_FUNCTIONS = [
+export const INTENT_FUNCTIONS = [
   {
     name: 'sell_property',
     description: 'User wants to sell their property',
