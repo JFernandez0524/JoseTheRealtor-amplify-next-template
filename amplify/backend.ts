@@ -11,6 +11,7 @@ import { dailyEmailAgent } from './functions/dailyEmailAgent/resource';
 import { bulkEmailCampaign } from './functions/bulkEmailCampaign/resource';
 import { ghlWebhookHandler } from './functions/ghlWebhookHandler/resource';
 import { fixFailedSyncs } from './functions/fixFailedSyncs/resource';
+import { populateQueueFromGhl } from './functions/populateQueueFromGhl/resource';
 import { addUserToGroup } from './data/add-user-to-group/resource';
 import { removeUserFromGroup } from './data/remove-user-from-group/resource';
 import { EventType } from 'aws-cdk-lib/aws-s3';
@@ -31,6 +32,7 @@ const backend = defineBackend({
   bulkEmailCampaign,
   ghlWebhookHandler,
   fixFailedSyncs,
+  populateQueueFromGhl,
   addUserToGroup,
   removeUserFromGroup,
 });
@@ -255,6 +257,23 @@ backend.data.resources.tables['PropertyLead'].grantReadWriteData(
 );
 backend.data.resources.tables['GhlIntegration'].grantReadData(
   backend.fixFailedSyncs.resources.lambda
+);
+
+// 📋 Configure Populate Queue from GHL Lambda
+backend.populateQueueFromGhl.addEnvironment(
+  'AMPLIFY_DATA_GhlIntegration_TABLE_NAME',
+  backend.data.resources.tables['GhlIntegration'].tableName
+);
+backend.populateQueueFromGhl.addEnvironment(
+  'AMPLIFY_DATA_OutreachQueue_TABLE_NAME',
+  backend.data.resources.tables['OutreachQueue'].tableName
+);
+
+backend.data.resources.tables['GhlIntegration'].grantReadData(
+  backend.populateQueueFromGhl.resources.lambda
+);
+backend.data.resources.tables['OutreachQueue'].grantReadWriteData(
+  backend.populateQueueFromGhl.resources.lambda
 );
 
 // 📨 Configure GHL Webhook Handler
