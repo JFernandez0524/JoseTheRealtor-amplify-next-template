@@ -1,11 +1,12 @@
 import type { Handler } from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, ScanCommand, UpdateCommand, GetCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, ScanCommand, GetCommand } from '@aws-sdk/lib-dynamodb';
+import { updateLeadSyncStatus } from '../shared/syncUtils';
+import { getValidGhlToken } from '../shared/ghlTokenManager';
 
 const dynamodb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 
 const LEAD_TABLE = process.env.AMPLIFY_DATA_PropertyLead_TABLE_NAME!;
-const GHL_INTEGRATION_TABLE = process.env.AMPLIFY_DATA_GhlIntegration_TABLE_NAME!;
 
 interface FailedLead {
   id: string;
@@ -25,47 +26,14 @@ async function getFullLead(leadId: string) {
   return result.Item;
 }
 
-async function getGhlToken(userId: string) {
-  const result = await dynamodb.send(new ScanCommand({
-    TableName: GHL_INTEGRATION_TABLE,
-    FilterExpression: 'userId = :userId',
-    ExpressionAttributeValues: { ':userId': userId }
-  }));
-
-  return {
-    accessToken: result.Items?.[0]?.accessToken,
-    locationId: result.Items?.[0]?.locationId
-  };
-}
-
-async function updateLeadStatus(leadId: string, ghlContactId: string) {
-  await dynamodb.send(new UpdateCommand({
-    TableName: LEAD_TABLE,
-    Key: { id: leadId },
-    UpdateExpression: 'SET ghlSyncStatus = :status, ghlContactId = :contactId, updatedAt = :now',
-    ExpressionAttributeValues: {
-      ':status': 'SUCCESS',
-      ':contactId': ghlContactId,
-      ':now': new Date().toISOString()
-    }
-  }));
-}
-
 async function markLeadAsRetryable(leadId: string, errorMessage: string) {
-  await dynamodb.send(new UpdateCommand({
-    TableName: LEAD_TABLE,
-    Key: { id: leadId },
-    UpdateExpression: 'SET ghlSyncStatus = :status, ghlSyncError = :error, updatedAt = :now',
-    ExpressionAttributeValues: {
-      ':status': 'FAILED',
-      ':error': errorMessage.substring(0, 500), // Truncate long errors
-      ':now': new Date().toISOString()
-    }
-  }));
+  await updateLeadSyncStatus(dynamodb, LEAD_TABLE, leadId, 'FAILED');
+  console.log(`Marked as retryable with error: ${errorMessage.substring(0, 100)}`);
 }
 
 export const handler: Handler = async () => {
   console.log('🔍 Scanning for failed GHL syncs...');
+  console.log('Environment:', { LEAD_TABLE });
 
   const result = await dynamodb.send(new ScanCommand({
     TableName: LEAD_TABLE,
@@ -88,7 +56,8 @@ export const handler: Handler = async () => {
     leadsByUser.get(lead.userId)!.push(lead);
   }
 
-  let fixed = 0;
+  console.log(`Grouped into ${leadsByUser.size} users`);
+
   let created = 0;
   let failed = 0;
 
@@ -96,16 +65,22 @@ export const handler: Handler = async () => {
   const { syncToGoHighLevel } = await import('../manualGhlSync/integrations/gohighlevel');
 
   for (const [userId, leads] of leadsByUser) {
-    const { accessToken, locationId } = await getGhlToken(userId);
+    console.log(`\n👤 Processing user ${userId} with ${leads.length} failed leads`);
     
-    if (!accessToken || !locationId) {
+    const tokenData = await getValidGhlToken(userId);
+    
+    if (!tokenData) {
       console.log(`⚠️ No GHL credentials for user ${userId}`);
       failed += leads.length;
       continue;
     }
 
+    console.log(`✅ Found GHL credentials for location ${tokenData.locationId}`);
+
     for (const lead of leads) {
       try {
+        console.log(`🔄 Processing lead ${lead.id}: ${lead.ownerFirstName} ${lead.ownerLastName}`);
+        
         // Get full lead data
         const fullLead = await getFullLead(lead.id);
         if (!fullLead) {
@@ -114,25 +89,31 @@ export const handler: Handler = async () => {
           continue;
         }
 
+        console.log(`📋 Lead data:`, {
+          id: lead.id,
+          phone: fullLead.ownerPhone || fullLead.phone1,
+          email: fullLead.ownerEmail,
+          address: fullLead.ownerAddress
+        });
+
         // Use the actual sync function with proper parameters
         const primaryPhone = fullLead.ownerPhone || fullLead.phone1;
         const ghlContactId = await syncToGoHighLevel(
-          fullLead as any, // Cast to bypass type checking - DynamoDB item matches DBLead structure
+          fullLead as any,
           primaryPhone,
-          1, // phoneIndex
-          true, // isPrimary
-          [], // userGroups
+          1,
+          true,
+          [],
           userId,
-          accessToken,
-          locationId
+          tokenData.token,
+          tokenData.locationId
         );
 
         if (ghlContactId) {
-          await updateLeadStatus(lead.id, ghlContactId);
-          console.log(`✅ Synced: ${lead.ownerFirstName} ${lead.ownerLastName}`);
+          await updateLeadSyncStatus(dynamodb, LEAD_TABLE, lead.id, 'SUCCESS', ghlContactId);
+          console.log(`✅ Synced: ${lead.ownerFirstName} ${lead.ownerLastName} → ${ghlContactId}`);
           created++;
         } else {
-          // This shouldn't happen since syncToGoHighLevel throws on error
           await markLeadAsRetryable(lead.id, 'No contact ID returned');
           console.log(`❌ Sync failed: ${lead.ownerFirstName} ${lead.ownerLastName}`);
           failed++;
@@ -140,7 +121,11 @@ export const handler: Handler = async () => {
       } catch (err: any) {
         // Keep as FAILED so it can be retried later
         await markLeadAsRetryable(lead.id, err.message);
-        console.error(`❌ Error syncing ${lead.id}:`, err.message);
+        console.error(`❌ Error syncing ${lead.id}:`, {
+          error: err.message,
+          leadName: `${lead.ownerFirstName} ${lead.ownerLastName}`,
+          stack: err.stack
+        });
         failed++;
       }
 
@@ -148,13 +133,16 @@ export const handler: Handler = async () => {
     }
   }
 
+  const summary = {
+    created, 
+    failed, 
+    total: failedLeads.length 
+  };
+
+  console.log('\n✅ Fix failed syncs complete:', summary);
+
   return {
     statusCode: 200,
-    body: JSON.stringify({ 
-      fixed: 0, // No longer searching, only creating
-      created, 
-      failed, 
-      total: failedLeads.length 
-    })
+    body: JSON.stringify(summary)
   };
 };

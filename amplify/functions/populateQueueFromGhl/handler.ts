@@ -1,12 +1,13 @@
 import type { Handler } from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, ScanCommand, PutCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, ScanCommand } from '@aws-sdk/lib-dynamodb';
+import { getValidGhlToken } from '../shared/ghlTokenManager';
+import { addToOutreachQueue } from '../shared/outreachQueue';
 import axios from 'axios';
 
 const dynamodb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 
 const GHL_INTEGRATION_TABLE = process.env.AMPLIFY_DATA_GhlIntegration_TABLE_NAME!;
-const OUTREACH_QUEUE_TABLE = process.env.AMPLIFY_DATA_OutreachQueue_TABLE_NAME!;
 
 interface GHLContact {
   id: string;
@@ -31,14 +32,19 @@ export const handler: Handler = async () => {
 
   let totalAdded = 0;
   let totalContacts = 0;
+  let aiOutreachTotal = 0;
 
   for (const integration of integrations) {
-    if (!integration.accessToken || !integration.locationId) {
-      console.log(`⚠️ Skipping integration for user ${integration.userId} - missing credentials`);
+    console.log(`\n👤 Processing user ${integration.userId}`);
+    
+    const tokenData = await getValidGhlToken(integration.userId);
+    
+    if (!tokenData) {
+      console.log(`⚠️ No valid GHL credentials for user ${integration.userId}`);
       continue;
     }
 
-    console.log(`\n👤 Processing user ${integration.userId}`);
+    console.log(`✅ Found GHL credentials for location ${tokenData.locationId}`);
 
     // Fetch all contacts with pagination
     let allContacts: GHLContact[] = [];
@@ -47,7 +53,7 @@ export const handler: Handler = async () => {
     let page = 1;
 
     while (true) {
-      let url = `https://services.leadconnectorhq.com/contacts/?locationId=${integration.locationId}&limit=100`;
+      let url = `https://services.leadconnectorhq.com/contacts/?locationId=${tokenData.locationId}&limit=100`;
       if (startAfter && startAfterId) {
         url += `&startAfter=${startAfter}&startAfterId=${startAfterId}`;
       }
@@ -55,7 +61,7 @@ export const handler: Handler = async () => {
       try {
         const response = await axios.get(url, {
           headers: {
-            'Authorization': `Bearer ${integration.accessToken}`,
+            'Authorization': `Bearer ${tokenData.token}`,
             'Version': '2021-07-28'
           }
         });
@@ -88,76 +94,55 @@ export const handler: Handler = async () => {
     }
 
     totalContacts += allContacts.length;
-    console.log(`📊 Total contacts: ${allContacts.length}`);
+    console.log(`📊 Total contacts for user: ${allContacts.length}`);
 
     // Filter for "ai outreach" tag
     const aiOutreachContacts = allContacts.filter(contact =>
       contact.tags && contact.tags.includes('ai outreach')
     );
 
-    console.log(`📊 AI outreach contacts: ${aiOutreachContacts.length}`);
+    aiOutreachTotal += aiOutreachContacts.length;
+    console.log(`📊 AI outreach contacts for user: ${aiOutreachContacts.length}`);
+    console.log(`Sample contact tags:`, aiOutreachContacts[0]?.tags);
 
     // Add to queue
     for (const contact of aiOutreachContacts) {
       try {
-        // Add SMS entry
-        if (contact.phone) {
-          await dynamodb.send(new PutCommand({
-            TableName: OUTREACH_QUEUE_TABLE,
-            Item: {
-              id: `${contact.id}-${contact.phone}-SMS`,
-              userId: integration.userId,
-              locationId: integration.locationId,
-              contactId: contact.id,
-              contactMethod: contact.phone,
-              channel: 'SMS',
-              status: 'PENDING',
-              touchNumber: 1,
-              nextTouchDate: new Date().toISOString(),
-              createdAt: new Date().toISOString(),
-              updatedAt: new Date().toISOString()
-            }
-          }));
-          totalAdded++;
-          console.log(`✅ Added SMS: ${contact.firstName} ${contact.lastName}`);
-        }
-
-        // Add EMAIL entries
-        const emails = [contact.email, ...(contact.additionalEmails || [])].filter(Boolean);
-        for (const email of emails) {
-          await dynamodb.send(new PutCommand({
-            TableName: OUTREACH_QUEUE_TABLE,
-            Item: {
-              id: `${contact.id}-${email}-EMAIL`,
-              userId: integration.userId,
-              locationId: integration.locationId,
-              contactId: contact.id,
-              contactMethod: email,
-              channel: 'EMAIL',
-              status: 'PENDING',
-              touchNumber: 1,
-              nextTouchDate: new Date().toISOString(),
-              createdAt: new Date().toISOString(),
-              updatedAt: new Date().toISOString()
-            }
-          }));
-          totalAdded++;
-          console.log(`✅ Added EMAIL: ${contact.firstName} ${contact.lastName}`);
-        }
+        await addToOutreachQueue({
+          userId: integration.userId,
+          locationId: tokenData.locationId,
+          contactId: contact.id,
+          contactName: `${contact.firstName || ''} ${contact.lastName || ''}`.trim(),
+          contactPhone: contact.phone,
+          contactEmail: contact.email,
+        });
+        
+        totalAdded++;
+        console.log(`✅ Added to queue: ${contact.firstName} ${contact.lastName}`);
 
         await new Promise(resolve => setTimeout(resolve, 100));
       } catch (err: any) {
-        console.error(`❌ Failed to add ${contact.firstName} ${contact.lastName}: ${err.message}`);
+        console.error(`❌ Failed to add ${contact.firstName} ${contact.lastName}:`, {
+          error: err.message,
+          contactId: contact.id,
+          phone: contact.phone,
+          email: contact.email
+        });
       }
     }
   }
 
+  const summary = {
+    totalContacts,
+    aiOutreachContacts: aiOutreachTotal,
+    queueEntriesAdded: totalAdded,
+    integrations: integrations.length
+  };
+
+  console.log('\n✅ Queue population complete:', summary);
+
   return {
     statusCode: 200,
-    body: JSON.stringify({
-      totalContacts,
-      totalAdded,
-      integrations: integrations.length
-    })
+    body: JSON.stringify(summary)
   };
 };

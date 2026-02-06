@@ -730,14 +730,13 @@ export default function LeadDashboardClient({}: Props) {
 
     setIsPopulatingQueue(true);
     try {
-      const response = await fetch('/api/v1/populate-queue-from-ghl', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-      });
+      const { data, errors } = await client.queries.populateQueueFromGhl();
 
-      const result = await response.json();
+      if (errors) {
+        throw new Error(errors[0]?.message || 'Failed to populate queue');
+      }
 
-      if (!response.ok) throw new Error(result.error);
+      const result = JSON.parse(data as string);
 
       alert(
         `✅ Queue Population Complete!\n\nTotal GHL contacts: ${result.totalContacts}\nAI outreach contacts: ${result.aiOutreachContacts}\nQueue entries added: ${result.queueEntriesAdded}${result.errors ? `\nErrors: ${result.errors.length}` : ''}`
