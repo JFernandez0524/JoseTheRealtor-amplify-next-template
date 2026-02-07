@@ -204,35 +204,6 @@ async function processUserContacts(integration: GhlIntegration): Promise<number>
     // If queue is empty, no outreach should be sent
     // This prevents duplicate messages that caused GHL suspension
     
-    // 5. Send initial outreach to each new contact
-    let processed = 0;
-    for (const contact of newContacts) {
-      // Check business hours before each message
-      const now = new Date();
-      const estHour = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' })).getHours();
-      
-      if (estHour < 9 || estHour >= 20) {
-        console.log(`⏰ [DAILY_OUTREACH] Outside business hours (${estHour}:00 EST). Stopping outreach.`);
-        break; // Stop processing remaining contacts
-      }
-      
-      try {
-        await sendInitialOutreach(contact, integrationWithToken, phoneNumber);
-        processed++;
-        console.log(`✅ [DAILY_OUTREACH] Sent message ${processed}/${newContacts.length}`);
-        
-        // A2P Compliance: Rate limiting to 1 message per second
-        if (processed < newContacts.length) {
-          console.log(`⏳ [DAILY_OUTREACH] Waiting 1 second before next message (A2P compliance)...`);
-          await new Promise(resolve => setTimeout(resolve, 1000));
-        }
-      } catch (error) {
-        console.error(`Failed to send outreach to contact ${contact.id}:`, error);
-      }
-    }
-    
-    return processed;
-    
   } catch (error) {
     console.error(`Error processing user contacts:`, error);
     return 0;
