@@ -14,6 +14,8 @@ export async function updateLeadSyncStatus(
   status: 'SUCCESS' | 'FAILED',
   contactId?: string
 ): Promise<void> {
+  console.log(`📝 Updating lead ${leadId} sync status to ${status}${contactId ? ` with contactId ${contactId}` : ''}`);
+  
   const updateExpression = status === 'SUCCESS' 
     ? 'SET #ghlSyncStatus = :status, #ghlContactId = :contactId, #ghlSyncDate = :syncDate'
     : 'SET #ghlSyncStatus = :status';
@@ -38,6 +40,8 @@ export async function updateLeadSyncStatus(
     ExpressionAttributeNames: expressionAttributeNames,
     ExpressionAttributeValues: expressionValues
   }));
+  
+  console.log(`✅ Lead ${leadId} status updated to ${status}`);
 }
 
 export function validateLeadForSync(lead: any): { isValid: boolean; reason?: string } {

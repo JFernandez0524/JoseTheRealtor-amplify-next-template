@@ -247,13 +247,16 @@ async function processQueueContacts(
         ]
       };
       
-      await sendInitialOutreach(contact, integration, phoneNumber);
+      // Determine which touch this is (1-7)
+      const touchNumber = (queueItem.smsAttempts || 0) + 1;
+      
+      await sendFollowUpOutreach(contact, integration, phoneNumber, touchNumber);
       
       // Update queue status to SENT
-      await updateSmsStatus(queueItem.id, 'SENT', (queueItem.smsAttempts || 0) + 1);
+      await updateSmsStatus(queueItem.id, 'SENT', touchNumber);
       
       processed++;
-      console.log(`✅ [QUEUE] Sent message ${processed}/${queueContacts.length}`);
+      console.log(`✅ [QUEUE] Sent touch ${touchNumber} to ${queueItem.contactName}`);
       
       // A2P Compliance: Rate limiting to 1 message per second
       if (processed < queueContacts.length) {
@@ -353,19 +356,27 @@ async function filterNewContacts(contacts: any[], integration: GhlIntegration): 
   return newContacts;
 }
 
-async function sendInitialOutreach(contact: any, integration: GhlIntegration, phoneNumber: string): Promise<void> {
-  console.log(`Sending initial outreach to ${contact.firstName} ${contact.lastName}`);
+async function sendFollowUpOutreach(contact: any, integration: GhlIntegration, phoneNumber: string, touchNumber: number): Promise<void> {
+  console.log(`Sending touch ${touchNumber} to ${contact.firstName} ${contact.lastName}`);
   
   const apiUrl = process.env.API_ENDPOINT || 'https://leads.JoseTheRealtor.com';
+  
+  // Determine message type based on touch number
+  const messageType = touchNumber === 1 ? 'initial_outreach' : `follow_up_touch_${touchNumber}`;
   
   try {
     const response = await axios.post(
       `${apiUrl}/api/v1/send-message-to-contact`,
-      { contactId: contact.id, accessToken: integration.accessToken, fromNumber: phoneNumber },
+      { 
+        contactId: contact.id, 
+        accessToken: integration.accessToken, 
+        fromNumber: phoneNumber,
+        touchNumber // Pass touch number to API
+      },
       { headers: { 'Content-Type': 'application/json' } }
     );
     
-    console.log(`✅ Sent outreach to ${contact.firstName} ${contact.lastName}`);
+    console.log(`✅ Sent touch ${touchNumber} to ${contact.firstName} ${contact.lastName}`);
     
     // Increment dial counter after successful send
     const currentCounter = parseInt(contact.customFields?.find((f: any) => f.id === '0MD4Pp2LCyOSCbCjA5qF')?.value || '0');
@@ -400,9 +411,14 @@ async function sendInitialOutreach(contact: any, integration: GhlIntegration, ph
     console.log(`📊 Updated dial counter to ${newCounter} for ${contact.firstName} ${contact.lastName}`);
     
   } catch (error: any) {
-    console.error(`Failed to send outreach:`, error.response?.data || error.message);
+    console.error(`Failed to send touch ${touchNumber}:`, error.response?.data || error.message);
     throw error;
   }
+}
+
+async function sendInitialOutreach(contact: any, integration: GhlIntegration, phoneNumber: string): Promise<void> {
+  // Deprecated: Use sendFollowUpOutreach with touchNumber instead
+  return sendFollowUpOutreach(contact, integration, phoneNumber, 1);
 }
 
 /**

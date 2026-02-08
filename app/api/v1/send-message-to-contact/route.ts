@@ -58,7 +58,7 @@ import { generateAIResponse } from '@/app/utils/ai/conversationHandler';
  */
 export async function POST(req: Request) {
   try {
-    const { contactId, accessToken, fromNumber } = await req.json();
+    const { contactId, accessToken, fromNumber, touchNumber } = await req.json();
     
     if (!contactId || !accessToken) {
       return NextResponse.json(
@@ -90,11 +90,16 @@ export async function POST(req: Request) {
     // Use a placeholder conversationId - the AI handler will send directly to contact
     const conversationId = 'auto';
 
+    // Determine message type based on touch number
+    const messageType = touchNumber === 1 || !touchNumber 
+      ? 'initial_outreach' 
+      : `follow_up_touch_${touchNumber}`;
+
     // Generate and send AI outreach message
     await generateAIResponse({
       contactId,
       conversationId,
-      incomingMessage: "initial_outreach",
+      incomingMessage: messageType,
       contactName: `${contact.firstName || ''} ${contact.lastName || ''}`.trim(),
       propertyAddress,
       propertyCity,
