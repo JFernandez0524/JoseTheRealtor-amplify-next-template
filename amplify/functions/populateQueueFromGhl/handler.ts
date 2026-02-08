@@ -147,8 +147,5 @@ export const handler: Handler = async () => {
 
   console.log('\n✅ Queue population complete:', summary);
 
-  return {
-    statusCode: 200,
-    body: JSON.stringify(summary)
-  };
+  return JSON.stringify(summary);
 };

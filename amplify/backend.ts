@@ -282,11 +282,20 @@ backend.ghlWebhookHandler.addEnvironment(
   backend.data.resources.tables['GhlIntegration'].tableName
 );
 
+backend.ghlWebhookHandler.addEnvironment(
+  'AMPLIFY_DATA_OutreachQueue_TABLE_NAME',
+  backend.data.resources.tables['OutreachQueue'].tableName
+);
+
 backend.ghlWebhookHandler.addEnvironment('GHL_CLIENT_ID', process.env.GHL_CLIENT_ID || '');
 backend.ghlWebhookHandler.addEnvironment('GHL_CLIENT_SECRET', process.env.GHL_CLIENT_SECRET || '');
 backend.ghlWebhookHandler.addEnvironment('OPENAI_API_KEY', process.env.OPENAI_API_KEY || '');
 
 backend.data.resources.tables['GhlIntegration'].grantReadData(
+  backend.ghlWebhookHandler.resources.lambda
+);
+
+backend.data.resources.tables['OutreachQueue'].grantReadWriteData(
   backend.ghlWebhookHandler.resources.lambda
 );
 

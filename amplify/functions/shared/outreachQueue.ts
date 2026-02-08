@@ -40,12 +40,15 @@ interface OutreachQueueItem {
   contactName?: string;
   contactPhone?: string;
   contactEmail?: string;
+  queueStatus?: 'OUTREACH' | 'CONVERSATION' | 'DND' | 'WRONG_INFO' | 'COMPLETED';
   smsStatus?: 'PENDING' | 'SENT' | 'REPLIED' | 'FAILED' | 'OPTED_OUT';
   emailStatus?: 'PENDING' | 'SENT' | 'REPLIED' | 'BOUNCED' | 'FAILED' | 'OPTED_OUT';
   smsAttempts?: number;
   emailAttempts?: number;
   lastSmsSent?: string;
   lastEmailSent?: string;
+  lastContactDate?: string;
+  lastLeadReplyDate?: string;
   propertyAddress?: string;
   propertyCity?: string;
   propertyState?: string;
@@ -86,6 +89,7 @@ export async function addToOutreachQueue(item: OutreachQueueItem): Promise<strin
     contactName: item.contactName,
     contactPhone: item.contactPhone,
     contactEmail: item.contactEmail,
+    queueStatus: 'OUTREACH' as const,
     smsStatus: item.contactPhone ? 'PENDING' : undefined,
     emailStatus: item.contactEmail ? 'PENDING' : undefined,
     smsAttempts: 0,
@@ -126,14 +130,32 @@ export async function getPendingSmsContacts(userId: string, limit: number = 50):
       ':userId': userId,
       ':status': 'PENDING',
     },
-    Limit: limit * 2, // Get extra to filter by cadence
+    Limit: limit * 2, // Get extra to filter by cadence and queue status
   }));
 
   const now = new Date();
   const items = (result.Items || []) as OutreachQueueItem[];
   
-  // Filter by 7-touch limit and 4-day cadence
+  // Filter by queue status, 7-touch limit, and 4-day cadence
   return items.filter(item => {
+    // Only send to contacts in OUTREACH status
+    const status = item.queueStatus || 'OUTREACH'; if (status !== 'OUTREACH') {
+      console.log(`⏹️ Contact ${item.contactId} not in OUTREACH status (${status})`);
+      return false;
+    }
+    
+    // Check if we already contacted them today (any channel)
+    if (item.lastContactDate) {
+      const lastContact = new Date(item.lastContactDate);
+      const today = new Date().toDateString();
+      const lastContactDay = lastContact.toDateString();
+      
+      if (today === lastContactDay) {
+        console.log(`⏹️ Contact ${item.contactId} already contacted today`);
+        return false;
+      }
+    }
+    
     const attempts = item.smsAttempts || 0;
     
     // Max 7 touches per phone
@@ -145,14 +167,14 @@ export async function getPendingSmsContacts(userId: string, limit: number = 50):
     // First touch - send immediately
     if (attempts === 0) return true;
     
-    // Subsequent touches - wait 4 days (AND at least 1 hour for GSI consistency)
+    // Subsequent touches - wait 4 days (AND at least 24 hours to prevent same-day duplicates)
     if (item.lastSmsSent) {
       const lastSent = new Date(item.lastSmsSent);
       const hoursSince = (now.getTime() - lastSent.getTime()) / (1000 * 60 * 60);
       const daysSince = hoursSince / 24;
       
-      // Prevent duplicate sends within same hour (GSI eventual consistency protection)
-      if (hoursSince < 1) {
+      // Prevent duplicate sends within same day (24 hours minimum)
+      if (hoursSince < 24) {
         console.log(`⏳ Contact ${item.contactId} sent recently - only ${hoursSince.toFixed(1)} hours ago`);
         return false;
       }
@@ -186,14 +208,32 @@ export async function getPendingEmailContacts(userId: string, limit: number = 50
       ':userId': userId,
       ':status': 'PENDING',
     },
-    Limit: limit * 2, // Get extra to filter by cadence
+    Limit: limit * 2, // Get extra to filter by cadence and queue status
   }));
 
   const now = new Date();
   const items = (result.Items || []) as OutreachQueueItem[];
   
-  // Filter by 7-touch limit and 4-day cadence
+  // Filter by queue status, 7-touch limit, and 4-day cadence
   return items.filter(item => {
+    // Only send to contacts in OUTREACH status
+    const status = item.queueStatus || 'OUTREACH'; if (status !== 'OUTREACH') {
+      console.log(`⏹️ Contact ${item.contactId} not in OUTREACH status (${status})`);
+      return false;
+    }
+    
+    // Check if we already contacted them today (any channel)
+    if (item.lastContactDate) {
+      const lastContact = new Date(item.lastContactDate);
+      const today = new Date().toDateString();
+      const lastContactDay = lastContact.toDateString();
+      
+      if (today === lastContactDay) {
+        console.log(`⏹️ Contact ${item.contactId} already contacted today`);
+        return false;
+      }
+    }
+    
     const attempts = item.emailAttempts || 0;
     
     // Max 7 touches per email
@@ -205,14 +245,14 @@ export async function getPendingEmailContacts(userId: string, limit: number = 50
     // First touch - send immediately
     if (attempts === 0) return true;
     
-    // Subsequent touches - wait 4 days (AND at least 1 hour for GSI consistency)
+    // Subsequent touches - wait 4 days (AND at least 24 hours to prevent same-day duplicates)
     if (item.lastEmailSent) {
       const lastSent = new Date(item.lastEmailSent);
       const hoursSince = (now.getTime() - lastSent.getTime()) / (1000 * 60 * 60);
       const daysSince = hoursSince / 24;
       
-      // Prevent duplicate sends within same hour (GSI eventual consistency protection)
-      if (hoursSince < 1) {
+      // Prevent duplicate sends within same day (24 hours minimum)
+      if (hoursSince < 24) {
         console.log(`⏳ Contact ${item.contactId} emailed recently - only ${hoursSince.toFixed(1)} hours ago`);
         return false;
       }
@@ -344,4 +384,69 @@ export async function findQueueItemByContactId(contactId: string): Promise<Outre
   }));
 
   return result.Items?.[0] as OutreachQueueItem || null;
+}
+
+/**
+ * Update queue lifecycle status
+ * Moves contact between OUTREACH, CONVERSATION, DND, WRONG_INFO, COMPLETED
+ * 
+ * @param id - Queue item ID
+ * @param status - New queue status
+ * @param reason - Optional reason for status change
+ */
+export async function updateQueueStatus(
+  id: string,
+  status: 'OUTREACH' | 'CONVERSATION' | 'DND' | 'WRONG_INFO' | 'COMPLETED',
+  reason?: string
+): Promise<void> {
+  await docClient.send(new UpdateCommand({
+    TableName: OUTREACH_QUEUE_TABLE,
+    Key: { id },
+    UpdateExpression: 'SET queueStatus = :status, updatedAt = :now',
+    ExpressionAttributeValues: {
+      ':status': status,
+      ':now': new Date().toISOString(),
+    },
+  }));
+
+  console.log(`✅ Updated queue status to ${status} for ${id}${reason ? ` (${reason})` : ''}`);
+}
+
+/**
+ * Log outbound contact (we sent a message)
+ * Updates lastContactDate to prevent same-day duplicates
+ * 
+ * @param id - Queue item ID
+ */
+export async function logOutboundContact(id: string): Promise<void> {
+  await docClient.send(new UpdateCommand({
+    TableName: OUTREACH_QUEUE_TABLE,
+    Key: { id },
+    UpdateExpression: 'SET lastContactDate = :now, updatedAt = :now',
+    ExpressionAttributeValues: {
+      ':now': new Date().toISOString(),
+    },
+  }));
+
+  console.log(`✅ Logged outbound contact for ${id}`);
+}
+
+/**
+ * Log inbound reply (they sent a message)
+ * Updates lastLeadReplyDate and moves to CONVERSATION status
+ * 
+ * @param id - Queue item ID
+ */
+export async function logInboundReply(id: string): Promise<void> {
+  await docClient.send(new UpdateCommand({
+    TableName: OUTREACH_QUEUE_TABLE,
+    Key: { id },
+    UpdateExpression: 'SET lastLeadReplyDate = :now, queueStatus = :status, updatedAt = :now',
+    ExpressionAttributeValues: {
+      ':now': new Date().toISOString(),
+      ':status': 'CONVERSATION',
+    },
+  }));
+
+  console.log(`✅ Logged inbound reply for ${id} - moved to CONVERSATION`);
 }

@@ -34,15 +34,20 @@ const schema = a.schema({
       contactPhone: a.string(),
       contactEmail: a.string(),
       
-      // Outreach status
+      // Queue lifecycle status
+      queueStatus: a.enum(['OUTREACH', 'CONVERSATION', 'DND', 'WRONG_INFO', 'COMPLETED']),
+      
+      // Outreach channel status
       smsStatus: a.enum(['PENDING', 'SENT', 'REPLIED', 'FAILED', 'OPTED_OUT']),
       emailStatus: a.enum(['PENDING', 'SENT', 'REPLIED', 'BOUNCED', 'FAILED', 'OPTED_OUT']),
       
-      // Tracking
+      // Tracking timestamps
       smsAttempts: a.integer().default(0),
       emailAttempts: a.integer().default(0),
       lastSmsSent: a.datetime(),
       lastEmailSent: a.datetime(),
+      lastContactDate: a.datetime(), // Last time WE contacted them (any channel)
+      lastLeadReplyDate: a.datetime(), // Last time THEY replied to us
       
       // Property data for messaging
       propertyAddress: a.string(),
@@ -57,6 +62,7 @@ const schema = a.schema({
     .secondaryIndexes((index) => [
       index('userId').sortKeys(['smsStatus']).queryField('byUserAndSmsStatus'),
       index('userId').sortKeys(['emailStatus']).queryField('byUserAndEmailStatus'),
+      index('userId').sortKeys(['queueStatus']).queryField('byUserAndQueueStatus'),
     ]),
 
   GhlIntegration: a

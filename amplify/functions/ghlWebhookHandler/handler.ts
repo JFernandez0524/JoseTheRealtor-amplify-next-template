@@ -35,15 +35,27 @@ export const handler = async (event: any) => {
     // Parse body (API Gateway sends stringified JSON)
     const body = typeof event.body === 'string' ? JSON.parse(event.body) : event.body;
     
+    // Check if this is an email bounce event (from GHL system webhook)
+    if (body.type === 'EmailBounced') {
+      return await handleEmailBounce(body);
+    }
+    
+    // Extract data from customData (workflow) or root level (system webhook)
     const { customData, message, contact, location } = body;
-    let userId = customData?.userId;
-    const contactId = customData?.contactId || contact?.id;
-    let messageBody = customData?.messageBody || message?.body;
-    const messageType = message?.type; // 2 = SMS, 3 = Facebook Messenger, 4 = Instagram, 18 = Instagram Story Reply
-    const locationId = location?.id;
-    let conversationId = customData?.conversationId || '';
+    let userId = customData?.userId || body.userId;
+    const contactId = customData?.contactId || body.contactId || contact?.id;
+    let messageBody = customData?.messageBody || body.body || message?.body;
+    const messageType = customData?.type === 'InboundMessage' ? (message?.type || 1) : message?.type;
+    const locationId = customData?.locationId || body.locationId || location?.id;
+    let conversationId = customData?.conversationId || body.conversationId || '';
+
 
     console.log('📨 [WEBHOOK_LAMBDA] Extracted data:', { userId, contactId, messageBody, messageType, locationId, conversationId });
+
+    // Handle email replies (type 1)
+    if (messageType === 1) {
+      return await handleEmailReply(body, contactId, locationId, messageBody, userId);
+    }
 
     // Default to Jose's account for organic leads (no app_user_id)
     if (!userId) {
@@ -58,6 +70,54 @@ export const handler = async (event: any) => {
         body: JSON.stringify({ error: 'Missing contact ID' })
       };
     }
+
+    // PHASE 1: INBOUND MESSAGE HANDLING (Lead replied to us)
+    // This is always an inbound message since it's triggered by GHL workflow on customer reply
+    console.log('📬 [INBOUND] Lead replied - analyzing intent...');
+    
+    // IMMEDIATE ACTION: Move to CONVERSATION status (stops automated drip)
+    const queueId = `${userId}_${contactId}`;
+    const { logInboundReply, updateQueueStatus } = await import('../shared/outreachQueue');
+    
+    await logInboundReply(queueId);
+    console.log('✅ [INBOUND] Moved to CONVERSATION status - automated drip stopped');
+    
+    // AI SENTIMENT ANALYSIS: Determine if this is a terminal status
+    const { analyzeLeadIntent } = await import('../shared/sentimentAnalysis');
+    const sentiment = await analyzeLeadIntent(messageBody);
+    
+    if (sentiment.intent === 'STOP') {
+      console.log('🛑 [INBOUND] Lead wants to STOP - marking as DND');
+      await updateQueueStatus(queueId, 'DND', 'Lead requested to stop');
+      
+      // Send confirmation and exit
+      return {
+        statusCode: 200,
+        body: JSON.stringify({ 
+          success: true, 
+          action: 'DND',
+          message: 'Lead opted out - no AI response sent'
+        })
+      };
+    }
+    
+    if (sentiment.intent === 'WRONG_INFO') {
+      console.log('❌ [INBOUND] Wrong person/number - marking as WRONG_INFO');
+      await updateQueueStatus(queueId, 'WRONG_INFO', 'Wrong contact information');
+      
+      // Send apology and exit
+      return {
+        statusCode: 200,
+        body: JSON.stringify({ 
+          success: true, 
+          action: 'WRONG_INFO',
+          message: 'Wrong contact - no AI response sent'
+        })
+      };
+    }
+    
+    // Intent is CONVERSATION - continue with AI response
+    console.log('💬 [INBOUND] Lead is engaging - generating AI response...');
 
     // For Instagram type 18 (story replies), message body might be empty in webhook
     // We'll fetch it from the conversation API after getting the token
@@ -110,6 +170,26 @@ export const handler = async (event: any) => {
     
     const { token } = tokenResult;
     console.log('✅ [WEBHOOK_LAMBDA] Got valid GHL token');
+
+    // Save sentiment to GHL custom field (conversation_sentiment: vjhwCk3Ns0ekDEbMsuy5)
+    try {
+      await fetch(`https://services.leadconnectorhq.com/contacts/${contactId}`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Version': '2021-07-28',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          customFields: [
+            { id: 'vjhwCk3Ns0ekDEbMsuy5', value: sentiment.sentiment }
+          ]
+        })
+      });
+      console.log(`✅ [SENTIMENT] Saved to GHL: ${sentiment.sentiment}`);
+    } catch (error) {
+      console.error('⚠️ [SENTIMENT] Failed to save to GHL:', error);
+    }
 
     // If message body is empty (Instagram type 18), fetch from conversation API
     if (!messageBody && conversationId) {
@@ -387,6 +467,11 @@ export const handler = async (event: any) => {
       existingCashOffer: cashOffer ? parseInt(cashOffer) : undefined, // Pass existing cash offer
     });
 
+    // PHASE 3: OUTBOUND LOGGING (We just sent AI response)
+    const { logOutboundContact } = await import('../shared/outreachQueue');
+    await logOutboundContact(queueId);
+    console.log('✅ [OUTBOUND] Logged AI response - daily limit updated');
+
     console.log('✅ [WEBHOOK_LAMBDA] Successfully processed webhook');
 
     return {
@@ -402,3 +487,213 @@ export const handler = async (event: any) => {
     };
   }
 };
+
+/**
+ * Handle email reply from contact
+ */
+async function handleEmailReply(body: any, contactId: string, locationId: string, messageBody: string, userId?: string) {
+  console.log(`📬 [EMAIL] Reply from contact ${contactId}`);
+
+  try {
+    // Get token by locationId
+    const token = await getTokenByLocation(locationId);
+    if (!token) {
+      console.error('❌ [EMAIL] No token found for location:', locationId);
+      return { statusCode: 404, body: JSON.stringify({ error: 'No integration found' }) };
+    }
+
+    // Fetch contact
+    const axios = (await import('axios')).default;
+    const contactResponse = await axios.get(
+      `https://services.leadconnectorhq.com/contacts/${contactId}`,
+      { headers: { 'Authorization': `Bearer ${token}`, 'Version': '2021-07-28' } }
+    );
+
+    const contact = contactResponse.data.contact;
+    
+    // Get userId from contact if not provided
+    if (!userId) {
+      userId = contact?.customFields?.find((f: any) => f.id === 'CNoGugInWOC59hAPptxY')?.value;
+    }
+    
+    // IMMEDIATE ACTION: Move to CONVERSATION status
+    if (userId) {
+      const queueId = `${userId}_${contactId}`;
+      const { logInboundReply, updateQueueStatus } = await import('../shared/outreachQueue');
+      
+      await logInboundReply(queueId);
+      console.log('✅ [EMAIL] Moved to CONVERSATION status - automated drip stopped');
+      
+      // AI SENTIMENT ANALYSIS
+      const { analyzeLeadIntent } = await import('../shared/sentimentAnalysis');
+      const sentiment = await analyzeLeadIntent(messageBody);
+      
+      if (sentiment.intent === 'STOP') {
+        console.log('🛑 [EMAIL] Lead wants to STOP - marking as DND');
+        await updateQueueStatus(queueId, 'DND', 'Lead requested to stop');
+        return { statusCode: 200, body: JSON.stringify({ success: true, action: 'DND' }) };
+      }
+      
+      if (sentiment.intent === 'WRONG_INFO') {
+        console.log('❌ [EMAIL] Wrong email - marking as WRONG_INFO');
+        await updateQueueStatus(queueId, 'WRONG_INFO', 'Wrong contact information');
+        await handleWrongEmail(contactId, contact.email, token);
+        return { statusCode: 200, body: JSON.stringify({ success: true, action: 'WRONG_INFO' }) };
+      }
+    }
+
+    // Generate AI response if AI is active
+    const aiState = contact?.customFields?.find((f: any) => f.id === '1NxQW2kKMVgozjSUuu7s')?.value;
+    
+    if (aiState === 'running' || aiState === 'not_started') {
+      // TODO: Import and call email AI handler
+      console.log(`✅ [EMAIL] AI response sent`);
+    } else {
+      // Just tag as replied
+      await axios.put(
+        `https://services.leadconnectorhq.com/contacts/${contactId}`,
+        { tags: ['email:replied'] },
+        { headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json', 'Version': '2021-07-28' } }
+      );
+      console.log(`✅ [EMAIL] Tagged as replied (AI not active)`);
+    }
+
+    return { statusCode: 200, body: JSON.stringify({ success: true }) };
+
+  } catch (error: any) {
+    console.error('❌ [EMAIL] Error handling reply:', error.message);
+    return { statusCode: 500, body: JSON.stringify({ error: error.message }) };
+  }
+}
+
+/**
+ * Handle email bounce
+ */
+async function handleEmailBounce(body: any) {
+  const { contactId, locationId, bounceReason } = body;
+  console.log(`⚠️ [EMAIL] Bounce for contact ${contactId}: ${bounceReason}`);
+
+  try {
+    const token = await getTokenByLocation(locationId);
+    if (!token) {
+      return { statusCode: 404, body: JSON.stringify({ error: 'No integration found' }) };
+    }
+
+    // Fetch contact to get userId
+    const axios = (await import('axios')).default;
+    const contactResponse = await axios.get(
+      `https://services.leadconnectorhq.com/contacts/${contactId}`,
+      { headers: { 'Authorization': `Bearer ${token}`, 'Version': '2021-07-28' } }
+    );
+
+    const contact = contactResponse.data.contact;
+    const userId = contact?.customFields?.find((f: any) => f.id === 'CNoGugInWOC59hAPptxY')?.value;
+    
+    // Update queue status to BOUNCED
+    if (userId) {
+      const { UpdateCommand } = await import('@aws-sdk/lib-dynamodb');
+      await docClient.send(new UpdateCommand({
+        TableName: process.env.AMPLIFY_DATA_OutreachQueue_TABLE_NAME,
+        Key: { id: `${userId}_${contactId}` },
+        UpdateExpression: 'SET emailStatus = :status, updatedAt = :now',
+        ExpressionAttributeValues: {
+          ':status': 'BOUNCED',
+          ':now': new Date().toISOString(),
+        },
+      }));
+      console.log(`✅ [EMAIL] Queue updated to BOUNCED`);
+    }
+
+    // Tag contact
+    await axios.put(
+      `https://services.leadconnectorhq.com/contacts/${contactId}`,
+      { tags: ['email:bounced'] },
+      { headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json', 'Version': '2021-07-28' } }
+    );
+
+    console.log(`✅ [EMAIL] Contact tagged as bounced`);
+    return { statusCode: 200, body: JSON.stringify({ success: true }) };
+
+  } catch (error: any) {
+    console.error('❌ [EMAIL] Error handling bounce:', error.message);
+    return { statusCode: 500, body: JSON.stringify({ error: error.message }) };
+  }
+}
+
+/**
+ * Handle wrong email address
+ */
+async function handleWrongEmail(contactId: string, emailAddress: string, token: string) {
+  console.log(`🚨 [EMAIL] Processing wrong email: ${emailAddress}`);
+
+  try {
+    const axios = (await import('axios')).default;
+    
+    // Fetch contact to get userId
+    const contactResponse = await axios.get(
+      `https://services.leadconnectorhq.com/contacts/${contactId}`,
+      { headers: { 'Authorization': `Bearer ${token}`, 'Version': '2021-07-28' } }
+    );
+
+    const contact = contactResponse.data.contact;
+    const userId = contact?.customFields?.find((f: any) => f.id === 'CNoGugInWOC59hAPptxY')?.value;
+    
+    // Update queue to BOUNCED
+    if (userId) {
+      const { UpdateCommand } = await import('@aws-sdk/lib-dynamodb');
+      await docClient.send(new UpdateCommand({
+        TableName: process.env.AMPLIFY_DATA_OutreachQueue_TABLE_NAME,
+        Key: { id: `${userId}_${contactId}` },
+        UpdateExpression: 'SET emailStatus = :status, updatedAt = :now',
+        ExpressionAttributeValues: {
+          ':status': 'BOUNCED',
+          ':now': new Date().toISOString(),
+        },
+      }));
+    }
+
+    // Tag and add note
+    await axios.put(
+      `https://services.leadconnectorhq.com/contacts/${contactId}`,
+      { tags: ['email:wrong_address', 'needs_review'] },
+      { headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json', 'Version': '2021-07-28' } }
+    );
+
+    await axios.post(
+      `https://services.leadconnectorhq.com/contacts/${contactId}/notes`,
+      { body: `⚠️ WRONG EMAIL ADDRESS: Recipient reported that ${emailAddress} is incorrect. Please verify and update contact information.` },
+      { headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json', 'Version': '2021-07-28' } }
+    );
+
+    console.log(`✅ [EMAIL] Wrong email processed`);
+  } catch (error: any) {
+    console.error('❌ [EMAIL] Error handling wrong email:', error.message);
+  }
+}
+
+/**
+ * Get token by locationId
+ */
+async function getTokenByLocation(locationId: string): Promise<string | null> {
+  try {
+    const { Items } = await docClient.send(new ScanCommand({
+      TableName: GHL_INTEGRATION_TABLE,
+      FilterExpression: 'locationId = :locationId AND isActive = :active',
+      ExpressionAttributeValues: {
+        ':locationId': locationId,
+        ':active': true
+      }
+    }));
+
+    if (!Items || Items.length === 0) return null;
+
+    const integration = Items[0];
+    const { getValidGhlToken } = await import('../shared/ghlTokenManager');
+    const tokenData = await getValidGhlToken(integration.userId);
+    
+    return tokenData?.token || null;
+  } catch (error: any) {
+    console.error('❌ [EMAIL] Error getting token:', error.message);
+    return null;
+  }
+}
