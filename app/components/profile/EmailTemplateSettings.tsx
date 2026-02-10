@@ -179,6 +179,11 @@ Jose Fernandez
 RE/MAX Agent`;
 
   const handleSave = async () => {
+    if (!integration) {
+      alert('Integration not loaded. Please refresh the page.');
+      return;
+    }
+    
     setSaving(true);
     try {
       await client.models.GhlIntegration.update({
@@ -189,9 +194,9 @@ RE/MAX Agent`;
         preforeclosureEmailTemplate: preforeclosureTemplate,
       });
       alert('Email templates saved successfully!');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to save templates:', error);
-      alert('Failed to save templates. Please try again.');
+      alert(`Failed to save templates: ${error.message || 'Unknown error'}`);
     } finally {
       setSaving(false);
     }

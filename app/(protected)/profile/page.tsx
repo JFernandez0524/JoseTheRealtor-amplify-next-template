@@ -8,6 +8,7 @@ import {
   cookiesClient,
 } from '@/app/utils/aws/auth/amplifyServerUtils.server';
 import GhlSettingsCard from '@/app/components/profile/GhlSettingsCard';
+import GhlCampaignSettings from '@/app/components/profile/GhlCampaignSettings';
 import EmailTemplateSettings from '@/app/components/profile/EmailTemplateSettings';
 
 import {
@@ -173,6 +174,9 @@ export default async function ProfilePage() {
 
           {/* GHL Integration Settings Card */}
           <GhlSettingsCard />
+          
+          {/* GHL Campaign Settings (Phone, Email, Signature) */}
+          <GhlCampaignSettings />
           
           {/* Email Template Settings Card */}
           {ghlIntegration && (
