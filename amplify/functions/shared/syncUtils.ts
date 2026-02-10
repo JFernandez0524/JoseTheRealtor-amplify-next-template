@@ -53,13 +53,15 @@ export function validateLeadForSync(lead: any): { isValid: boolean; reason?: str
     return { isValid: false, reason: `Skip trace not completed: ${lead.skipTraceStatus}` };
   }
 
-  // Check contact information
-  const phones = lead.phones || [];
-  const emails = lead.emails || [];
-  const hasContact = phones.length > 0 || emails.length > 0;
-  
-  if (!hasContact) {
-    return { isValid: false, reason: 'No phone numbers or email addresses found' };
+  // Skip contact validation for NO_QUALITY_CONTACTS and NO_MATCH (direct mail leads)
+  if (skipTraceStatus !== 'NO_QUALITY_CONTACTS' && skipTraceStatus !== 'NO_MATCH') {
+    const phones = lead.phones || [];
+    const emails = lead.emails || [];
+    const hasContact = phones.length > 0 || emails.length > 0;
+    
+    if (!hasContact) {
+      return { isValid: false, reason: 'No phone numbers or email addresses found' };
+    }
   }
 
   // Check probate admin info (with fallback to owner info)
