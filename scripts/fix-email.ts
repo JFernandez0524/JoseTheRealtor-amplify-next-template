@@ -1,11 +1,22 @@
-import { DynamoDBClient, ScanCommand } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, UpdateCommand, GetCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import {
+  DynamoDBDocumentClient,
+  UpdateCommand,
+  GetCommand,
+  ScanCommand,
+} from '@aws-sdk/lib-dynamodb';
 import axios from 'axios';
 
-const dynamodb = DynamoDBDocumentClient.from(new DynamoDBClient({ region: 'us-east-1' }));
+const dynamodb = DynamoDBDocumentClient.from(
+  new DynamoDBClient({ region: 'us-east-1' }),
+);
 const QUEUE_TABLE = 'OutreachQueue-ahlnflzdejd5jdrulwuqcuxm6i-NONE';
 
-async function fixEmail(contactId: string, newEmail: string, accessToken: string) {
+async function fixEmail(
+  contactId: string,
+  newEmail: string,
+  accessToken: string,
+) {
   console.log(`🔧 Fixing email for contact ${contactId}...\n`);
 
   try {
@@ -15,15 +26,15 @@ async function fixEmail(contactId: string, newEmail: string, accessToken: string
       `https://services.leadconnectorhq.com/contacts/${contactId}`,
       {
         email: newEmail,
-        tags: ['email:corrected']
+        tags: ['email:corrected'],
       },
       {
         headers: {
-          'Authorization': `Bearer ${accessToken}`,
+          Authorization: `Bearer ${accessToken}`,
           'Content-Type': 'application/json',
-          'Version': '2021-07-28'
-        }
-      }
+          Version: '2021-07-28',
+        },
+      },
     );
     console.log(`✅ Updated GHL contact with new email: ${newEmail}`);
 
@@ -33,26 +44,28 @@ async function fixEmail(contactId: string, newEmail: string, accessToken: string
       `https://services.leadconnectorhq.com/contacts/${contactId}/tags`,
       {
         headers: {
-          'Authorization': `Bearer ${accessToken}`,
+          Authorization: `Bearer ${accessToken}`,
           'Content-Type': 'application/json',
-          'Version': '2021-07-28'
+          Version: '2021-07-28',
         },
         data: {
-          tags: ['email:wrong_address', 'needs_review']
-        }
-      }
+          tags: ['email:wrong_address', 'needs_review'],
+        },
+      },
     );
     console.log('✅ Removed error tags');
 
     // 3. Find queue entry by contactId (scan for it)
     console.log('\n3️⃣ Finding queue entry...');
-    const scanResult = await dynamodb.send(new ScanCommand({
-      TableName: QUEUE_TABLE,
-      FilterExpression: 'contactId = :contactId',
-      ExpressionAttributeValues: {
-        ':contactId': contactId
-      }
-    }));
+    const scanResult = await dynamodb.send(
+      new ScanCommand({
+        TableName: QUEUE_TABLE,
+        FilterExpression: 'contactId = :contactId',
+        ExpressionAttributeValues: {
+          ':contactId': contactId,
+        },
+      }),
+    );
 
     if (!scanResult.Items || scanResult.Items.length === 0) {
       console.log('⚠️ No queue entry found for this contact');
@@ -64,26 +77,31 @@ async function fixEmail(contactId: string, newEmail: string, accessToken: string
 
     // 4. Update queue with new email and reset status to PENDING
     console.log('\n4️⃣ Updating queue with corrected email...');
-    await dynamodb.send(new UpdateCommand({
-      TableName: QUEUE_TABLE,
-      Key: { id: queueItem.id },
-      UpdateExpression: 'SET contactEmail = :email, emailStatus = :status, emailAttempts = :attempts, updatedAt = :now',
-      ExpressionAttributeValues: {
-        ':email': newEmail,
-        ':status': 'PENDING',
-        ':attempts': 0,
-        ':now': new Date().toISOString()
-      }
-    }));
+    await dynamodb.send(
+      new UpdateCommand({
+        TableName: QUEUE_TABLE,
+        Key: { id: queueItem.id },
+        UpdateExpression:
+          'SET contactEmail = :email, emailStatus = :status, emailAttempts = :attempts, updatedAt = :now',
+        ExpressionAttributeValues: {
+          ':email': newEmail,
+          ':status': 'PENDING',
+          ':attempts': 0,
+          ':now': new Date().toISOString(),
+        },
+      }),
+    );
     console.log('✅ Queue updated - contact will receive emails again');
 
     console.log('\n✅ Email correction complete!');
     console.log(`   Contact: ${contactId}`);
     console.log(`   New Email: ${newEmail}`);
     console.log(`   Status: Ready for outreach`);
-
   } catch (error: any) {
-    console.error('❌ Error fixing email:', error.response?.data || error.message);
+    console.error(
+      '❌ Error fixing email:',
+      error.response?.data || error.message,
+    );
   }
 }
 
@@ -91,8 +109,12 @@ async function fixEmail(contactId: string, newEmail: string, accessToken: string
 const [contactId, newEmail, accessToken] = process.argv.slice(2);
 
 if (!contactId || !newEmail || !accessToken) {
-  console.log('Usage: npx tsx scripts/fix-email.ts <contactId> <newEmail> <accessToken>');
-  console.log('Example: npx tsx scripts/fix-email.ts abc123 correct@email.com eyJhbGc...');
+  console.log(
+    'Usage: npx tsx scripts/fix-email.ts <contactId> <newEmail> <accessToken>',
+  );
+  console.log(
+    'Example: npx tsx scripts/fix-email.ts abc123 correct@email.com eyJhbGc...',
+  );
   process.exit(1);
 }
 
