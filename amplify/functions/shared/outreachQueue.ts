@@ -47,6 +47,8 @@ interface OutreachQueueItem {
   emailAttempts?: number;
   lastSmsSent?: string;
   lastEmailSent?: string;
+  nextSmsDate?: string; // Scheduled date for next SMS (SMS disabled)
+  nextEmailDate?: string; // Scheduled date for next email
   lastContactDate?: string;
   lastLeadReplyDate?: string;
   propertyAddress?: string;
@@ -94,6 +96,7 @@ export async function addToOutreachQueue(item: OutreachQueueItem): Promise<strin
     emailStatus: item.contactEmail ? 'PENDING' : undefined,
     smsAttempts: 0,
     emailAttempts: 0,
+    nextEmailDate: item.contactEmail ? new Date().toISOString() : undefined, // Send first email immediately
     propertyAddress: item.propertyAddress,
     propertyCity: item.propertyCity,
     propertyState: item.propertyState,
@@ -193,7 +196,7 @@ export async function getPendingSmsContacts(userId: string, limit: number = 50):
  * Get pending email contacts for a user
  * Used by email agent to find contacts needing outreach
  * 
- * Enforces 7-touch limit and 4-day cadence between touches
+ * Returns contacts whose nextEmailDate is today or earlier
  * 
  * @param userId - User ID to query
  * @param limit - Max contacts to return
@@ -208,59 +211,36 @@ export async function getPendingEmailContacts(userId: string, limit: number = 50
       ':userId': userId,
       ':status': 'PENDING',
     },
-    Limit: limit * 2, // Get extra to filter by cadence and queue status
+    Limit: 1000, // Get more to filter by date
   }));
 
-  const now = new Date();
+  const today = new Date();
+  today.setHours(0, 0, 0, 0); // Start of today
+  
   const items = (result.Items || []) as OutreachQueueItem[];
   
-  // Filter by queue status, 7-touch limit, and 4-day cadence
+  // Filter by nextEmailDate and queue status
   return items.filter(item => {
     // Only send to contacts in OUTREACH status
-    const status = item.queueStatus || 'OUTREACH'; if (status !== 'OUTREACH') {
+    const status = item.queueStatus || 'OUTREACH';
+    if (status !== 'OUTREACH') {
       console.log(`⏹️ Contact ${item.contactId} not in OUTREACH status (${status})`);
       return false;
     }
     
-    // Check if we already contacted them today (any channel)
-    if (item.lastContactDate) {
-      const lastContact = new Date(item.lastContactDate);
-      const today = new Date().toDateString();
-      const lastContactDay = lastContact.toDateString();
-      
-      if (today === lastContactDay) {
-        console.log(`⏹️ Contact ${item.contactId} already contacted today`);
-        return false;
-      }
-    }
-    
-    const attempts = item.emailAttempts || 0;
-    
-    // Max 7 touches per email
-    if (attempts >= 7) {
-      console.log(`⏹️ Contact ${item.contactId} reached max email attempts (7)`);
+    // Must have nextEmailDate set
+    if (!item.nextEmailDate) {
+      console.log(`⚠️ Contact ${item.contactId} missing nextEmailDate`);
       return false;
     }
     
-    // First touch - send immediately
-    if (attempts === 0) return true;
+    // Check if nextEmailDate is today or earlier
+    const nextDate = new Date(item.nextEmailDate);
+    nextDate.setHours(0, 0, 0, 0);
     
-    // Subsequent touches - wait 4 days (AND at least 24 hours to prevent same-day duplicates)
-    if (item.lastEmailSent) {
-      const lastSent = new Date(item.lastEmailSent);
-      const hoursSince = (now.getTime() - lastSent.getTime()) / (1000 * 60 * 60);
-      const daysSince = hoursSince / 24;
-      
-      // Prevent duplicate sends within same day (24 hours minimum)
-      if (hoursSince < 24) {
-        console.log(`⏳ Contact ${item.contactId} emailed recently - only ${hoursSince.toFixed(1)} hours ago`);
-        return false;
-      }
-      
-      if (daysSince < 4) {
-        console.log(`⏳ Contact ${item.contactId} not ready - only ${daysSince.toFixed(1)} days since last email`);
-        return false;
-      }
+    if (nextDate > today) {
+      console.log(`⏳ Contact ${item.contactId} not ready - scheduled for ${nextDate.toDateString()}`);
+      return false;
     }
     
     return true;
@@ -343,6 +323,44 @@ export async function updateEmailStatus(
   }));
 
   console.log(`✅ Updated email status to ${finalStatus} for queue item ${id} (attempt ${attempts || 0})`);
+}
+
+/**
+ * Update email sent - increments counter, updates timestamp, and schedules next email
+ * Keeps status as PENDING for follow-up touches
+ * 
+ * @param id - Queue item ID (userId_contactId)
+ */
+export async function updateEmailSent(id: string): Promise<void> {
+  // Get current attempts
+  const result = await docClient.send(new GetCommand({
+    TableName: OUTREACH_QUEUE_TABLE,
+    Key: { id }
+  }));
+
+  const currentAttempts = (result.Item?.emailAttempts as number) || 0;
+  const newAttempts = currentAttempts + 1;
+  
+  // Calculate next email date (4 days from now)
+  const nextDate = new Date();
+  nextDate.setDate(nextDate.getDate() + 4);
+  nextDate.setHours(0, 0, 0, 0); // Start of day
+
+  // Update with new attempt count and next scheduled date
+  await docClient.send(new UpdateCommand({
+    TableName: OUTREACH_QUEUE_TABLE,
+    Key: { id },
+    UpdateExpression: 'SET emailStatus = :status, emailAttempts = :attempts, lastEmailSent = :timestamp, nextEmailDate = :nextDate, updatedAt = :now',
+    ExpressionAttributeValues: {
+      ':status': 'PENDING', // Keep PENDING for follow-ups
+      ':attempts': newAttempts,
+      ':timestamp': new Date().toISOString(),
+      ':nextDate': nextDate.toISOString(),
+      ':now': new Date().toISOString(),
+    },
+  }));
+
+  console.log(`✅ Updated email for queue item ${id} - attempt ${newAttempts}, next email: ${nextDate.toDateString()}`);
 }
 
 /**

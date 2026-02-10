@@ -25,25 +25,20 @@ interface GHLIntegration {
  * - Only sends during business hours (Mon-Fri 9AM-7PM, Sat 9AM-12PM EST)
  * - Sunday: No emails sent
  * 
+ * BATCH LIMITS (Compliance):
+ * - Max 50 emails per hour per integration
+ * - Prevents overwhelming recipients
+ * - Stays within email provider limits
+ * - If 10,000 leads ready, spreads over 200 hours (8+ days)
+ * 
  * WORKFLOW:
  * 1. Check if within business hours (exit if not)
  * 2. Scan DynamoDB for active GHL integrations with campaignEmail configured
  * 3. For each integration:
- *    a. 🚀 NEW: Query OutreachQueue for PENDING email contacts (fast, cheap)
- *       - Filters by 7-touch limit and 4-day cadence
- *       - Returns contacts ready for next touch
- *       - 90% reduction in GHL API costs
- *    b. 🔄 FALLBACK: If queue empty/fails, search GHL for contacts with "ai outreach" tag
- *    c. Send personalized email via /api/v1/send-email-to-contact
- *    d. Update queue status (PENDING for follow-ups, or REPLIED/BOUNCED/FAILED/OPTED_OUT)
+ *    a. Query OutreachQueue for PENDING email contacts (limit 50)
+ *    b. Send personalized email via /api/v1/send-email-to-contact
+ *    c. Update queue with nextEmailDate = today + 4 days
  * 4. Rate limit: 2 seconds between emails
- * 
- * OUTREACH QUEUE BENEFITS:
- * - Sub-second queries vs 2-3 second GHL searches
- * - 90% fewer GHL API calls
- * - Better tracking and analytics
- * - Automatic 7-touch cadence enforcement
- * - Multi-email support (7 touches per email address)
  * 
  * EMAIL CONTENT (AMMO Framework):
  * - Subject: "Clarity on [Property Address]" (3-6 words)
@@ -53,43 +48,10 @@ interface GHLIntegration {
  * - Ask: Invites them to meet and discuss options
  * - Signature: Professional contact information
  * 
- * EMAIL STRUCTURE:
- * - Personalized with contact's name and property details
- * - Bullet points for cash offer and retail value
- * - Professional signature block with contact info
- * - Includes specific dollar amounts when available
- * 
- * TRACKING:
- * - Queue: emailAttempts incremented, lastEmailSent updated
- * - GHL: email_attempt_counter incremented, last_email_date updated
- * - Prevents duplicate emails
- * 
- * REPLY HANDLING:
- * - Webhook detects email replies (updates queue to REPLIED)
- * - AI generates contextual responses
- * - Continues conversation toward property visit
- * - Detects handoff keywords and tags for human follow-up
- * 
- * BOUNCE PROTECTION:
- * - Webhook detects bounced emails (updates queue to BOUNCED)
- * - Stops future emails to that address
- * - Tags contact with "email:bounced"
- * 
  * ENVIRONMENT VARIABLES:
  * - GHL_INTEGRATION_TABLE_NAME: DynamoDB table for GHL integrations
  * - AMPLIFY_DATA_OutreachQueue_TABLE_NAME: DynamoDB table for outreach queue
  * - APP_URL: Base URL for API calls (e.g., https://leads.josetherealtor.com)
- * 
- * RELATED FILES:
- * - /api/v1/send-email-to-contact - API route for email generation
- * - /utils/ai/emailConversationHandler - Email content generator (AMMO framework)
- * - /api/v1/ghl-email-webhook - Handles email replies/bounces (updates queue)
- * - shared/outreachQueue - Queue manager utilities
- * - shared/businessHours - Business hours checker
- * 
- * MONITORING:
- * - CloudWatch logs: /aws/lambda/dailyEmailAgent
- * - Metrics: Total emails sent, queue hit rate, success/failure counts, bounce rate
  */
 
 export const handler = async (event: any) => {
@@ -258,20 +220,26 @@ RE/MAX Homeland Realtors
               
               // Update queue status if using queue
               if (usingQueue && contact._queueId) {
+                console.log(`📋 [QUEUE] Updating queue item ${contact._queueId}`);
                 try {
-                  const { updateEmailStatus } = await import('../shared/outreachQueue');
-                  await updateEmailStatus(contact._queueId, 'SENT', contact._queueAttempts + 1);
-                } catch (queueError) {
-                  console.error(`⚠️ Failed to update queue status:`, queueError);
+                  const { updateEmailSent } = await import('../shared/outreachQueue');
+                  await updateEmailSent(contact._queueId);
+                  console.log(`✅ [QUEUE] Updated queue item ${contact._queueId}`);
+                } catch (queueError: any) {
+                  console.error(`❌ [QUEUE] Failed to update queue status:`, queueError.message);
                 }
+              } else {
+                console.log(`⚠️ [QUEUE] Not updating queue - usingQueue: ${usingQueue}, _queueId: ${contact._queueId}`);
               }
               
-              // Update email counter in GHL (fallback tracking)
+              // Update email counter in GHL (increment, not set to 1)
+              const currentCounter = parseInt(contact.customFields?.find((f: any) => f.id === 'wWlrXoXeMXcM6kUexf2L')?.value || '0');
               await axios.put(
                 `https://services.leadconnectorhq.com/contacts/${contact.id}`,
                 {
                   customFields: [
-                    { id: 'wWlrXoXeMXcM6kUexf2L', value: 1 } // email_attempt_counter
+                    { id: 'wWlrXoXeMXcM6kUexf2L', value: (currentCounter + 1).toString() }, // Increment email_attempt_counter
+                    { id: '3xOBr4GvgRc22kBRNYCE', value: new Date().toISOString() } // last_email_date
                   ]
                 },
                 {

@@ -6,6 +6,7 @@ export const dailyEmailAgent = defineFunction({
   timeoutSeconds: 900, // 15 minutes
   environment: {
     AMPLIFY_DATA_GhlIntegration_TABLE_NAME: process.env.AMPLIFY_DATA_GhlIntegration_TABLE_NAME || '',
+    AMPLIFY_DATA_OutreachQueue_TABLE_NAME: process.env.AMPLIFY_DATA_OutreachQueue_TABLE_NAME || '',
     APP_URL: process.env.APP_URL || 'https://leads.josetherealtor.com',
     OPENAI_API_KEY: process.env.OPENAI_API_KEY || ''
   },

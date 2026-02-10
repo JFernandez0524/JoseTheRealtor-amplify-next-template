@@ -46,6 +46,8 @@ const schema = a.schema({
       emailAttempts: a.integer().default(0),
       lastSmsSent: a.datetime(),
       lastEmailSent: a.datetime(),
+      nextSmsDate: a.datetime(), // Scheduled date for next SMS (SMS disabled)
+      nextEmailDate: a.datetime(), // Scheduled date for next email
       lastContactDate: a.datetime(), // Last time WE contacted them (any channel)
       lastLeadReplyDate: a.datetime(), // Last time THEY replied to us
       
@@ -101,27 +103,15 @@ const schema = a.schema({
   DoorKnockQueue: a
     .model({
       userId: a.string().required(),
-      leadId: a.string().required(),
-      
-      // Lead details for map display
-      ownerName: a.string().required(),
-      propertyAddress: a.string().required(),
-      propertyCity: a.string().required(),
-      propertyState: a.string().required(),
-      propertyZip: a.string(),
-      
-      // Map coordinates
-      latitude: a.float(),
-      longitude: a.float(),
+      leadId: a.id().required(),
+      lead: a.belongsTo('PropertyLead', 'leadId'), // Relationship to get fresh data
       
       // Door knock status
       status: a.enum(['PENDING', 'VISITED', 'NOT_HOME', 'COMPLETED']),
       visitedAt: a.datetime(),
       notes: a.string(),
       
-      // Lead context  
-      leadType: a.string(),
-      estimatedValue: a.integer(),
+      // Priority override (optional - defaults to lead's AI priority)
       priority: a.enum(['HIGH', 'MEDIUM', 'LOW']),
     })
     .authorization((allow) => [
@@ -245,6 +235,7 @@ const schema = a.schema({
       contacts: a.hasMany('Contact', 'leadId'),
       enrichments: a.hasMany('Enrichment', 'leadId'),
       activities: a.hasMany('Activity', 'leadId'),
+      doorKnockQueue: a.hasMany('DoorKnockQueue', 'leadId'),
     })
     .authorization((allow) => [allow.owner(), allow.group('ADMINS')])
     .secondaryIndexes((index) => [
