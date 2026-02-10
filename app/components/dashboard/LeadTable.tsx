@@ -7,6 +7,12 @@ import { formatDate } from '@/app/utils/formatters';
 import { updateLead } from '@/app/utils/aws/data/lead.client';
 import { type Schema } from '@/amplify/data/resource';
 
+// Format listing status for display
+const formatListingStatus = (status: string | null | undefined): string => {
+  if (!status) return '-';
+  return status.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+};
+
 // 1. EXTENDED LEAD TYPE (Kept correct)
 type Lead = Schema['PropertyLead']['type'] & {
   ghlSyncStatus?: 'PENDING' | 'SUCCESS' | 'FAILED' | 'SKIPPED' | null;
@@ -572,7 +578,7 @@ export function LeadTable({
                     <select
                       value={lead.listingStatus || ''}
                       onChange={async (e) => {
-                        const newStatus = e.target.value as 'off market' | 'active' | 'sold' | 'pending' | 'fsbo' | 'auction' | 'skip' | 'door knock' | '';
+                        const newStatus = e.target.value as 'off_market' | 'active' | 'sold' | 'pending' | 'fsbo' | 'auction' | 'skip' | 'door_knock' | '';
                         try {
                           await updateLead(lead.id, {
                             listingStatus: newStatus || null
@@ -586,24 +592,23 @@ export function LeadTable({
                         lead.listingStatus === 'active' ? 'bg-green-100 text-green-800' :
                         lead.listingStatus === 'sold' ? 'bg-red-100 text-red-800' :
                         lead.listingStatus === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                        lead.listingStatus === 'off market' ? 'bg-gray-100 text-gray-800' :
+                        lead.listingStatus === 'off_market' ? 'bg-gray-100 text-gray-800' :
                         lead.listingStatus === 'skip' ? 'bg-orange-100 text-orange-800' :
                         lead.listingStatus === 'fsbo' ? 'bg-purple-100 text-purple-800' :
                         lead.listingStatus === 'auction' ? 'bg-pink-100 text-pink-800' :
-                        lead.listingStatus === 'door knock' ? 'bg-blue-100 text-blue-800' :
+                        lead.listingStatus === 'door_knock' ? 'bg-blue-100 text-blue-800' :
                         'bg-white text-gray-500'
                       }`}
                     >
                       <option value="">-</option>
-                      <option value="off market">Off Market</option>
+                      <option value="off_market">Off Market</option>
                       <option value="active">Active</option>
                       <option value="sold">Sold</option>
                       <option value="pending">Pending</option>
                       <option value="fsbo">FSBO</option>
                       <option value="auction">Auction</option>
                       <option value="skip">Skip</option>
-                      <option value="door knock">Door Knock</option>
-                      <option value="DIRECT_MAIL">Direct Mail</option>
+                      <option value="door_knock">Door Knock</option>
                     </select>
                   </td>
 

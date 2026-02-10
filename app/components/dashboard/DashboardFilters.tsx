@@ -37,7 +37,6 @@ type Props = {
   handleBulkAIScore: () => Promise<void>;
   handleBulkEnrichLeads: () => Promise<void>;
   handleBulkDirectMail: () => Promise<void>;
-  handleBulkEmailCampaign: () => Promise<void>;
   handlePopulateQueue: () => Promise<void>;
   handleAddToDoorKnock: () => Promise<void>;
   handleDelete: () => Promise<void>;
@@ -83,7 +82,6 @@ export function DashboardFilters({
   handleBulkAIScore,
   handleBulkEnrichLeads,
   handleBulkDirectMail,
-  handleBulkEmailCampaign,
   handlePopulateQueue,
   handleAddToDoorKnock,
   handleDelete,
@@ -194,14 +192,14 @@ export function DashboardFilters({
           >
             <option value=''>All Statuses</option>
             <option value='NULL'>No Status</option>
-            <option value='off market'>Off Market</option>
+            <option value='off_market'>Off Market</option>
             <option value='active'>Active</option>
             <option value='sold'>Sold</option>
             <option value='pending'>Pending</option>
             <option value='fsbo'>FSBO</option>
             <option value='auction'>Auction</option>
             <option value='skip'>Skip</option>
-            <option value='door knock'>Door Knock</option>
+            <option value='door_knock'>Door Knock</option>
           </select>
 
           {/* 6. AI PRIORITY FILTER - AI PLAN ONLY */}
@@ -307,14 +305,14 @@ export function DashboardFilters({
               className='text-sm px-3 py-1.5 rounded bg-blue-600 text-white hover:bg-blue-700 transition shadow-sm w-full sm:w-auto cursor-pointer'
             >
               <option value="">Set Status...</option>
-              <option value="off market">Off Market</option>
+              <option value="off_market">Off Market</option>
               <option value="active">Active</option>
               <option value="sold">Sold</option>
               <option value="pending">Pending</option>
               <option value="fsbo">FSBO</option>
               <option value="auction">Auction</option>
               <option value="skip">Skip</option>
-              <option value="door knock">Door Knock</option>
+              <option value="door_knock">Door Knock</option>
             </select>
 
             {/* Skip Trace Button */}
@@ -408,22 +406,6 @@ export function DashboardFilters({
                 </>
               ) : (
                 <>📬 Generate Letters</>
-              )}
-            </button>
-
-            {/* Email Campaign Button */}
-            <button
-              onClick={handleBulkEmailCampaign}
-              disabled={isEmailCampaigning || isSkipTracing || isGhlSyncing}
-              className={`text-sm px-3 py-1.5 rounded transition-colors flex items-center justify-center gap-1.5 shadow-sm w-full sm:w-auto
-                                ${isEmailCampaigning ? 'bg-blue-300 text-white cursor-not-allowed' : 'bg-gradient-to-r from-blue-600 to-cyan-600 text-white hover:from-blue-700 hover:to-cyan-700'}`}
-            >
-              {isEmailCampaigning ? (
-                <>
-                  <Loader size='small' variation='linear' /> Sending...
-                </>
-              ) : (
-                <>📧 Start Email Campaign</>
               )}
             </button>
 

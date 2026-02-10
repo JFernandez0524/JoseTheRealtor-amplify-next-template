@@ -157,7 +157,7 @@ export async function bulkDeleteLeads(ids: string[]): Promise<void> {
  */
 export async function bulkUpdateStatus(
   ids: string[],
-  status: 'off market' | 'active' | 'sold' | 'pending' | 'fsbo' | 'auction' | 'skip' | 'door knock'
+  status: 'off_market' | 'active' | 'sold' | 'pending' | 'fsbo' | 'auction' | 'skip' | 'door_knock'
 ): Promise<void> {
   try {
     await Promise.all(

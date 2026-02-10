@@ -177,7 +177,7 @@ const schema = a.schema({
       rawSkipTraceData: a.json(), // Store all skip trace results even if they don't pass filters
       validationStatus: a.enum(['VALID', 'INVALID']),
       validationErrors: a.string().array(), // Track validation issues for admin review
-      listingStatus: a.enum(['off market', 'active', 'sold', 'pending', 'fsbo', 'auction', 'skip', 'door knock']).default('off market'), // Property listing status
+      listingStatus: a.enum(['off_market', 'active', 'sold', 'pending', 'fsbo', 'auction', 'skip', 'door_knock']), // Property listing status
 
       // 💥 NEW: GHL Sync Status Fields
       ghlSyncStatus: a.enum(['PENDING', 'SUCCESS', 'FAILED', 'SKIPPED']),
@@ -206,8 +206,6 @@ const schema = a.schema({
       zillowUrl: a.string(), // Zillow property URL
       zillowAddress: a.string(), // Actual address from Zillow (for mismatch detection)
       rentZestimate: a.float(), // Rental estimate
-      listingStatus: a.string(), // MLS Status: Active, Sold, Pending, etc.
-      listingStatusDate: a.date(), // When status last changed
       priceHistory: a.json(), // Array of price history
       taxHistory: a.json(), // Array of tax history
       homeDetails: a.json(), // Bedrooms, bathrooms, sqft, etc.

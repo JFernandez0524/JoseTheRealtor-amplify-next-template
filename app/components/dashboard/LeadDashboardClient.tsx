@@ -512,7 +512,7 @@ export default function LeadDashboardClient({}: Props) {
     try {
       await bulkUpdateStatus(
         selectedIds,
-        status as 'off market' | 'active' | 'sold' | 'pending' | 'fsbo' | 'auction' | 'skip' | 'door knock'
+        status as 'off_market' | 'active' | 'sold' | 'pending' | 'fsbo' | 'auction' | 'skip' | 'door_knock'
       );
       alert(`Successfully updated ${selectedIds.length} leads to ${status}`);
       setSelectedIds([]);
@@ -689,38 +689,6 @@ export default function LeadDashboardClient({}: Props) {
     }
   };
 
-  const handleBulkEmailCampaign = async () => {
-    if (
-      !confirm(
-        `Start email campaign for all eligible contacts in GHL?\n\nThis will send prospecting emails to contacts that haven't been emailed yet.`
-      )
-    )
-      return;
-
-    setIsProcessing(true);
-    try {
-      const response = await fetch('/api/v1/start-email-campaign', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-      });
-
-      const result = await response.json();
-
-      if (!response.ok) throw new Error(result.error);
-
-      alert(
-        `✅ Email Campaign Complete!\n\nEmails sent: ${result.successCount}\nFailed: ${result.failCount}\nTotal contacts: ${result.totalContacts}`
-      );
-    } catch (err: any) {
-      console.error('Email campaign error:', err);
-      alert(`Error starting email campaign: ${err.message}`);
-    } finally {
-      setIsProcessing(false);
-      // Force page refresh to ensure all data is updated
-      window.location.reload();
-    }
-  };
-
   const handlePopulateQueue = async () => {
     if (
       !confirm(
@@ -840,7 +808,7 @@ export default function LeadDashboardClient({}: Props) {
         
         return [
           `"${lead.type || ''}"`,
-          `"${lead.manualStatus || ''}"`,
+          `"${lead.listingStatus || ''}"`,
           `"${lead.skipTraceStatus || ''}"`,
           `"${lead.ghlSyncStatus || ''}"`,
           `"${lead.ownerFirstName || ''} ${lead.ownerLastName || ''}"`.trim(),
@@ -938,14 +906,13 @@ export default function LeadDashboardClient({}: Props) {
         handleBulkAIScore={handleBulkAIScore}
         handleBulkEnrichLeads={handleBulkEnrichLeads}
         handleBulkDirectMail={handleBulkDirectMail}
-        handleBulkEmailCampaign={handleBulkEmailCampaign}
         handlePopulateQueue={handlePopulateQueue}
         handleAddToDoorKnock={handleAddToDoorKnock}
         handleDelete={handleDeleteLeads}
         handleExport={() => alert('Exporting leads to CSV...')}
         handleDownloadSkipTraced={handleDownloadSkipTraced}
         handleViewDetails={handleViewDetails}
-        isEmailCampaigning={isProcessing}
+        isEmailCampaigning={false}
         isPopulatingQueue={isPopulatingQueue}
       />
 
