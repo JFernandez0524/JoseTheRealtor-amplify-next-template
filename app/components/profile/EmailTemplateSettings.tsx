@@ -2,11 +2,9 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { client } from '@/app/utils/aws/data/frontEndClient';
-import { type Schema } from '@/amplify/data/resource';
 
 interface EmailTemplateSettingsProps {
-  integration: any;
-  onUpdate: () => void;
+  integrationId: string;
 }
 
 interface FieldOption {
@@ -16,10 +14,26 @@ interface FieldOption {
 }
 
 const AVAILABLE_FIELDS: FieldOption[] = [
-  { label: 'First Name', value: '{firstName}', description: "Contact's first name" },
-  { label: 'Property Address', value: '{propertyAddress}', description: 'Full property address' },
-  { label: 'Market Value', value: '{zestimate}', description: 'Formatted Zestimate value' },
-  { label: 'Cash Offer', value: '{cashOffer}', description: 'Formatted cash offer (70% of value)' },
+  {
+    label: 'First Name',
+    value: '{firstName}',
+    description: "Contact's first name",
+  },
+  {
+    label: 'Property Address',
+    value: '{propertyAddress}',
+    description: 'Full property address',
+  },
+  {
+    label: 'Market Value',
+    value: '{zestimate}',
+    description: 'Formatted Zestimate value',
+  },
+  {
+    label: 'Cash Offer',
+    value: '{cashOffer}',
+    description: 'Formatted cash offer (70% of value)',
+  },
 ];
 
 interface TemplateEditorProps {
@@ -29,7 +43,12 @@ interface TemplateEditorProps {
   rows?: number;
 }
 
-function TemplateEditor({ value, onChange, placeholder, rows = 10 }: TemplateEditorProps) {
+function TemplateEditor({
+  value,
+  onChange,
+  placeholder,
+  rows = 10,
+}: TemplateEditorProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const insertField = (field: string) => {
@@ -39,9 +58,9 @@ function TemplateEditor({ value, onChange, placeholder, rows = 10 }: TemplateEdi
     const start = textarea.selectionStart;
     const end = textarea.selectionEnd;
     const newValue = value.substring(0, start) + field + value.substring(end);
-    
+
     onChange(newValue);
-    
+
     // Set cursor position after inserted field
     setTimeout(() => {
       textarea.focus();
@@ -50,14 +69,14 @@ function TemplateEditor({ value, onChange, placeholder, rows = 10 }: TemplateEdi
   };
 
   return (
-    <div className="space-y-2">
-      <div className="flex flex-wrap gap-1 mb-2">
+    <div className='space-y-2'>
+      <div className='flex flex-wrap gap-1 mb-2'>
         {AVAILABLE_FIELDS.map((field) => (
           <button
             key={field.value}
-            type="button"
+            type='button'
             onClick={() => insertField(field.value)}
-            className="px-2 py-1 text-xs bg-blue-100 hover:bg-blue-200 text-blue-800 rounded border"
+            className='px-2 py-1 text-xs bg-blue-100 hover:bg-blue-200 text-blue-800 rounded border'
             title={field.description}
           >
             + {field.label}
@@ -69,14 +88,18 @@ function TemplateEditor({ value, onChange, placeholder, rows = 10 }: TemplateEdi
         value={value}
         onChange={(e) => onChange(e.target.value)}
         rows={rows}
-        className="w-full p-3 border rounded font-mono text-sm resize-y"
+        className='w-full p-3 border rounded font-mono text-sm resize-y'
         placeholder={placeholder}
       />
     </div>
   );
 }
 
-export default function EmailTemplateSettings({ integration, onUpdate }: EmailTemplateSettingsProps) {
+export default function EmailTemplateSettings({
+  integrationId,
+}: EmailTemplateSettingsProps) {
+  const [integration, setIntegration] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
   const [probateSubject, setProbateSubject] = useState('');
   const [probateTemplate, setProbateTemplate] = useState('');
   const [preforeclosureSubject, setPreforeclosureSubject] = useState('');
@@ -84,13 +107,38 @@ export default function EmailTemplateSettings({ integration, onUpdate }: EmailTe
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    if (integration) {
-      setProbateSubject(integration.probateEmailSubject || 'Two options for {propertyAddress} (Preliminary Analysis)');
-      setProbateTemplate(integration.probateEmailTemplate || getDefaultProbateTemplate());
-      setPreforeclosureSubject(integration.preforeclosureEmailSubject || 'Two options for {propertyAddress} (Preliminary Analysis)');
-      setPreforeclosureTemplate(integration.preforeclosureEmailTemplate || getDefaultPreforeclosureTemplate());
-    }
-  }, [integration]);
+    const loadIntegration = async () => {
+      try {
+        const { data } = await client.models.GhlIntegration.get({
+          id: integrationId,
+        });
+        if (data) {
+          setIntegration(data);
+          setProbateSubject(
+            data.probateEmailSubject ||
+              'Two options for {propertyAddress} (Preliminary Analysis)',
+          );
+          setProbateTemplate(
+            data.probateEmailTemplate || getDefaultProbateTemplate(),
+          );
+          setPreforeclosureSubject(
+            data.preforeclosureEmailSubject ||
+              'Two options for {propertyAddress} (Preliminary Analysis)',
+          );
+          setPreforeclosureTemplate(
+            data.preforeclosureEmailTemplate ||
+              getDefaultPreforeclosureTemplate(),
+          );
+        }
+      } catch (error) {
+        console.error('Error loading integration:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadIntegration();
+  }, [integrationId]);
 
   const getDefaultProbateTemplate = () => `{firstName},
 
@@ -140,7 +188,6 @@ RE/MAX Agent`;
         preforeclosureEmailSubject: preforeclosureSubject,
         preforeclosureEmailTemplate: preforeclosureTemplate,
       });
-      onUpdate();
       alert('Email templates saved successfully!');
     } catch (error) {
       console.error('Failed to save templates:', error);
@@ -150,65 +197,90 @@ RE/MAX Agent`;
     }
   };
 
+  if (loading) {
+    return (
+      <div className='bg-white rounded-lg shadow p-6'>
+        <div className='animate-pulse'>
+          <div className='h-6 bg-gray-200 rounded w-1/3 mb-4'></div>
+          <div className='space-y-3'>
+            <div className='h-4 bg-gray-200 rounded'></div>
+            <div className='h-4 bg-gray-200 rounded w-2/3'></div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="bg-white rounded-lg shadow p-6">
-      <h3 className="text-lg font-semibold mb-4">📧 Email Templates</h3>
-      
+    <div className='bg-white rounded-lg shadow p-6'>
+      <h3 className='text-lg font-semibold mb-4'>📧 Email Templates</h3>
+
       {/* Probate Template */}
-      <div className="mb-6">
-        <h4 className="font-medium mb-2">Probate Leads</h4>
-        <div className="mb-3">
-          <label className="block text-sm font-medium mb-1">Subject Line</label>
+      <div className='mb-6'>
+        <h4 className='font-medium mb-2'>Probate Leads</h4>
+        <div className='mb-3'>
+          <label className='block text-sm font-medium mb-1'>Subject Line</label>
           <input
-            type="text"
+            type='text'
             value={probateSubject}
             onChange={(e) => setProbateSubject(e.target.value)}
-            className="w-full p-2 border rounded"
-            placeholder="Email subject for probate leads"
+            className='w-full p-2 border rounded'
+            placeholder='Email subject for probate leads'
           />
         </div>
-        <div className="mb-3">
-          <label className="block text-sm font-medium mb-1">Email Template</label>
+        <div className='mb-3'>
+          <label className='block text-sm font-medium mb-1'>
+            Email Template
+          </label>
           <TemplateEditor
             value={probateTemplate}
             onChange={setProbateTemplate}
-            placeholder="Email template for probate leads"
+            placeholder='Email template for probate leads'
             rows={12}
           />
         </div>
       </div>
 
       {/* Preforeclosure Template */}
-      <div className="mb-6">
-        <h4 className="font-medium mb-2">Preforeclosure Leads</h4>
-        <div className="mb-3">
-          <label className="block text-sm font-medium mb-1">Subject Line</label>
+      <div className='mb-6'>
+        <h4 className='font-medium mb-2'>Preforeclosure Leads</h4>
+        <div className='mb-3'>
+          <label className='block text-sm font-medium mb-1'>Subject Line</label>
           <input
-            type="text"
+            type='text'
             value={preforeclosureSubject}
             onChange={(e) => setPreforeclosureSubject(e.target.value)}
-            className="w-full p-2 border rounded"
-            placeholder="Email subject for preforeclosure leads"
+            className='w-full p-2 border rounded'
+            placeholder='Email subject for preforeclosure leads'
           />
         </div>
-        <div className="mb-3">
-          <label className="block text-sm font-medium mb-1">Email Template</label>
+        <div className='mb-3'>
+          <label className='block text-sm font-medium mb-1'>
+            Email Template
+          </label>
           <TemplateEditor
             value={preforeclosureTemplate}
             onChange={setPreforeclosureTemplate}
-            placeholder="Email template for preforeclosure leads"
+            placeholder='Email template for preforeclosure leads'
             rows={10}
           />
         </div>
       </div>
 
       {/* Variables Help */}
-      <div className="mb-4 p-3 bg-gray-50 rounded">
-        <p className="text-sm font-medium mb-2">💡 How to use:</p>
-        <ul className="text-xs text-gray-600 space-y-1">
-          <li>• Click the blue buttons above each editor to insert database fields</li>
-          <li>• Fields will be replaced with actual data when emails are sent</li>
-          <li>• You can type additional variables manually using {'{fieldName}'} format</li>
+      <div className='mb-4 p-3 bg-gray-50 rounded'>
+        <p className='text-sm font-medium mb-2'>💡 How to use:</p>
+        <ul className='text-xs text-gray-600 space-y-1'>
+          <li>
+            • Click the blue buttons above each editor to insert database fields
+          </li>
+          <li>
+            • Fields will be replaced with actual data when emails are sent
+          </li>
+          <li>
+            • You can type additional variables manually using {'{fieldName}'}{' '}
+            format
+          </li>
           <li>• Preview your template by checking recent sent emails in GHL</li>
         </ul>
       </div>
@@ -216,7 +288,7 @@ RE/MAX Agent`;
       <button
         onClick={handleSave}
         disabled={saving}
-        className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:opacity-50"
+        className='bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:opacity-50'
       >
         {saving ? 'Saving...' : 'Save Templates'}
       </button>

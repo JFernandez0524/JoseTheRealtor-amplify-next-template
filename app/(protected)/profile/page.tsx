@@ -177,11 +177,7 @@ export default async function ProfilePage() {
           {/* Email Template Settings Card */}
           {ghlIntegration && (
             <EmailTemplateSettings 
-              integration={ghlIntegration} 
-              onUpdate={() => {
-                // This will be handled by the component internally
-                // The page will need to be refreshed to see changes
-              }} 
+              integrationId={ghlIntegration.id}
             />
           )}
         </div>
