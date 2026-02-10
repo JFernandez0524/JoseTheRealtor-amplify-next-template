@@ -176,7 +176,7 @@ backend.dailyOutreachAgent.addEnvironment('GHL_CLIENT_ID', process.env.GHL_CLIEN
 backend.dailyOutreachAgent.addEnvironment('GHL_CLIENT_SECRET', process.env.GHL_CLIENT_SECRET || '');
 backend.dailyOutreachAgent.addEnvironment('API_ENDPOINT', process.env.API_ENDPOINT || 'https://leads.JoseTheRealtor.com');
 
-backend.data.resources.tables['GhlIntegration'].grantReadData(
+backend.data.resources.tables['GhlIntegration'].grantReadWriteData(
   backend.dailyOutreachAgent.resources.lambda
 );
 
@@ -204,7 +204,7 @@ backend.bulkEmailCampaign.addEnvironment(
 backend.bulkEmailCampaign.addEnvironment('GHL_CLIENT_ID', process.env.GHL_CLIENT_ID || '');
 backend.bulkEmailCampaign.addEnvironment('GHL_CLIENT_SECRET', process.env.GHL_CLIENT_SECRET || '');
 
-backend.data.resources.tables['GhlIntegration'].grantReadData(
+backend.data.resources.tables['GhlIntegration'].grantReadWriteData(
   backend.bulkEmailCampaign.resources.lambda
 );
 
@@ -223,7 +223,7 @@ backend.dailyEmailAgent.addEnvironment('APP_URL', process.env.APP_URL || 'https:
 backend.dailyEmailAgent.addEnvironment('GHL_CLIENT_ID', process.env.GHL_CLIENT_ID || '');
 backend.dailyEmailAgent.addEnvironment('GHL_CLIENT_SECRET', process.env.GHL_CLIENT_SECRET || '');
 
-backend.data.resources.tables['GhlIntegration'].grantReadData(
+backend.data.resources.tables['GhlIntegration'].grantReadWriteData(
   backend.dailyEmailAgent.resources.lambda
 );
 
@@ -255,7 +255,7 @@ backend.fixFailedSyncs.addEnvironment(
 backend.data.resources.tables['PropertyLead'].grantReadWriteData(
   backend.fixFailedSyncs.resources.lambda
 );
-backend.data.resources.tables['GhlIntegration'].grantReadData(
+backend.data.resources.tables['GhlIntegration'].grantReadWriteData(
   backend.fixFailedSyncs.resources.lambda
 );
 
@@ -269,7 +269,7 @@ backend.populateQueueFromGhl.addEnvironment(
   backend.data.resources.tables['OutreachQueue'].tableName
 );
 
-backend.data.resources.tables['GhlIntegration'].grantReadData(
+backend.data.resources.tables['GhlIntegration'].grantReadWriteData(
   backend.populateQueueFromGhl.resources.lambda
 );
 backend.data.resources.tables['OutreachQueue'].grantReadWriteData(
@@ -291,7 +291,7 @@ backend.ghlWebhookHandler.addEnvironment('GHL_CLIENT_ID', process.env.GHL_CLIENT
 backend.ghlWebhookHandler.addEnvironment('GHL_CLIENT_SECRET', process.env.GHL_CLIENT_SECRET || '');
 backend.ghlWebhookHandler.addEnvironment('OPENAI_API_KEY', process.env.OPENAI_API_KEY || '');
 
-backend.data.resources.tables['GhlIntegration'].grantReadData(
+backend.data.resources.tables['GhlIntegration'].grantReadWriteData(
   backend.ghlWebhookHandler.resources.lambda
 );
 

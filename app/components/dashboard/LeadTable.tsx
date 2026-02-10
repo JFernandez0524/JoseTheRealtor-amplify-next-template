@@ -312,7 +312,7 @@ export function LeadTable({
               </th>
               {renderSortableHeader('type', 'Type')}
               {renderSortableHeader('aiScore', 'AI Score', 'bg-purple-50')}
-              {renderSortableHeader('skipTraceStatus', 'Status')}
+              {renderSortableHeader('skipTraceStatus', 'Skip Status')}
               {/* NEW GHL STATUS HEADER */}
               {renderSortableHeader('ghlSyncStatus', 'GHL Sync', 'bg-purple-50')}
               {renderSortableHeader('ghlSyncDate', 'Sync Date', 'bg-purple-50')}
@@ -325,7 +325,7 @@ export function LeadTable({
               {renderSortableHeader('ownerCity', 'City/State/Zip', 'bg-blue-50')}
               {renderSortableHeader('ownerCounty', 'County', 'bg-blue-50')}
               {renderSortableHeader('zestimate', 'Zestimate', 'bg-yellow-50')}
-              {renderSortableHeader('manualStatus', 'Status', 'bg-yellow-50')}
+              {renderSortableHeader('manualStatus', 'Lead Status', 'bg-yellow-50')}
               {renderSortableHeader('adminLastName', 'Admin Name', 'bg-purple-50')}
               {renderSortableHeader('adminAddress', 'Admin Address', 'bg-purple-50')}
               {renderSortableHeader('phones', 'Phone', 'bg-green-50')}

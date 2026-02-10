@@ -203,9 +203,8 @@ export default function LeadDashboardClient({}: Props) {
 
         const matchesDateAdded = !filterDateAdded || (() => {
           if (!lead.createdAt) return false;
-          const leadDate = new Date(lead.createdAt).toDateString();
-          const filterDate = new Date(filterDateAdded).toDateString();
-          return leadDate === filterDate;
+          const leadDate = new Date(lead.createdAt).toISOString().split('T')[0];
+          return leadDate >= filterDateAdded;
         })();
 
         // Date filtering for skip trace completion
@@ -374,10 +373,10 @@ export default function LeadDashboardClient({}: Props) {
     setIsProcessing(true);
     setProcessingMessage('Starting GHL sync...');
     try {
-      const { successful, failed } = await syncToGHL(selectedIds, (current, total, message) => {
+      const { successful, skipped, failed } = await syncToGHL(selectedIds, (current, total, message) => {
         setProcessingMessage(`${message} (${current}/${total})`);
       });
-      alert(`CRM Sync Complete!\n✅ Successful: ${successful}\n❌ Failed: ${failed}`);
+      alert(`CRM Sync Complete!\n✅ Successful: ${successful}\n⏭️ Skipped: ${skipped}\n❌ Failed: ${failed}`);
       
     } catch (err) {
       console.error('Sync error:', err);

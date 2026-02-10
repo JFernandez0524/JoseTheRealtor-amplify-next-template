@@ -45,8 +45,11 @@ export async function updateLeadSyncStatus(
 }
 
 export function validateLeadForSync(lead: any): { isValid: boolean; reason?: string } {
-  // Check skip trace status
-  if (lead.skipTraceStatus?.toUpperCase() !== 'COMPLETED') {
+  // Check skip trace status - COMPLETED, NO_QUALITY_CONTACTS, and NO_MATCH are all valid completed statuses
+  const skipTraceStatus = lead.skipTraceStatus?.toUpperCase();
+  const validStatuses = ['COMPLETED', 'NO_QUALITY_CONTACTS', 'NO_MATCH'];
+  
+  if (!skipTraceStatus || !validStatuses.includes(skipTraceStatus)) {
     return { isValid: false, reason: `Skip trace not completed: ${lead.skipTraceStatus}` };
   }
 
