@@ -127,7 +127,11 @@ export const handler = async (event: any) => {
       locationId: item.locationId.S!,
       accessToken: item.accessToken.S!,
       campaignEmail: 'jose.fernandez@contact.josetherealtor.com', // GHL verified domain
-      emailSignature: item.emailSignature?.S || '', // Get email signature from DynamoDB
+      emailSignature: item.emailSignature?.S || `
+Jose Fernandez
+RE/MAX Homeland Realtors
+(732) 810-0182
+`, // Get email signature from DynamoDB or use default
     }));
 
     console.log(`Found ${integrations.length} active integrations`);
