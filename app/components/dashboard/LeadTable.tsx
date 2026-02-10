@@ -325,7 +325,7 @@ export function LeadTable({
               {renderSortableHeader('ownerCity', 'City/State/Zip', 'bg-blue-50')}
               {renderSortableHeader('ownerCounty', 'County', 'bg-blue-50')}
               {renderSortableHeader('zestimate', 'Zestimate', 'bg-yellow-50')}
-              {renderSortableHeader('manualStatus', 'Lead Status', 'bg-yellow-50')}
+              {renderSortableHeader('listingStatus', 'Listing Status', 'bg-yellow-50')}
               {renderSortableHeader('adminLastName', 'Admin Name', 'bg-purple-50')}
               {renderSortableHeader('adminAddress', 'Admin Address', 'bg-purple-50')}
               {renderSortableHeader('phones', 'Phone', 'bg-green-50')}
@@ -567,15 +567,15 @@ export function LeadTable({
                     </div>
                   </td>
 
-                  {/* Manual Status Column */}
+                  {/* Listing Status Column */}
                   <td className='px-4 py-4 whitespace-nowrap text-xs bg-yellow-50/30'>
                     <select
-                      value={lead.manualStatus || ''}
+                      value={lead.listingStatus || ''}
                       onChange={async (e) => {
-                        const newStatus = e.target.value as 'ACTIVE' | 'SOLD' | 'PENDING' | 'OFF_MARKET' | 'SKIP' | 'DIRECT_MAIL' | '';
+                        const newStatus = e.target.value as 'off market' | 'active' | 'sold' | 'pending' | 'fsbo' | 'auction' | 'skip' | 'door knock' | '';
                         try {
                           await updateLead(lead.id, {
-                            manualStatus: newStatus || null
+                            listingStatus: newStatus || null
                           });
                         } catch (err) {
                           console.error('Failed to update status:', err);
@@ -583,21 +583,26 @@ export function LeadTable({
                       }}
                       onClick={(e) => e.stopPropagation()}
                       className={`text-xs font-semibold px-2 py-1 rounded border-0 cursor-pointer ${
-                        lead.manualStatus === 'ACTIVE' ? 'bg-green-100 text-green-800' :
-                        lead.manualStatus === 'SOLD' ? 'bg-red-100 text-red-800' :
-                        lead.manualStatus === 'PENDING' ? 'bg-yellow-100 text-yellow-800' :
-                        lead.manualStatus === 'OFF_MARKET' ? 'bg-gray-100 text-gray-800' :
-                        lead.manualStatus === 'SKIP' ? 'bg-orange-100 text-orange-800' :
-                        lead.manualStatus === 'DIRECT_MAIL' ? 'bg-blue-100 text-blue-800' :
+                        lead.listingStatus === 'active' ? 'bg-green-100 text-green-800' :
+                        lead.listingStatus === 'sold' ? 'bg-red-100 text-red-800' :
+                        lead.listingStatus === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                        lead.listingStatus === 'off market' ? 'bg-gray-100 text-gray-800' :
+                        lead.listingStatus === 'skip' ? 'bg-orange-100 text-orange-800' :
+                        lead.listingStatus === 'fsbo' ? 'bg-purple-100 text-purple-800' :
+                        lead.listingStatus === 'auction' ? 'bg-pink-100 text-pink-800' :
+                        lead.listingStatus === 'door knock' ? 'bg-blue-100 text-blue-800' :
                         'bg-white text-gray-500'
                       }`}
                     >
                       <option value="">-</option>
-                      <option value="ACTIVE">Active</option>
-                      <option value="SOLD">Sold</option>
-                      <option value="PENDING">Pending</option>
-                      <option value="OFF_MARKET">Off Market</option>
-                      <option value="SKIP">Skip</option>
+                      <option value="off market">Off Market</option>
+                      <option value="active">Active</option>
+                      <option value="sold">Sold</option>
+                      <option value="pending">Pending</option>
+                      <option value="fsbo">FSBO</option>
+                      <option value="auction">Auction</option>
+                      <option value="skip">Skip</option>
+                      <option value="door knock">Door Knock</option>
                       <option value="DIRECT_MAIL">Direct Mail</option>
                     </select>
                   </td>

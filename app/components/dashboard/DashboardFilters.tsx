@@ -14,8 +14,8 @@ type Props = {
   setFilterGhlStatus: (val: string) => void;
   filterHasPhone: string;
   setFilterHasPhone: (val: string) => void;
-  filterManualStatus: string;
-  setFilterManualStatus: (val: string) => void;
+  filterListingStatus: string;
+  setFilterListingStatus: (val: string) => void;
   filterAiPriority: string;
   setFilterAiPriority: (val: string) => void;
   filterDateAdded: string;
@@ -64,8 +64,8 @@ export function DashboardFilters({
   setFilterGhlStatus,
   filterHasPhone,
   setFilterHasPhone,
-  filterManualStatus,
-  setFilterManualStatus,
+  filterListingStatus,
+  setFilterListingStatus,
   filterAiPriority,
   setFilterAiPriority,
   filterDateAdded,
@@ -186,22 +186,22 @@ export function DashboardFilters({
             <option value='NO_PHONE'>No Phone Numbers</option>
           </select>
 
-          {/* 5. MANUAL STATUS FILTER */}
+          {/* 5. LISTING STATUS FILTER */}
           <select
-            value={filterManualStatus}
-            onChange={(e) => setFilterManualStatus(e.target.value)}
+            value={filterListingStatus}
+            onChange={(e) => setFilterListingStatus(e.target.value)}
             className='border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:ring-2 focus:ring-yellow-500 outline-none w-full'
           >
             <option value=''>All Statuses</option>
             <option value='NULL'>No Status</option>
-            <option value='ACTIVE'>Active Only</option>
-            <option value='SOLD'>Sold</option>
-            <option value='PENDING'>Pending</option>
-            <option value='OFF_MARKET'>Off Market</option>
-            <option value='SKIP'>Skip</option>
-            <option value='DIRECT_MAIL'>Direct Mail</option>
-            <option value='FSBO'>FSBO</option>
-            <option value='DOOR_KNOCK'>Door Knock</option>
+            <option value='off market'>Off Market</option>
+            <option value='active'>Active</option>
+            <option value='sold'>Sold</option>
+            <option value='pending'>Pending</option>
+            <option value='fsbo'>FSBO</option>
+            <option value='auction'>Auction</option>
+            <option value='skip'>Skip</option>
+            <option value='door knock'>Door Knock</option>
           </select>
 
           {/* 6. AI PRIORITY FILTER - AI PLAN ONLY */}
@@ -251,14 +251,14 @@ export function DashboardFilters({
         </div>
 
         {/* Clear All Button */}
-        {(filterType || filterStatus || filterGhlStatus || filterHasPhone || filterManualStatus || skipTraceFromDate || skipTraceToDate) && (
+        {(filterType || filterStatus || filterGhlStatus || filterHasPhone || filterListingStatus || skipTraceFromDate || skipTraceToDate) && (
           <button
             onClick={() => {
               setFilterType('');
               setFilterStatus('');
               setFilterGhlStatus('');
               setFilterHasPhone('');
-              setFilterManualStatus('');
+              setFilterListingStatus('');
               setSkipTraceFromDate('');
               setSkipTraceToDate('');
             }}
@@ -307,12 +307,14 @@ export function DashboardFilters({
               className='text-sm px-3 py-1.5 rounded bg-blue-600 text-white hover:bg-blue-700 transition shadow-sm w-full sm:w-auto cursor-pointer'
             >
               <option value="">Set Status...</option>
-              <option value="ACTIVE">Active</option>
-              <option value="SOLD">Sold</option>
-              <option value="PENDING">Pending</option>
-              <option value="OFF_MARKET">Off Market</option>
-              <option value="SKIP">Skip</option>
-              <option value="DIRECT_MAIL">Direct Mail</option>
+              <option value="off market">Off Market</option>
+              <option value="active">Active</option>
+              <option value="sold">Sold</option>
+              <option value="pending">Pending</option>
+              <option value="fsbo">FSBO</option>
+              <option value="auction">Auction</option>
+              <option value="skip">Skip</option>
+              <option value="door knock">Door Knock</option>
             </select>
 
             {/* Skip Trace Button */}

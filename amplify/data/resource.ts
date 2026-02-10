@@ -177,7 +177,7 @@ const schema = a.schema({
       rawSkipTraceData: a.json(), // Store all skip trace results even if they don't pass filters
       validationStatus: a.enum(['VALID', 'INVALID']),
       validationErrors: a.string().array(), // Track validation issues for admin review
-      manualStatus: a.enum(['ACTIVE', 'SOLD', 'PENDING', 'OFF_MARKET', 'SKIP', 'DIRECT_MAIL']), // Manual override
+      listingStatus: a.enum(['off market', 'active', 'sold', 'pending', 'fsbo', 'auction', 'skip', 'door knock']).default('off market'), // Property listing status
 
       // 💥 NEW: GHL Sync Status Fields
       ghlSyncStatus: a.enum(['PENDING', 'SUCCESS', 'FAILED', 'SKIPPED']),

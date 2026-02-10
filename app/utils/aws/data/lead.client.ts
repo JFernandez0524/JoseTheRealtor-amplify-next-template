@@ -157,14 +157,14 @@ export async function bulkDeleteLeads(ids: string[]): Promise<void> {
  */
 export async function bulkUpdateStatus(
   ids: string[],
-  status: 'ACTIVE' | 'SOLD' | 'PENDING' | 'OFF_MARKET' | 'SKIP' | 'DIRECT_MAIL'
+  status: 'off market' | 'active' | 'sold' | 'pending' | 'fsbo' | 'auction' | 'skip' | 'door knock'
 ): Promise<void> {
   try {
     await Promise.all(
       ids.map((id) =>
         client.models.PropertyLead.update({
           id,
-          manualStatus: status,
+          listingStatus: status,
         })
       )
     );
@@ -277,26 +277,33 @@ export async function syncToGHL(leadIds: string[], onProgress?: (current: number
       
       results.forEach((result, index) => {
         if (result.status === 'fulfilled') {
-          // Check the actual sync result status, not just if Lambda executed
           const response = result.value as any;
-          console.log(`🔍 Debug - Lead ${batch[index]} FULL response structure:`, JSON.stringify(response, null, 2));
           
-          // Try multiple ways to access the result
-          const syncResult = response?.data?.manualGhlSync || response?.data || response;
-          console.log(`🔍 Debug - Extracted sync result:`, JSON.stringify(syncResult, null, 2));
+          // Extract the actual Lambda response from GraphQL wrapper
+          const lambdaResult = response?.data?.manualGhlSync;
           
-          // Check status
-          const status = syncResult?.status || response?.status || response?.data?.manualGhlSync?.status;
+          // Parse if it's a JSON string
+          let syncData = lambdaResult;
+          if (typeof lambdaResult === 'string') {
+            try {
+              syncData = JSON.parse(lambdaResult);
+            } catch {
+              syncData = { status: lambdaResult };
+            }
+          }
+          
+          const status = syncData?.status;
+          console.log(`🔍 Lead ${batch[index]} - Status: ${status}, Message: ${syncData?.message || 'N/A'}`);
           
           if (status === 'SUCCESS') {
             successful++;
             console.log(`✅ Lead ${batch[index]} synced successfully`);
           } else if (status === 'SKIPPED') {
             skipped++;
-            console.log(`⏭️ Lead ${batch[index]} skipped: ${syncResult?.message || 'No quality contacts'}`);
+            console.log(`⏭️ Lead ${batch[index]} skipped: ${syncData?.message}`);
           } else {
             failed++;
-            console.log(`❌ Lead ${batch[index]} sync failed: ${syncResult?.message || syncResult || 'Unknown error'}`);
+            console.log(`❌ Lead ${batch[index]} failed - Status: ${status}, Message: ${syncData?.message}`);
           }
         } else {
           failed++;

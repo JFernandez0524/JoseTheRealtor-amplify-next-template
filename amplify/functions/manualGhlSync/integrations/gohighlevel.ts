@@ -28,6 +28,7 @@ const GHL_CUSTOM_FIELD_ID_MAP: Record<string, string> = {
   app_account_status: 'diShiF2bpX7VFql08MVN',
   app_lead_id: 'aBlDP8DU3dFSHI2LFesn',
   ai_state: '1NxQW2kKMVgozjSUuu7s',
+  listing_status: 'HjA3Xd9IMZNhpH1uXpTo',
   // 📞 DIAL TRACKING FIELDS
   call_attempt_counter: '0MD4Pp2LCyOSCbCjA5qF',
   last_call_date: 'dWNGeSckpRoVUxXLgxMj',
@@ -144,6 +145,7 @@ export async function syncToGoHighLevel(
       lead_type: lead.type === 'PROBATE' ? 'Probate' : lead.type === 'PREFORECLOSURE' ? 'Preforeclosure' : lead.type,
       contact_type: specificPhone ? 'Phone Contact' : 'Direct Mail',
       skiptracestatus: lead.skipTraceStatus?.toUpperCase() || 'PENDING',
+      listing_status: lead.listingStatus || 'off market',
       lead_source_id: lead.id, // 🎯 Shared Lead ID for suppression workflows
       zestimate: zestimateValue, // Full market value (listing value)
       cash_offer: cashOfferValue, // 70% cash offer (as-is value)
@@ -297,32 +299,8 @@ export async function syncToGoHighLevel(
           console.log(`📭 No existing contact found by email`);
         }
       } else if (basePayload.firstName && basePayload.lastName) {
-        // Try multiple name formats
-        const nameVariations = [
-          `${basePayload.firstName} ${basePayload.lastName}`,
-          `${basePayload.lastName}, ${basePayload.firstName}`,
-          `${basePayload.firstName.toLowerCase()} ${basePayload.lastName.toLowerCase()}`,
-        ];
-        
-        console.log(`🔍 Searching for existing contact by name variations:`, nameVariations);
-        
-        for (const nameVar of nameVariations) {
-          const searchBody = {
-            locationId: ghlLocationId,
-            pageLimit: 1,
-            filters: [{ field: 'name', operator: 'eq', value: nameVar }],
-          };
-          const searchRes = await ghl.post('/contacts/search', searchBody);
-          if (searchRes.data?.contacts?.length > 0) {
-            existingContact = searchRes.data.contacts[0];
-            console.log(`✅ Found existing contact by name (${nameVar}): ${existingContact.id}`);
-            break;
-          }
-        }
-        
-        if (!existingContact) {
-          console.log(`📭 No existing contact found by any name variation`);
-        }
+        // Skip duplicate check for direct mail contacts (no phone/email to search by)
+        console.log(`📭 Skipping duplicate check for direct mail contact (no phone/email)`);
       }
     } catch (searchError: any) {
       console.error(`⚠️ Contact search failed:`, searchError.response?.data || searchError.message);

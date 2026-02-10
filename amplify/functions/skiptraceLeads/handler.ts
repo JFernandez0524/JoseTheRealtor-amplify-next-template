@@ -350,19 +350,19 @@ export const handler: Handler = async (event) => {
 
     console.log(`✅ Fetched ${leads.length} valid leads`);
 
-    // Filter out SOLD/SKIP leads
+    // Filter out sold/skip leads
     const leadsToProcess = leads.filter(lead => 
-      lead.manualStatus !== 'SOLD' && lead.manualStatus !== 'SKIP'
+      lead.listingStatus !== 'sold' && lead.listingStatus !== 'skip'
     );
 
     const skippedLeads = leads.filter(lead => 
-      lead.manualStatus === 'SOLD' || lead.manualStatus === 'SKIP'
+      lead.listingStatus === 'sold' || lead.listingStatus === 'skip'
     );
 
     const results: any[] = skippedLeads.map(lead => ({
       id: lead.id,
       status: 'SKIPPED',
-      reason: `Marked as ${lead.manualStatus}`
+      reason: `Marked as ${lead.listingStatus}`
     }));
 
     if (leadsToProcess.length === 0) {

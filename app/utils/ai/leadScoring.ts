@@ -137,7 +137,7 @@ function generateInsights(lead: Lead, factors: any, score: number): string[] {
   }
 
   // Status insights
-  if (lead.manualStatus === 'PENDING') {
+  if (lead.listingStatus === 'pending') {
     insights.push('⏳ Deal in progress - follow up');
   }
 
@@ -175,8 +175,8 @@ export function getUrgentLeads(leads: Lead[]): Lead[] {
     return (
       ageInDays > 30 &&
       (lead.zestimate || lead.estimatedValue || 0) > 200000 &&
-      lead.manualStatus !== 'SOLD' &&
-      lead.manualStatus !== 'SKIP'
+      lead.listingStatus !== 'sold' &&
+      lead.listingStatus !== 'skip'
     );
   }).slice(0, 5);
 }
@@ -189,7 +189,7 @@ export function getBestROILeads(leads: Lead[]): Lead[] {
     .filter(lead => {
       const zestimate = lead.zestimate || lead.estimatedValue || 0;
       const hasContact = (lead.phones?.length || 0) > 0;
-      return zestimate > 250000 && hasContact && lead.manualStatus === 'ACTIVE';
+      return zestimate > 250000 && hasContact && lead.listingStatus === 'active';
     })
     .sort((a, b) => (b.zestimate || 0) - (a.zestimate || 0))
     .slice(0, 5);

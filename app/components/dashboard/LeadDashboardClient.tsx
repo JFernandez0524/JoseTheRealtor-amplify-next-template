@@ -47,7 +47,7 @@ export default function LeadDashboardClient({}: Props) {
   const [filterStatus, setFilterStatus] = useState('');
   const [filterCrmStatus, setFilterCrmStatus] = useState('');
   const [filterHasPhone, setFilterHasPhone] = useState('');
-  const [filterManualStatus, setFilterManualStatus] = useState('');
+  const [filterListingStatus, setFilterListingStatus] = useState('');
   const [filterAiPriority, setFilterAiPriority] = useState('');
   const [filterDateAdded, setFilterDateAdded] = useState('');
   const [skipTraceFromDate, setSkipTraceFromDate] = useState('');
@@ -192,11 +192,11 @@ export default function LeadDashboardClient({}: Props) {
               ? !lead.phones || lead.phones.length === 0
               : true);
 
-        const matchesManualStatus =
-          !filterManualStatus ||
-          (filterManualStatus === 'NULL'
-            ? !lead.manualStatus
-            : lead.manualStatus === filterManualStatus);
+        const matchesListingStatus =
+          !filterListingStatus ||
+          (filterListingStatus === 'NULL'
+            ? !lead.listingStatus
+            : lead.listingStatus === filterListingStatus);
 
         const matchesAiPriority =
           !filterAiPriority || lead.aiPriority === filterAiPriority;
@@ -228,7 +228,7 @@ export default function LeadDashboardClient({}: Props) {
           matchesStatus &&
           matchesCrm &&
           matchesPhone &&
-          matchesManualStatus &&
+          matchesListingStatus &&
           matchesAiPriority &&
           matchesDateAdded &&
           matchesDateRange
@@ -315,7 +315,7 @@ export default function LeadDashboardClient({}: Props) {
     filterStatus,
     filterCrmStatus,
     filterHasPhone,
-    filterManualStatus,
+    filterListingStatus,
     filterAiPriority,
     skipTraceFromDate,
     skipTraceToDate,
@@ -376,19 +376,21 @@ export default function LeadDashboardClient({}: Props) {
       const { successful, skipped, failed } = await syncToGHL(selectedIds, (current, total, message) => {
         setProcessingMessage(`${message} (${current}/${total})`);
       });
-      alert(`CRM Sync Complete!\n✅ Successful: ${successful}\n⏭️ Skipped: ${skipped}\n❌ Failed: ${failed}`);
       
-    } catch (err) {
-      console.error('Sync error:', err);
-      alert('Error initiating CRM sync. Ensure leads are skip-traced first.');
-    } finally {
       setIsProcessing(false);
       setProcessingMessage('');
       setSelectedIds([]);
       
-      // Refresh data and force page reload after all operations
-      await refreshLeads();
+      alert(`CRM Sync Complete!\n✅ Successful: ${successful}\n⏭️ Skipped: ${skipped}\n❌ Failed: ${failed}`);
+      
+      // Refresh page after alert is dismissed
       window.location.reload();
+      
+    } catch (err) {
+      console.error('Sync error:', err);
+      setIsProcessing(false);
+      setProcessingMessage('');
+      alert('Error initiating CRM sync. Ensure leads are skip-traced first.');
     }
   };
 
@@ -510,7 +512,7 @@ export default function LeadDashboardClient({}: Props) {
     try {
       await bulkUpdateStatus(
         selectedIds,
-        status as 'ACTIVE' | 'SOLD' | 'PENDING' | 'OFF_MARKET' | 'SKIP' | 'DIRECT_MAIL'
+        status as 'off market' | 'active' | 'sold' | 'pending' | 'fsbo' | 'auction' | 'skip' | 'door knock'
       );
       alert(`Successfully updated ${selectedIds.length} leads to ${status}`);
       setSelectedIds([]);
@@ -912,8 +914,8 @@ export default function LeadDashboardClient({}: Props) {
         setFilterGhlStatus={setFilterCrmStatus}
         filterHasPhone={filterHasPhone}
         setFilterHasPhone={setFilterHasPhone}
-        filterManualStatus={filterManualStatus}
-        setFilterManualStatus={setFilterManualStatus}
+        filterListingStatus={filterListingStatus}
+        setFilterListingStatus={setFilterListingStatus}
         filterAiPriority={filterAiPriority}
         setFilterAiPriority={setFilterAiPriority}
         filterDateAdded={filterDateAdded}
