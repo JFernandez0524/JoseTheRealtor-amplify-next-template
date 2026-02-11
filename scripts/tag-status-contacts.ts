@@ -53,25 +53,35 @@ async function main() {
   // 2. Get all leads with ghlContactId
   console.log('📋 Finding synced leads...\n');
   
-  const leadsResult = await dynamodb.send(new ScanCommand({
-    TableName: LEAD_TABLE,
-    FilterExpression: 'attribute_exists(ghlContactId) AND #owner = :userId',
-    ExpressionAttributeNames: {
-      '#owner': 'owner'
-    },
-    ExpressionAttributeValues: {
-      ':userId': USER_ID
-    }
-  }));
+  let allLeads: any[] = [];
+  let lastEvaluatedKey: any = undefined;
+  
+  do {
+    const leadsResult = await dynamodb.send(new ScanCommand({
+      TableName: LEAD_TABLE,
+      FilterExpression: 'attribute_exists(ghlContactId) AND #owner = :userId',
+      ExpressionAttributeNames: {
+        '#owner': 'owner'
+      },
+      ExpressionAttributeValues: {
+        ':userId': USER_ID
+      },
+      ExclusiveStartKey: lastEvaluatedKey
+    }));
 
-  const leads = leadsResult.Items || [];
-  console.log(`Found ${leads.length} synced leads\n`);
+    allLeads = allLeads.concat(leadsResult.Items || []);
+    lastEvaluatedKey = leadsResult.LastEvaluatedKey;
+    
+    console.log(`Fetched ${leadsResult.Items?.length || 0} leads (total: ${allLeads.length})`);
+  } while (lastEvaluatedKey);
+
+  console.log(`Found ${allLeads.length} synced leads total\n`);
 
   let updated = 0;
   let skipped = 0;
   let failed = 0;
 
-  for (const lead of leads) {
+  for (const lead of allLeads) {
     if (!lead.ghlContactId) {
       skipped++;
       continue;
