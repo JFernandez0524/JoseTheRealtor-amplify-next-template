@@ -113,9 +113,9 @@ export function ManualLeadForm() {
           if (data.success) {
             setLead((prev: any) => ({
               ...prev,
-              standardizedAddress: data.validation.standardizedAddress,
-              latitude: data.validation.latitude,
-              longitude: data.validation.longitude,
+              standardizedAddress: data.standardizedAddress,
+              latitude: data.latitude,
+              longitude: data.longitude,
               zestimate: data.zestimate,
               zpid: data.zpid,
               validationStatus: 'VALID',

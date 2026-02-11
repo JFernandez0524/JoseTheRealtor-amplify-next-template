@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { AuthGetCurrentUserServer } from '@/app/utils/aws/auth/amplifyServerUtils.server';
-import { validateAndStandardizeAddress } from '@/app/utils/google.server';
-import { getPropertyDataByAddress } from '@/app/utils/bridge.server';
+import { validateAddressWithGoogle } from '@/app/utils/google.server';
+import { analyzeBridgeProperty } from '@/app/utils/bridge.server';
 
 export async function POST(request: NextRequest) {
   try {
@@ -21,9 +21,9 @@ export async function POST(request: NextRequest) {
 
     // 1. Validate and standardize address
     const fullAddress = `${address}, ${city}, ${state} ${zip}`;
-    const validation = await validateAndStandardizeAddress(fullAddress);
+    const validation = await validateAddressWithGoogle(fullAddress);
 
-    if (!validation.isValid) {
+    if (!validation.success) {
       return NextResponse.json({
         success: false,
         error: 'Invalid address',
@@ -36,18 +36,18 @@ export async function POST(request: NextRequest) {
     let zpid = null;
 
     try {
-      const propertyData = await getPropertyDataByAddress(
-        address,
+      const propertyData = await analyzeBridgeProperty({
+        street: address,
         city,
         state,
         zip,
-        validation.latitude,
-        validation.longitude
-      );
+        lat: validation.location.lat,
+        lng: validation.location.lng
+      });
 
-      if (propertyData) {
-        zestimate = propertyData.zestimate;
-        zpid = propertyData.zpid;
+      if (propertyData.success && propertyData.valuation) {
+        zestimate = propertyData.valuation.zestimate;
+        zpid = propertyData.valuation.zpid;
       }
     } catch (error) {
       console.error('Zestimate fetch failed:', error);
@@ -56,7 +56,10 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      validation,
+      standardizedAddress: validation.formattedAddress,
+      latitude: validation.location.lat,
+      longitude: validation.location.lng,
+      components: validation.components,
       zestimate,
       zpid,
     });
