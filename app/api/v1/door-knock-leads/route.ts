@@ -17,7 +17,8 @@ export async function GET(request: NextRequest) {
 
     const leads = (doorKnockLeads || []).map(lead => ({
       id: lead.id,
-      ownerName: lead.ownerName,
+      ownerName: `${lead.ownerFirstName || ''} ${lead.ownerLastName || ''}`.trim() || 'Unknown',
+      adminName: `${lead.adminFirstName || ''} ${lead.adminLastName || ''}`.trim(),
       propertyAddress: lead.propertyAddress,
       propertyCity: lead.propertyCity,
       propertyState: lead.propertyState,

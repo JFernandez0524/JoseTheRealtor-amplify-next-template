@@ -108,6 +108,9 @@ const schema = a.schema({
       
       // Snapshot of lead data (for offline/quick access)
       ownerFirstName: a.string(),
+      ownerLastName: a.string(),
+      adminFirstName: a.string(), // For probate leads
+      adminLastName: a.string(), // For probate leads
       propertyAddress: a.string(),
       propertyCity: a.string(),
       propertyState: a.string(),

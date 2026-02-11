@@ -119,103 +119,37 @@ RE/MAX Homeland Realtors
       const validAccessToken = tokenData.token;
       
       try {
-        // 🚀 NEW: Try queue-based approach first (fast, cheap)
-        let eligibleContacts: any[] = [];
-        let usingQueue = false;
+        // Query OutreachQueue for PENDING email contacts (limit 50)
+        const { getPendingEmailContacts } = await import('../shared/outreachQueue');
+        const eligibleContacts = await getPendingEmailContacts(integration.userId, 50);
         
-        try {
-          const { getPendingEmailContacts } = await import('../shared/outreachQueue');
-          const queueContacts = await getPendingEmailContacts(integration.userId, 50);
-          
-          if (queueContacts.length > 0) {
-            console.log(`📋 [QUEUE] Found ${queueContacts.length} pending email contacts in queue`);
-            eligibleContacts = queueContacts.map((q: any) => ({
-              id: q.contactId,
-              firstName: q.contactName?.split(' ')[0],
-              lastName: q.contactName?.split(' ').slice(1).join(' '),
-              email: q.contactEmail,
-              customFields: [
-                { id: 'p3NOYiInAERYbe0VsLHB', value: q.propertyAddress },
-                { id: 'h4UIjKQvFu7oRW4SAY8W', value: q.propertyCity },
-                { id: '9r9OpQaxYPxqbA6Hvtx7', value: q.propertyState },
-                { id: 'oaf4wCuM3Ub9eGpiddrO', value: q.leadType },
-              ],
-              _queueId: q.id, // Store queue ID for status updates
-              _queueAttempts: q.emailAttempts || 0
-            }));
-            usingQueue = true;
-          } else {
-            console.log(`📋 [QUEUE] No pending contacts in queue, falling back to GHL search`);
-          }
-        } catch (queueError) {
-          console.error(`⚠️ [QUEUE] Queue query failed, falling back to GHL search:`, queueError);
+        console.log(`📋 [QUEUE] Found ${eligibleContacts.length} pending email contacts`);
+
+        if (eligibleContacts.length === 0) {
+          console.log('No contacts ready for email outreach');
+          continue;
         }
 
-        // 🔄 FALLBACK: Use old GHL search method if queue is empty or failed
-        if (!usingQueue) {
-          const searchResponse = await axios.post(
-            'https://services.leadconnectorhq.com/contacts/search',
-            {
-              locationId: integration.locationId,
-              pageLimit: 100,
-              filters: [
-                {
-                  field: 'tags',
-                  operator: 'contains',
-                  value: 'ai outreach'
-                }
-              ]
-            },
-            {
-              headers: {
-                'Authorization': `Bearer ${validAccessToken}`,
-                'Content-Type': 'application/json',
-                'Version': '2021-07-28'
-              }
-            }
-          );
+        // Map queue items to contact format
+        const contacts = eligibleContacts.map((q: any) => ({
+          id: q.contactId,
+          firstName: q.contactName?.split(' ')[0],
+          lastName: q.contactName?.split(' ').slice(1).join(' '),
+          email: q.contactEmail,
+          customFields: [
+            { id: 'p3NOYiInAERYbe0VsLHB', value: q.propertyAddress },
+            { id: 'h4UIjKQvFu7oRW4SAY8W', value: q.propertyCity },
+            { id: '9r9OpQaxYPxqbA6Hvtx7', value: q.propertyState },
+            { id: 'oaf4wCuM3Ub9eGpiddrO', value: q.leadType },
+          ],
+          _queueId: q.id,
+          _queueAttempts: q.emailAttempts || 0
+        }));
 
-          const contacts = searchResponse.data.contacts || [];
-          console.log(`Found ${contacts.length} contacts with "ai outreach" tag`);
-
-          // Filter contacts who haven't been emailed yet and have at least one email
-          eligibleContacts = contacts.filter((contact: any) => {
-            const emailAttemptCounter = contact.customFields?.find((f: any) => f.id === 'wWlrXoXeMXcM6kUexf2L')?.value;
-            const lastEmailDate = contact.customFields?.find((f: any) => f.id === '3xOBr4GvgRc22kBRNYCE')?.value;
-            
-            // Check all email fields (primary + email2 + email3)
-            const email2 = contact.customFields?.find((f: any) => f.id === 'JY5nf3NzRwfCGvN5u00E')?.value;
-            const email3 = contact.customFields?.find((f: any) => f.id === '1oy6TLKItn5RkebjI7kD')?.value;
-            const hasEmail = contact.email || email2 || email3;
-            
-            if (!hasEmail) return false;
-            
-            // If never emailed (no counter or counter = 0), eligible
-            if (!emailAttemptCounter || emailAttemptCounter === 0 || emailAttemptCounter === '0') {
-              return true;
-            }
-            
-            // If emailed before, check if 4 days have passed since last_email_date
-            if (lastEmailDate) {
-              const lastEmailTime = new Date(lastEmailDate).getTime();
-              const now = Date.now();
-              const fourDaysInMs = 4 * 24 * 60 * 60 * 1000;
-              const daysSinceLastEmail = (now - lastEmailTime) / (24 * 60 * 60 * 1000);
-              
-              console.log(`Contact ${contact.firstName} ${contact.lastName}: last emailed ${daysSinceLastEmail.toFixed(1)} days ago`);
-              
-              return (now - lastEmailTime) >= fourDaysInMs;
-            }
-            
-            // Has counter but no date (shouldn't happen) - skip to be safe
-            return false;
-          });
-        }
-
-        console.log(`${eligibleContacts.length} contacts eligible for email outreach`);
+        console.log(`${contacts.length} contacts eligible for email outreach`);
 
         // Send email to each eligible contact
-        for (const contact of eligibleContacts) {
+        for (const contact of contacts) {
           try {
             console.log(`Sending email to contact ${contact.id} (${contact.email})`);
             
@@ -238,18 +172,14 @@ RE/MAX Homeland Realtors
               console.log(`✅ Email sent successfully to ${contact.email}`);
               totalEmailsSent++;
               
-              // Update queue status if using queue
-              if (usingQueue && contact._queueId) {
-                console.log(`📋 [QUEUE] Updating queue item ${contact._queueId}`);
-                try {
-                  const { updateEmailSent } = await import('../shared/outreachQueue');
-                  await updateEmailSent(contact._queueId);
-                  console.log(`✅ [QUEUE] Updated queue item ${contact._queueId}`);
-                } catch (queueError: any) {
-                  console.error(`❌ [QUEUE] Failed to update queue status:`, queueError.message);
-                }
-              } else {
-                console.log(`⚠️ [QUEUE] Not updating queue - usingQueue: ${usingQueue}, _queueId: ${contact._queueId}`);
+              // Update queue status
+              console.log(`📋 [QUEUE] Updating queue item ${contact._queueId}`);
+              try {
+                const { updateEmailSent } = await import('../shared/outreachQueue');
+                await updateEmailSent(contact._queueId);
+                console.log(`✅ [QUEUE] Updated queue item ${contact._queueId}`);
+              } catch (queueError: any) {
+                console.error(`❌ [QUEUE] Failed to update queue status:`, queueError.message);
               }
               
               // Update email counter in GHL (increment, not set to 1)

@@ -61,9 +61,10 @@ export async function POST(request: NextRequest) {
         await cookiesClient.models.DoorKnockQueue.create({
           userId: user.userId,
           leadId: lead.id,
-          ownerFirstName:
-            `${lead.ownerFirstName || ''} ${lead.ownerLastName || ''}`.trim() ||
-            'Unknown Owner',
+          ownerFirstName: lead.ownerFirstName || '',
+          ownerLastName: lead.ownerLastName || '',
+          adminFirstName: lead.adminFirstName || '',
+          adminLastName: lead.adminLastName || '',
           propertyAddress: lead.ownerAddress || 'Unknown Address',
           propertyCity: lead.ownerCity || '',
           propertyState: lead.ownerState || '',
