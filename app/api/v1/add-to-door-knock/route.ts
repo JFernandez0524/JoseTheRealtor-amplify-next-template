@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { AuthGetCurrentUserServer, cookiesClient } from '@/app/utils/aws/auth/amplifyServerUtils.server';
+import {
+  AuthGetCurrentUserServer,
+  cookiesClient,
+} from '@/app/utils/aws/auth/amplifyServerUtils.server';
 
 export async function POST(request: NextRequest) {
   try {
@@ -9,18 +12,23 @@ export async function POST(request: NextRequest) {
     }
 
     const { leadIds } = await request.json();
-    
+
     if (!leadIds || !Array.isArray(leadIds) || leadIds.length === 0) {
-      return NextResponse.json({ error: 'Lead IDs are required' }, { status: 400 });
+      return NextResponse.json(
+        { error: 'Lead IDs are required' },
+        { status: 400 },
+      );
     }
 
-    console.log(`🚪 Adding ${leadIds.length} leads to door knock queue for user ${user.userId}`);
+    console.log(
+      `🚪 Adding ${leadIds.length} leads to door knock queue for user ${user.userId}`,
+    );
 
     // Fetch the selected leads
     const { data: leads } = await cookiesClient.models.PropertyLead.list({
       filter: {
-        or: leadIds.map(id => ({ id: { eq: id } }))
-      }
+        or: leadIds.map((id) => ({ id: { eq: id } })),
+      },
     });
 
     if (!leads || leads.length === 0) {
@@ -34,15 +42,18 @@ export async function POST(request: NextRequest) {
     for (const lead of leads) {
       try {
         // Check if already in door knock queue
-        const { data: existing } = await cookiesClient.models.DoorKnockQueue.list({
-          filter: {
-            userId: { eq: user.userId },
-            leadId: { eq: lead.id }
-          }
-        });
+        const { data: existing } =
+          await cookiesClient.models.DoorKnockQueue.list({
+            filter: {
+              userId: { eq: user.userId },
+              leadId: { eq: lead.id },
+            },
+          });
 
         if (existing && existing.length > 0) {
-          console.log(`⚠️ Lead ${lead.id} already in door knock queue, skipping`);
+          console.log(
+            `⚠️ Lead ${lead.id} already in door knock queue, skipping`,
+          );
           continue;
         }
 
@@ -50,7 +61,9 @@ export async function POST(request: NextRequest) {
         await cookiesClient.models.DoorKnockQueue.create({
           userId: user.userId,
           leadId: lead.id,
-          ownerName: `${lead.ownerFirstName || ''} ${lead.ownerLastName || ''}`.trim() || 'Unknown Owner',
+          ownerFirstName:
+            `${lead.ownerFirstName || ''} ${lead.ownerLastName || ''}`.trim() ||
+            'Unknown Owner',
           propertyAddress: lead.ownerAddress || 'Unknown Address',
           propertyCity: lead.ownerCity || '',
           propertyState: lead.ownerState || '',
@@ -60,12 +73,11 @@ export async function POST(request: NextRequest) {
           status: 'PENDING',
           priority: 'MEDIUM',
           latitude: lead.latitude || null,
-          longitude: lead.longitude || null
+          longitude: lead.longitude || null,
         });
 
         addedCount++;
         console.log(`✅ Added lead ${lead.id} to door knock queue`);
-
       } catch (error) {
         const errorMsg = `Failed to add lead ${lead.id}: ${error}`;
         console.error(errorMsg);
@@ -73,20 +85,24 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    console.log(`🎉 Door knock queue update complete: ${addedCount} added, ${errors.length} errors`);
+    console.log(
+      `🎉 Door knock queue update complete: ${addedCount} added, ${errors.length} errors`,
+    );
 
     return NextResponse.json({
       success: true,
       added: addedCount,
       errors: errors.length > 0 ? errors : undefined,
-      message: `Successfully added ${addedCount} leads to door knock queue`
+      message: `Successfully added ${addedCount} leads to door knock queue`,
     });
-
   } catch (error) {
     console.error('Error adding leads to door knock queue:', error);
-    return NextResponse.json({ 
-      error: 'Failed to add leads to door knock queue',
-      details: error instanceof Error ? error.message : String(error)
-    }, { status: 500 });
+    return NextResponse.json(
+      {
+        error: 'Failed to add leads to door knock queue',
+        details: error instanceof Error ? error.message : String(error),
+      },
+      { status: 500 },
+    );
   }
 }

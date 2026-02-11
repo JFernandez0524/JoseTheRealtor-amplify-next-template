@@ -749,6 +749,30 @@ export default function LeadDashboardClient({}: Props) {
     }
   };
 
+  const handleSyncListingStatus = async () => {
+    if (!confirm('Sync listing_status field to all existing GHL contacts?\n\nThis will update contacts that were synced before the field was created.')) return;
+
+    setIsProcessing(true);
+    setProcessingMessage('Syncing listing status to GHL...');
+    try {
+      const response = await fetch('/api/v1/sync-listing-status', {
+        method: 'POST',
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) throw new Error(result.error);
+
+      alert(`✅ Listing Status Sync Complete!\n\nUpdated: ${result.updated}/${result.total} contacts`);
+    } catch (err: any) {
+      console.error('Listing status sync error:', err);
+      alert(`Error syncing listing status: ${err.message}`);
+    } finally {
+      setIsProcessing(false);
+      setProcessingMessage('');
+    }
+  };
+
   const handleDownloadSkipTraced = () => {
     if (selectedIds.length === 0) {
       alert('Please select leads to download.');
@@ -908,6 +932,7 @@ export default function LeadDashboardClient({}: Props) {
         handleBulkDirectMail={handleBulkDirectMail}
         handlePopulateQueue={handlePopulateQueue}
         handleAddToDoorKnock={handleAddToDoorKnock}
+        handleSyncListingStatus={handleSyncListingStatus}
         handleDelete={handleDeleteLeads}
         handleExport={() => alert('Exporting leads to CSV...')}
         handleDownloadSkipTraced={handleDownloadSkipTraced}

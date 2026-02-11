@@ -39,6 +39,7 @@ type Props = {
   handleBulkDirectMail: () => Promise<void>;
   handlePopulateQueue: () => Promise<void>;
   handleAddToDoorKnock: () => Promise<void>;
+  handleSyncListingStatus: () => Promise<void>;
   handleDelete: () => Promise<void>;
   handleExport: () => void;
   handleDownloadSkipTraced: () => void;
@@ -84,6 +85,7 @@ export function DashboardFilters({
   handleBulkDirectMail,
   handlePopulateQueue,
   handleAddToDoorKnock,
+  handleSyncListingStatus,
   handleDelete,
   handleExport,
   handleDownloadSkipTraced,
@@ -432,6 +434,15 @@ export function DashboardFilters({
               className='text-sm px-3 py-1.5 rounded bg-amber-600 text-white hover:bg-amber-700 transition shadow-sm w-full'
             >
               🚪 Add to Door Knock
+            </button>
+
+            {/* Sync Listing Status Button */}
+            <button
+              onClick={handleSyncListingStatus}
+              disabled={isPopulatingQueue || isSkipTracing || isGhlSyncing}
+              className='text-sm px-3 py-1.5 rounded bg-orange-600 text-white hover:bg-orange-700 transition shadow-sm w-full'
+            >
+              🔄 Sync Listing Status
             </button>
 
             {/* Export Button */}

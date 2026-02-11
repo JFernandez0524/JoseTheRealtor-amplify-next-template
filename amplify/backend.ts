@@ -12,6 +12,7 @@ import { bulkEmailCampaign } from './functions/bulkEmailCampaign/resource';
 import { ghlWebhookHandler } from './functions/ghlWebhookHandler/resource';
 import { fixFailedSyncs } from './functions/fixFailedSyncs/resource';
 import { populateQueueFromGhl } from './functions/populateQueueFromGhl/resource';
+import { syncListingStatus } from './functions/syncListingStatus/resource';
 import { addUserToGroup } from './data/add-user-to-group/resource';
 import { removeUserFromGroup } from './data/remove-user-from-group/resource';
 import { EventType } from 'aws-cdk-lib/aws-s3';
@@ -33,6 +34,7 @@ const backend = defineBackend({
   ghlWebhookHandler,
   fixFailedSyncs,
   populateQueueFromGhl,
+  syncListingStatus,
   addUserToGroup,
   removeUserFromGroup,
 });
@@ -315,3 +317,22 @@ backend.ghlWebhookHandler.resources.lambda.addPermission('AllowPublicFunctionUrl
   action: 'lambda:InvokeFunctionUrl',
   functionUrlAuthType: FunctionUrlAuthType.NONE,
 });
+
+// 🔄 Configure Sync Listing Status (one-time function)
+backend.syncListingStatus.addEnvironment(
+  'AMPLIFY_DATA_GhlIntegration_TABLE_NAME',
+  backend.data.resources.tables['GhlIntegration'].tableName
+);
+
+backend.syncListingStatus.addEnvironment(
+  'AMPLIFY_DATA_PropertyLead_TABLE_NAME',
+  backend.data.resources.tables['PropertyLead'].tableName
+);
+
+backend.data.resources.tables['GhlIntegration'].grantReadData(
+  backend.syncListingStatus.resources.lambda
+);
+
+backend.data.resources.tables['PropertyLead'].grantReadData(
+  backend.syncListingStatus.resources.lambda
+);

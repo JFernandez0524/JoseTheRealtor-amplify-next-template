@@ -106,6 +106,17 @@ const schema = a.schema({
       leadId: a.id().required(),
       lead: a.belongsTo('PropertyLead', 'leadId'), // Relationship to get fresh data
       
+      // Snapshot of lead data (for offline/quick access)
+      ownerFirstName: a.string(),
+      propertyAddress: a.string(),
+      propertyCity: a.string(),
+      propertyState: a.string(),
+      propertyZip: a.string(),
+      leadType: a.string(),
+      estimatedValue: a.float(),
+      latitude: a.float(),
+      longitude: a.float(),
+      
       // Door knock status
       status: a.enum(['PENDING', 'VISITED', 'NOT_HOME', 'COMPLETED']),
       visitedAt: a.datetime(),

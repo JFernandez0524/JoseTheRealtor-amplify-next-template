@@ -180,15 +180,35 @@ RE/MAX Homeland Realtors
 
           // Filter contacts who haven't been emailed yet and have at least one email
           eligibleContacts = contacts.filter((contact: any) => {
-            const emailAttemptCounter = contact.customFields?.find((f: any) => f.id === '0MD4Pp2LCyOSCbCjA5qF')?.value;
+            const emailAttemptCounter = contact.customFields?.find((f: any) => f.id === 'wWlrXoXeMXcM6kUexf2L')?.value;
+            const lastEmailDate = contact.customFields?.find((f: any) => f.id === '3xOBr4GvgRc22kBRNYCE')?.value;
             
             // Check all email fields (primary + email2 + email3)
             const email2 = contact.customFields?.find((f: any) => f.id === 'JY5nf3NzRwfCGvN5u00E')?.value;
             const email3 = contact.customFields?.find((f: any) => f.id === '1oy6TLKItn5RkebjI7kD')?.value;
             const hasEmail = contact.email || email2 || email3;
             
-            // Only send to contacts with at least one email who haven't been emailed (counter = 0 or null)
-            return hasEmail && (!emailAttemptCounter || emailAttemptCounter === 0 || emailAttemptCounter === '0');
+            if (!hasEmail) return false;
+            
+            // If never emailed (no counter or counter = 0), eligible
+            if (!emailAttemptCounter || emailAttemptCounter === 0 || emailAttemptCounter === '0') {
+              return true;
+            }
+            
+            // If emailed before, check if 4 days have passed since last_email_date
+            if (lastEmailDate) {
+              const lastEmailTime = new Date(lastEmailDate).getTime();
+              const now = Date.now();
+              const fourDaysInMs = 4 * 24 * 60 * 60 * 1000;
+              const daysSinceLastEmail = (now - lastEmailTime) / (24 * 60 * 60 * 1000);
+              
+              console.log(`Contact ${contact.firstName} ${contact.lastName}: last emailed ${daysSinceLastEmail.toFixed(1)} days ago`);
+              
+              return (now - lastEmailTime) >= fourDaysInMs;
+            }
+            
+            // Has counter but no date (shouldn't happen) - skip to be safe
+            return false;
           });
         }
 

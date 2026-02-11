@@ -1,15 +1,15 @@
 /**
- * Script to find and tag GHL contacts that were synced with a manual status
+ * Script to sync listing_status field to all GHL contacts
  * 
- * This finds contacts where:
- * - skipTraceStatus = NO_QUALITY_CONTACTS (in GHL custom field)
- * - The corresponding lead in our DB has a manualStatus set
+ * This updates contacts where:
+ * - They have been synced to GHL (have ghlContactId in our DB)
+ * - The listing_status custom field needs to be set/updated
  * 
  * Usage: npx tsx scripts/tag-status-contacts.ts
  */
 
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, ScanCommand, GetCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, ScanCommand } from '@aws-sdk/lib-dynamodb';
 import axios from 'axios';
 
 const dynamodb = DynamoDBDocumentClient.from(new DynamoDBClient({ region: 'us-east-1' }));
@@ -20,11 +20,8 @@ const GHL_TABLE = 'GhlIntegration-ahlnflzdejd5jdrulwuqcuxm6i-NONE';
 // Your user ID
 const USER_ID = '44d8f4c8-10c1-7038-744b-271103170819';
 
-// GHL custom field ID for app_lead_id
-const APP_LEAD_ID_FIELD = 'contact.app_lead_id'; // Update if different
-
 async function main() {
-  console.log('🔍 Finding NO_QUALITY_CONTACTS contacts with manual status...\n');
+  console.log('🔄 Syncing listing_status to GHL contacts...\n');
 
   // 1. Get GHL token
   const ghlResult = await dynamodb.send(new ScanCommand({
@@ -42,8 +39,7 @@ async function main() {
   }
 
   const ghlToken = ghlResult.Items[0].accessToken;
-  const locationId = ghlResult.Items[0].locationId;
-  console.log(`✅ Found GHL integration for location: ${locationId}\n`);
+  console.log(`✅ Found GHL integration\n`);
 
   const ghl = axios.create({
     baseURL: 'https://services.leadconnectorhq.com',
@@ -54,77 +50,58 @@ async function main() {
     }
   });
 
-  // 2. Search GHL for contacts with skiptracestatus = NO_QUALITY_CONTACTS
-  console.log('📋 Searching GHL for NO_QUALITY_CONTACTS contacts...\n');
+  // 2. Get all leads with ghlContactId
+  console.log('📋 Finding synced leads...\n');
   
-  const searchRes = await ghl.post('/contacts/search', {
-    locationId,
-    query: 'NO_QUALITY_CONTACTS' // Search in all fields
-  });
+  const leadsResult = await dynamodb.send(new ScanCommand({
+    TableName: LEAD_TABLE,
+    FilterExpression: 'attribute_exists(ghlContactId) AND #owner = :userId',
+    ExpressionAttributeNames: {
+      '#owner': 'owner'
+    },
+    ExpressionAttributeValues: {
+      ':userId': USER_ID
+    }
+  }));
 
-  const contacts = searchRes.data?.contacts || [];
-  console.log(`Found ${contacts.length} contacts to check\n`);
+  const leads = leadsResult.Items || [];
+  console.log(`Found ${leads.length} synced leads\n`);
 
-  let tagged = 0;
+  let updated = 0;
   let skipped = 0;
   let failed = 0;
 
-  for (const contact of contacts) {
-    // Find app_lead_id custom field
-    const appLeadIdField = contact.customFields?.find((cf: any) => 
-      cf.id === 'oaf4wCuM3Ub9eGpiddrO' // app_lead_id field ID
-    );
-    
-    const leadId = appLeadIdField?.value;
-    
-    if (!leadId) {
-      console.log(`⚠️ Skipping ${contact.firstName} ${contact.lastName} - no app_lead_id`);
+  for (const lead of leads) {
+    if (!lead.ghlContactId) {
       skipped++;
       continue;
     }
 
-    // Check if lead has manualStatus in DB
     try {
-      const leadResult = await dynamodb.send(new GetCommand({
-        TableName: LEAD_TABLE,
-        Key: { id: leadId }
-      }));
-
-      const lead = leadResult.Item;
-      
-      if (!lead) {
-        console.log(`⚠️ Lead ${leadId} not found in DB`);
-        skipped++;
-        continue;
-      }
-
-      if (!lead.manualStatus) {
-        // This is OK - no manual status means it should have been synced
-        skipped++;
-        continue;
-      }
-
-      // This contact has a manual status - tag it!
-      await ghl.put(`/contacts/${contact.id}`, {
-        tags: ['wrong_status_synced']
+      await ghl.put(`/contacts/${lead.ghlContactId}`, {
+        customFields: [
+          {
+            key: 'listing_status',
+            field_value: lead.listingStatus || 'OFF_MARKET'
+          }
+        ]
       });
 
-      console.log(`✅ Tagged: ${contact.firstName} ${contact.lastName} (Status: ${lead.manualStatus}) - Contact ID: ${contact.id}`);
-      tagged++;
+      console.log(`✅ Updated ${lead.ownerFirstName} ${lead.ownerLastName}: ${lead.listingStatus || 'OFF_MARKET'}`);
+      updated++;
 
-      // Rate limit
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      // Rate limit: 500ms between requests
+      await new Promise(resolve => setTimeout(resolve, 500));
     } catch (error: any) {
-      console.error(`❌ Failed for ${contact.firstName} ${contact.lastName}:`, error.response?.data || error.message);
+      console.error(`❌ Failed for ${lead.ghlContactId}:`, error.response?.data || error.message);
       failed++;
     }
   }
 
   console.log(`\n📊 Summary:`);
-  console.log(`   ✅ Tagged: ${tagged}`);
+  console.log(`   ✅ Updated: ${updated}`);
   console.log(`   ⏭️ Skipped: ${skipped}`);
   console.log(`   ❌ Failed: ${failed}`);
-  console.log(`\n🏷️ Tagged contacts have: "wrong_status_synced"`);
 }
 
 main().catch(console.error);
