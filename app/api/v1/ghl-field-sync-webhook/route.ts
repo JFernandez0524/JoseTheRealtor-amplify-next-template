@@ -29,13 +29,24 @@ const CUSTOM_FIELD_IDS = {
 export async function POST(request: Request) {
   try {
     const payload = await request.json();
-    console.log('🔄 [FIELD_SYNC] Received webhook:', JSON.stringify(payload, null, 2));
+    console.log('🔄 [FIELD_SYNC] Full payload received:', JSON.stringify(payload, null, 2));
+    console.log('🔄 [FIELD_SYNC] Payload keys:', Object.keys(payload));
 
-    // GHL sends contact.id at root level or in custom data
-    const contactId = payload.contactId || payload.id;
+    // GHL sends contact.id in multiple possible locations
+    const contactId = payload.contactId || payload.id || payload.contact?.id;
+
+    console.log('🔄 [FIELD_SYNC] Extracted contactId:', contactId);
+    console.log('🔄 [FIELD_SYNC] payload.contactId:', payload.contactId);
+    console.log('🔄 [FIELD_SYNC] payload.id:', payload.id);
+    console.log('🔄 [FIELD_SYNC] payload.contact?.id:', payload.contact?.id);
 
     if (!contactId) {
-      return NextResponse.json({ error: 'Missing contact ID' }, { status: 400 });
+      console.error('❌ [FIELD_SYNC] Missing contact ID. Available keys:', Object.keys(payload));
+      return NextResponse.json({ 
+        error: 'Missing contact ID',
+        availableKeys: Object.keys(payload),
+        hint: 'Check CloudWatch logs for full payload structure'
+      }, { status: 400 });
     }
 
     // Extract custom field values (GHL sends as root-level properties)
