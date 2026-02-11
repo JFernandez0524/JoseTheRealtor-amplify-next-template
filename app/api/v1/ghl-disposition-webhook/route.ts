@@ -43,7 +43,7 @@ export async function POST(request: Request) {
     console.log('📞 [DISPOSITION] Received webhook:', JSON.stringify(payload, null, 2));
 
     // GHL sends contact.id in the root payload
-    const contactId = payload.id || payload.contactId;
+    const contactId = payload.contact_id || payload.id || payload.contactId;
     const locationId = payload.location?.id;
 
     if (!contactId) {

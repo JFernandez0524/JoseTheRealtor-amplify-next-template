@@ -33,7 +33,7 @@ export async function POST(request: Request) {
     console.log('🔄 [FIELD_SYNC] Payload keys:', Object.keys(payload));
 
     // GHL sends contact.id in multiple possible locations
-    const contactId = payload.contactId || payload.id || payload.contact?.id;
+    const contactId = payload.contact_id || payload.contactId || payload.id || payload.contact?.id;
 
     console.log('🔄 [FIELD_SYNC] Extracted contactId:', contactId);
     console.log('🔄 [FIELD_SYNC] payload.contactId:', payload.contactId);
