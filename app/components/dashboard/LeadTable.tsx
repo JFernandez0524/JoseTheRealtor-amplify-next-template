@@ -371,7 +371,10 @@ export function LeadTable({
               leads.map((lead) => (
                 <tr
                   key={lead.id}
-                  onDoubleClick={() => window.open(`/lead/${lead.id}`, '_blank')}
+                  onDoubleClick={(e) => {
+                    e.preventDefault();
+                    onRowClick(lead.id);
+                  }}
                   className='hover:bg-gray-50 transition cursor-pointer select-none'
                 >
                   <td className='px-4 py-4 whitespace-nowrap sticky left-0 bg-white z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]'>

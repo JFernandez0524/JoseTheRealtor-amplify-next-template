@@ -52,7 +52,7 @@ async function main() {
         Key: { id: lead.id },
         UpdateExpression: 'SET listingStatus = :status',
         ExpressionAttributeValues: {
-          ':status': 'OFF_MARKET'
+          ':status': 'off_market'
         }
       }));
 
