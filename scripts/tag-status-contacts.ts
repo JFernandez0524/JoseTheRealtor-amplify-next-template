@@ -92,7 +92,7 @@ async function main() {
         customFields: [
           {
             key: 'listing_status',
-            field_value: lead.listingStatus || 'off_market'
+            field_value: (lead.listingStatus || 'off_market').replace('_', ' ')
           }
         ]
       });

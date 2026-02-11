@@ -79,19 +79,52 @@ export function ManualLeadForm() {
   useEffect(() => {
     if (!isLoaded || mode !== 'manual') return;
 
-    const handleOwnerSelect = (e: any) => {
+    const handleOwnerSelect = async (e: any) => {
       const place = e.detail.place;
       if (place?.address_components) {
         const parsed = parseGoogleAddress(place);
+        const address = place.formatted_address || parsed.street;
+        
         setLead((prev: any) => ({
           ...prev,
-          ownerAddress: place.formatted_address || parsed.street,
+          ownerAddress: address,
           ownerCity: parsed.city,
           ownerState: parsed.state,
           ownerZip: parsed.zip,
           latitude: place.geometry?.location?.lat(),
           longitude: place.geometry?.location?.lng(),
         }));
+
+        // Enrich with validation and Zestimate
+        try {
+          const response = await fetch('/api/v1/enrich-manual-lead', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              address: parsed.street,
+              city: parsed.city,
+              state: parsed.state,
+              zip: parsed.zip,
+            }),
+          });
+
+          const data = await response.json();
+          
+          if (data.success) {
+            setLead((prev: any) => ({
+              ...prev,
+              standardizedAddress: data.validation.standardizedAddress,
+              latitude: data.validation.latitude,
+              longitude: data.validation.longitude,
+              zestimate: data.zestimate,
+              zpid: data.zpid,
+              validationStatus: 'VALID',
+            }));
+            setMessage(`✅ Address validated. Zestimate: ${data.zestimate ? `$${data.zestimate.toLocaleString()}` : 'N/A'}`);
+          }
+        } catch (error) {
+          console.error('Enrichment failed:', error);
+        }
       }
     };
 
@@ -135,6 +168,8 @@ export function ManualLeadForm() {
           skipTraceStatus: lead.phone ? 'COMPLETED' : 'PENDING',
           ghlSyncStatus: 'PENDING',
           ghlContactId: null,
+          listingStatus: 'off_market', // Default to off_market
+          uploadSource: 'manual_entry',
         }
       );
 

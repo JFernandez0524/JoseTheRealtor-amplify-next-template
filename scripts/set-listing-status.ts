@@ -38,9 +38,11 @@ async function main() {
 
   console.log(`\nFound ${allLeads.length} total leads\n`);
 
-  // Filter leads with empty listingStatus
-  const leadsToUpdate = allLeads.filter(lead => !lead.listingStatus);
-  console.log(`${leadsToUpdate.length} leads need listingStatus set to OFF_MARKET\n`);
+  // Filter leads with empty or uppercase listingStatus
+  const leadsToUpdate = allLeads.filter(lead => 
+    !lead.listingStatus || lead.listingStatus === 'OFF_MARKET'
+  );
+  console.log(`${leadsToUpdate.length} leads need listingStatus fixed\n`);
 
   let updated = 0;
   let failed = 0;

@@ -50,6 +50,7 @@ export default function LeadDashboardClient({}: Props) {
   const [filterListingStatus, setFilterListingStatus] = useState('');
   const [filterAiPriority, setFilterAiPriority] = useState('');
   const [filterDateAdded, setFilterDateAdded] = useState('');
+  const [filterSource, setFilterSource] = useState('');
   const [skipTraceFromDate, setSkipTraceFromDate] = useState('');
   const [skipTraceToDate, setSkipTraceToDate] = useState('');
 
@@ -207,6 +208,8 @@ export default function LeadDashboardClient({}: Props) {
           return leadDate >= filterDateAdded;
         })();
 
+        const matchesSource = !filterSource || lead.uploadSource === filterSource;
+
         // Date filtering for skip trace completion
         const matchesDateRange = (() => {
           if (!skipTraceFromDate && !skipTraceToDate) return true;
@@ -231,6 +234,7 @@ export default function LeadDashboardClient({}: Props) {
           matchesListingStatus &&
           matchesAiPriority &&
           matchesDateAdded &&
+          matchesSource &&
           matchesDateRange
         );
       })
@@ -912,6 +916,8 @@ export default function LeadDashboardClient({}: Props) {
         setFilterAiPriority={setFilterAiPriority}
         filterDateAdded={filterDateAdded}
         setFilterDateAdded={setFilterDateAdded}
+        filterSource={filterSource}
+        setFilterSource={setFilterSource}
         skipTraceFromDate={skipTraceFromDate}
         setSkipTraceFromDate={setSkipTraceFromDate}
         skipTraceToDate={skipTraceToDate}

@@ -182,6 +182,7 @@ const schema = a.schema({
       validationStatus: a.enum(['VALID', 'INVALID']),
       validationErrors: a.string().array(), // Track validation issues for admin review
       listingStatus: a.enum(['off_market', 'active', 'sold', 'pending', 'fsbo', 'auction', 'skip', 'door_knock']), // Property listing status
+      uploadSource: a.enum(['csv_upload', 'manual_entry', 'api_import']), // How the lead was added
 
       // 💥 NEW: GHL Sync Status Fields
       ghlSyncStatus: a.enum(['PENDING', 'SUCCESS', 'FAILED', 'SKIPPED']),

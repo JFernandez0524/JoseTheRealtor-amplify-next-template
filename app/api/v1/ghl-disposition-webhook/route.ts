@@ -111,6 +111,9 @@ export async function POST(request: Request) {
     if (STOP_DISPOSITIONS.includes(callOutcome)) {
       console.log(`🛑 [DISPOSITION] Stopping AI outreach for contact ${contactId}`);
 
+      // Get property address to find sibling contacts
+      let propertyAddress = payload.customFields?.find((f: any) => f.id === 'p3NOYiInAERYbe0VsLHB')?.value;
+      
       // Find queue item by contactId (scan operation)
       const queueItem = await findQueueItemByContactId(contactId);
       
@@ -145,10 +148,101 @@ export async function POST(request: Request) {
             });
             
             console.log(`✅ [DISPOSITION] Updated PropertyLead ${lead.id} with call outcome`);
+            
+            // Use property address from lead if not in payload
+            if (!propertyAddress) {
+              propertyAddress = lead.ownerAddress;
+            }
           }
         } catch (leadError) {
           console.error(`⚠️ [DISPOSITION] Failed to update PropertyLead:`, leadError);
           // Don't fail the webhook if lead update fails
+        }
+        
+        // 🔗 SIBLING SYNC: Update all contacts with same property address
+        if (propertyAddress) {
+          console.log(`🔗 [SIBLING SYNC] Finding siblings for property: ${propertyAddress}`);
+          
+          try {
+            const { data: integrations } = await cookiesClient.models.GhlIntegration.list({
+              filter: { 
+                locationId: { eq: locationId },
+                isActive: { eq: true }
+              }
+            });
+
+            if (integrations && integrations.length > 0) {
+              const { getValidGhlToken } = await import('@/app/utils/aws/data/ghlIntegration.server');
+              const accessToken = await getValidGhlToken(integrations[0].userId);
+
+              if (accessToken) {
+                const axios = (await import('axios')).default;
+                
+                // Search for all contacts with same property address
+                const searchResponse = await axios.post(
+                  'https://services.leadconnectorhq.com/contacts/search',
+                  {
+                    locationId,
+                    query: propertyAddress
+                  },
+                  {
+                    headers: {
+                      'Authorization': `Bearer ${accessToken}`,
+                      'Content-Type': 'application/json',
+                      'Version': '2021-07-28'
+                    }
+                  }
+                );
+
+                const siblings = searchResponse.data?.contacts?.filter((c: any) => 
+                  c.id !== contactId && // Exclude the original contact
+                  c.customFields?.find((f: any) => f.id === 'p3NOYiInAERYbe0VsLHB')?.value === propertyAddress
+                ) || [];
+
+                console.log(`🔗 [SIBLING SYNC] Found ${siblings.length} sibling contacts`);
+
+                // Update each sibling
+                for (const sibling of siblings) {
+                  try {
+                    await axios.put(
+                      `https://services.leadconnectorhq.com/contacts/${sibling.id}`,
+                      {
+                        customFields: [
+                          { id: CALL_OUTCOME_FIELD_ID, value: callOutcome }
+                        ],
+                        tags: ['linked_outcome_sync']
+                      },
+                      {
+                        headers: {
+                          'Authorization': `Bearer ${accessToken}`,
+                          'Content-Type': 'application/json',
+                          'Version': '2021-07-28'
+                        }
+                      }
+                    );
+
+                    // Stop outreach for sibling in queue
+                    const siblingQueueItem = await findQueueItemByContactId(sibling.id);
+                    if (siblingQueueItem) {
+                      const siblingQueueId = `${siblingQueueItem.userId}_${sibling.id}`;
+                      await updateSmsStatus(siblingQueueId, 'OPTED_OUT');
+                      await updateEmailStatus(siblingQueueId, 'OPTED_OUT');
+                    }
+
+                    console.log(`✅ [SIBLING SYNC] Updated sibling ${sibling.id} (${sibling.firstName} ${sibling.lastName})`);
+                    
+                    // Rate limit
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                  } catch (siblingError) {
+                    console.error(`⚠️ [SIBLING SYNC] Failed to update sibling ${sibling.id}:`, siblingError);
+                  }
+                }
+              }
+            }
+          } catch (syncError) {
+            console.error(`⚠️ [SIBLING SYNC] Failed to sync siblings:`, syncError);
+            // Don't fail the webhook if sibling sync fails
+          }
         }
         
         return NextResponse.json({

@@ -407,6 +407,8 @@ export const handler: S3Handler = async (event) => {
             phones: preSkiptracedPhone ? [preSkiptracedPhone] : [],
             skipTraceStatus: preSkiptracedPhone ? 'COMPLETED' : 'PENDING',
             ghlSyncStatus: 'PENDING',
+            listingStatus: 'off_market', // Default to off_market for new leads
+            uploadSource: 'csv_upload',
             validationStatus: propValidation ? 'VALID' : 'INVALID',
             
             // 🏠 Zestimate and Zillow data

@@ -20,6 +20,8 @@ type Props = {
   setFilterAiPriority: (val: string) => void;
   filterDateAdded: string;
   setFilterDateAdded: (val: string) => void;
+  filterSource: string;
+  setFilterSource: (val: string) => void;
   skipTraceFromDate: string;
   setSkipTraceFromDate: (val: string) => void;
   skipTraceToDate: string;
@@ -70,6 +72,8 @@ export function DashboardFilters({
   setFilterAiPriority,
   filterDateAdded,
   setFilterDateAdded,
+  filterSource,
+  setFilterSource,
   skipTraceFromDate,
   setSkipTraceFromDate,
   skipTraceToDate,
@@ -229,7 +233,19 @@ export function DashboardFilters({
             />
           </div>
 
-          {/* 8. SKIP TRACE DATE FILTERS */}
+          {/* 8. SOURCE FILTER */}
+          <select
+            value={filterSource}
+            onChange={(e) => setFilterSource(e.target.value)}
+            className='border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none w-full'
+          >
+            <option value=''>All Sources</option>
+            <option value='csv_upload'>📄 CSV Upload</option>
+            <option value='manual_entry'>✍️ Manual Entry</option>
+            <option value='api_import'>🔗 API Import</option>
+          </select>
+
+          {/* 9. SKIP TRACE DATE FILTERS */}
           <div className='flex flex-col sm:flex-row gap-2 items-center'>
             <label className='text-xs text-gray-600 whitespace-nowrap'>Skip Traced:</label>
             <input
