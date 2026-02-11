@@ -14,7 +14,6 @@
  */
 
 import { NextResponse } from 'next/server';
-import { cookiesClient } from '@/app/utils/aws/auth/amplifyServerUtils.server';
 import { updateSmsStatus, updateEmailStatus, findQueueItemByContactId } from '@/amplify/functions/shared/outreachQueue';
 
 const CUSTOM_FIELD_IDS = {
@@ -49,13 +48,13 @@ export async function POST(request: Request) {
       }, { status: 400 });
     }
 
-    // Extract custom field values (GHL sends as root-level properties)
-    const callAttempts = payload[CUSTOM_FIELD_IDS.CALL_ATTEMPT_COUNTER];
-    const emailAttempts = payload[CUSTOM_FIELD_IDS.EMAIL_ATTEMPT_COUNTER];
-    const lastCallDate = payload[CUSTOM_FIELD_IDS.LAST_CALL_DATE];
-    const aiState = payload[CUSTOM_FIELD_IDS.AI_STATE];
-    const mailSentCount = payload[CUSTOM_FIELD_IDS.MAIL_SENT_COUNT];
-    const callOutcome = payload[CUSTOM_FIELD_IDS.CALL_OUTCOME];
+    // Extract custom field values (GHL sends as human-readable names at root level)
+    const callAttempts = payload['Call Attempt or Text Counter'] || payload[CUSTOM_FIELD_IDS.CALL_ATTEMPT_COUNTER];
+    const emailAttempts = payload['email attempt counter'] || payload[CUSTOM_FIELD_IDS.EMAIL_ATTEMPT_COUNTER];
+    const lastCallDate = payload['Last Call Date'] || payload[CUSTOM_FIELD_IDS.LAST_CALL_DATE];
+    const aiState = payload['AI State'] || payload[CUSTOM_FIELD_IDS.AI_STATE];
+    const mailSentCount = payload['Mail Sent Count'] || payload[CUSTOM_FIELD_IDS.MAIL_SENT_COUNT];
+    const callOutcome = payload['Call Outcome'] || payload[CUSTOM_FIELD_IDS.CALL_OUTCOME];
 
     console.log('🔄 [FIELD_SYNC] Extracted values:', {
       contactId,
@@ -67,17 +66,28 @@ export async function POST(request: Request) {
       callOutcome
     });
 
-    // Find PropertyLead by ghlContactId
-    const { data: leads } = await cookiesClient.models.PropertyLead.list({
-      filter: { ghlContactId: { eq: contactId } }
-    });
+    // Find PropertyLead by ghlContactId using direct DynamoDB access
+    const { DynamoDBClient } = await import('@aws-sdk/client-dynamodb');
+    const { DynamoDBDocumentClient, ScanCommand, UpdateCommand } = await import('@aws-sdk/lib-dynamodb');
+    
+    const dynamoClient = new DynamoDBClient({ region: process.env.AWS_REGION });
+    const docClient = DynamoDBDocumentClient.from(dynamoClient);
+    
+    const scanResult = await docClient.send(new ScanCommand({
+      TableName: process.env.AMPLIFY_DATA_PropertyLead_TABLE_NAME,
+      FilterExpression: 'ghlContactId = :contactId',
+      ExpressionAttributeValues: {
+        ':contactId': contactId
+      },
+      Limit: 1
+    }));
 
-    if (!leads || leads.length === 0) {
+    if (!scanResult.Items || scanResult.Items.length === 0) {
       console.log(`⚠️ [FIELD_SYNC] No PropertyLead found for contact ${contactId}`);
       return NextResponse.json({ success: true, message: 'Contact not found in app' });
     }
 
-    const lead = leads[0];
+    const lead = scanResult.Items[0];
     const currentOutreachData = (lead.ghlOutreachData as any) || {};
 
     // Build updated outreach data
@@ -102,11 +112,16 @@ export async function POST(request: Request) {
       updatedOutreachData.callOutcome = callOutcome;
     }
 
-    // Update PropertyLead
-    await cookiesClient.models.PropertyLead.update({
-      id: lead.id,
-      ghlOutreachData: updatedOutreachData
-    });
+    // Update PropertyLead using DynamoDB
+    await docClient.send(new UpdateCommand({
+      TableName: process.env.AMPLIFY_DATA_PropertyLead_TABLE_NAME,
+      Key: { id: lead.id },
+      UpdateExpression: 'SET ghlOutreachData = :data, updatedAt = :now',
+      ExpressionAttributeValues: {
+        ':data': updatedOutreachData,
+        ':now': new Date().toISOString()
+      }
+    }));
 
     console.log(`✅ [FIELD_SYNC] Updated PropertyLead ${lead.id}`);
 

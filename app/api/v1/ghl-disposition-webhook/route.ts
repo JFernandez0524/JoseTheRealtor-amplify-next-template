@@ -11,7 +11,6 @@
 
 import { NextResponse } from 'next/server';
 import { updateSmsStatus, updateEmailStatus, findQueueItemByContactId } from '@/amplify/functions/shared/outreachQueue';
-import { cookiesClient } from '@/app/utils/aws/auth/amplifyServerUtils.server';
 
 const CALL_OUTCOME_FIELD_ID = 'LNyfm5JDal955puZGbu3';
 
@@ -68,16 +67,25 @@ export async function POST(request: Request) {
 
     // Update Last Call Date for ALL dispositions (manual calls)
     try {
-      const { data: integrations } = await cookiesClient.models.GhlIntegration.list({
-        filter: { 
-          locationId: { eq: locationId },
-          isActive: { eq: true }
-        }
-      });
+      const { DynamoDBClient } = await import('@aws-sdk/client-dynamodb');
+      const { DynamoDBDocumentClient, ScanCommand } = await import('@aws-sdk/lib-dynamodb');
+      
+      const dynamoClient = new DynamoDBClient({ region: process.env.AWS_REGION });
+      const docClient = DynamoDBDocumentClient.from(dynamoClient);
+      
+      const scanResult = await docClient.send(new ScanCommand({
+        TableName: process.env.AMPLIFY_DATA_GhlIntegration_TABLE_NAME,
+        FilterExpression: 'locationId = :locationId AND isActive = :active',
+        ExpressionAttributeValues: {
+          ':locationId': locationId,
+          ':active': true
+        },
+        Limit: 1
+      }));
 
-      if (integrations && integrations.length > 0) {
+      if (scanResult.Items && scanResult.Items.length > 0) {
         const { getValidGhlToken } = await import('@/app/utils/aws/data/ghlIntegration.server');
-        const accessToken = await getValidGhlToken(integrations[0].userId);
+        const accessToken = await getValidGhlToken(scanResult.Items[0].userId);
 
         if (accessToken) {
           const axios = (await import('axios')).default;
@@ -128,24 +136,40 @@ export async function POST(request: Request) {
         
         // Update PropertyLead with call outcome
         try {
-          // Find lead by ghlContactId
-          const { data: leads } = await cookiesClient.models.PropertyLead.list({
-            filter: { ghlContactId: { eq: contactId } }
-          });
+          const { DynamoDBClient } = await import('@aws-sdk/client-dynamodb');
+          const { DynamoDBDocumentClient, ScanCommand, UpdateCommand } = await import('@aws-sdk/lib-dynamodb');
           
-          if (leads && leads.length > 0) {
-            const lead = leads[0];
-            const currentOutreachData = (lead.ghlOutreachData as any) || {};
+          const dynamoClient = new DynamoDBClient({ region: process.env.AWS_REGION });
+          const docClient = DynamoDBDocumentClient.from(dynamoClient);
+          
+          // Find lead by ghlContactId
+          const scanResult = await docClient.send(new ScanCommand({
+            TableName: process.env.AMPLIFY_DATA_PropertyLead_TABLE_NAME,
+            FilterExpression: 'ghlContactId = :contactId',
+            ExpressionAttributeValues: {
+              ':contactId': contactId
+            },
+            Limit: 1
+          }));
+          
+          if (scanResult.Items && scanResult.Items.length > 0) {
+            const lead = scanResult.Items[0];
+            const currentOutreachData = lead.ghlOutreachData || {};
             
-            await cookiesClient.models.PropertyLead.update({
-              id: lead.id,
-              ghlOutreachData: {
-                ...currentOutreachData,
-                callOutcome,
-                smsStatus: 'OPTED_OUT',
-                emailStatus: 'OPTED_OUT'
+            await docClient.send(new UpdateCommand({
+              TableName: process.env.AMPLIFY_DATA_PropertyLead_TABLE_NAME,
+              Key: { id: lead.id },
+              UpdateExpression: 'SET ghlOutreachData = :data, updatedAt = :now',
+              ExpressionAttributeValues: {
+                ':data': {
+                  ...currentOutreachData,
+                  callOutcome,
+                  smsStatus: 'OPTED_OUT',
+                  emailStatus: 'OPTED_OUT'
+                },
+                ':now': new Date().toISOString()
               }
-            });
+            }));
             
             console.log(`✅ [DISPOSITION] Updated PropertyLead ${lead.id} with call outcome`);
             
@@ -164,16 +188,25 @@ export async function POST(request: Request) {
           console.log(`🔗 [SIBLING SYNC] Finding siblings for property: ${propertyAddress}`);
           
           try {
-            const { data: integrations } = await cookiesClient.models.GhlIntegration.list({
-              filter: { 
-                locationId: { eq: locationId },
-                isActive: { eq: true }
-              }
-            });
+            const { DynamoDBClient } = await import('@aws-sdk/client-dynamodb');
+            const { DynamoDBDocumentClient, ScanCommand } = await import('@aws-sdk/lib-dynamodb');
+            
+            const dynamoClient = new DynamoDBClient({ region: process.env.AWS_REGION });
+            const docClient = DynamoDBDocumentClient.from(dynamoClient);
+            
+            const scanResult = await docClient.send(new ScanCommand({
+              TableName: process.env.AMPLIFY_DATA_GhlIntegration_TABLE_NAME,
+              FilterExpression: 'locationId = :locationId AND isActive = :active',
+              ExpressionAttributeValues: {
+                ':locationId': locationId,
+                ':active': true
+              },
+              Limit: 1
+            }));
 
-            if (integrations && integrations.length > 0) {
+            if (scanResult.Items && scanResult.Items.length > 0) {
               const { getValidGhlToken } = await import('@/app/utils/aws/data/ghlIntegration.server');
-              const accessToken = await getValidGhlToken(integrations[0].userId);
+              const accessToken = await getValidGhlToken(scanResult.Items[0].userId);
 
               if (accessToken) {
                 const axios = (await import('axios')).default;
