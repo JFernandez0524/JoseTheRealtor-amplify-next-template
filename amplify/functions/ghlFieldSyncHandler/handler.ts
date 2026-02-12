@@ -165,16 +165,17 @@ async function handleDisposition(payload: any, contactId: string, callOutcome: s
   const queueItem = queueScan.Items[0];
   const userId = queueItem.userId;
   const locationId = queueItem.locationId;
+  const propertyAddress = queueItem.propertyAddress;
 
-  console.log(`🔍 [DISPOSITION] Found queue item for user ${userId}, location ${locationId}`);
+  console.log(`🔍 [DISPOSITION] Found queue item for user ${userId}, property ${propertyAddress}`);
 
-  // Get all OutreachQueue items for this user/location (all contacts for this PropertyLead)
-  const allContactsResult = await docClient.send(new QueryCommand({
+  // Get all OutreachQueue items for this user AND property address (same lead)
+  const allContactsResult = await docClient.send(new ScanCommand({
     TableName: process.env.AMPLIFY_DATA_OutreachQueue_TABLE_NAME,
-    IndexName: 'outreachQueuesByUserId',
-    KeyConditionExpression: 'userId = :userId',
+    FilterExpression: 'userId = :userId AND propertyAddress = :address',
     ExpressionAttributeValues: {
-      ':userId': userId
+      ':userId': userId,
+      ':address': propertyAddress
     }
   }));
 
