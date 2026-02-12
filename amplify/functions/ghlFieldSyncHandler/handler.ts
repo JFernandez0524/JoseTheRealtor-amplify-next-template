@@ -195,18 +195,23 @@ async function handleDisposition(payload: any, contactId: string, callOutcome: s
     }));
     relatedContacts = result.Items || [];
   } else if (contactName) {
-    // Last resort: use contactName (strip number suffix like " (2)")
-    const baseName = contactName.replace(/\s*\(\d+\)\s*$/, '').trim();
+    // Last resort: use contactName (strip number suffix like " (2)" and lowercase for matching)
+    const baseName = contactName.replace(/\s*\(\d+\)\s*$/, '').trim().toLowerCase();
     console.log(`⚠️ [DISPOSITION] No leadId or propertyAddress, falling back to contactName: ${baseName}`);
+    
+    // Get all contacts for this user and filter by name in code (DynamoDB begins_with is case-sensitive)
     const result = await docClient.send(new ScanCommand({
       TableName: process.env.AMPLIFY_DATA_OutreachQueue_TABLE_NAME,
-      FilterExpression: 'userId = :userId AND begins_with(contactName, :name)',
+      FilterExpression: 'userId = :userId',
       ExpressionAttributeValues: {
-        ':userId': userId,
-        ':name': baseName
+        ':userId': userId
       }
     }));
-    relatedContacts = result.Items || [];
+    
+    // Filter by contactName in code (case-insensitive)
+    relatedContacts = (result.Items || []).filter(item => 
+      item.contactName && item.contactName.toLowerCase().startsWith(baseName)
+    );
   } else {
     console.log(`⚠️ [DISPOSITION] No way to find related contacts`);
     relatedContacts = [queueItem]; // Only update this one contact
