@@ -150,8 +150,7 @@ async function handleDisposition(payload: any, contactId: string, callOutcome: s
     FilterExpression: 'contactId = :contactId',
     ExpressionAttributeValues: {
       ':contactId': contactId
-    },
-    Limit: 1
+    }
   }));
 
   if (!queueScan.Items || queueScan.Items.length === 0) {
