@@ -14,6 +14,7 @@ import { fixFailedSyncs } from './functions/fixFailedSyncs/resource';
 import { populateQueueFromGhl } from './functions/populateQueueFromGhl/resource';
 import { syncListingStatus } from './functions/syncListingStatus/resource';
 import { ghlFieldSyncHandler } from './functions/ghlFieldSyncHandler/resource';
+import { thanksIoWebhookHandler } from './functions/thanksIoWebhookHandler/resource';
 import { addUserToGroup } from './data/add-user-to-group/resource';
 import { removeUserFromGroup } from './data/remove-user-from-group/resource';
 import { EventType } from 'aws-cdk-lib/aws-s3';
@@ -37,6 +38,7 @@ const backend = defineBackend({
   populateQueueFromGhl,
   syncListingStatus,
   ghlFieldSyncHandler,
+  thanksIoWebhookHandler,
   addUserToGroup,
   removeUserFromGroup,
 });
@@ -380,3 +382,42 @@ backend.ghlFieldSyncHandler.resources.lambda.addToRolePolicy(
     ]
   })
 );
+
+// 📬 Configure Thanks.io Webhook Handler
+backend.thanksIoWebhookHandler.addEnvironment(
+  'AMPLIFY_DATA_GhlIntegration_TABLE_NAME',
+  backend.data.resources.tables['GhlIntegration'].tableName
+);
+
+backend.thanksIoWebhookHandler.addEnvironment(
+  'AMPLIFY_DATA_OutreachQueue_TABLE_NAME',
+  backend.data.resources.tables['OutreachQueue'].tableName
+);
+
+backend.thanksIoWebhookHandler.addEnvironment('GHL_CLIENT_ID', process.env.GHL_CLIENT_ID || '');
+backend.thanksIoWebhookHandler.addEnvironment('GHL_CLIENT_SECRET', process.env.GHL_CLIENT_SECRET || '');
+
+backend.data.resources.tables['GhlIntegration'].grantReadWriteData(
+  backend.thanksIoWebhookHandler.resources.lambda
+);
+
+backend.data.resources.tables['OutreachQueue'].grantReadData(
+  backend.thanksIoWebhookHandler.resources.lambda
+);
+
+// Enable Function URL for webhook
+backend.thanksIoWebhookHandler.resources.lambda.addFunctionUrl({
+  authType: FunctionUrlAuthType.NONE, // Public endpoint for thanks.io webhook
+  cors: {
+    allowedOrigins: ['*'],
+    allowedMethods: [HttpMethod.POST],
+    allowedHeaders: ['*'],
+  }
+});
+
+// Grant public access to Function URL
+backend.thanksIoWebhookHandler.resources.lambda.addPermission('AllowPublicFunctionUrl', {
+  principal: new AnyPrincipal(),
+  action: 'lambda:InvokeFunctionUrl',
+  functionUrlAuthType: FunctionUrlAuthType.NONE,
+});

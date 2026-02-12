@@ -1,5 +1,5 @@
 /**
- * THANKS.IO WEBHOOK HANDLER
+ * THANKS.IO WEBHOOK HANDLER - Lambda Version
  * 
  * Handles webhooks from thanks.io for:
  * - Order Item Status Updates (delivery tracking)
@@ -8,8 +8,14 @@
  * Updates GHL contacts with mail tracking data
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import type { Handler } from 'aws-lambda';
+import { getValidGhlToken } from '../shared/ghlTokenManager';
+import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import { DynamoDBDocumentClient, GetCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import axios from 'axios';
+
+const dynamoClient = new DynamoDBClient({});
+const docClient = DynamoDBDocumentClient.from(dynamoClient);
 
 const GHL_API_BASE = 'https://services.leadconnectorhq.com';
 
@@ -21,9 +27,9 @@ const CUSTOM_FIELD_IDS = {
   QR_SCAN_COUNT: '981A5iFqndhODq2naOu4',
 };
 
-export async function POST(request: NextRequest) {
+export const handler: Handler = async (event) => {
   try {
-    const payload = await request.json();
+    const payload = JSON.parse(event.body || '{}');
     console.log('📬 [THANKS.IO] Received webhook:', payload.event_type);
 
     const eventType = payload.event_type;
@@ -34,7 +40,10 @@ export async function POST(request: NextRequest) {
     
     if (!ghlContactId) {
       console.log('⚠️ [THANKS.IO] No GHL contact ID in custom_1 field');
-      return NextResponse.json({ success: true, message: 'No contact ID' });
+      return {
+        statusCode: 200,
+        body: JSON.stringify({ success: true, message: 'No contact ID' })
+      };
     }
 
     // Handle different event types
@@ -44,20 +53,22 @@ export async function POST(request: NextRequest) {
       await handleQRScan(ghlContactId, data);
     }
 
-    return NextResponse.json({ success: true });
+    return {
+      statusCode: 200,
+      body: JSON.stringify({ success: true })
+    };
   } catch (error: any) {
     console.error('❌ [THANKS.IO] Webhook error:', error);
-    return NextResponse.json(
-      { error: 'Webhook processing failed' },
-      { status: 500 }
-    );
+    return {
+      statusCode: 500,
+      body: JSON.stringify({ error: 'Webhook processing failed' })
+    };
   }
-}
+};
 
 async function handleDeliveryUpdate(contactId: string, data: any) {
   const currentStatus = data['order_item.current_status'];
   const deliveryDate = data['order_item.delivery_date'];
-  const orderId = data['order.id'];
 
   console.log(`📦 [THANKS.IO] Delivery update for ${contactId}: ${currentStatus}`);
 
@@ -66,9 +77,15 @@ async function handleDeliveryUpdate(contactId: string, data: any) {
     return;
   }
 
+  // Get user ID from contact (need to look up in GHL or OutreachQueue)
+  const userId = await getUserIdFromContact(contactId);
+  if (!userId) return;
+
   // Get GHL token
-  const token = await getGhlToken(contactId);
-  if (!token) return;
+  const tokenData = await getValidGhlToken(userId);
+  if (!tokenData) return;
+
+  const { token } = tokenData;
 
   // Get current contact to check mail count
   const contactResponse = await axios.get(
@@ -84,15 +101,6 @@ async function handleDeliveryUpdate(contactId: string, data: any) {
   const contact = contactResponse.data.contact;
   const currentMailCount = parseInt(contact.customFields?.find((f: any) => f.id === CUSTOM_FIELD_IDS.MAIL_SENT_COUNT)?.value || '0');
   const newMailCount = currentMailCount + 1;
-
-  // Determine which stage to move to based on mail count
-  const stageMap: Record<number, string> = {
-    1: 'Touch 1 - Delivered',
-    2: 'Touch 2 - Delivered', 
-    3: 'Touch 3 - Delivered'
-  };
-
-  const newStage = stageMap[newMailCount];
 
   // Update GHL contact
   await axios.put(
@@ -122,18 +130,23 @@ async function handleDeliveryUpdate(contactId: string, data: any) {
     }
   );
 
-  console.log(`✅ [THANKS.IO] Updated contact ${contactId} - mail ${newMailCount} delivered, stage: ${newStage}`);
+  console.log(`✅ [THANKS.IO] Updated contact ${contactId} - mail ${newMailCount} delivered`);
 }
 
 async function handleQRScan(contactId: string, data: any) {
   const scanCount = data['order_item.scans'];
-  const qrUrl = data['qrcode.url'];
 
   console.log(`📱 [THANKS.IO] QR scan for ${contactId}: ${scanCount} scans`);
 
+  // Get user ID from contact
+  const userId = await getUserIdFromContact(contactId);
+  if (!userId) return;
+
   // Get GHL token
-  const token = await getGhlToken(contactId);
-  if (!token) return;
+  const tokenData = await getValidGhlToken(userId);
+  if (!tokenData) return;
+
+  const { token } = tokenData;
 
   // Update GHL contact with scan count and high-engagement tag
   await axios.put(
@@ -158,43 +171,37 @@ async function handleQRScan(contactId: string, data: any) {
   console.log(`✅ [THANKS.IO] Updated contact ${contactId} - QR scanned ${scanCount} times`);
 }
 
-async function getGhlToken(contactId: string): Promise<string | null> {
+async function getUserIdFromContact(contactId: string): Promise<string | null> {
   try {
-    // Get contact from GHL to find which location it belongs to
-    // We'll use a system token or find the user from the locationId
-    
-    // For now, get the first active integration for the location
-    // TODO: Improve this to match contact to specific user
-    const { generateServerClientUsingReqRes } = await import('@/app/utils/aws/amplifyServerUtils');
-    const { cookieBasedClient } = await generateServerClientUsingReqRes();
-    
-    const { data: integrations } = await cookieBasedClient.models.GhlIntegration.list({
-      filter: {
-        locationId: { eq: 'mHaAy3ZaUHgrbPyughDG' },
-        isActive: { eq: true }
-      }
-    });
-    
-    if (!integrations || integrations.length === 0) {
-      console.error('❌ No active GHL integration found');
-      return null;
+    // Look up contact in OutreachQueue to find userId
+    const result = await docClient.send(new GetCommand({
+      TableName: process.env.AMPLIFY_DATA_OutreachQueue_TABLE_NAME,
+      Key: { id: `${contactId}` } // Assuming id format is userId_contactId
+    }));
+
+    if (result.Item) {
+      return result.Item.userId;
     }
-    
-    const integration = integrations[0];
-    
-    // Check if token is expired and refresh if needed
-    const expiresAt = new Date(integration.expiresAt);
-    const now = new Date();
-    
-    if (expiresAt <= now) {
-      console.log('🔄 Token expired, refreshing...');
-      // Token refresh logic here (use existing ghlTokenManager)
-      return null;
+
+    // Fallback: scan for the contact
+    const { DynamoDBDocumentClient, ScanCommand } = await import('@aws-sdk/lib-dynamodb');
+    const scanResult = await docClient.send(new ScanCommand({
+      TableName: process.env.AMPLIFY_DATA_OutreachQueue_TABLE_NAME!,
+      FilterExpression: 'contactId = :contactId',
+      ExpressionAttributeValues: {
+        ':contactId': contactId
+      },
+      Limit: 1
+    }));
+
+    if (scanResult.Items && scanResult.Items.length > 0) {
+      return scanResult.Items[0].userId;
     }
-    
-    return integration.accessToken;
+
+    console.error(`❌ [THANKS.IO] Could not find userId for contact ${contactId}`);
+    return null;
   } catch (error) {
-    console.error('❌ Error getting GHL token:', error);
+    console.error('❌ [THANKS.IO] Error getting userId:', error);
     return null;
   }
 }
