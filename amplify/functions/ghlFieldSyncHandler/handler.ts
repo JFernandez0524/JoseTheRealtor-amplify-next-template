@@ -182,24 +182,11 @@ async function handleDisposition(payload: any, contactId: string, callOutcome: s
       }
     }));
     relatedContacts = result.Items || [];
-  } else if (propertyAddress) {
-    // Fallback to propertyAddress scan for old items
-    console.log(`⚠️ [DISPOSITION] No leadId, falling back to propertyAddress scan`);
-    const result = await docClient.send(new ScanCommand({
-      TableName: process.env.AMPLIFY_DATA_OutreachQueue_TABLE_NAME,
-      FilterExpression: 'userId = :userId AND propertyAddress = :address',
-      ExpressionAttributeValues: {
-        ':userId': userId,
-        ':address': propertyAddress
-      }
-    }));
-    relatedContacts = result.Items || [];
-  } else if (contactName) {
-    // Last resort: use contactName (strip number suffix like " (2)" and lowercase for matching)
-    const baseName = contactName.replace(/\s*\(\d+\)\s*$/, '').trim().toLowerCase();
-    console.log(`⚠️ [DISPOSITION] No leadId or propertyAddress, falling back to contactName: ${baseName}`);
+  } else {
+    // No leadId - use combined search strategy (propertyAddress + contactName)
+    console.log(`⚠️ [DISPOSITION] No leadId, using combined search (address + name)`);
     
-    // Get all contacts for this user and filter by name in code (DynamoDB begins_with is case-sensitive)
+    // Get all contacts for this user
     const result = await docClient.send(new ScanCommand({
       TableName: process.env.AMPLIFY_DATA_OutreachQueue_TABLE_NAME,
       FilterExpression: 'userId = :userId',
@@ -208,14 +195,24 @@ async function handleDisposition(payload: any, contactId: string, callOutcome: s
       }
     }));
     
-    // Filter by contactName in code (case-insensitive)
-    relatedContacts = (result.Items || []).filter(item => 
-      item.contactName && item.contactName.toLowerCase().startsWith(baseName)
-    );
-  } else {
-    console.log(`⚠️ [DISPOSITION] No way to find related contacts`);
-    relatedContacts = [queueItem]; // Only update this one contact
+    const allUserContacts = result.Items || [];
+    const baseName = contactName ? contactName.replace(/\s*\(\d+\)\s*$/, '').trim().toLowerCase() : '';
+    
+    // Filter by BOTH propertyAddress AND contactName to catch all related contacts
+    relatedContacts = allUserContacts.filter(item => {
+      // Match by propertyAddress if both have it
+      const addressMatch = propertyAddress && item.propertyAddress === propertyAddress;
+      
+      // Match by contactName (case-insensitive, strip number suffix)
+      const nameMatch = baseName && item.contactName && 
+        item.contactName.toLowerCase().startsWith(baseName);
+      
+      return addressMatch || nameMatch;
+    });
+    
+    console.log(`📋 [DISPOSITION] Found ${relatedContacts.length} contacts (address or name match)`);
   }
+
   console.log(`📋 [DISPOSITION] Found ${relatedContacts.length} total contacts for user`);
 
   // Get GHL access token
