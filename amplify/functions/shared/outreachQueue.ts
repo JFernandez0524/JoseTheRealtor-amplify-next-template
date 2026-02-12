@@ -37,6 +37,7 @@ interface OutreachQueueItem {
   userId: string;
   locationId: string;
   contactId: string;
+  leadId?: string; // Links all contacts for the same PropertyLead
   contactName?: string;
   contactPhone?: string;
   contactEmail?: string;
@@ -88,6 +89,7 @@ export async function addToOutreachQueue(item: OutreachQueueItem): Promise<strin
     userId: item.userId,
     locationId: item.locationId,
     contactId: item.contactId,
+    leadId: item.leadId, // Link to PropertyLead
     contactName: item.contactName,
     contactPhone: item.contactPhone,
     contactEmail: item.contactEmail,

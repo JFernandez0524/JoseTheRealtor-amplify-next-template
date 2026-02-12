@@ -326,6 +326,7 @@ export async function syncToGoHighLevel(
           userId,
           locationId: ghlLocationId,
           contactId,
+          leadId: lead.id, // Link to PropertyLead
           contactName: `${basePayload.firstName} ${basePayload.lastName}`,
           contactPhone: specificPhone,
           contactEmail: primaryEmail || undefined,

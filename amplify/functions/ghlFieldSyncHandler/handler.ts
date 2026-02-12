@@ -164,22 +164,54 @@ async function handleDisposition(payload: any, contactId: string, callOutcome: s
 
   const queueItem = queueScan.Items[0];
   const userId = queueItem.userId;
-  const locationId = queueItem.locationId;
+  const leadId = queueItem.leadId;
   const propertyAddress = queueItem.propertyAddress;
+  const contactName = queueItem.contactName;
 
-  console.log(`🔍 [DISPOSITION] Found queue item for user ${userId}, property ${propertyAddress}`);
+  console.log(`🔍 [DISPOSITION] Found queue item for user ${userId}, leadId ${leadId}`);
 
-  // Get all OutreachQueue items for this user AND property address (same lead)
-  const allContactsResult = await docClient.send(new ScanCommand({
-    TableName: process.env.AMPLIFY_DATA_OutreachQueue_TABLE_NAME,
-    FilterExpression: 'userId = :userId AND propertyAddress = :address',
-    ExpressionAttributeValues: {
-      ':userId': userId,
-      ':address': propertyAddress
-    }
-  }));
-
-  const relatedContacts = allContactsResult.Items || [];
+  // Get all OutreachQueue items for this lead
+  let relatedContacts;
+  if (leadId) {
+    // Use leadId GSI for fast query
+    const result = await docClient.send(new QueryCommand({
+      TableName: process.env.AMPLIFY_DATA_OutreachQueue_TABLE_NAME,
+      IndexName: 'outreachQueuesByLeadId',
+      KeyConditionExpression: 'leadId = :leadId',
+      ExpressionAttributeValues: {
+        ':leadId': leadId
+      }
+    }));
+    relatedContacts = result.Items || [];
+  } else if (propertyAddress) {
+    // Fallback to propertyAddress scan for old items
+    console.log(`⚠️ [DISPOSITION] No leadId, falling back to propertyAddress scan`);
+    const result = await docClient.send(new ScanCommand({
+      TableName: process.env.AMPLIFY_DATA_OutreachQueue_TABLE_NAME,
+      FilterExpression: 'userId = :userId AND propertyAddress = :address',
+      ExpressionAttributeValues: {
+        ':userId': userId,
+        ':address': propertyAddress
+      }
+    }));
+    relatedContacts = result.Items || [];
+  } else if (contactName) {
+    // Last resort: use contactName (strip number suffix like " (2)")
+    const baseName = contactName.replace(/\s*\(\d+\)\s*$/, '').trim();
+    console.log(`⚠️ [DISPOSITION] No leadId or propertyAddress, falling back to contactName: ${baseName}`);
+    const result = await docClient.send(new ScanCommand({
+      TableName: process.env.AMPLIFY_DATA_OutreachQueue_TABLE_NAME,
+      FilterExpression: 'userId = :userId AND begins_with(contactName, :name)',
+      ExpressionAttributeValues: {
+        ':userId': userId,
+        ':name': baseName
+      }
+    }));
+    relatedContacts = result.Items || [];
+  } else {
+    console.log(`⚠️ [DISPOSITION] No way to find related contacts`);
+    relatedContacts = [queueItem]; // Only update this one contact
+  }
   console.log(`📋 [DISPOSITION] Found ${relatedContacts.length} total contacts for user`);
 
   // Get GHL access token

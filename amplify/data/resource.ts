@@ -30,6 +30,7 @@ const schema = a.schema({
       userId: a.string().required(),
       locationId: a.string().required(),
       contactId: a.string().required(),
+      leadId: a.string(), // Links all contacts for the same PropertyLead
       contactName: a.string(),
       contactPhone: a.string(),
       contactEmail: a.string(),
@@ -65,6 +66,7 @@ const schema = a.schema({
       index('userId').sortKeys(['smsStatus']).queryField('byUserAndSmsStatus'),
       index('userId').sortKeys(['emailStatus']).queryField('byUserAndEmailStatus'),
       index('userId').sortKeys(['queueStatus']).queryField('byUserAndQueueStatus'),
+      index('leadId').queryField('byLeadId'),
     ]),
 
   GhlIntegration: a
