@@ -1,6 +1,8 @@
 import type { Handler } from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, ScanCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, ScanCommand, UpdateCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
+import { getValidGhlToken } from '../shared/ghlTokenManager';
+import axios from 'axios';
 
 const dynamoClient = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
@@ -142,45 +144,132 @@ async function handleDisposition(payload: any, contactId: string, callOutcome: s
     'DNC'
   ];
 
-  // Update PropertyLead with call outcome
-  const scanResult = await docClient.send(new ScanCommand({
-    TableName: process.env.AMPLIFY_DATA_PropertyLead_TABLE_NAME,
-    FilterExpression: 'ghlContactId = :contactId',
+  // Find the OutreachQueue item for this contact
+  const queueScan = await docClient.send(new ScanCommand({
+    TableName: process.env.AMPLIFY_DATA_OutreachQueue_TABLE_NAME,
+    FilterExpression: 'contactId = :contactId',
     ExpressionAttributeValues: {
       ':contactId': contactId
     },
     Limit: 1
   }));
 
-  if (scanResult.Items && scanResult.Items.length > 0) {
-    const lead = scanResult.Items[0];
-    const currentOutreachData = lead.ghlOutreachData || {};
+  if (!queueScan.Items || queueScan.Items.length === 0) {
+    console.log(`⚠️ [DISPOSITION] No OutreachQueue item found for contact ${contactId}`);
+    return {
+      statusCode: 200,
+      body: JSON.stringify({ success: true, message: 'Contact not in queue' })
+    };
+  }
+
+  const queueItem = queueScan.Items[0];
+  const userId = queueItem.userId;
+  const locationId = queueItem.locationId;
+
+  console.log(`🔍 [DISPOSITION] Found queue item for user ${userId}, location ${locationId}`);
+
+  // Get all OutreachQueue items for this user/location (all contacts for this PropertyLead)
+  const allContactsResult = await docClient.send(new QueryCommand({
+    TableName: process.env.AMPLIFY_DATA_OutreachQueue_TABLE_NAME,
+    IndexName: 'outreachQueuesByUserId',
+    KeyConditionExpression: 'userId = :userId',
+    ExpressionAttributeValues: {
+      ':userId': userId
+    }
+  }));
+
+  const relatedContacts = allContactsResult.Items || [];
+  console.log(`📋 [DISPOSITION] Found ${relatedContacts.length} total contacts for user`);
+
+  // Get GHL access token
+  const tokenData = await getValidGhlToken(userId);
+  if (!tokenData) {
+    console.error('❌ [DISPOSITION] No valid GHL token found');
+    return {
+      statusCode: 500,
+      body: JSON.stringify({ error: 'No valid GHL token' })
+    };
+  }
+
+  const { token } = tokenData;
+
+  // Update all related contacts in GHL
+  let updatedCount = 0;
+  for (const contact of relatedContacts) {
+    if (contact.contactId === contactId) {
+      console.log(`⏭️ [DISPOSITION] Skipping original contact ${contactId}`);
+      continue; // Skip the one that triggered the webhook
+    }
+
+    try {
+      console.log(`🔄 [DISPOSITION] Updating GHL contact ${contact.contactId} with outcome: ${callOutcome}`);
+      
+      await axios.put(
+        `https://services.leadconnectorhq.com/contacts/${contact.contactId}`,
+        {
+          customFields: [
+            {
+              id: CUSTOM_FIELD_IDS.CALL_OUTCOME,
+              value: callOutcome
+            }
+          ]
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Version: '2021-07-28'
+          }
+        }
+      );
+
+      updatedCount++;
+      console.log(`✅ [DISPOSITION] Updated contact ${contact.contactId}`);
+      
+      // Rate limit: 2 seconds between API calls
+      await new Promise(resolve => setTimeout(resolve, 2000));
+    } catch (error: any) {
+      console.error(`❌ [DISPOSITION] Failed to update contact ${contact.contactId}:`, error.response?.data || error.message);
+    }
+  }
+
+  // Update OutreachQueue items with new status
+  const shouldStop = STOP_DISPOSITIONS.includes(callOutcome);
+  for (const contact of relatedContacts) {
+    const updates: any = {
+      callOutcome,
+      updatedAt: new Date().toISOString()
+    };
+
+    if (shouldStop) {
+      if (contact.smsStatus) updates.smsStatus = 'OPTED_OUT';
+      if (contact.emailStatus) updates.emailStatus = 'OPTED_OUT';
+    }
 
     await docClient.send(new UpdateCommand({
-      TableName: process.env.AMPLIFY_DATA_PropertyLead_TABLE_NAME,
-      Key: { id: lead.id },
-      UpdateExpression: 'SET ghlOutreachData = :data, updatedAt = :now',
+      TableName: process.env.AMPLIFY_DATA_OutreachQueue_TABLE_NAME,
+      Key: { id: contact.id },
+      UpdateExpression: 'SET callOutcome = :outcome, updatedAt = :now' + 
+        (shouldStop && contact.smsStatus ? ', smsStatus = :optedOut' : '') +
+        (shouldStop && contact.emailStatus ? ', emailStatus = :optedOut' : ''),
       ExpressionAttributeValues: {
-        ':data': {
-          ...currentOutreachData,
-          callOutcome,
-          smsStatus: STOP_DISPOSITIONS.includes(callOutcome) ? 'OPTED_OUT' : currentOutreachData.smsStatus,
-          emailStatus: STOP_DISPOSITIONS.includes(callOutcome) ? 'OPTED_OUT' : currentOutreachData.emailStatus
-        },
-        ':now': new Date().toISOString()
+        ':outcome': callOutcome,
+        ':now': new Date().toISOString(),
+        ...(shouldStop ? { ':optedOut': 'OPTED_OUT' } : {})
       }
     }));
-
-    console.log(`✅ [DISPOSITION] Updated PropertyLead ${lead.id}`);
   }
+
+  console.log(`✅ [DISPOSITION] Updated ${updatedCount} related contacts in GHL`);
+  console.log(`✅ [DISPOSITION] Updated ${relatedContacts.length} queue items`);
 
   return {
     statusCode: 200,
     body: JSON.stringify({
       success: true,
-      message: 'Disposition recorded',
+      message: 'Disposition synced to all contacts',
       contactId,
-      disposition: callOutcome
+      disposition: callOutcome,
+      updatedContacts: updatedCount
     })
   };
 }

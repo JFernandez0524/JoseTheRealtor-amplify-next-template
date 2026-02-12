@@ -350,6 +350,11 @@ backend.ghlFieldSyncHandler.addEnvironment(
   backend.data.resources.tables['PropertyLead'].tableName
 );
 
+backend.ghlFieldSyncHandler.addEnvironment(
+  'AMPLIFY_DATA_OutreachQueue_TABLE_NAME',
+  backend.data.resources.tables['OutreachQueue'].tableName
+);
+
 backend.ghlFieldSyncHandler.addEnvironment('GHL_CLIENT_ID', process.env.GHL_CLIENT_ID || '');
 backend.ghlFieldSyncHandler.addEnvironment('GHL_CLIENT_SECRET', process.env.GHL_CLIENT_SECRET || '');
 
@@ -359,4 +364,19 @@ backend.data.resources.tables['GhlIntegration'].grantReadWriteData(
 
 backend.data.resources.tables['PropertyLead'].grantReadWriteData(
   backend.ghlFieldSyncHandler.resources.lambda
+);
+
+backend.data.resources.tables['OutreachQueue'].grantReadWriteData(
+  backend.ghlFieldSyncHandler.resources.lambda
+);
+
+// Grant permission to query GSI indexes
+backend.ghlFieldSyncHandler.resources.lambda.addToRolePolicy(
+  new PolicyStatement({
+    effect: Effect.ALLOW,
+    actions: ['dynamodb:Query'],
+    resources: [
+      `${backend.data.resources.tables['OutreachQueue'].tableArn}/index/*`
+    ]
+  })
 );

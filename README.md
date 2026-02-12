@@ -298,13 +298,59 @@ For detailed deployment instructions, see the [Amplify documentation](https://do
      - Prevents duplicate emails in future campaigns
    - **Reply Handling**:
      - Webhook automatically detects email replies
-     - Tags contact with "email:replied"
-     - Removes from future campaigns
-   - **Bounce Protection**:
-     - Detects bounced emails via webhook
-     - Tags contact with "email:bounced"
-     - Stops future emails to that address
-   - **Rate Limiting**: 2 seconds between emails to prevent API throttling
+
+14. **Webhook Integrations (Real-Time GHL Sync)**
+   - **Purpose**: Bi-directional sync between GHL and your app database
+   - **Available Webhooks**:
+     
+     **1. Multi-Channel Message Webhook** (SMS, Facebook, Instagram, WhatsApp)
+     - **URL**: `https://dpw6qwhfwor3hucpbsitt7skzq0itemx.lambda-url.us-east-1.on.aws/`
+     - **Lambda**: `amplify/functions/ghlWebhookHandler/`
+     - **Trigger**: GHL workflow automation on "Customer Replied"
+     - **Purpose**: Instant AI responses to inbound messages across all channels
+     - **What It Does**:
+       - Detects message type (SMS=2, FB=3, IG=4, WhatsApp=5)
+       - Generates AI response using conversation handler
+       - Updates OutreachQueue status (PENDING → REPLIED)
+       - Prevents further automated touches to replied contacts
+     - **Setup**: Create GHL workflow with "Customer Replied" trigger → Send webhook POST
+     
+     **2. Email Reply/Bounce Webhook**
+     - **URL**: `/api/v1/ghl-email-webhook` (Next.js API route)
+     - **Trigger**: GHL workflow automation on email events
+     - **Purpose**: Handle email replies and bounces
+     - **What It Does**:
+       - Detects email replies and generates AI responses
+       - Detects bounced emails and stops future sends
+       - Updates OutreachQueue status (PENDING → REPLIED/BOUNCED)
+       - Tags contacts appropriately (email:replied, email:bounced)
+     - **Setup**: Create GHL workflow with email event triggers → Send webhook POST
+     
+     **3. Field Sync Webhook** (Custom Field Updates)
+     - **URL**: `https://xjiwzxgpa4nzpxdxjl5ib6xdom0gdtvx.lambda-url.us-east-1.on.aws/`
+     - **Lambda**: `amplify/functions/ghlFieldSyncHandler/`
+     - **Trigger**: GHL workflow automation on custom field updates
+     - **Purpose**: Sync GHL custom field changes back to PropertyLead table
+     - **What It Does**:
+       - Receives updated contact data from GHL
+       - Updates corresponding PropertyLead record in DynamoDB
+       - Keeps local database in sync with GHL changes
+       - Example: Call disposition "Spoke - Follow Up" syncs to lead status
+     - **Setup**: Create GHL workflow with field update trigger → Send webhook POST with contact data
+   
+   - **Webhook Security**:
+     - All webhooks use Function URL auth type NONE (public endpoints)
+     - GHL cannot authenticate with AWS IAM
+     - Security via request validation in handler code
+     - Rate limiting and origin checking recommended
+   
+   - **Monitoring**:
+     - All webhook calls logged in CloudWatch
+     - View logs in AWS Console → Lambda → Function → Monitor
+     - Search by contact ID or request ID for debugging
+     - Average response time: 200-300ms
+
+15. **AI Analysis**
 
 ## AI Agent System
 
