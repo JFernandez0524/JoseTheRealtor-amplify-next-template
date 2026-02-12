@@ -13,6 +13,7 @@ import { ghlWebhookHandler } from './functions/ghlWebhookHandler/resource';
 import { fixFailedSyncs } from './functions/fixFailedSyncs/resource';
 import { populateQueueFromGhl } from './functions/populateQueueFromGhl/resource';
 import { syncListingStatus } from './functions/syncListingStatus/resource';
+import { ghlFieldSyncHandler } from './functions/ghlFieldSyncHandler/resource';
 import { addUserToGroup } from './data/add-user-to-group/resource';
 import { removeUserFromGroup } from './data/remove-user-from-group/resource';
 import { EventType } from 'aws-cdk-lib/aws-s3';
@@ -35,6 +36,7 @@ const backend = defineBackend({
   fixFailedSyncs,
   populateQueueFromGhl,
   syncListingStatus,
+  ghlFieldSyncHandler,
   addUserToGroup,
   removeUserFromGroup,
 });
@@ -335,4 +337,26 @@ backend.data.resources.tables['GhlIntegration'].grantReadData(
 
 backend.data.resources.tables['PropertyLead'].grantReadData(
   backend.syncListingStatus.resources.lambda
+);
+
+// 🔄 Configure GHL Field Sync Handler
+backend.ghlFieldSyncHandler.addEnvironment(
+  'AMPLIFY_DATA_GhlIntegration_TABLE_NAME',
+  backend.data.resources.tables['GhlIntegration'].tableName
+);
+
+backend.ghlFieldSyncHandler.addEnvironment(
+  'AMPLIFY_DATA_PropertyLead_TABLE_NAME',
+  backend.data.resources.tables['PropertyLead'].tableName
+);
+
+backend.ghlFieldSyncHandler.addEnvironment('GHL_CLIENT_ID', process.env.GHL_CLIENT_ID || '');
+backend.ghlFieldSyncHandler.addEnvironment('GHL_CLIENT_SECRET', process.env.GHL_CLIENT_SECRET || '');
+
+backend.data.resources.tables['GhlIntegration'].grantReadWriteData(
+  backend.ghlFieldSyncHandler.resources.lambda
+);
+
+backend.data.resources.tables['PropertyLead'].grantReadWriteData(
+  backend.ghlFieldSyncHandler.resources.lambda
 );
