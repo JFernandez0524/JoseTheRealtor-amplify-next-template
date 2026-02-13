@@ -299,8 +299,8 @@ For detailed deployment instructions, see the [Amplify documentation](https://do
    - **Reply Handling**:
      - Webhook automatically detects email replies
 
-14. **Webhook Integrations (Real-Time GHL Sync)**
-   - **Purpose**: Bi-directional sync between GHL and your app database
+14. **Webhook Integrations (Real-Time Sync)**
+   - **Purpose**: Bi-directional sync between GHL, thanks.io, and your app database
    - **Available Webhooks**:
      
      **1. Multi-Channel Message Webhook** (SMS, Facebook, Instagram, WhatsApp)
@@ -313,7 +313,9 @@ For detailed deployment instructions, see the [Amplify documentation](https://do
        - Generates AI response using conversation handler
        - Updates OutreachQueue status (PENDING → REPLIED)
        - Prevents further automated touches to replied contacts
+       - Adds tag: `conversation:active`
      - **Setup**: Create GHL workflow with "Customer Replied" trigger → Send webhook POST
+     - **Tags Added**: `conversation:active`
      
      **2. Email Reply/Bounce Webhook**
      - **URL**: `/api/v1/ghl-email-webhook` (Next.js API route)
@@ -323,24 +325,54 @@ For detailed deployment instructions, see the [Amplify documentation](https://do
        - Detects email replies and generates AI responses
        - Detects bounced emails and stops future sends
        - Updates OutreachQueue status (PENDING → REPLIED/BOUNCED)
-       - Tags contacts appropriately (email:replied, email:bounced)
+       - Tags contacts appropriately
      - **Setup**: Create GHL workflow with email event triggers → Send webhook POST
+     - **Tags Added**: `email:replied`, `email:bounced`
      
      **3. Field Sync Webhook** (Custom Field Updates)
      - **URL**: `https://xjiwzxgpa4nzpxdxjl5ib6xdom0gdtvx.lambda-url.us-east-1.on.aws/`
      - **Lambda**: `amplify/functions/ghlFieldSyncHandler/`
-     - **Trigger**: GHL workflow automation on custom field updates
-     - **Purpose**: Sync GHL custom field changes back to PropertyLead table
+     - **Trigger**: GHL workflow automation on custom field updates (Call Outcome)
+     - **Purpose**: Sync call dispositions across all related contacts for same lead
      - **What It Does**:
-       - Receives updated contact data from GHL
-       - Updates corresponding PropertyLead record in DynamoDB
-       - Keeps local database in sync with GHL changes
-       - Example: Call disposition "Spoke - Follow Up" syncs to lead status
-     - **Setup**: Create GHL workflow with field update trigger → Send webhook POST with contact data
+       - Receives Call Outcome update from GHL
+       - Finds all related contacts (same property, multiple phones)
+       - Updates ALL contacts in GHL with same disposition
+       - Updates OutreachQueue status (OPTED_OUT for stop dispositions)
+       - Prevents further outreach to all contacts when marked Not Interested/DNC
+     - **Setup**: Create GHL workflow: Call Outcome updated → Send webhook POST
+     - **Stop Dispositions**: Not Interested, DNC, Wrong Number, Listed With Realtor, Sold Already
+     - **Tags Added**: None (updates custom fields only)
+     
+     **4. Thanks.io Direct Mail Webhook** (Mail Delivery & QR Scans)
+     - **URL**: `https://turhumn37zo2ksb5pfckwbyi7m0hssnq.lambda-url.us-east-1.on.aws/`
+     - **Lambda**: `amplify/functions/thanksIoWebhookHandler/`
+     - **Trigger**: thanks.io sends webhook when mail delivered or QR code scanned
+     - **Purpose**: Track direct mail delivery and engagement
+     - **What It Does**:
+       - **On Mail Delivery**: Increments `mail_sent_count`, updates delivery date, adds touch tag
+       - **On QR Scan**: Updates scan count, adds high-engagement tags
+       - Automatically moves leads through pipeline stages based on mail touches
+     - **Setup**: 
+       1. Configure webhook in thanks.io dashboard: https://dashboard.thanks.io/profile/webhooks
+       2. When sending mail, set `custom_1` field = GHL contact ID (use `{{contact.contact_id}}`)
+       3. Create GHL automations to move stages based on tags
+     - **Tags Added**: 
+       - `mail:delivered` (all deliveries)
+       - `mail:touch1` (first mail delivered)
+       - `mail:touch2` (second mail delivered)
+       - `mail:touch3` (third mail delivered)
+       - `mail:scanned` (QR code scanned - HOT LEAD!)
+       - `high-engagement` (QR code scanned)
+     - **Custom Fields Updated**:
+       - `mail_sent_count` (increments on each delivery)
+       - `last_mail_date` (date of last delivery)
+       - `mail_delivery_date` (date of most recent delivery)
+       - `qr_scan_count` (number of QR scans)
    
    - **Webhook Security**:
      - All webhooks use Function URL auth type NONE (public endpoints)
-     - GHL cannot authenticate with AWS IAM
+     - GHL and thanks.io cannot authenticate with AWS IAM
      - Security via request validation in handler code
      - Rate limiting and origin checking recommended
    
@@ -350,7 +382,69 @@ For detailed deployment instructions, see the [Amplify documentation](https://do
      - Search by contact ID or request ID for debugging
      - Average response time: 200-300ms
 
-15. **AI Analysis**
+15. **GHL Tags Reference**
+   
+   **System Tags** (automatically added by app):
+   - `app:synced` - Contact synced from app to GHL
+   - `ai outreach` - Contact eligible for AI email/SMS outreach
+   - `direct mail only` - Contact has no qualified skip trace results, direct mail only
+   
+   **Outreach Status Tags**:
+   - `conversation:active` - Contact replied to outreach
+   - `email:replied` - Contact replied to email
+   - `email:bounced` - Email bounced, stop sending
+   - `conversation_ended` - AI conversation completed
+   
+   **Direct Mail Tags** (from thanks.io webhook):
+   - `mail:delivered` - Any mail piece delivered
+   - `mail:touch1` - First mail piece delivered
+   - `mail:touch2` - Second mail piece delivered  
+   - `mail:touch3` - Third mail piece delivered
+   - `mail:scanned` - QR code scanned (HOT LEAD!)
+   - `high-engagement` - High engagement detected (QR scan)
+   
+   **Pipeline Stage Automation** (recommended GHL workflows):
+   - Tag `mail:touch1` added → Move to "Touch 1 - Delivered" stage
+   - Tag `mail:touch2` added → Move to "Touch 2 - Delivered" stage
+   - Tag `mail:touch3` added → Move to "Touch 3 - Delivered" stage
+   - Tag `mail:scanned` added → Move to "Engaged" stage + notify you
+   - 60 days in "Touch 3" without `mail:scanned` → Move to "Dead" stage
+
+16. **Direct Mail Campaign Workflow**
+   
+   **Setup Requirements**:
+   1. Skip trace probate leads in app
+   2. Leads without qualified contact info get "direct mail only" tag
+   3. Sync to GHL (enters "New Lead" stage)
+   4. Export contacts with "direct mail only" tag from GHL
+   5. Upload to thanks.io with `custom_1` = `{{contact.contact_id}}`
+   
+   **Automated Flow**:
+   - **Day 0**: Mail #1 sent via thanks.io
+   - **Day 3-5**: Mail #1 delivered → Webhook fires → `mail:touch1` tag → Move to "Touch 1 - Delivered"
+   - **Day 21**: Mail #2 sent via thanks.io (thanks.io handles timing)
+   - **Day 24-26**: Mail #2 delivered → Webhook fires → `mail:touch2` tag → Move to "Touch 2 - Delivered"
+   - **Day 42**: Mail #3 sent via thanks.io
+   - **Day 45-47**: Mail #3 delivered → Webhook fires → `mail:touch3` tag → Move to "Touch 3 - Delivered"
+   - **Any time**: QR scan → Webhook fires → `mail:scanned` + `high-engagement` tags → Move to "Engaged" → **Call immediately!**
+   - **Day 107** (60 days after Touch 3): No engagement → Move to "Dead"
+   
+   **Pipeline Stages**:
+   1. New Lead
+   2. Touch 1 - Delivered
+   3. Touch 2 - Delivered
+   4. Touch 3 - Delivered
+   5. Engaged (Hot!)
+   6. Dead
+   
+   **Key Points**:
+   - ✅ thanks.io controls mail timing (21-day intervals)
+   - ✅ Webhook tracks delivery (moves stages automatically)
+   - ✅ QR scan = instant hot lead notification
+   - ✅ `mail_sent_count` only increments on actual delivery
+   - ✅ No engagement after 60 days = Dead
+
+17. **AI Analysis**
 
 ## AI Agent System
 
