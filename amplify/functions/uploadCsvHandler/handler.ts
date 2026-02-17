@@ -67,23 +67,79 @@ const formatName = (val: any): string => {
 const parseOwnershipName = (ownership: string): { firstName: string; lastName: string } => {
   if (!ownership) return { firstName: '', lastName: '' };
   
-  // Remove common suffixes and split on separators
+  // Remove common suffixes
   const cleaned = ownership
     .replace(/\b(ESTATE|TRUST|TRUSTEE|EXEC|EXECUTOR|ETAL|ET AL|C\/O|%)\b/gi, '')
-    .split(/[&,]/)[0] // Take first person only
     .trim();
   
   if (!cleaned) return { firstName: '', lastName: '' };
   
-  // Split into words
+  // Check if there are multiple people (contains &)
+  if (cleaned.includes('&')) {
+    const people = cleaned.split('&').map(p => p.trim());
+    const firstNames: string[] = [];
+    const lastNames: string[] = [];
+    
+    for (const person of people) {
+      if (person.includes(',')) {
+        // "LAST, FIRST" format
+        const parts = person.split(',').map(s => s.trim());
+        lastNames.push(formatName(parts[0]));
+        firstNames.push(formatName(parts.slice(1).join(' ')));
+      } else {
+        // "FIRST LAST" format
+        const words = person.split(/\s+/).filter(w => w.length > 0);
+        if (words.length === 1) {
+          lastNames.push(formatName(words[0]));
+        } else {
+          const suffixes = ['JR', 'SR', 'II', 'III', 'IV', 'V'];
+          const lastWord = words[words.length - 1].toUpperCase().replace(/\./g, '');
+          const lastNameIndex = suffixes.includes(lastWord) ? words.length - 2 : words.length - 1;
+          
+          firstNames.push(words.slice(0, lastNameIndex).map(w => formatName(w)).join(' '));
+          lastNames.push(formatName(words[lastNameIndex]));
+        }
+      }
+    }
+    
+    return {
+      firstName: firstNames.filter(f => f).join(' & '),
+      lastName: lastNames.filter(l => l).join(' & '),
+    };
+  }
+  
+  // Single person - check if format is "LAST, FIRST"
+  if (cleaned.includes(',')) {
+    const parts = cleaned.split(',').map(s => s.trim());
+    const lastPart = parts[0];
+    const firstPart = parts.slice(1).join(' ').trim();
+    
+    return {
+      firstName: formatName(firstPart || ''),
+      lastName: formatName(lastPart || ''),
+    };
+  }
+  
+  // Single person - "FIRST MIDDLE LAST" format
   const words = cleaned.split(/\s+/).filter(w => w.length > 0);
   
   if (words.length === 0) return { firstName: '', lastName: '' };
   if (words.length === 1) return { firstName: '', lastName: formatName(words[0]) };
   
-  // Last word is last name, rest is first name
-  const lastName = formatName(words[words.length - 1]);
-  const firstName = words.slice(0, -1).map(w => formatName(w)).join(' ');
+  const lastWord = words[words.length - 1].toUpperCase().replace(/\./g, '');
+  const suffixes = ['JR', 'SR', 'II', 'III', 'IV', 'V', 'ESQ', 'MD', 'PHD', 'DDS'];
+  
+  let lastNameIndex = words.length - 1;
+  if (suffixes.includes(lastWord)) {
+    lastNameIndex = words.length - 2;
+  }
+  
+  if (lastNameIndex <= 0) {
+    return { firstName: '', lastName: formatName(words[0]) };
+  }
+  
+  const firstName = words.slice(0, lastNameIndex).map(w => formatName(w)).join(' ');
+  const lastName = formatName(words[lastNameIndex]);
   
   return { firstName, lastName };
 };
@@ -260,11 +316,11 @@ export const handler: S3Handler = async (event) => {
             : null;
 
           // 🔢 CONVERT TO NUMBERS: Satisfies a.float() type requirement
-          const latitude = propValidation?.location?.lat
-            ? Number(propValidation.location.lat)
+          const latitude = propValidation?.location?.latitude
+            ? Number(propValidation.location.latitude)
             : null;
-          const longitude = propValidation?.location?.lng
-            ? Number(propValidation.location.lng)
+          const longitude = propValidation?.location?.longitude
+            ? Number(propValidation.location.longitude)
             : null;
 
           // --- PROBATE ADMIN LOGIC ---

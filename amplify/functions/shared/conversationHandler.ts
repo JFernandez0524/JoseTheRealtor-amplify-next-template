@@ -666,7 +666,7 @@ Respond to their message:`;
         
         if (validated?.success) {
           const { street, city, state, zip } = validated.components;
-          const { lat, lng } = validated.location;
+          const { lat, lng } = validated.location as any;
           
           // Now get property value with validated address
           const propData = await getPropertyAnalysis(street, city, state, zip, lat, lng);

@@ -133,15 +133,27 @@ export async function syncToGoHighLevel(
     const zestimateValue = lead.zestimate || lead.estimatedValue || 0;
     const cashOfferValue = Math.round(zestimateValue * 0.70); // 70% rule for cash offer
 
+    // Helper to convert ALL CAPS to Title Case for USPS compatibility
+    const toTitleCase = (str: string) => {
+      if (!str) return str;
+      return str.toLowerCase().replace(/\b\w/g, (char) => char.toUpperCase());
+    };
+
+    // Use standardized addresses for USPS compatibility (thanks.io)
+    const mailingAddr = toTitleCase((lead.adminStandardizedAddress as any)?.street?.S || lead.mailingAddress);
+    const mailingCity = toTitleCase((lead.adminStandardizedAddress as any)?.city?.S || lead.mailingCity);
+    const mailingState = (lead.adminStandardizedAddress as any)?.state?.S || lead.mailingState;
+    const mailingZip = (lead.adminStandardizedAddress as any)?.zip?.S || lead.mailingZip;
+
     const customFieldValues: Record<string, any> = {
-      property_address: lead.ownerAddress,
-      property_city: lead.ownerCity,
-      property_state: lead.ownerState,
-      property_zip: lead.ownerZip,
-      mailing_address: lead.mailingAddress,
-      mailing_city: lead.mailingCity,
-      mailing_state: lead.mailingState,
-      mailing_zipcode: lead.mailingZip,
+      property_address: toTitleCase((lead.standardizedAddress as any)?.street || lead.ownerAddress),
+      property_city: toTitleCase((lead.standardizedAddress as any)?.city || lead.ownerCity),
+      property_state: (lead.standardizedAddress as any)?.state || lead.ownerState,
+      property_zip: (lead.standardizedAddress as any)?.zip || lead.ownerZip,
+      mailing_address: mailingAddr,
+      mailing_city: mailingCity,
+      mailing_state: mailingState,
+      mailing_zipcode: mailingZip,
       lead_type: lead.type === 'PROBATE' ? 'Probate' : lead.type === 'PREFORECLOSURE' ? 'Preforeclosure' : lead.type,
       contact_type: specificPhone ? 'Phone Contact' : 'Direct Mail',
       skiptracestatus: lead.skipTraceStatus?.toUpperCase() || 'PENDING',
@@ -149,6 +161,9 @@ export async function syncToGoHighLevel(
       lead_source_id: lead.id, // 🎯 Shared Lead ID for suppression workflows
       zestimate: zestimateValue, // Full market value (listing value)
       cash_offer: cashOfferValue, // 70% cash offer (as-is value)
+      // 📧 Additional emails
+      email_2: lead.emails?.[1] || undefined,
+      email_3: lead.emails?.[2] || undefined,
       // 🆕 APP CONTROL FIELDS
       app_user_id: userId,
       app_plan: appPlan,
@@ -322,20 +337,49 @@ export async function syncToGoHighLevel(
     if (contactId && tags.includes('ai outreach')) {
       try {
         const { addToOutreachQueue } = await import('../../shared/outreachQueue');
-        await addToOutreachQueue({
-          userId,
-          locationId: ghlLocationId,
-          contactId,
-          leadId: lead.id, // Link to PropertyLead
-          contactName: `${basePayload.firstName} ${basePayload.lastName}`,
-          contactPhone: specificPhone,
-          contactEmail: primaryEmail || undefined,
-          propertyAddress: lead.ownerAddress,
-          propertyCity: lead.ownerCity,
-          propertyState: lead.ownerState,
-          leadType: lead.type,
-        });
-        console.log(`✅ Added contact ${contactId} to outreach queue`);
+        
+        // Add queue item for phone (SMS)
+        if (specificPhone) {
+          await addToOutreachQueue({
+            userId,
+            locationId: ghlLocationId,
+            contactId,
+            leadId: lead.id,
+            contactName: `${basePayload.firstName} ${basePayload.lastName}`,
+            contactPhone: specificPhone,
+            contactEmail: undefined, // SMS only
+            propertyAddress: lead.ownerAddress,
+            propertyCity: lead.ownerCity,
+            propertyState: lead.ownerState,
+            leadType: lead.type,
+          });
+          console.log(`✅ Added phone ${specificPhone} to outreach queue`);
+        }
+        
+        // Add queue items for each email (up to 3)
+        const emails = [
+          primaryEmail,
+          lead.emails?.[1],
+          lead.emails?.[2]
+        ].filter((e): e is string => !!e);
+        
+        for (const email of emails) {
+          await addToOutreachQueue({
+            userId,
+            locationId: ghlLocationId,
+            contactId,
+            leadId: lead.id,
+            contactName: `${basePayload.firstName} ${basePayload.lastName}`,
+            contactPhone: undefined, // Email only
+            contactEmail: email,
+            propertyAddress: lead.ownerAddress,
+            propertyCity: lead.ownerCity,
+            propertyState: lead.ownerState,
+            leadType: lead.type,
+          });
+          console.log(`✅ Added email ${email} to outreach queue`);
+        }
+        
       } catch (queueError) {
         console.error(`⚠️ Failed to add to outreach queue:`, queueError);
         // Don't fail the sync if queue add fails

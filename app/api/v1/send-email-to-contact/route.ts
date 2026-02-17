@@ -56,7 +56,7 @@ import { generateEmailAIResponse } from '@/app/utils/ai/emailConversationHandler
  */
 export async function POST(req: Request) {
   try {
-    const { contactId, accessToken, fromEmail, emailSignature } = await req.json();
+    const { contactId, accessToken, fromEmail, emailSignature, toEmail } = await req.json();
     
     if (!contactId || !accessToken) {
       return NextResponse.json(
@@ -77,6 +77,9 @@ export async function POST(req: Request) {
     );
 
     const contact = contactResponse.data.contact;
+    
+    // Use provided email or fall back to contact's primary email
+    const recipientEmail = toEmail || contact.email;
 
     // Extract property data from custom fields
     const propertyAddress = contact?.customFields?.find((f: any) => f.id === 'p3NOYiInAERYbe0VsLHB')?.value;
@@ -105,6 +108,7 @@ export async function POST(req: Request) {
       locationId: contact.locationId,
       contact,
       fromEmail,
+      toEmail: recipientEmail, // Use specific email from queue
       accessToken
     });
 

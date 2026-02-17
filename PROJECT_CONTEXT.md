@@ -1,8 +1,211 @@
 # Project Context - JoseTheRealtor Platform
 
-**Last Updated:** 2026-02-05 8:22 PM EST
+**Last Updated:** 2026-02-13 9:20 AM EST
 
-## Current Status
+## Current Status - February 2026
+
+### ✅ MAJOR UPDATES THIS WEEK
+
+#### 1. Email Analytics Dashboard - DEPLOYED ✅
+**Deployed:** 2026-02-12
+**Location:** Dashboard page (moved from profile)
+
+**Features:**
+- 7-day email count
+- 30-day email count  
+- Total emails sent
+- Recent 10 emails table with contact details
+- Real-time data from OutreachQueue table
+
+**Files:**
+- `app/components/profile/EmailAnalytics.tsx` - Analytics component
+- `app/(protected)/dashboard/page.tsx` - Dashboard integration
+
+#### 2. Disposition Sync Across Multiple Contacts - DEPLOYED ✅
+**Deployed:** 2026-02-12
+**Lambda:** `ghlFieldSyncHandler`
+**URL:** `https://xjiwzxgpa4nzpxdxjl5ib6xdom0gdtvx.lambda-url.us-east-1.on.aws/`
+
+**Problem Solved:**
+When a lead has 3 phone numbers synced to GHL as 3 separate contacts, marking a disposition on one contact now automatically updates all 3 contacts.
+
+**How It Works:**
+1. User marks "Call Outcome" on Contact 1 in GHL
+2. GHL workflow fires webhook to Lambda
+3. Lambda finds all related contacts using:
+   - `leadId` (fast GSI query) - for new contacts
+   - `propertyAddress` (scan) - for contacts with address
+   - `contactName` (case-insensitive scan) - for old contacts
+4. Lambda updates ALL related contacts in GHL with same disposition
+5. Lambda updates ALL OutreachQueue items with same status
+6. If STOP disposition (Not Interested, DNC, etc.), marks all as OPTED_OUT
+
+**Stop Dispositions:**
+- Not Interested
+- DNC
+- Wrong Number / Disconnected / Invalid Number
+- Listed With Realtor
+- Sold Already
+
+**Files:**
+- `amplify/functions/ghlFieldSyncHandler/handler.ts` - Multi-contact sync logic
+- `amplify/backend.ts` - Lambda configuration with OutreachQueue access
+- `amplify/data/resource.ts` - Added `leadId` field to OutreachQueue schema
+
+**Key Features:**
+- Combined search strategy (address OR name) to find all related contacts
+- Case-insensitive name matching
+- Strips number suffixes like " (2)" from names
+- Updates both GHL and OutreachQueue
+- Rate limited (2 seconds between GHL API calls)
+
+#### 3. Thanks.io Direct Mail Webhook - DEPLOYED ✅
+**Deployed:** 2026-02-12
+**Lambda:** `thanksIoWebhookHandler`
+**URL:** `https://turhumn37zo2ksb5pfckwbyi7m0hssnq.lambda-url.us-east-1.on.aws/`
+
+**Purpose:**
+Track direct mail delivery and QR code scans from thanks.io campaigns.
+
+**What It Does:**
+- **On Mail Delivery**: Increments `mail_sent_count`, adds touch tags (`mail:touch1`, `mail:touch2`, `mail:touch3`)
+- **On QR Scan**: Updates `qr_scan_count`, adds `mail:scanned` and `high-engagement` tags
+
+**Setup:**
+1. Configure webhook in thanks.io: https://dashboard.thanks.io/profile/webhooks
+2. When sending mail, set `custom_1` = GHL contact ID (`{{contact.contact_id}}`)
+3. Create GHL automations to move pipeline stages based on tags
+
+**Pipeline Stages:**
+1. New Lead
+2. Touch 1 - Delivered (tag: `mail:touch1`)
+3. Touch 2 - Delivered (tag: `mail:touch2`)
+4. Touch 3 - Delivered (tag: `mail:touch3`)
+5. Engaged (tag: `mail:scanned`) - HOT LEAD!
+6. Dead (60 days after Touch 3 with no engagement)
+
+**GHL Custom Fields:**
+- `mail_sent_count` (ID: `DTEW0PLqxp35WHOiDLWR`) - Increments on each delivery
+- `last_mail_date` (ID: `4fRJXKv1A22BdMLrJfxO`) - Date of last delivery
+- `mail_delivery_date` (ID: `bQqrO0OicE1N7EShmoQZ`) - Most recent delivery date
+- `qr_scan_count` (ID: `981A5iFqndhODq2naOu4`) - Number of QR scans
+
+**Files:**
+- `amplify/functions/thanksIoWebhookHandler/handler.ts` - Webhook logic
+- `amplify/functions/thanksIoWebhookHandler/resource.ts` - Lambda definition
+- `amplify/backend.ts` - Lambda configuration with permissions
+
+**Direct Mail Workflow:**
+```
+Day 0: Mail #1 sent via thanks.io
+Day 3-5: Mail #1 delivered → mail:touch1 tag → Move to "Touch 1 - Delivered"
+Day 21: Mail #2 sent (thanks.io handles timing)
+Day 24-26: Mail #2 delivered → mail:touch2 tag → Move to "Touch 2 - Delivered"
+Day 42: Mail #3 sent
+Day 45-47: Mail #3 delivered → mail:touch3 tag → Move to "Touch 3 - Delivered"
+Any time: QR scan → mail:scanned + high-engagement tags → Move to "Engaged" → CALL NOW!
+Day 107: No engagement → Move to "Dead"
+```
+
+#### 4. Missing nextEmailDate Fix - DEPLOYED ✅
+**Fixed:** 2026-02-12
+**Issue:** 627 contacts missing `nextEmailDate` field, preventing email sends
+
+**Solution:**
+- Created `scripts/fix-next-email-date.ts`
+- Set `nextEmailDate` to current time for all PENDING email contacts
+- All 627 contacts now ready to receive emails
+
+**Result:**
+- Email agent now sending emails hourly
+- 7-touch cadence working correctly
+- No more "missing nextEmailDate" warnings
+
+#### 5. OutreachQueue Schema Enhancement - DEPLOYED ✅
+**Added:** `leadId` field to OutreachQueue
+**Purpose:** Link all contacts for the same PropertyLead
+
+**Benefits:**
+- Fast GSI queries by `leadId` (new contacts)
+- Fallback to `propertyAddress` (contacts with address)
+- Fallback to `contactName` (old contacts without leadId)
+- Multi-level search strategy ensures all related contacts found
+
+**Migration:**
+- New contacts automatically get `leadId` when synced
+- Old contacts use fallback search strategies
+- No backfill needed (fallbacks work perfectly)
+
+### ✅ All Webhooks - ACTIVE & DOCUMENTED
+
+**1. Multi-Channel Message Webhook** (SMS/FB/IG/WhatsApp)
+- URL: `https://dpw6qwhfwor3hucpbsitt7skzq0itemx.lambda-url.us-east-1.on.aws/`
+- Lambda: `ghlWebhookHandler`
+- Purpose: Instant AI responses to inbound messages
+- Tags: `conversation:active`
+
+**2. Email Reply/Bounce Webhook**
+- URL: `/api/v1/ghl-email-webhook`
+- Purpose: Handle email replies and bounces
+- Tags: `email:replied`, `email:bounced`
+
+**3. Field Sync Webhook** (Call Outcome)
+- URL: `https://xjiwzxgpa4nzpxdxjl5ib6xdom0gdtvx.lambda-url.us-east-1.on.aws/`
+- Lambda: `ghlFieldSyncHandler`
+- Purpose: Sync dispositions across all related contacts
+- Updates: OutreachQueue status, GHL custom fields
+
+**4. Thanks.io Direct Mail Webhook**
+- URL: `https://turhumn37zo2ksb5pfckwbyi7m0hssnq.lambda-url.us-east-1.on.aws/`
+- Lambda: `thanksIoWebhookHandler`
+- Purpose: Track mail delivery and QR scans
+- Tags: `mail:delivered`, `mail:touch1-3`, `mail:scanned`, `high-engagement`
+
+### ✅ Complete Tag System
+
+**System Tags:**
+- `app:synced` - Contact synced from app to GHL
+- `ai outreach` - Eligible for AI email/SMS outreach
+- `direct mail only` - No qualified skip trace results
+
+**Outreach Status Tags:**
+- `conversation:active` - Replied to outreach
+- `email:replied` - Replied to email
+- `email:bounced` - Email bounced
+- `conversation_ended` - AI conversation completed
+
+**Direct Mail Tags:**
+- `mail:delivered` - Any mail delivered
+- `mail:touch1` - First mail delivered
+- `mail:touch2` - Second mail delivered
+- `mail:touch3` - Third mail delivered
+- `mail:scanned` - QR code scanned (HOT!)
+- `high-engagement` - High engagement detected
+
+### Recent Bug Fixes
+
+**1. Email Lambda GSI Index Names - FIXED ✅**
+**Date:** 2026-02-11
+**Issue:** Email Lambda using wrong GSI names, causing query failures
+**Root Cause:** Code referenced `byUserAndEmailStatus` but actual GSI name is `outreachQueuesByUserIdAndEmailStatus`
+**Fix:** Updated `amplify/functions/shared/outreachQueue.ts` with correct GSI names
+**Files Modified:**
+- `amplify/functions/shared/outreachQueue.ts` - Fixed GSI names for email and SMS queries
+
+**2. Missing Queue Status Fields - FIXED ✅**
+**Date:** 2026-02-11
+**Issue:** 597 queue items missing `queueStatus` and `emailStatus` fields
+**Root Cause:** GHL fallback code removal exposed bug that existed from day one
+**Fix:** Created `scripts/fix-queue-status.ts` to set defaults
+**Result:** All 597 items now have `queueStatus=OUTREACH` and `emailStatus=PENDING`
+
+**3. Disposition Webhook Contact Lookup - FIXED ✅**
+**Date:** 2026-02-12
+**Issue:** Webhook using `Limit: 1` on scan, missing contacts beyond first scanned item
+**Fix:** Removed `Limit: 1` to scan entire table for contact match
+**Result:** All contacts now found regardless of table position
+
+## Active Systems
 
 ### ✅ AI Response Webhook - DEPLOYED & WORKING (Multi-Channel)
 **Status:** Fully operational with dedicated Lambda function

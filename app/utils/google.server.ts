@@ -1,4 +1,4 @@
-import { Client, AddressComponent } from '@googlemaps/google-maps-services-js';
+import { AddressValidationClient } from '@googlemaps/addressvalidation';
 
 const GOOGLE_MAPS_API_KEY = process.env.GOOGLE_MAPS_API_KEY;
 
@@ -6,92 +6,75 @@ if (!GOOGLE_MAPS_API_KEY) {
   throw new Error('GOOGLE_MAPS_API_KEY is not set in .env.local');
 }
 
-// 1. Instantiate the client (as per the docs)
-const client = new Client({});
+const addressValidationClient = new AddressValidationClient({
+  apiKey: GOOGLE_MAPS_API_KEY,
+});
 
 /**
- * Validates and geocodes an address string using the Google Maps Geocoding API.
- * Returns the first, best-matching result.
+ * Validates an address using Google Address Validation API with USPS CASS.
+ * Returns standardized address components with USPS postal city names.
  */
-
-/**
- * Parses Google's address_components array into a clean object.
- */
-function parseAddressComponents(components: AddressComponent[]) {
-  const result: { [key: string]: string } = {};
-
-  for (const component of components) {
-    const type = component.types[0];
-
-    // 🟢 FIX: Prioritize short_name for the state component
-    if (type === 'administrative_area_level_1') {
-      result[type] = component.short_name; // Use NJ instead of New Jersey
-    } else {
-      result[type] = component.long_name; // Use long_name for all other fields (e.g., city/county)
-    }
-  }
-
-  // Build the final, clean address object
-  const streetNumber = result.street_number || '';
-  const route = result.route || '';
-  const subpremise = result.subpremise || ''; // Unit/Apt number
-  
-  // Construct street address with unit if present
-  let street = `${streetNumber} ${route}`.trim();
-  if (subpremise) {
-    street += ` ${subpremise}`;
-  }
-  
-  return {
-    street: street,
-    city: result.locality || result.administrative_area_level_2 || '',
-    county: result.administrative_area_level_2 || '', // County information
-    state: result.administrative_area_level_1 || '', // Will now contain 'NJ'
-    zip: result.postal_code || '',
-  };
-}
-
 export async function validateAddressWithGoogle(address: string) {
   console.log(`Validating address with Google: ${address}`);
 
   try {
-    // 2. Call the geocode method
-    const response = await client.geocode({
-      params: {
-        key: `${GOOGLE_MAPS_API_KEY}`, // API key for authentication
-        address: address,
+    const [response] = await addressValidationClient.validateAddress({
+      address: {
+        addressLines: [address],
       },
-      timeout: 1000, // milliseconds
+      enableUspsCass: true,
     });
 
-    // 3. Check for results
-    if (response.data.results && response.data.results.length > 0) {
-      const bestResult = response.data.results[0];
+    const result = response.result;
+    const postalAddress = result?.address?.postalAddress;
+    const uspsData = result?.uspsData;
 
-      // Use our new helper to parse the components
-      const parsedComponents = parseAddressComponents(
-        bestResult.address_components
-      );
-
-      // 4. Return the standardized, validated data
-      return {
-        success: true,
-        formattedAddress: bestResult.formatted_address,
-        location: bestResult.geometry.location, // { lat, lng }
-        placeId: bestResult.place_id,
-        // You can check 'partial_match' or 'types' for more validation
-        isPartialMatch: bestResult.partial_match || false,
-        components: parsedComponents, // { street, city, state, zip }
-      };
-    } else {
+    if (!postalAddress) {
       throw new Error('No results found for that address.');
     }
+
+    // Use USPS standardized address when available
+    const standardizedAddr = uspsData?.standardizedAddress;
+    
+    // Build street from USPS components
+    let street = '';
+    if (standardizedAddr) {
+      street = standardizedAddr.firstAddressLine || '';
+      // If it contains comma, it's the full line - extract just street
+      if (street.includes(',')) {
+        street = street.split(',')[0].trim();
+      }
+    } else {
+      street = postalAddress.addressLines?.[0] || '';
+    }
+    
+    // Build ZIP code with extension if available
+    const zip = standardizedAddr?.zipCode ?
+      (standardizedAddr.zipCodeExtension ? `${standardizedAddr.zipCode}-${standardizedAddr.zipCodeExtension}` : standardizedAddr.zipCode) :
+      postalAddress.postalCode || '';
+    
+    // Helper to convert ALL CAPS to Title Case
+    const toTitleCase = (str: string) => {
+      if (!str) return str;
+      return str.toLowerCase().replace(/\b\w/g, (char) => char.toUpperCase());
+    };
+    
+    return {
+      success: true,
+      formattedAddress: result?.address?.formattedAddress || '',
+      location: result?.geocode?.location as any,
+      placeId: (result?.address as any)?.placeId,
+      isPartialMatch: result?.verdict?.addressComplete === false,
+      components: {
+        street: toTitleCase(street),
+        city: toTitleCase(standardizedAddr?.city || postalAddress.locality || ''),
+        county: postalAddress.administrativeArea || '',
+        state: standardizedAddr?.state || postalAddress.administrativeArea || '',
+        zip,
+      },
+    };
   } catch (e: any) {
-    // Handle API errors
-    console.error(
-      'Google Geocoding API error:',
-      e.response?.data?.error_message || e.message
-    );
+    console.error('Google Address Validation API error:', e.message);
     throw new Error('Address validation failed.');
   }
 }

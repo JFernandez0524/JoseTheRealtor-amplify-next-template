@@ -24,6 +24,7 @@
     "aws-amplify": "^6.15.9",
     "axios": "^1.12.2",
     "csv-parse": "^6.1.0",
+    "dotenv": "^17.3.1",
     "formidable": "^3.4",
     "next": "^14.2.33",
     "react": "^18",

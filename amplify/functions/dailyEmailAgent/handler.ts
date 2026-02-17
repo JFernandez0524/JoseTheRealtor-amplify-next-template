@@ -159,7 +159,8 @@ RE/MAX Homeland Realtors
                 contactId: contact.id,
                 accessToken: validAccessToken,
                 fromEmail: integration.campaignEmail,
-                emailSignature: integration.emailSignature
+                emailSignature: integration.emailSignature,
+                toEmail: contact.email // Specific email from queue
               },
               {
                 headers: {
