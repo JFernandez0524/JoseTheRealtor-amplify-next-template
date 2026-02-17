@@ -525,6 +525,8 @@ export default function LeadDashboardClient({}: Props) {
     setProcessingMessage(`Deleting ${selectedIds.length} leads...`);
     try {
       await bulkDeleteLeads(selectedIds);
+      // Wait 2 seconds for deletes to propagate
+      await new Promise(resolve => setTimeout(resolve, 2000));
       // Immediately reload - don't wait for anything else
       window.location.reload();
     } catch (err) {

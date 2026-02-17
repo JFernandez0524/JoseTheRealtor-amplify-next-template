@@ -142,10 +142,20 @@ export async function deleteLead(id: string): Promise<void> {
  */
 export async function bulkDeleteLeads(ids: string[]): Promise<void> {
   try {
-    await Promise.all(
-      ids.map((id) => client.models.PropertyLead.delete({ id }))
-    );
-    console.log(`✅ Deleted ${ids.length} leads`);
+    // Use server-side API route to bypass authorization issues
+    const response = await fetch('/api/v1/bulk-delete-leads', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids })
+    });
+    
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Failed to delete leads');
+    }
+    
+    const result = await response.json();
+    console.log(`✅ Deleted ${result.deleted} leads`);
   } catch (err) {
     console.error('Failed to bulk delete leads:', err);
     throw err;
