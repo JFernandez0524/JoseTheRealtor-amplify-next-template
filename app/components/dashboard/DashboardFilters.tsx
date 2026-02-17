@@ -425,38 +425,6 @@ export function DashboardFilters({
               </button>
             )}
 
-            {/* Direct Mail Button */}
-            <button
-              onClick={handleBulkDirectMail}
-              disabled={isGeneratingLetters || isSkipTracing || isGhlSyncing || isAiScoring}
-              className={`text-sm px-3 py-1.5 rounded transition-colors flex items-center justify-center gap-1.5 shadow-sm w-full sm:w-auto
-                                ${isGeneratingLetters ? 'bg-green-300 text-white cursor-not-allowed' : 'bg-gradient-to-r from-green-600 to-teal-600 text-white hover:from-green-700 hover:to-teal-700'}`}
-            >
-              {isGeneratingLetters ? (
-                <>
-                  <Loader size='small' variation='linear' /> Generating...
-                </>
-              ) : (
-                <>📬 Generate Letters</>
-              )}
-            </button>
-
-            {/* Populate Queue Button */}
-            <button
-              onClick={handlePopulateQueue}
-              disabled={isPopulatingQueue || isSkipTracing || isGhlSyncing}
-              className={`text-sm px-3 py-1.5 rounded transition-colors flex items-center justify-center gap-1.5 shadow-sm w-full sm:w-auto
-                                ${isPopulatingQueue ? 'bg-purple-300 text-white cursor-not-allowed' : 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white hover:from-purple-700 hover:to-indigo-700'}`}
-            >
-              {isPopulatingQueue ? (
-                <>
-                  <Loader size='small' variation='linear' /> Populating...
-                </>
-              ) : (
-                <>🔄 Populate Queue</>
-              )}
-            </button>
-
             {/* Add to Door Knock Button */}
             <button
               onClick={handleAddToDoorKnock}
@@ -464,15 +432,6 @@ export function DashboardFilters({
               className='text-sm px-3 py-1.5 rounded bg-amber-600 text-white hover:bg-amber-700 transition shadow-sm w-full'
             >
               🚪 Add to Door Knock
-            </button>
-
-            {/* Sync Listing Status Button */}
-            <button
-              onClick={handleSyncListingStatus}
-              disabled={isPopulatingQueue || isSkipTracing || isGhlSyncing}
-              className='text-sm px-3 py-1.5 rounded bg-orange-600 text-white hover:bg-orange-700 transition shadow-sm w-full'
-            >
-              🔄 Sync Listing Status
             </button>
 
             {/* Export Button */}

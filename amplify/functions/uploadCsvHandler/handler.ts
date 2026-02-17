@@ -302,7 +302,8 @@ export const handler: S3Handler = async (event) => {
           const finalPropAddr = rawPropAddr; // Use original CSV address
           const finalPropCity = rawPropCity; // Use original CSV city
           const finalPropState = std?.state || rawPropState; // Use standardized state (NJ vs New Jersey)
-          const finalPropZip = std?.zip || rawPropZip; // Use standardized zip
+          // Strip +4 from zip codes (keep only 5 digits)
+          const finalPropZip = (std?.zip || rawPropZip)?.split('-')[0];
           const finalPropCounty = std?.county || null;
 
           const standardizedAddress = propValidation
@@ -357,7 +358,8 @@ export const handler: S3Handler = async (event) => {
               finalMailAddr = aStd?.street || rawAdminAddr;
               finalMailCity = aStd?.city || sanitize(row['adminCity']);
               finalMailState = aStd?.state || sanitize(row['adminState']);
-              finalMailZip = aStd?.zip || rawAdminZip;
+              // Strip +4 from admin zip
+              finalMailZip = (aStd?.zip || rawAdminZip)?.split('-')[0];
               
               // Store admin standardized address
               if (adminValidation) {

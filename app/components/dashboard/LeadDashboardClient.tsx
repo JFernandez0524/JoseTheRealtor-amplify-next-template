@@ -441,33 +441,45 @@ export default function LeadDashboardClient({}: Props) {
 
     if (!confirm(`Skip-trace ${selectedIds.length} leads?`)) return;
 
-    // Warn if batch is too large
+    // Warn if batch is large
     if (selectedIds.length > 50) {
       if (!confirm(
         `⚠️ Large batch detected (${selectedIds.length} leads)\n\n` +
-        `This will take several minutes to complete.\n` +
-        `Consider processing in smaller batches of 50 or less for faster results.\n\n` +
-        `Continue anyway?`
+        `This will be processed in batches of 50 to ensure reliability.\n` +
+        `This may take several minutes to complete.\n\n` +
+        `Continue?`
       )) return;
     }
 
     setIsProcessing(true);
-    
-    // Safety timeout - reset processing state after 2 minutes max
-    const safetyTimeout = setTimeout(() => {
-      console.warn('⚠️ Skip trace timeout - resetting processing state');
-      setIsProcessing(false);
-    }, 120000);
+    setProcessingMessage(`Skip tracing ${selectedIds.length} leads...`);
     
     try {
-      const data = await skipTraceLeads(selectedIds);
+      const BATCH_SIZE = 50;
+      const allResults = [];
+      
+      // Process in batches of 50
+      for (let i = 0; i < selectedIds.length; i += BATCH_SIZE) {
+        const batch = selectedIds.slice(i, i + BATCH_SIZE);
+        const batchNum = Math.floor(i / BATCH_SIZE) + 1;
+        const totalBatches = Math.ceil(selectedIds.length / BATCH_SIZE);
+        
+        setProcessingMessage(`Skip tracing batch ${batchNum}/${totalBatches} (${batch.length} leads)...`);
+        console.log(`📦 Processing batch ${batchNum}/${totalBatches}: ${batch.length} leads`);
+        
+        const batchResults = await skipTraceLeads(batch);
+        allResults.push(...(Array.isArray(batchResults) ? batchResults : []));
+        
+        // Small delay between batches to avoid rate limits
+        if (i + BATCH_SIZE < selectedIds.length) {
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+      }
 
-      console.log('Skip trace response:', JSON.stringify(data, null, 2));
-      console.log('Response type:', typeof data);
-      console.log('Is array?:', Array.isArray(data));
+      console.log('Skip trace complete:', allResults.length, 'results');
 
       // Handle response - data is the array directly
-      const results = Array.isArray(data) ? data : [];
+      const results = allResults;
       console.log('Results array:', results);
       console.log('Results length:', results.length);
       
@@ -505,8 +517,8 @@ export default function LeadDashboardClient({}: Props) {
       console.error('Skip-trace error:', err);
       alert(`Error during skip-trace: ${err.message || 'Check your network connection'}`);
     } finally {
-      clearTimeout(safetyTimeout);
       setIsProcessing(false);
+      setProcessingMessage('');
     }
   };
   const handleDeleteLeads = async () => {
