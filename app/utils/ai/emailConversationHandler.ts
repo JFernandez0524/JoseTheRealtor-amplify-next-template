@@ -49,6 +49,7 @@ interface EmailConversationContext {
   contact?: any;
   testMode?: boolean;
   fromEmail?: string;
+  toEmail?: string;
   accessToken?: string;
 }
 
