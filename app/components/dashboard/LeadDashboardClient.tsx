@@ -208,6 +208,20 @@ export default function LeadDashboardClient({}: Props) {
           if (!lead.createdAt) return false;
           const leadDate = new Date(lead.createdAt).toISOString().split('T')[0];
           
+          // Debug logging
+          if (filterDateAdded || filterDateAddedTo) {
+            console.log('Date filter check:', {
+              leadDate,
+              filterDateAdded,
+              filterDateAddedTo,
+              matches: (filterDateAdded && filterDateAddedTo) 
+                ? (leadDate >= filterDateAdded && leadDate <= filterDateAddedTo)
+                : filterDateAdded 
+                  ? leadDate >= filterDateAdded
+                  : leadDate <= filterDateAddedTo
+            });
+          }
+          
           if (filterDateAdded && filterDateAddedTo) {
             return leadDate >= filterDateAdded && leadDate <= filterDateAddedTo;
           } else if (filterDateAdded) {
