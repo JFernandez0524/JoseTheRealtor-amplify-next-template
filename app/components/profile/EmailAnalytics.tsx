@@ -36,17 +36,18 @@ export default function EmailAnalytics() {
       const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
       const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
-      const withEmails = queue.filter(q => q.lastEmailSent);
+      const withEmails = queue.filter(q => q && q.lastEmailSent);
       
       const last7Days = withEmails.filter(q => 
-        new Date(q.lastEmailSent!) >= sevenDaysAgo
+        q && q.lastEmailSent && new Date(q.lastEmailSent) >= sevenDaysAgo
       ).length;
 
       const last30Days = withEmails.filter(q => 
-        new Date(q.lastEmailSent!) >= thirtyDaysAgo
+        q && q.lastEmailSent && new Date(q.lastEmailSent) >= thirtyDaysAgo
       ).length;
 
       const recentEmails = withEmails
+        .filter(q => q && q.lastEmailSent)
         .sort((a, b) => new Date(b.lastEmailSent!).getTime() - new Date(a.lastEmailSent!).getTime())
         .slice(0, 10)
         .map(q => ({
