@@ -299,6 +299,11 @@ export default function LeadDashboardClient({}: Props) {
     filterStatus,
     filterCrmStatus,
     filterHasPhone,
+    filterListingStatus,
+    filterAiPriority,
+    filterDateAdded,
+    filterDateAddedTo,
+    filterSource,
     skipTraceFromDate,
     skipTraceToDate,
     sortField,
@@ -503,17 +508,16 @@ export default function LeadDashboardClient({}: Props) {
       return;
 
     setIsProcessing(true);
+    setProcessingMessage(`Deleting ${selectedIds.length} leads...`);
     try {
       await bulkDeleteLeads(selectedIds);
-      setSelectedIds([]);
-      alert('Leads deleted successfully.');
-      await refreshLeads();
+      // Immediately reload - don't wait for anything else
+      window.location.reload();
     } catch (err) {
       console.error('Delete error:', err);
-    } finally {
+      alert(`Error deleting leads: ${err instanceof Error ? err.message : 'Unknown error'}`);
       setIsProcessing(false);
-      // Force page refresh to ensure all data is updated
-      window.location.reload();
+      setProcessingMessage('');
     }
   };
 
