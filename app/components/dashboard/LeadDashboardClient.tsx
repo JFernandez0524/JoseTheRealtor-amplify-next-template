@@ -50,6 +50,7 @@ export default function LeadDashboardClient({}: Props) {
   const [filterListingStatus, setFilterListingStatus] = useState('');
   const [filterAiPriority, setFilterAiPriority] = useState('');
   const [filterDateAdded, setFilterDateAdded] = useState('');
+  const [filterDateAddedTo, setFilterDateAddedTo] = useState('');
   const [filterSource, setFilterSource] = useState('');
   const [skipTraceFromDate, setSkipTraceFromDate] = useState('');
   const [skipTraceToDate, setSkipTraceToDate] = useState('');
@@ -202,10 +203,19 @@ export default function LeadDashboardClient({}: Props) {
         const matchesAiPriority =
           !filterAiPriority || lead.aiPriority === filterAiPriority;
 
-        const matchesDateAdded = !filterDateAdded || (() => {
+        const matchesDateAdded = (() => {
+          if (!filterDateAdded && !filterDateAddedTo) return true;
           if (!lead.createdAt) return false;
           const leadDate = new Date(lead.createdAt).toISOString().split('T')[0];
-          return leadDate >= filterDateAdded;
+          
+          if (filterDateAdded && filterDateAddedTo) {
+            return leadDate >= filterDateAdded && leadDate <= filterDateAddedTo;
+          } else if (filterDateAdded) {
+            return leadDate >= filterDateAdded;
+          } else if (filterDateAddedTo) {
+            return leadDate <= filterDateAddedTo;
+          }
+          return true;
         })();
 
         const matchesSource = !filterSource || lead.uploadSource === filterSource;
@@ -916,6 +926,8 @@ export default function LeadDashboardClient({}: Props) {
         setFilterAiPriority={setFilterAiPriority}
         filterDateAdded={filterDateAdded}
         setFilterDateAdded={setFilterDateAdded}
+        filterDateAddedTo={filterDateAddedTo}
+        setFilterDateAddedTo={setFilterDateAddedTo}
         filterSource={filterSource}
         setFilterSource={setFilterSource}
         skipTraceFromDate={skipTraceFromDate}

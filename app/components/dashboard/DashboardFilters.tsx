@@ -20,6 +20,8 @@ type Props = {
   setFilterAiPriority: (val: string) => void;
   filterDateAdded: string;
   setFilterDateAdded: (val: string) => void;
+  filterDateAddedTo: string;
+  setFilterDateAddedTo: (val: string) => void;
   filterSource: string;
   setFilterSource: (val: string) => void;
   skipTraceFromDate: string;
@@ -72,6 +74,8 @@ export function DashboardFilters({
   setFilterAiPriority,
   filterDateAdded,
   setFilterDateAdded,
+  filterDateAddedTo,
+  setFilterDateAddedTo,
   filterSource,
   setFilterSource,
   skipTraceFromDate,
@@ -224,11 +228,21 @@ export function DashboardFilters({
 
           {/* 7. DATE ADDED FILTER */}
           <div className='flex flex-col gap-1'>
-            <label className='text-xs text-gray-600'>Date Added:</label>
+            <label className='text-xs text-gray-600'>Date Added (From):</label>
             <input
               type='date'
               value={filterDateAdded}
               onChange={(e) => setFilterDateAdded(e.target.value)}
+              className='border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none w-full'
+            />
+          </div>
+
+          <div className='flex flex-col gap-1'>
+            <label className='text-xs text-gray-600'>Date Added (To):</label>
+            <input
+              type='date'
+              value={filterDateAddedTo}
+              onChange={(e) => setFilterDateAddedTo(e.target.value)}
               className='border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none w-full'
             />
           </div>

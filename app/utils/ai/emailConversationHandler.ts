@@ -4,16 +4,16 @@ const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
 /**
  * EMAIL CONVERSATION HANDLER
- * 
+ *
  * Handles automated email conversations with leads using the AMMO framework
  * (Audience-Message-Method-Outcome) and Hook-Relate-Bridge-Ask structure.
- * 
+ *
  * FRAMEWORK:
  * - Hook: Professional salutation (name only, no "Hi/Hello")
  * - Relate: Shows understanding of their probate/foreclosure situation
  * - Bridge: Presents two clear options (cash offer vs retail listing)
  * - Ask: Invites them to meet and discuss options
- * 
+ *
  * FEATURES:
  * - Generates personalized emails with property-specific details
  * - Includes cash offer (70% of Zestimate) and retail value
@@ -21,12 +21,12 @@ const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
  * - Signature block with contact information
  * - Detects handoff keywords for human follow-up
  * - Updates AI state in GHL custom fields
- * 
+ *
  * USAGE:
  * - Initial outreach: Set incomingMessage to "initial_outreach"
  * - Reply handling: Set incomingMessage to the contact's email body
  * - Test mode: Set testMode to true to prevent sending
- * 
+ *
  * RELATED FILES:
  * - /api/v1/send-email-to-contact - API route for sending emails
  * - /api/v1/ghl-email-webhook - Webhook for handling replies
@@ -62,30 +62,38 @@ interface PropertyAnalysis {
 }
 
 // Get property analysis
-async function getPropertyAnalysis(address: string, city: string, state: string, zip: string): Promise<PropertyAnalysis | null> {
+async function getPropertyAnalysis(
+  address: string,
+  city: string,
+  state: string,
+  zip: string,
+): Promise<PropertyAnalysis | null> {
   try {
-    const response = await fetch(`${process.env.NEXTAUTH_URL}/api/v1/analyze-property`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
+    const response = await fetch(
+      `${process.env.NEXTAUTH_URL}/api/v1/analyze-property`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          street: address,
+          city,
+          state,
+          zip,
+        }),
       },
-      body: JSON.stringify({
-        street: address,
-        city,
-        state,
-        zip
-      })
-    });
+    );
 
     if (!response.ok) return null;
-    
+
     const data = await response.json();
     return {
       zestimate: data.valuation?.zestimate,
       sqft: data.valuation?.livingArea,
       beds: data.valuation?.bedrooms,
       baths: data.valuation?.bathrooms,
-      yearBuilt: data.valuation?.yearBuilt
+      yearBuilt: data.valuation?.yearBuilt,
     };
   } catch (error) {
     console.error('Property analysis error:', error);
@@ -101,76 +109,84 @@ async function sendGHLEmail(
   accessToken: string,
   testMode = false,
   fromEmail?: string,
-  contactId?: string
+  contactId?: string,
 ) {
   if (testMode) {
     console.log('🧪 TEST MODE - Would send email:', { subject, body });
     return;
   }
-  
+
   // Add unsubscribe link to email body
-  const unsubscribeLink = contactId 
+  const unsubscribeLink = contactId
     ? `${process.env.NEXTAUTH_URL || 'https://leads.josetherealtor.com'}/unsubscribe?contact=${contactId}`
     : '';
-  
+
   const emailWithUnsubscribe = unsubscribeLink
     ? `${body}<br><br><div style="font-size: 11px; color: #999; text-align: center; margin-top: 20px; padding-top: 20px; border-top: 1px solid #eee;">If you no longer wish to receive these emails, you may <a href="${unsubscribeLink}" style="color: #999; text-decoration: underline;">unsubscribe here</a>.</div>`
     : body;
-  
+
   try {
-    console.log(`📧 Sending email to GHL ${contactId ? `contact ${contactId}` : `conversation ${conversationId}`}`);
-    
+    console.log(
+      `📧 Sending email to GHL ${contactId ? `contact ${contactId}` : `conversation ${conversationId}`}`,
+    );
+
     const messagePayload: any = {
       type: 'Email',
       subject,
-      html: emailWithUnsubscribe
+      html: emailWithUnsubscribe,
     };
-    
+
     if (fromEmail) {
       messagePayload.emailFrom = fromEmail;
     }
-    
+
     // Use contact-based endpoint if contactId provided
-    const endpoint = contactId 
+    const endpoint = contactId
       ? `https://services.leadconnectorhq.com/conversations/messages`
       : `https://services.leadconnectorhq.com/conversations/${conversationId}/messages`;
-    
+
     if (contactId) {
       messagePayload.contactId = contactId;
     }
-    
-    await axios.post(
-      endpoint,
-      messagePayload,
-      {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-          'Version': '2021-07-28',
-          'Accept': 'application/json'
-        }
-      }
-    );
+
+    await axios.post(endpoint, messagePayload, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+        Version: '2021-07-28',
+        Accept: 'application/json',
+      },
+    });
     console.log('✅ Email sent successfully to GHL');
   } catch (error: any) {
-    console.error('❌ Failed to send GHL email:', error.response?.data || error.message);
+    console.error(
+      '❌ Failed to send GHL email:',
+      error.response?.data || error.message,
+    );
     throw error;
   }
 }
 
 // Generate AI email response using OpenAI
-async function generateEmailResponse(context: EmailConversationContext, propertyData?: PropertyAnalysis): Promise<{ subject: string; body: string }> {
+async function generateEmailResponse(
+  context: EmailConversationContext,
+  propertyData?: PropertyAnalysis,
+): Promise<{ subject: string; body: string }> {
   const hasPropertyData = propertyData?.zestimate;
-  const hasAddress = context.propertyAddress && context.propertyCity && context.propertyState;
-  
-  const cashOffer = propertyData?.zestimate ? Math.round(propertyData.zestimate * 0.70) : null;
-  const isInitialOutreach = context.incomingMessage === 'initial_outreach';
-  
-  const situationContext = context.leadType === 'Probate' 
-    ? 'navigate the complexity and stress of settling estates'
-    : 'facing foreclosure situations';
+  const hasAddress =
+    context.propertyAddress && context.propertyCity && context.propertyState;
 
-  const systemPrompt = isInitialOutreach 
+  const cashOffer = propertyData?.zestimate
+    ? Math.round(propertyData.zestimate * 0.7)
+    : null;
+  const isInitialOutreach = context.incomingMessage === 'initial_outreach';
+
+  const situationContext =
+    context.leadType === 'Probate'
+      ? 'navigate the complexity and stress of settling estates'
+      : 'facing foreclosure situations';
+
+  const systemPrompt = isInitialOutreach
     ? `You are Jose Fernandez from RE/MAX Homeland Realtors sending a FIRST-TIME email to ${context.contactName} about their ${context.leadType?.toLowerCase()} situation.
 
 AMMO FRAMEWORK:
@@ -239,78 +255,102 @@ Generate the email response body only (return as JSON with "subject" and "body" 
       propertyAddress: context.propertyAddress,
       leadType: context.leadType,
       hasZestimate: !!propertyData?.zestimate,
-      isInitialOutreach
+      isInitialOutreach,
     });
-    
+
     const response = await axios.post(
       'https://api.openai.com/v1/chat/completions',
       {
         model: 'gpt-4o-mini',
         messages: [
           { role: 'system', content: systemPrompt },
-          { role: 'user', content: isInitialOutreach ? 'Generate the initial outreach email.' : context.incomingMessage }
+          {
+            role: 'user',
+            content: isInitialOutreach
+              ? 'Generate the initial outreach email.'
+              : context.incomingMessage,
+          },
         ],
-        response_format: { type: "json_object" },
+        response_format: { type: 'json_object' },
         max_tokens: 500,
-        temperature: 0.7
+        temperature: 0.7,
       },
       {
         headers: {
-          'Authorization': `Bearer ${OPENAI_API_KEY}`,
-          'Content-Type': 'application/json'
-        }
-      }
+          Authorization: `Bearer ${OPENAI_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+      },
     );
 
-    console.log('🤖 [EMAIL_AI] OpenAI raw response:', response.data.choices[0]?.message?.content);
-    
-    const result = JSON.parse(response.data.choices[0]?.message?.content || '{}');
-    
+    console.log(
+      '🤖 [EMAIL_AI] OpenAI raw response:',
+      response.data.choices[0]?.message?.content,
+    );
+
+    const result = JSON.parse(
+      response.data.choices[0]?.message?.content || '{}',
+    );
+
     console.log('🤖 [EMAIL_AI] Parsed result:', result);
-    
+
     if (!result.body) {
-      console.error('❌ [EMAIL_AI] OpenAI returned empty body. Full result:', JSON.stringify(result));
+      console.error(
+        '❌ [EMAIL_AI] OpenAI returned empty body. Full result:',
+        JSON.stringify(result),
+      );
       throw new Error('OpenAI failed to generate email body');
     }
-    
+
     // Convert plain text to HTML with proper formatting
     let htmlBody = result.body;
-    
+
     // Convert line breaks to paragraphs
     htmlBody = htmlBody
-      .split('\n\n')  // Split on double line breaks (paragraphs)
+      .split('\n\n') // Split on double line breaks (paragraphs)
       .map((para: string) => {
         // Handle bullet points
         if (para.includes('•') || para.includes('-')) {
           const lines = para.split('\n');
           const bullets = lines
-            .filter(line => line.trim().startsWith('•') || line.trim().startsWith('-'))
-            .map(line => `<li>${line.replace(/^[•\-]\s*/, '').trim()}</li>`)
+            .filter(
+              (line) =>
+                line.trim().startsWith('•') || line.trim().startsWith('-'),
+            )
+            .map((line) => `<li>${line.replace(/^[•\-]\s*/, '').trim()}</li>`)
             .join('');
           const nonBullets = lines
-            .filter(line => !line.trim().startsWith('•') && !line.trim().startsWith('-'))
+            .filter(
+              (line) =>
+                !line.trim().startsWith('•') && !line.trim().startsWith('-'),
+            )
             .join('<br>');
-          return nonBullets ? `<p>${nonBullets}</p><ul>${bullets}</ul>` : `<ul>${bullets}</ul>`;
+          return nonBullets
+            ? `<p>${nonBullets}</p><ul>${bullets}</ul>`
+            : `<ul>${bullets}</ul>`;
         }
         // Regular paragraph
         return `<p>${para.replace(/\n/g, '<br>')}</p>`;
       })
       .join('');
-    
+
     // Append HTML signature if provided, otherwise use default
-    const signature = context.emailSignature || `
+    const signature =
+      context.emailSignature ||
+      `
       <p>
         Jose Fernandez<br>
         RE/MAX Homeland Realtors<br>
         (732) 810-0182
       </p>
     `;
-    
+
     htmlBody += `<br>${signature}`;
-    
+
     return {
-      subject: result.subject || `Re: ${context.propertyAddress || 'Your Property'}`,
-      body: htmlBody
+      subject:
+        result.subject || `Re: ${context.propertyAddress || 'Your Property'}`,
+      body: htmlBody,
     };
   } catch (error: any) {
     console.error('❌ OpenAI API error:', error);
@@ -322,33 +362,43 @@ Generate the email response body only (return as JSON with "subject" and "body" 
 // Check if contact has AI enabled
 function isAIEnabled(contact: any): boolean {
   const hasEmail = contact?.email;
-  const leadType = contact?.customFields?.find((f: any) => f.id === 'oaf4wCuM3Ub9eGpiddrO')?.value;
-  const contactType = contact?.customFields?.find((f: any) => f.id === 'pGfgxcdFaYAkdq0Vp53j')?.value;
-  
+  const leadType = contact?.customFields?.find(
+    (f: any) => f.id === 'oaf4wCuM3Ub9eGpiddrO',
+  )?.value;
+  const contactType = contact?.customFields?.find(
+    (f: any) => f.id === 'pGfgxcdFaYAkdq0Vp53j',
+  )?.value;
+
   const isDirectMailOnly = contactType === 'Direct Mail';
-  const hasValidLeadType = ['Probate', 'PREFORECLOSURE', 'Preforeclosure'].includes(leadType);
-  
+  const hasValidLeadType = [
+    'Probate',
+    'PREFORECLOSURE',
+    'Preforeclosure',
+  ].includes(leadType);
+
   return hasEmail && hasValidLeadType && !isDirectMailOnly;
 }
 
 // Update AI state in GHL
-async function updateAIState(contactId: string, newState: string, accessToken: string) {
+async function updateAIState(
+  contactId: string,
+  newState: string,
+  accessToken: string,
+) {
   try {
     await axios.put(
       `https://services.leadconnectorhq.com/contacts/${contactId}`,
       {
-        customFields: [
-          { id: '1NxQW2kKMVgozjSUuu7s', value: newState }
-        ]
+        customFields: [{ id: '1NxQW2kKMVgozjSUuu7s', value: newState }],
       },
       {
         headers: {
-          'Authorization': `Bearer ${accessToken}`,
+          Authorization: `Bearer ${accessToken}`,
           'Content-Type': 'application/json',
-          'Version': '2021-07-28',
-          'Accept': 'application/json'
-        }
-      }
+          Version: '2021-07-28',
+          Accept: 'application/json',
+        },
+      },
     );
   } catch (error) {
     console.error('Failed to update AI state:', error);
@@ -368,16 +418,18 @@ function shouldHandoffToHuman(message: string): boolean {
     'interested',
     'yes i want',
     'how much',
-    'what can you offer'
+    'what can you offer',
   ];
 
-  return handoffKeywords.some(keyword => 
-    message.toLowerCase().includes(keyword)
+  return handoffKeywords.some((keyword) =>
+    message.toLowerCase().includes(keyword),
   );
 }
 
 // Main email conversation handler
-export async function generateEmailAIResponse(context: EmailConversationContext): Promise<{ subject: string; body: string }> {
+export async function generateEmailAIResponse(
+  context: EmailConversationContext,
+): Promise<{ subject: string; body: string }> {
   try {
     // Require accessToken for non-test mode
     if (!context.testMode && !context.accessToken) {
@@ -399,25 +451,25 @@ export async function generateEmailAIResponse(context: EmailConversationContext)
     if (shouldHandoffToHuman(context.incomingMessage)) {
       if (!context.testMode && context.accessToken) {
         await updateAIState(context.contactId, 'handoff', context.accessToken);
-        
+
         // Tag contact for human follow-up
         await axios.post(
           `https://services.leadconnectorhq.com/contacts/${context.contactId}/tags`,
           { tags: ['Ready-For-Human-Contact'] },
           {
             headers: {
-              'Authorization': `Bearer ${context.accessToken}`,
-              'Content-Type': 'application/json'
-            }
-          }
+              Authorization: `Bearer ${context.accessToken}`,
+              'Content-Type': 'application/json',
+            },
+          },
         );
       }
 
       const handoffEmail = {
         subject: 'Re: Your Property Options',
-        body: `${context.contactName},\n\nGreat! I'll have one of our property specialists reach out to you within the next few hours to discuss your options in detail.\n\nThanks for your interest!\n\nJose Fernandez\nRE/MAX Homeland Realtors\n(732) 810-0182`
+        body: `${context.contactName},\n\nGreat! I'll have one of our property specialists reach out to you within the next few hours to discuss your options in detail.\n\nThanks for your interest!\n\nJose Fernandez\nRE/MAX Homeland Realtors\n(732) 810-0182`,
       };
-      
+
       await sendGHLEmail(
         context.conversationId,
         handoffEmail.subject,
@@ -425,29 +477,36 @@ export async function generateEmailAIResponse(context: EmailConversationContext)
         context.accessToken || '',
         context.testMode,
         context.fromEmail,
-        context.contactId
+        context.contactId,
       );
-      
+
       return handoffEmail;
     }
 
     // Get property analysis for context
     let propertyData: PropertyAnalysis | null = null;
-    
+
     // Use provided zestimate if available, otherwise fetch from API
     if (context.zestimate) {
       propertyData = { zestimate: context.zestimate };
-    } else if (context.propertyAddress && context.propertyCity && context.propertyState) {
+    } else if (
+      context.propertyAddress &&
+      context.propertyCity &&
+      context.propertyState
+    ) {
       propertyData = await getPropertyAnalysis(
         context.propertyAddress,
         context.propertyCity,
         context.propertyState,
-        context.propertyZip || ''
+        context.propertyZip || '',
       );
     }
 
     // Generate AI email response
-    const emailResponse = await generateEmailResponse(context, propertyData || undefined);
+    const emailResponse = await generateEmailResponse(
+      context,
+      propertyData || undefined,
+    );
 
     // Send response to GHL
     await sendGHLEmail(
@@ -457,18 +516,17 @@ export async function generateEmailAIResponse(context: EmailConversationContext)
       context.accessToken || '',
       context.testMode,
       context.fromEmail,
-      context.contactId
+      context.contactId,
     );
 
     return emailResponse;
-
   } catch (error) {
     console.error('Email conversation handler error:', error);
     const fallbackEmail = {
       subject: 'Re: Your Property',
-      body: `${context.contactName},\n\nThanks for your message! I'll get back to you shortly.\n\nJose Fernandez\nRE/MAX Homeland Realtors\n(732) 810-0182`
+      body: `${context.contactName},\n\nThanks for your message! I'll get back to you shortly.\n\nJose Fernandez\nRE/MAX Homeland Realtors\n(732) 810-0182`,
     };
-    
+
     if (context.accessToken) {
       await sendGHLEmail(
         context.conversationId,
@@ -477,10 +535,10 @@ export async function generateEmailAIResponse(context: EmailConversationContext)
         context.accessToken,
         context.testMode,
         context.fromEmail,
-        context.contactId
+        context.contactId,
       );
     }
-    
+
     return fallbackEmail;
   }
 }
