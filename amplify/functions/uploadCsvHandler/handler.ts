@@ -417,6 +417,8 @@ export const handler: S3Handler = async (event) => {
             // Use standardized address from Google (USPS CASS) for better matching
             const zestimateStreet = standardizedAddress?.street || finalPropAddr;
             const zestimateCity = standardizedAddress?.city || finalPropCity;
+            // Strip +4 from zip code (Bridge API doesn't like it)
+            const zestimateZip = (standardizedAddress?.zip || finalPropZip)?.split('-')[0];
             
             zillowData = await fetchBestZestimate({
               lat: latitude || undefined,
@@ -424,7 +426,7 @@ export const handler: S3Handler = async (event) => {
               street: zestimateStreet,
               city: zestimateCity,
               state: finalPropState,
-              zip: finalPropZip,
+              zip: zestimateZip,
             });
             
             if (zillowData) {
