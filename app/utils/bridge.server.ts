@@ -21,7 +21,15 @@ const cleanCityName = (city: string) => {
 const generateAddressVariations = (street: string) => {
   if (!street) return [street];
   const variations = new Set<string>();
-  variations.add(street);
+  
+  // Convert to Title Case first (Bridge API prefers this format)
+  const toTitleCase = (str: string) => {
+    return str.toLowerCase().replace(/\b\w/g, (char) => char.toUpperCase());
+  };
+  
+  const titleCaseStreet = toTitleCase(street);
+  variations.add(titleCaseStreet);
+  variations.add(street); // Keep original too
 
   const transform = (addr: string, options: { directionStyle: 'full' | 'usps' | 'zillow'; removeOrdinals?: boolean; unitStyle?: 'abbreviated' | 'full' }) => {
     let result = addr;
@@ -50,8 +58,9 @@ const generateAddressVariations = (street: string) => {
   ];
 
   configs.forEach((config) => {
-    variations.add(transform(street, config));
-    variations.add(transform(street, { ...config, unitStyle: 'abbreviated' }));
+    variations.add(transform(titleCaseStreet, config));
+    variations.add(transform(titleCaseStreet, { ...config, unitStyle: 'abbreviated' }));
+    variations.add(transform(street, config)); // Try original format too
   });
 
   return Array.from(variations).filter((v) => v);

@@ -414,11 +414,15 @@ export const handler: S3Handler = async (event) => {
             // 🚦 Rate limit: Wait before API call
             await delay(BRIDGE_API_DELAY_MS);
             
+            // Use standardized address from Google (USPS CASS) for better matching
+            const zestimateStreet = standardizedAddress?.street || finalPropAddr;
+            const zestimateCity = standardizedAddress?.city || finalPropCity;
+            
             zillowData = await fetchBestZestimate({
               lat: latitude || undefined,
               lng: longitude || undefined,
-              street: finalPropAddr,
-              city: finalPropCity,
+              street: zestimateStreet,
+              city: zestimateCity,
               state: finalPropState,
               zip: finalPropZip,
             });
@@ -426,7 +430,7 @@ export const handler: S3Handler = async (event) => {
             if (zillowData) {
               console.log('✅ Zestimate fetched:', { zpid: zillowData.zpid, zestimate: zillowData.zestimate });
             } else {
-              console.log('❌ No Zestimate data for address:', { address: finalPropAddr, city: finalPropCity });
+              console.log('❌ No Zestimate data for address:', { address: zestimateStreet, city: zestimateCity });
             }
           } catch (error: any) {
             console.log('Bridge API error:', error.message);
