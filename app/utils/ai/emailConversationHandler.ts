@@ -233,6 +233,14 @@ RULES:
 Generate the email response body only (return as JSON with "subject" and "body" fields):`;
 
   try {
+    console.log('🤖 [EMAIL_AI] Calling OpenAI with context:', {
+      contactName: context.contactName,
+      propertyAddress: context.propertyAddress,
+      leadType: context.leadType,
+      hasZestimate: !!propertyData?.zestimate,
+      isInitialOutreach
+    });
+    
     const response = await axios.post(
       'https://api.openai.com/v1/chat/completions',
       {
@@ -253,10 +261,19 @@ Generate the email response body only (return as JSON with "subject" and "body" 
       }
     );
 
+    console.log('🤖 [EMAIL_AI] OpenAI raw response:', response.data.choices[0]?.message?.content);
+    
     const result = JSON.parse(response.data.choices[0]?.message?.content || '{}');
     
+    console.log('🤖 [EMAIL_AI] Parsed result:', result);
+    
+    if (!result.body) {
+      console.error('❌ [EMAIL_AI] OpenAI returned empty body. Full result:', JSON.stringify(result));
+      throw new Error('OpenAI failed to generate email body');
+    }
+    
     // Convert plain text to HTML with proper formatting
-    let htmlBody = result.body || 'Thanks for your message. I\'ll get back to you shortly.';
+    let htmlBody = result.body;
     
     // Convert line breaks to paragraphs
     htmlBody = htmlBody
