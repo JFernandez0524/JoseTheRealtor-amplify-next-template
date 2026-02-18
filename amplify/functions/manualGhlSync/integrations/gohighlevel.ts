@@ -241,13 +241,21 @@ export async function syncToGoHighLevel(
       }
     }
 
-    // 🛡️ DIRECT MAIL PROTECTION - Only ONE sibling gets mail eligibility (and only if in $300k-$850k range)
-    if (isPrimary && isDirectMailEligible) {
+    // 🛡️ DIRECT MAIL ELIGIBILITY - Only for leads that need direct mail
+    // Criteria: NO_MATCH, NO_QUALITY_CONTACTS, or only emails (no phones)
+    const isDirectMailOnly = 
+      lead.skipTraceStatus === 'NO_MATCH' || 
+      lead.skipTraceStatus === 'NO_QUALITY_CONTACTS' ||
+      (!specificPhone && (lead.emails && lead.emails.length > 0));
+    
+    // 🛡️ DIRECT MAIL PROTECTION - Only ONE sibling gets mail eligibility (and only if direct mail criteria met)
+    if (isPrimary && isDirectMailEligible && isDirectMailOnly) {
       tags.push('Thanks_IO_Eligible'); // Updated for Thanks.io
       tags.push('Primary_Contact');
+      tags.push('direct-mail-only'); // Replace probate_mail tag
     } else if (isPrimary) {
       tags.push('Primary_Contact');
-      // No Thanks_IO_Eligible tag for properties outside $300k-$850k range
+      // No Thanks_IO_Eligible tag - either has phone or outside value range
     }
 
     const basePayload = {
