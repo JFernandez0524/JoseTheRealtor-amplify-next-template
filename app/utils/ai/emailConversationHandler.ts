@@ -294,12 +294,14 @@ Generate the email response body only (return as JSON with "subject" and "body" 
 
     console.log('🤖 [EMAIL_AI] Parsed result:', result);
 
-    if (!result.body) {
+    if (!result.body || !result.subject) {
       console.error(
-        '❌ [EMAIL_AI] OpenAI returned empty body. Full result:',
+        '❌ [EMAIL_AI] OpenAI returned incomplete response. Full result:',
         JSON.stringify(result),
       );
-      throw new Error('OpenAI failed to generate email body');
+      throw new Error(
+        `OpenAI failed to generate email: missing ${!result.body ? 'body' : 'subject'}`
+      );
     }
 
     // Convert plain text to HTML with proper formatting
