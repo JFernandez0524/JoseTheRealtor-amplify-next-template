@@ -223,6 +223,12 @@ export async function getPendingEmailContacts(userId: string, limit: number = 50
   
   // Filter by nextEmailDate and queue status
   return items.filter(item => {
+    // Must have email address
+    if (!item.contactEmail) {
+      console.log(`⚠️ Contact ${item.contactId} has no email - skipping`);
+      return false;
+    }
+    
     // Only send to contacts in OUTREACH status
     const status = item.queueStatus || 'OUTREACH';
     if (status !== 'OUTREACH') {

@@ -367,18 +367,16 @@ function isAIEnabled(contact: any): boolean {
   const leadType = contact?.customFields?.find(
     (f: any) => f.id === 'oaf4wCuM3Ub9eGpiddrO',
   )?.value;
-  const contactType = contact?.customFields?.find(
-    (f: any) => f.id === 'pGfgxcdFaYAkdq0Vp53j',
-  )?.value;
 
-  const isDirectMailOnly = contactType === 'Direct Mail';
   const hasValidLeadType = [
     'Probate',
     'PREFORECLOSURE',
     'Preforeclosure',
   ].includes(leadType);
 
-  return hasEmail && hasValidLeadType && !isDirectMailOnly;
+  // For email outreach, we only need email and valid lead type
+  // "Direct Mail" contacts can still receive AI emails
+  return hasEmail && hasValidLeadType;
 }
 
 // Update AI state in GHL
