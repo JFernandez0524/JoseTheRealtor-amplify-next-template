@@ -34,7 +34,19 @@ import {
 } from '@/app/utils/aws/auth/amplifyServerUtils.server';
 import { analyzeBridgeProperty } from '@/app/utils/bridge.server';
 
+const ALLOWED_ORIGIN = 'https://jose-fernandez.remax.com';
+
 export async function POST(req: Request) {
+  const origin = req.headers.get('origin');
+  const corsHeaders = {
+    'Access-Control-Allow-Origin': origin === ALLOWED_ORIGIN ? ALLOWED_ORIGIN : '*',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type',
+  };
+
+  if (req.method === 'OPTIONS') {
+    return new NextResponse(null, { status: 204, headers: corsHeaders });
+  }
   try {
     const isAuthenticated = await AuthIsUserAuthenticatedServer();
     const groups = isAuthenticated ? await AuthGetUserGroupsServer() : [];
@@ -49,14 +61,14 @@ export async function POST(req: Request) {
     if (street && city && state && zip) {
       console.log('✅ Using structured address:', { street, city, state, zip });
       const result = await analyzeBridgeProperty({ street, city, state, zip, lat, lng });
-      return NextResponse.json(result);
+      return NextResponse.json(result, { headers: corsHeaders });
     }
 
     // Otherwise fall back to raw address string
     if (address) {
       console.log('⚠️ Using raw address string:', address);
       const result = await analyzeBridgeProperty({ street: address, lat, lng });
-      return NextResponse.json(result);
+      return NextResponse.json(result, { headers: corsHeaders });
     }
 
     throw new Error('No address data provided');
@@ -64,7 +76,7 @@ export async function POST(req: Request) {
     console.error('SERVER ERROR:', error.message);
     return NextResponse.json(
       { success: false, error: error.message, details: error.response?.data || null },
-      { status: 500 }
+      { status: 500, headers: corsHeaders }
     );
   }
 }
