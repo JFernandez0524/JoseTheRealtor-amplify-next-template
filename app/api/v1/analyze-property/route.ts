@@ -36,17 +36,25 @@ import { analyzeBridgeProperty } from '@/app/utils/bridge.server';
 
 const ALLOWED_ORIGIN = 'https://jose-fernandez.remax.com';
 
-export async function POST(req: Request) {
+const getCorsHeaders = (req: Request) => {
   const origin = req.headers.get('origin');
-  const corsHeaders = {
-    'Access-Control-Allow-Origin': origin === ALLOWED_ORIGIN ? ALLOWED_ORIGIN : '*',
+  return {
+    'Access-Control-Allow-Origin': origin === ALLOWED_ORIGIN ? ALLOWED_ORIGIN : ALLOWED_ORIGIN,
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
   };
+};
 
-  if (req.method === 'OPTIONS') {
-    return new NextResponse(null, { status: 204, headers: corsHeaders });
-  }
+export async function OPTIONS(req: Request) {
+  return new NextResponse(null, { 
+    status: 204, 
+    headers: getCorsHeaders(req) 
+  });
+}
+
+export async function POST(req: Request) {
+  const corsHeaders = getCorsHeaders(req);
+
   try {
     const isAuthenticated = await AuthIsUserAuthenticatedServer();
     const groups = isAuthenticated ? await AuthGetUserGroupsServer() : [];
@@ -57,21 +65,20 @@ export async function POST(req: Request) {
     
     const { lat, lng, street, city, state, zip, address } = body;
 
-    // If we have structured data, use it directly
+    let result;
+
     if (street && city && state && zip) {
       console.log('✅ Using structured address:', { street, city, state, zip });
-      const result = await analyzeBridgeProperty({ street, city, state, zip, lat, lng });
-      return NextResponse.json(result, { headers: corsHeaders });
-    }
-
-    // Otherwise fall back to raw address string
-    if (address) {
+      result = await analyzeBridgeProperty({ street, city, state, zip, lat, lng });
+    } else if (address) {
       console.log('⚠️ Using raw address string:', address);
-      const result = await analyzeBridgeProperty({ street: address, lat, lng });
-      return NextResponse.json(result, { headers: corsHeaders });
+      result = await analyzeBridgeProperty({ street: address, lat, lng });
+    } else {
+      throw new Error('No address data provided');
     }
 
-    throw new Error('No address data provided');
+    return NextResponse.json(result, { headers: corsHeaders });
+
   } catch (error: any) {
     console.error('SERVER ERROR:', error.message);
     return NextResponse.json(
