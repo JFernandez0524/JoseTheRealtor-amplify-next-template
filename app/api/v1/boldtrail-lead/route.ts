@@ -16,6 +16,18 @@ interface BoldTrailLeadRequest {
   phone?: string;
 }
 
+// Handle CORS preflight
+export async function OPTIONS(request: NextRequest) {
+  return new NextResponse(null, {
+    status: 200,
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type',
+    },
+  });
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body: BoldTrailLeadRequest = await request.json();
@@ -39,7 +51,14 @@ export async function POST(request: NextRequest) {
       console.error('❌ Address validation failed:', error);
       return NextResponse.json(
         { error: 'Invalid address. Please enter a valid property address.' },
-        { status: 400 }
+        { 
+          status: 400,
+          headers: {
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'POST, OPTIONS',
+            'Access-Control-Allow-Headers': 'Content-Type',
+          },
+        }
       );
     }
 
@@ -102,6 +121,12 @@ export async function POST(request: NextRequest) {
         sqft: propertyData.sqft,
         yearBuilt: propertyData.yearBuilt,
       } : null,
+    }, {
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type',
+      },
     });
 
   } catch (error: any) {
@@ -111,7 +136,14 @@ export async function POST(request: NextRequest) {
         error: 'Failed to process request',
         message: error.message 
       },
-      { status: 500 }
+      { 
+        status: 500,
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'POST, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type',
+        },
+      }
     );
   }
 }
