@@ -67,13 +67,15 @@ export const handler: Handler = async (event) => {
 };
 
 async function handleDeliveryUpdate(contactId: string, data: any) {
-  const currentStatus = data['order_item.current_status'];
+  const itemStatus = data['order_item.current_status'];
+  const orderStatus = data['order.status'];
   const deliveryDate = data['order_item.delivery_date'];
 
-  console.log(`📦 [THANKS.IO] Delivery update for ${contactId}: ${currentStatus}`);
+  console.log(`📦 [THANKS.IO] Delivery update for ${contactId}: order=${orderStatus}, item=${itemStatus}`);
 
-  // Only process "Delivered" status
-  if (currentStatus !== 'Delivered') {
+  // Check order-level status for "Delivered"
+  if (orderStatus !== 'Delivered') {
+    console.log(`⏭️ [THANKS.IO] Skipping - order not delivered yet`);
     return;
   }
 
