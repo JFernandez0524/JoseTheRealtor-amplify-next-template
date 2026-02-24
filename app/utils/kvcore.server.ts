@@ -45,7 +45,8 @@ const kvCoreClient: AxiosInstance = axios.create({
     'Authorization': `Bearer ${KVCORE_API_KEY}`,
     'Content-Type': 'application/json'
   },
-  timeout: 10000
+  timeout: 10000,
+  validateStatus: () => true // Don't throw on any status
 });
 
 // ============================================
@@ -70,6 +71,7 @@ export async function createContact(contact: {
 
   try {
     console.log('👤 Creating kvCORE contact:', contact.email);
+    console.log('🔗 Request URL:', `${KVCORE_BASE_URL}/public/contacts`);
     
     const response = await kvCoreClient.post('/public/contacts', {
       first_name: contact.firstName,
@@ -82,10 +84,23 @@ export async function createContact(contact: {
       tags: contact.tags
     });
 
-    console.log('✅ Contact created:', response.data.id);
-    return response.data;
+    console.log('📊 Response status:', response.status);
+    console.log('📦 Response data:', response.data);
+
+    if (response.status >= 200 && response.status < 300) {
+      console.log('✅ Contact created:', response.data.id);
+      return response.data;
+    } else {
+      console.error('❌ kvCORE API error:', response.status, response.data);
+      return null;
+    }
   } catch (error: any) {
-    console.error('❌ kvCORE create contact error:', error.response?.data || error.message);
+    console.error('❌ kvCORE request failed:', {
+      message: error.message,
+      url: error.config?.url,
+      baseURL: error.config?.baseURL,
+      method: error.config?.method
+    });
     return null;
   }
 }
