@@ -71,36 +71,41 @@ export async function createContact(contact: {
 
   try {
     console.log('👤 Creating kvCORE contact:', contact.email);
-    console.log('🔗 Request URL:', `${KVCORE_BASE_URL}/public/contacts`);
     
-    const response = await kvCoreClient.post('/public/contacts', {
-      first_name: contact.firstName,
-      last_name: contact.lastName,
-      email: contact.email,
-      phone: contact.phone,
-      deal_type: contact.dealType || 'buyer,seller',
-      source: contact.source || 'AI Chat',
-      notes: contact.notes,
-      tags: contact.tags
+    const url = `${KVCORE_BASE_URL}/public/contacts`;
+    console.log('🔗 Request URL:', url);
+    
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${KVCORE_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        first_name: contact.firstName,
+        last_name: contact.lastName,
+        email: contact.email,
+        phone: contact.phone,
+        deal_type: contact.dealType || 'buyer,seller',
+        source: contact.source || 'AI Chat',
+        notes: contact.notes,
+        tags: contact.tags
+      })
     });
 
+    const data = await response.json();
     console.log('📊 Response status:', response.status);
-    console.log('📦 Response data:', response.data);
+    console.log('📦 Response data:', data);
 
-    if (response.status >= 200 && response.status < 300) {
-      console.log('✅ Contact created:', response.data.id);
-      return response.data;
+    if (response.ok) {
+      console.log('✅ Contact created:', data.id);
+      return data;
     } else {
-      console.error('❌ kvCORE API error:', response.status, response.data);
+      console.error('❌ kvCORE API error:', response.status, data);
       return null;
     }
   } catch (error: any) {
-    console.error('❌ kvCORE request failed:', {
-      message: error.message,
-      url: error.config?.url,
-      baseURL: error.config?.baseURL,
-      method: error.config?.method
-    });
+    console.error('❌ kvCORE request failed:', error.message);
     return null;
   }
 }
