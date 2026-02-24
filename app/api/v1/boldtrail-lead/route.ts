@@ -118,11 +118,7 @@ export async function POST(request: NextRequest) {
               email: body.email,
               phone: body.phone,
               source: 'Estate Sale Landing Page',
-              tags: ['landing-page-lead', 'estate-sale-inquiry', 'hot-lead'],
-              customField: {
-                property_address: `${validatedAddress.street || body.street}, ${validatedAddress.city || body.city}, ${validatedAddress.state || body.state}`,
-                estimated_value: zestimate.toString()
-              }
+              tags: ['landing-page-lead', 'estate-sale-inquiry', 'hot-lead']
             })
           });
 
