@@ -25,7 +25,7 @@
 import axios, { AxiosInstance } from 'axios';
 
 const KVCORE_API_KEY = process.env.KVCORE_API_KEY;
-const KVCORE_BASE_URL = 'https://api.kvcore.com/v2';
+const KVCORE_BASE_URL = 'https://api.boldtrail.com';
 
 function isKvCoreEnabled(): boolean {
   if (!KVCORE_API_KEY) {
@@ -72,13 +72,14 @@ export async function createContact(contact: {
   try {
     console.log('👤 Creating kvCORE contact:', contact.email);
     
-    const url = `${KVCORE_BASE_URL}/public/contacts`;
+    const url = `${KVCORE_BASE_URL}/crm/contacts`;
     console.log('🔗 Request URL:', url);
     
     const response = await fetch(url, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${KVCORE_API_KEY}`,
+        'Accept': 'application/json',
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
