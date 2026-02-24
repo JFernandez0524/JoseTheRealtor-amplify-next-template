@@ -97,7 +97,13 @@ export async function POST(request: NextRequest) {
         const locationId = process.env.GHL_LOCATION_ID;
         const apiKey = process.env.GHL_API_KEY;
         
+        console.log('🔑 GHL credentials check:', { 
+          hasLocationId: !!locationId, 
+          hasApiKey: !!apiKey 
+        });
+        
         if (locationId && apiKey) {
+          console.log('📤 Sending to GHL...');
           const ghlResponse = await fetch('https://services.leadconnectorhq.com/contacts/', {
             method: 'POST',
             headers: {
@@ -126,6 +132,8 @@ export async function POST(request: NextRequest) {
           } else {
             console.error('❌ GHL error:', result);
           }
+        } else {
+          console.error('❌ Missing GHL credentials');
         }
       } catch (error) {
         console.error('❌ Failed to send to GHL:', error);
