@@ -87,22 +87,49 @@ export async function POST(request: NextRequest) {
       console.error('⚠️ Zestimate lookup failed:', error);
     }
 
-    // 3. Create contact in kvCORE
+    // 3. Send to GHL
     if (body.name || body.email || body.phone) {
       const nameParts = (body.name || '').trim().split(' ');
       const firstName = nameParts[0] || 'Unknown';
       const lastName = nameParts.slice(1).join(' ') || 'Lead';
 
-      await createContact({
-        firstName,
-        lastName,
-        email: body.email,
-        phone: body.phone,
-        dealType: 'seller',
-        source: 'Estate Sale Landing Page',
-        notes: `Property: ${validatedAddress.street || body.street}, ${validatedAddress.city || body.city}, ${validatedAddress.state || body.state}\nEstimated Value: $${zestimate.toLocaleString()}\nLead Source: BoldTrail Estate Sale Landing Page`,
-        tags: ['boldtrail-estate-sale', 'probate-landing-page', 'nj-probate-2026']
-      });
+      try {
+        const locationId = process.env.GHL_LOCATION_ID;
+        const apiKey = process.env.GHL_API_KEY;
+        
+        if (locationId && apiKey) {
+          const ghlResponse = await fetch('https://services.leadconnectorhq.com/contacts/', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${apiKey}`,
+              'Version': '2021-07-28',
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              locationId,
+              firstName,
+              lastName,
+              email: body.email,
+              phone: body.phone,
+              source: 'Estate Sale Landing Page',
+              tags: ['landing-page-lead', 'estate-sale-inquiry', 'hot-lead'],
+              customField: {
+                property_address: `${validatedAddress.street || body.street}, ${validatedAddress.city || body.city}, ${validatedAddress.state || body.state}`,
+                estimated_value: zestimate.toString()
+              }
+            })
+          });
+
+          const result = await ghlResponse.json();
+          if (ghlResponse.ok) {
+            console.log('✅ Lead sent to GHL:', result.contact?.id);
+          } else {
+            console.error('❌ GHL error:', result);
+          }
+        }
+      } catch (error) {
+        console.error('❌ Failed to send to GHL:', error);
+      }
     }
 
     // 4. Return response

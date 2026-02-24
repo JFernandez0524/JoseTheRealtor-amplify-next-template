@@ -71,7 +71,7 @@ async function handleDeliveryUpdate(contactId: string, data: any) {
   const orderStatus = data['order.status'];
   const deliveryDate = data['order_item.delivery_date'];
 
-  console.log(`📦 [THANKS.IO] Delivery update for ${contactId}: order=${orderStatus}, item=${itemStatus}`);
+  console.log(`📦 [THANKS.IO] Delivery update for ${contactId}: order=${orderStatus}, item=${itemStatus}, delivered=${deliveryDate}`);
 
   // Check order-level status for "Delivered"
   if (orderStatus !== 'Delivered') {
