@@ -88,8 +88,9 @@ export async function analyzeBridgeProperty(params: {
   const { street: rawStreet, city: rawCity, state, zip, lat, lng } = params;
   const city = cleanCityName(rawCity || '');
   const streetVariations = generateAddressVariations(rawStreet || '');
+  const zip5 = zip?.split('-')[0]; // Strip ZIP+4 to 5 digits
 
-  console.log('🔍 Bridge API search params:', { rawStreet, city, state, zip, lat, lng });
+  console.log('🔍 Bridge API search params:', { rawStreet, city, state, zip: zip5, lat, lng });
   console.log('📝 Street variations:', streetVariations);
 
   let valuation = null;
@@ -99,9 +100,9 @@ export async function analyzeBridgeProperty(params: {
   for (const street of streetVariations) {
     try {
       const res = await bridgeClient.get('/zestimates_v2/zestimates', {
-        params: { limit: 10, address: street, city, state, postalCode: zip },
+        params: { limit: 10, address: street, city, state, postalCode: zip5 },
       });
-      console.log(`🔎 Trying: ${street}, ${city}, ${state} ${zip}`);
+      console.log(`🔎 Trying: ${street}, ${city}, ${state} ${zip5}`);
       console.log(`📦 Bridge returned ${res.data.bundle?.length || 0} results`);
       
       if (res.data.bundle?.length > 0) {
