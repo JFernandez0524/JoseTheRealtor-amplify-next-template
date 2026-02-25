@@ -135,6 +135,24 @@ export async function POST(request: NextRequest) {
           const result = await ghlResponse.json();
           if (ghlResponse.ok) {
             console.log('✅ Lead sent to GHL:', result.contact?.id);
+            
+            // Add note with form submission details
+            const noteText = `🌐 Estate Sale Landing Page Inquiry\n\nSubmitted Name: ${body.name}\nEmail: ${body.email || 'Not provided'}\nPhone: ${body.phone}\nProperty: ${validatedAddress.street || body.street}, ${validatedAddress.city || body.city}, ${validatedAddress.state || body.state} ${validatedAddress.zip || body.zip}\nZestimate: $${zestimate.toLocaleString()}\nCash Offer: $${Math.round(zestimate * 0.7).toLocaleString()}\n\nSubmitted: ${new Date().toLocaleString('en-US', { timeZone: 'America/New_York' })} EST`;
+            
+            await fetch(`https://services.leadconnectorhq.com/contacts/${result.contact.id}/notes`, {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${apiKey}`,
+                'Version': '2021-07-28',
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({
+                body: noteText,
+                userId: locationId
+              })
+            });
+            
+            console.log('✅ Note added with form details');
           } else if (ghlResponse.status === 400 && result.meta?.contactId) {
             // Duplicate contact - add tags, custom fields, and note
             console.log(`🔄 Duplicate ${result.meta.matchingField} detected for ${result.meta.contactName}, updating with inquiry details`);
