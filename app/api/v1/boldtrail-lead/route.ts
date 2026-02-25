@@ -118,13 +118,74 @@ export async function POST(request: NextRequest) {
               email: body.email,
               phone: body.phone,
               source: 'Estate Sale Landing Page',
-              tags: ['landing-page-lead', 'estate-sale-inquiry', 'hot-lead']
+              tags: ['landing-page-lead', 'estate-sale-inquiry', 'hot-lead'],
+              customFields: [
+                { id: 'p3NOYiInAERYbe0VsLHB', value: validatedAddress.street || body.street },
+                { id: 'h4UIjKQvFu7oRW4SAY8W', value: validatedAddress.city || body.city },
+                { id: '9r9OpQaxYPxqbA6Hvtx7', value: validatedAddress.state || body.state },
+                { id: 'hgbjsTVwcyID7umdhm2o', value: validatedAddress.zip || body.zip },
+                { id: '7wIe1cRbZYXUnc3WOVb2', value: zestimate.toString() },
+                { id: 'sM3hEOHCJFoPyWhj1Vc8', value: Math.round(zestimate * 0.7).toString() },
+                { id: 'oaf4wCuM3Ub9eGpiddrO', value: 'ESTATE SALE' },
+                { id: 'pGfgxcdFaYAkdq0Vp53j', value: 'Phone Contact' }
+              ]
             })
           });
 
           const result = await ghlResponse.json();
           if (ghlResponse.ok) {
             console.log('✅ Lead sent to GHL:', result.contact?.id);
+          } else if (ghlResponse.status === 400 && result.meta?.contactId) {
+            // Duplicate contact - add tags, custom fields, and note
+            console.log(`🔄 Duplicate ${result.meta.matchingField} detected for ${result.meta.contactName}, updating with inquiry details`);
+            
+            const updatePayload: any = {
+              tags: ['landing-page-lead', 'estate-sale-inquiry', 'hot-lead'],
+              customFields: [
+                { id: 'p3NOYiInAERYbe0VsLHB', value: validatedAddress.street || body.street },
+                { id: 'h4UIjKQvFu7oRW4SAY8W', value: validatedAddress.city || body.city },
+                { id: '9r9OpQaxYPxqbA6Hvtx7', value: validatedAddress.state || body.state },
+                { id: 'hgbjsTVwcyID7umdhm2o', value: validatedAddress.zip || body.zip },
+                { id: '7wIe1cRbZYXUnc3WOVb2', value: zestimate.toString() },
+                { id: 'sM3hEOHCJFoPyWhj1Vc8', value: Math.round(zestimate * 0.7).toString() },
+                { id: 'oaf4wCuM3Ub9eGpiddrO', value: 'ESTATE SALE' },
+                { id: 'pGfgxcdFaYAkdq0Vp53j', value: 'Phone Contact' }
+              ]
+            };
+
+            const updateResponse = await fetch(`https://services.leadconnectorhq.com/contacts/${result.meta.contactId}`, {
+              method: 'PUT',
+              headers: {
+                'Authorization': `Bearer ${apiKey}`,
+                'Version': '2021-07-28',
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify(updatePayload)
+            });
+
+            if (updateResponse.ok) {
+              console.log('✅ Custom fields updated for existing contact');
+              
+              // Add note with form submission details
+              const noteText = `🌐 Estate Sale Landing Page Inquiry\n\nSubmitted Name: ${body.name}\nEmail: ${body.email || 'Not provided'}\nPhone: ${body.phone}\nProperty: ${validatedAddress.street || body.street}, ${validatedAddress.city || body.city}, ${validatedAddress.state || body.state} ${validatedAddress.zip || body.zip}\nZestimate: $${zestimate.toLocaleString()}\nCash Offer: $${Math.round(zestimate * 0.7).toLocaleString()}\n\nSubmitted: ${new Date().toLocaleString('en-US', { timeZone: 'America/New_York' })} EST`;
+              
+              await fetch(`https://services.leadconnectorhq.com/contacts/${result.meta.contactId}/notes`, {
+                method: 'POST',
+                headers: {
+                  'Authorization': `Bearer ${apiKey}`,
+                  'Version': '2021-07-28',
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                  body: noteText,
+                  userId: locationId
+                })
+              });
+              
+              console.log('✅ Note added with form details');
+            } else {
+              console.error('❌ Failed to update contact:', await updateResponse.json());
+            }
           } else {
             console.error('❌ GHL error:', result);
           }
