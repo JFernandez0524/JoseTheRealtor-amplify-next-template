@@ -127,7 +127,7 @@ export async function POST(request: NextRequest) {
                 { id: '7wIe1cRbZYXUnc3WOVb2', value: zestimate.toString() },
                 { id: 'sM3hEOHCJFoPyWhj1Vc8', value: Math.round(zestimate * 0.7).toString() },
                 { id: 'oaf4wCuM3Ub9eGpiddrO', value: 'ESTATE SALE' },
-                { id: 'pGfgxcdFaYAkdq0Vp53j', value: 'Phone Contact' }
+                { id: 'pGfgxcdFaYAkdq0Vp53j', value: 'Probate Landing Page' }
               ]
             })
           });
@@ -149,7 +149,7 @@ export async function POST(request: NextRequest) {
                 { id: '7wIe1cRbZYXUnc3WOVb2', value: zestimate.toString() },
                 { id: 'sM3hEOHCJFoPyWhj1Vc8', value: Math.round(zestimate * 0.7).toString() },
                 { id: 'oaf4wCuM3Ub9eGpiddrO', value: 'ESTATE SALE' },
-                { id: 'pGfgxcdFaYAkdq0Vp53j', value: 'Phone Contact' }
+                { id: 'pGfgxcdFaYAkdq0Vp53j', value: 'Probate Landing Page' }
               ]
             };
 
