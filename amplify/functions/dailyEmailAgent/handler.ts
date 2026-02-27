@@ -184,23 +184,29 @@ RE/MAX Homeland Realtors
               }
               
               // Update email counter in GHL (increment, not set to 1)
-              const currentCounter = parseInt(contact.customFields?.find((f: any) => f.id === 'wWlrXoXeMXcM6kUexf2L')?.value || '0');
-              await axios.put(
-                `https://services.leadconnectorhq.com/contacts/${contact.id}`,
-                {
-                  customFields: [
-                    { id: 'wWlrXoXeMXcM6kUexf2L', value: (currentCounter + 1).toString() }, // Increment email_attempt_counter
-                    { id: '3xOBr4GvgRc22kBRNYCE', value: new Date().toISOString() } // last_email_date
-                  ]
-                },
-                {
-                  headers: {
-                    'Authorization': `Bearer ${validAccessToken}`,
-                    'Content-Type': 'application/json',
-                    'Version': '2021-07-28'
+              try {
+                const currentCounter = parseInt(contact.customFields?.find((f: any) => f.id === 'wWlrXoXeMXcM6kUexf2L')?.value || '0');
+                console.log(`📊 [GHL] Updating counter for ${contact.id}: ${currentCounter} → ${currentCounter + 1}`);
+                await axios.put(
+                  `https://services.leadconnectorhq.com/contacts/${contact.id}`,
+                  {
+                    customFields: [
+                      { id: 'wWlrXoXeMXcM6kUexf2L', value: (currentCounter + 1).toString() },
+                      { id: '3xOBr4GvgRc22kBRNYCE', value: new Date().toISOString() }
+                    ]
+                  },
+                  {
+                    headers: {
+                      'Authorization': `Bearer ${validAccessToken}`,
+                      'Content-Type': 'application/json',
+                      'Version': '2021-07-28'
+                    }
                   }
-                }
-              );
+                );
+                console.log(`✅ [GHL] Counter updated for ${contact.id}`);
+              } catch (ghlError: any) {
+                console.error(`❌ [GHL] Failed to update counter for ${contact.id}:`, ghlError.response?.data || ghlError.message);
+              }
             } else {
               console.error(`Failed to send email to ${contact.email}:`, response.data.error);
             }
