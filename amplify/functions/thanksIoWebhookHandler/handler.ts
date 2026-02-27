@@ -175,35 +175,46 @@ async function handleQRScan(contactId: string, data: any) {
 
 async function getUserIdFromContact(contactId: string): Promise<string | null> {
   try {
-    // Look up contact in OutreachQueue to find userId
-    const result = await docClient.send(new GetCommand({
-      TableName: process.env.AMPLIFY_DATA_OutreachQueue_TABLE_NAME,
-      Key: { id: `${contactId}` } // Assuming id format is userId_contactId
-    }));
-
-    if (result.Item) {
-      return result.Item.userId;
-    }
-
-    // Fallback: scan for the contact
-    const { DynamoDBDocumentClient, ScanCommand } = await import('@aws-sdk/lib-dynamodb');
-    const scanResult = await docClient.send(new ScanCommand({
-      TableName: process.env.AMPLIFY_DATA_OutreachQueue_TABLE_NAME!,
-      FilterExpression: 'contactId = :contactId',
-      ExpressionAttributeValues: {
-        ':contactId': contactId
-      },
+    const { ScanCommand } = await import('@aws-sdk/lib-dynamodb');
+    
+    // Get any GHL integration to fetch contact details
+    const integrationResult = await docClient.send(new ScanCommand({
+      TableName: process.env.AMPLIFY_DATA_GhlIntegration_TABLE_NAME!,
       Limit: 1
     }));
 
-    if (scanResult.Items && scanResult.Items.length > 0) {
-      return scanResult.Items[0].userId;
+    if (!integrationResult.Items?.length) {
+      console.error(`❌ [THANKS.IO] No GHL integrations found`);
+      return null;
     }
 
-    console.error(`❌ [THANKS.IO] Could not find userId for contact ${contactId}`);
+    const tokenData = await getValidGhlToken(integrationResult.Items[0].userId);
+    if (!tokenData) return null;
+
+    // Get contact's locationId from GHL
+    const contactResponse = await axios.get(
+      `${GHL_API_BASE}/contacts/${contactId}`,
+      { headers: { Authorization: `Bearer ${tokenData.token}`, Version: '2021-07-28' } }
+    );
+
+    const locationId = contactResponse.data.contact.locationId;
+    
+    // Find userId for this locationId
+    const userResult = await docClient.send(new ScanCommand({
+      TableName: process.env.AMPLIFY_DATA_GhlIntegration_TABLE_NAME!,
+      FilterExpression: 'locationId = :locationId',
+      ExpressionAttributeValues: { ':locationId': locationId },
+      Limit: 1
+    }));
+
+    if (userResult.Items?.length) {
+      return userResult.Items[0].userId;
+    }
+
+    console.error(`❌ [THANKS.IO] No userId found for locationId ${locationId}`);
     return null;
-  } catch (error) {
-    console.error('❌ [THANKS.IO] Error getting userId:', error);
+  } catch (error: any) {
+    console.error('❌ [THANKS.IO] Error getting userId:', error.message);
     return null;
   }
 }
