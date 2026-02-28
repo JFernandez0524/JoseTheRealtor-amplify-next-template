@@ -11,9 +11,9 @@ import type { Handler } from 'aws-lambda';
 import crypto from 'crypto';
 import axios from 'axios';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, GetCommand, PutCommand, ScanCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient,  ScanCommand } from '@aws-sdk/lib-dynamodb';
 import { getValidGhlToken } from '../shared/ghlTokenManager';
-import { generateAIResponse } from '../shared/conversationHandler';
+
 
 const dynamoClient = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
