@@ -1,10 +1,12 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
+import crypto from 'crypto';
 
 const META_VERIFY_TOKEN = process.env.META_VERIFY_TOKEN;
+const META_APP_SECRET = process.env.META_APP_SECRET;
 
 /**
  * VERIFICATION HANDLER (GET)
- * Meta calls this when you click "Verify" in the App Dashboard.
+ * Used by Meta to verify your webhook endpoint.
  */
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -13,51 +15,61 @@ export async function GET(req: NextRequest) {
   const token = searchParams.get('hub.verify_token');
   const challenge = searchParams.get('hub.challenge');
 
-  // Check if a token and mode is in the query string of the request
-  if (mode && token) {
-    // Check the mode and token sent is correct
-    if (mode === 'subscribe' && token === META_VERIFY_TOKEN) {
-      console.log('✅ WEBHOOK_VERIFIED');
-      // IMPORTANT: Return the challenge as a plain string (text/plain)
-      return new Response(challenge, { status: 200 });
-    } else {
-      // Respond with '403 Forbidden' if verify tokens do not match
-      return new Response('Verification failed', { status: 403 });
-    }
+  if (mode === 'subscribe' && token === META_VERIFY_TOKEN) {
+    console.log('✅ WEBHOOK_VERIFIED');
+    return new Response(challenge, { status: 200 });
   }
-
-  return new Response('Hello Webhook', { status: 200 });
+  
+  return new Response('Verification failed', { status: 403 });
 }
 
 /**
  * EVENT NOTIFICATION HANDLER (POST)
- * Meta calls this whenever a user sends a message.
+ * Receives messages and validates their signature.
  */
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
+    // 1. Get the raw body as text for signature verification
+    const rawBody = await req.text();
+    const signature = req.headers.get('x-hub-signature-256');
 
-    // Check if this is an event from a page subscription
+    if (!signature) {
+      console.warn('⚠️ No signature found in headers.');
+      return new Response('No signature', { status: 401 });
+    }
+
+    // 2. Validate Signature
+    const elements = signature.split('=');
+    const signatureHash = elements[1];
+    const expectedHash = crypto
+      .createHmac('sha256', META_APP_SECRET as string)
+      .update(rawBody, 'utf8')
+      .digest('hex');
+
+    if (signatureHash !== expectedHash) {
+      console.error('❌ Signature mismatch! The request may not be from Meta.');
+      return new Response('Unauthorized', { status: 401 });
+    }
+
+    // 3. Parse and Process
+    const body = JSON.parse(rawBody);
+
     if (body.object === 'page') {
-      
-      // Iterate over each entry - there may be multiple if batched
       body.entry.forEach((entry: any) => {
-        // Gets the message. entry.messaging is an array
-        const webhook_event = entry.messaging[0];
-        console.log('📩 Received Event:', webhook_event);
-
-        const sender_psid = webhook_event.sender.id;
-        console.log('Sender PSID:', sender_psid);
+        const webhook_event = entry.messaging?.[0];
+        if (webhook_event) {
+          console.log('📩 Validated Event:', webhook_event);
+          const sender_psid = webhook_event.sender.id;
+          console.log('Sender PSID:', sender_psid);
+        }
       });
 
-      // Returns a '200 OK' response to all requests
       return new Response('EVENT_RECEIVED', { status: 200 });
-    } else {
-      // Return a '404 Not Found' if event is not from a page subscription
-      return new Response('Not Found', { status: 404 });
     }
+
+    return new Response('Not Found', { status: 404 });
   } catch (error) {
-    console.error('Error parsing webhook:', error);
+    console.error('🔥 Webhook Error:', error);
     return new Response('Internal Server Error', { status: 500 });
   }
 }

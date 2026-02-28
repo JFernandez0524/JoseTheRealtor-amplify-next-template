@@ -15,6 +15,7 @@ import { populateQueueFromGhl } from './functions/populateQueueFromGhl/resource'
 import { syncListingStatus } from './functions/syncListingStatus/resource';
 import { ghlFieldSyncHandler } from './functions/ghlFieldSyncHandler/resource';
 import { thanksIoWebhookHandler } from './functions/thanksIoWebhookHandler/resource';
+import { facebookWebhookHandler } from './functions/facebookWebhookHandler/resource';
 import { addUserToGroup } from './data/add-user-to-group/resource';
 import { removeUserFromGroup } from './data/remove-user-from-group/resource';
 import { EventType } from 'aws-cdk-lib/aws-s3';
@@ -39,6 +40,7 @@ const backend = defineBackend({
   syncListingStatus,
   ghlFieldSyncHandler,
   thanksIoWebhookHandler,
+  facebookWebhookHandler,
   addUserToGroup,
   removeUserFromGroup,
 });
@@ -417,6 +419,49 @@ backend.thanksIoWebhookHandler.resources.lambda.addFunctionUrl({
 
 // Grant public access to Function URL
 backend.thanksIoWebhookHandler.resources.lambda.addPermission('AllowPublicFunctionUrl', {
+  principal: new AnyPrincipal(),
+  action: 'lambda:InvokeFunctionUrl',
+  functionUrlAuthType: FunctionUrlAuthType.NONE,
+});
+
+// 📘 Configure Facebook Webhook Handler
+backend.facebookWebhookHandler.addEnvironment(
+  'AMPLIFY_DATA_GhlIntegration_TABLE_NAME',
+  backend.data.resources.tables['GhlIntegration'].tableName
+);
+
+backend.facebookWebhookHandler.addEnvironment(
+  'AMPLIFY_DATA_OutreachQueue_TABLE_NAME',
+  backend.data.resources.tables['OutreachQueue'].tableName
+);
+
+backend.facebookWebhookHandler.addEnvironment('GHL_CLIENT_ID', process.env.GHL_CLIENT_ID || '');
+backend.facebookWebhookHandler.addEnvironment('GHL_CLIENT_SECRET', process.env.GHL_CLIENT_SECRET || '');
+backend.facebookWebhookHandler.addEnvironment('META_VERIFY_TOKEN', process.env.META_VERIFY_TOKEN || '');
+backend.facebookWebhookHandler.addEnvironment('META_APP_SECRET', process.env.META_APP_SECRET || '');
+backend.facebookWebhookHandler.addEnvironment('FB_PAGE_ACCESS_TOKEN', process.env.FB_PAGE_ACCESS_TOKEN || '');
+backend.facebookWebhookHandler.addEnvironment('OPENAI_API_KEY', process.env.OPENAI_API_KEY || '');
+backend.facebookWebhookHandler.addEnvironment('APP_URL', process.env.APP_URL || 'https://main.d127hbsjypuuhr.amplifyapp.com');
+
+backend.data.resources.tables['GhlIntegration'].grantReadWriteData(
+  backend.facebookWebhookHandler.resources.lambda
+);
+
+backend.data.resources.tables['OutreachQueue'].grantReadWriteData(
+  backend.facebookWebhookHandler.resources.lambda
+);
+
+// Enable Function URL for webhook
+backend.facebookWebhookHandler.resources.lambda.addFunctionUrl({
+  authType: FunctionUrlAuthType.NONE,
+  cors: {
+    allowedOrigins: ['*'],
+    allowedMethods: [HttpMethod.GET, HttpMethod.POST],
+    allowedHeaders: ['*'],
+  }
+});
+
+backend.facebookWebhookHandler.resources.lambda.addPermission('AllowPublicFacebookWebhook', {
   principal: new AnyPrincipal(),
   action: 'lambda:InvokeFunctionUrl',
   functionUrlAuthType: FunctionUrlAuthType.NONE,

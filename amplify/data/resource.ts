@@ -34,6 +34,7 @@ const schema = a.schema({
       contactName: a.string(),
       contactPhone: a.string(),
       contactEmail: a.string(),
+      facebookPsid: a.string(), // Facebook Page-Scoped ID for Messenger
       
       // Queue lifecycle status
       queueStatus: a.enum(['OUTREACH', 'CONVERSATION', 'DND', 'WRONG_INFO', 'COMPLETED']),
