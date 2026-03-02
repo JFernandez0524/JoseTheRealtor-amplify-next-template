@@ -441,6 +441,42 @@ export const handler = async (event: any) => {
     // Generate AI response (import from shared utility)
     const { generateAIResponse } = await import('../shared/conversationHandler');
     
+    // Fetch conversation history for context (last 20 messages)
+    let conversationHistory: Array<{role: 'user' | 'assistant', content: string}> = [];
+    if (conversationId) {
+      try {
+        console.log('📜 [WEBHOOK_LAMBDA] Fetching conversation history...');
+        const historyResponse = await fetch(
+          `https://services.leadconnectorhq.com/conversations/${conversationId}/messages?limit=20`,
+          {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Version': '2021-04-15'
+            }
+          }
+        );
+        const historyData = await historyResponse.json();
+        
+        if (historyData?.messages && Array.isArray(historyData.messages)) {
+          // Filter out system messages and map to OpenAI format
+          // GHL returns newest first, so reverse for chronological order
+          conversationHistory = historyData.messages
+            .filter((msg: any) => msg.body && msg.type !== 'TYPE_SYSTEM')
+            .reverse()
+            .map((msg: any) => ({
+              role: msg.direction === 'outbound' ? 'assistant' as const : 'user' as const,
+              content: msg.body
+            }))
+            .slice(-20); // Keep last 20 messages
+          
+          console.log(`✅ [WEBHOOK_LAMBDA] Loaded ${conversationHistory.length} messages for context`);
+        }
+      } catch (error) {
+        console.error('⚠️ [WEBHOOK_LAMBDA] Failed to fetch conversation history:', error);
+        // Continue without history - graceful degradation
+      }
+    }
+    
     // Determine message type: Instagram (18), Facebook (3, 11), or SMS (2)
     let messageTypeStr: 'SMS' | 'FB' | 'IG' | 'WhatsApp' = 'SMS';
     if (messageType === 18) {
@@ -465,6 +501,7 @@ export const handler = async (event: any) => {
       messageType: messageTypeStr,
       existingZestimate: zestimate ? parseInt(zestimate) : undefined, // Pass existing Zestimate
       existingCashOffer: cashOffer ? parseInt(cashOffer) : undefined, // Pass existing cash offer
+      conversationHistory, // Pass conversation history for multi-turn context
     });
 
     // PHASE 3: OUTBOUND LOGGING (We just sent AI response)

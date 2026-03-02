@@ -42,6 +42,7 @@ interface ConversationContext {
   messageType?: 'SMS' | 'FB' | 'IG' | 'WhatsApp'; // Message channel type
   existingZestimate?: number; // Zestimate from database (skip API call)
   existingCashOffer?: number; // Cash offer from database (skip calculation)
+  conversationHistory?: Array<{role: 'user' | 'assistant', content: string}>; // Last 20 messages for context
   // Listing ad context (for buyer leads)
   listingAddress?: string; // Property from the ad
   listingPrice?: number;
@@ -307,16 +308,26 @@ async function generateOpenAIResponse(context: ConversationContext, propertyData
 
   const systemPrompt = `You are an AI assistant helping Jose Fernandez, a licensed real estate agent at RE/MAX Homeland Realtors.
 
-🔒 TRUST QUESTION OVERRIDE (HIGHEST PRIORITY):
+📱 COMMUNICATION PREFERENCE OVERRIDE (HIGHEST PRIORITY):
 
-If the user asks ANY of these questions:
-- "Where did you see this?"
-- "How did you get my info?"
-- "What notice?"
-- "Who gave you my number?"
-- "Where did you see the notice?"
+If the user requests a specific communication method:
+- "Text me" / "Please text" / "Send me a text"
+- "Call me" / "Give me a call"
+- "Email me" / "Send an email"
 
-IMMEDIATELY respond with ONE of these variants (choose randomly for natural variance):
+IMMEDIATELY acknowledge and continue naturally:
+"Absolutely! I'm texting you now. [Continue with relevant question based on conversation state]"
+
+DO NOT treat this as a trust question. This is a preference, not skepticism.
+
+🔒 TRUST QUESTION OVERRIDE (SECOND PRIORITY):
+
+If the user asks a trust question with question words or question marks:
+- "Where did you see this?" / "How did you get my info?"
+- "What notice?" / "Who gave you my number?"
+- "Where did you see the notice?" / "How did you find me?"
+
+IMMEDIATELY respond with ONE of these variants (choose randomly):
 
 Variant 1: "Good question — it came from publicly available county records. Nothing private or paid. If this isn't a good time, no worries at all."
 
@@ -623,19 +634,29 @@ Respond to their message:`;
       }
     ];
     
+    // Build messages array with conversation history
+    const messages: Array<{role: string, content: string}> = [
+      { role: 'system', content: systemPrompt }
+    ];
+    
+    // Add conversation history if available (for multi-turn context)
+    if (context.conversationHistory && context.conversationHistory.length > 0) {
+      messages.push(...context.conversationHistory);
+      console.log(`📜 Including ${context.conversationHistory.length} previous messages for context`);
+    }
+    
+    // Add current message
+    if (isInitialOutreach) {
+      messages.push({ role: 'user', content: 'Generate the initial outreach message following the 5-step script.' });
+    } else {
+      messages.push({ role: 'user', content: context.incomingMessage });
+    }
+    
     const response = await axios.post(
       'https://api.openai.com/v1/chat/completions',
       {
         model: 'gpt-4o-mini', // Using 4o-mini for now (4.1-mini when available)
-        messages: isInitialOutreach 
-          ? [
-              { role: 'system', content: systemPrompt },
-              { role: 'user', content: 'Generate the initial outreach message following the 5-step script.' }
-            ]
-          : [
-              { role: 'system', content: systemPrompt },
-              { role: 'user', content: context.incomingMessage }
-            ],
+        messages,
         tools,
         tool_choice: 'auto',
         max_tokens: 150,
