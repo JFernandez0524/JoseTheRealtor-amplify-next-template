@@ -597,7 +597,6 @@ Hi [Name], this is Jose Fernandez from RE/MAX Homeland Realtors. I saw the publi
 - `POST /api/v1/ghl-email-webhook` - Handle email replies (AI responses)
 
 #### Other
-- `POST /api/v1/start-email-campaign` - Trigger bulk email campaign
 - `GET /api/v1/ghl-phone-numbers` - Get available GHL phone numbers
 - `GET /api/v1/oauth/callback` - GHL OAuth callback
 - `POST /api/v1/oauth/refresh` - Refresh GHL OAuth token

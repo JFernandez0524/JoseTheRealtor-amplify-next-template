@@ -303,7 +303,7 @@ export default function DocsPage() {
                 <h4 className="font-medium text-blue-800 mb-2">📧 Email Campaign System</h4>
                 <ul className="list-disc list-inside space-y-1 text-blue-700 text-sm">
                   <li><strong>Initial Email</strong>: Automatically sent when contact is created in GHL</li>
-                  <li><strong>Bulk Campaign</strong>: Click "📧 Start Email Campaign" to email all eligible contacts</li>
+                  <li><strong>Daily Automated Outreach</strong>: Runs hourly during business hours for contacts with "AI Outreach" tag</li>
                   <li>Emails sent to ALL addresses (primary + email_2 + email_3)</li>
                   <li>Personalized with property data (address, Zestimate, cash offer)</li>
                   <li>Reply detection: Automatically tags replied contacts and stops automation</li>
@@ -316,7 +316,7 @@ export default function DocsPage() {
               <div className="bg-green-50 p-4 rounded-lg">
                 <h4 className="font-medium text-green-800 mb-2">📱 AI SMS Campaign System</h4>
                 <ul className="list-disc list-inside space-y-1 text-green-700 text-sm">
-                  <li><strong>Daily Automated Outreach</strong>: Runs at 9 AM EST for contacts with "AI Outreach" tag</li>
+                  <li><strong>Daily Automated Outreach</strong>: Runs hourly during business hours for contacts with "AI Outreach" tag</li>
                   <li>AI-generated messages using OpenAI with proven 5-step script</li>
                   <li>Adapts to lead type (preforeclosure vs probate)</li>
                   <li>Handles inbound replies with contextual AI responses</li>

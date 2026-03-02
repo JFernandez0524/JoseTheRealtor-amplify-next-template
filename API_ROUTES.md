@@ -45,13 +45,6 @@
 - Detects bounces → Tags contact, stops future emails
 **Used by:** GHL email workflow webhooks
 
-### POST /api/v1/start-email-campaign
-**Purpose:** Manual bulk email campaign trigger
-**Auth:** Required (user must be authenticated)
-**Request:** None (uses user's GHL integration)
-**Response:** `{ success, sent, failed, errors }`
-**Used by:** Dashboard "Start Email Campaign" button
-
 ### POST /api/v1/refresh-zestimate
 **Purpose:** Refresh Zestimate for a specific lead
 **Auth:** Required

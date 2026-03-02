@@ -10,8 +10,7 @@ A comprehensive real estate lead management platform built with AWS Amplify Gen2
 - **AI Messaging Bot**: Automated conversations across SMS, Facebook Messenger, Instagram DMs, and WhatsApp using OpenAI
 - **Multi-Channel Outreach**: Coordinated messaging with instant AI responses on all platforms
 - **Outreach Queue System**: Efficient DynamoDB-based queue for tracking outreach status (90% reduction in API costs)
-- **Automated Email Campaigns**: Bulk prospecting emails with personalized property details, Zestimate values, and cash offers
-- **Multi-Channel Outreach**: Coordinated SMS and email campaigns with automatic reply/bounce detection and tagging
+- **Automated Email Campaigns**: AI-powered prospecting emails with personalized property details, Zestimate values, and cash offers
 - **Business Hours Compliance**: All outreach respects Mon-Fri 9AM-7PM, Sat 9AM-12PM EST schedule
 - **Property Enrichment (Preforeclosure)**: Real equity data, mortgage balances, and quality contact info via BatchData ($0.29/lead)
 - **Skip Tracing**: Pay-per-use contact lookup at $0.10 per skip (probate leads)
@@ -175,7 +174,6 @@ For detailed deployment instructions, see the [Amplify documentation](https://do
      - Cash offer (70% of Zestimate for as-is purchase option)
      - Appropriate tags for direct mail or phone campaigns
    - **Initial Email**: Automatically sent to all email addresses when contact is created
-   - **Bulk Email Campaign**: Click "📧 Start Email Campaign" to email all eligible contacts
    - **Daily SMS Outreach**: Automated at 9 AM EST for contacts with "AI Outreach" tag
    - **Reply Handling**: Automatic detection and tagging of email/SMS replies
    - **Bounce Protection**: Stops emails to bounced addresses automatically
@@ -283,23 +281,7 @@ For detailed deployment instructions, see the [Amplify documentation](https://do
      - Multi-email support (sends to all addresses on contact)
      - Bounce detection and automatic tagging
 
-13. **Email Campaigns (Manual Bulk Prospecting)**
-   - **Manual Trigger**: Click "📧 Start Email Campaign" button in dashboard
-   - **Target Contacts**: GHL contacts with "app:synced" tag who haven't been emailed
-   - **Email Content**:
-     - Personalized with contact's first name
-     - Property address and estimated value
-     - Cash offer amount (70% of Zestimate)
-     - Two options: quick cash sale or full market listing
-   - **Multi-Email Support**: Sends to all email addresses on contact (primary + email2 + email3)
-   - **Tracking**:
-     - Updates email_attempt_counter after sending
-     - Records last_email_date
-     - Prevents duplicate emails in future campaigns
-   - **Reply Handling**:
-     - Webhook automatically detects email replies
-
-14. **Webhook Integrations (Real-Time Sync)**
+13. **Webhook Integrations (Real-Time Sync)**
    - **Purpose**: Bi-directional sync between GHL, thanks.io, and your app database
    - **Available Webhooks**:
      
@@ -382,7 +364,7 @@ For detailed deployment instructions, see the [Amplify documentation](https://do
      - Search by contact ID or request ID for debugging
      - Average response time: 200-300ms
 
-15. **GHL Tags Reference**
+14. **GHL Tags Reference**
    
    **System Tags** (automatically added by app):
    - `app:synced` - Contact synced from app to GHL
@@ -410,7 +392,7 @@ For detailed deployment instructions, see the [Amplify documentation](https://do
    - Tag `mail:scanned` added → Move to "Engaged" stage + notify you
    - 60 days in "Touch 3" without `mail:scanned` → Move to "Dead" stage
 
-16. **Direct Mail Campaign Workflow**
+15. **Direct Mail Campaign Workflow**
    
    **Setup Requirements**:
    1. Skip trace probate leads in app
@@ -444,7 +426,10 @@ For detailed deployment instructions, see the [Amplify documentation](https://do
    - ✅ `mail_sent_count` only increments on actual delivery
    - ✅ No engagement after 60 days = Dead
 
-17. **AI Analysis**
+16. **AI Analysis**
+   - Use Chat feature for property insights
+   - Get automated follow-up suggestions
+   - Analyze market conditions and equity potential
 
 ## AI Agent System
 
@@ -658,11 +643,6 @@ Jose
 2. Verify 2-second delays between messages
 3. Review GHL rate limit settings
 
-14. **AI Analysis**
-   - Use Chat feature for property insights
-   - Get automated follow-up suggestions
-   - Analyze market conditions and equity potential
-
 ### API Endpoints
 
 The platform provides REST APIs and Lambda functions for integration:
@@ -673,7 +653,6 @@ The platform provides REST APIs and Lambda functions for integration:
 - `POST /api/v1/send-message-to-contact` - Send AI SMS outreach message (production)
 - `POST /api/v1/send-email-to-contact` - Send AI email outreach message (production)
 - `POST /api/v1/send-test-to-contact` - Send AI outreach message (testing)
-- `POST /api/v1/start-email-campaign` - Start bulk email campaign
 - `GET /api/v1/ghl-phone-numbers` - Get available GHL phone numbers
 - `POST /api/v1/ghl-email-webhook` - Handle email replies and bounces (AI responses)
 - `POST /api/v1/test-ai-response` - Test AI responses (no SMS sent)

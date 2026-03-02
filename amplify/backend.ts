@@ -8,7 +8,7 @@ import { manualGhlSync } from './functions/manualGhlSync/resource';
 import { aiFollowUpAgent } from './functions/aiFollowUpAgent/resource';
 import { dailyOutreachAgent } from './functions/dailyOutreachAgent/resource';
 import { dailyEmailAgent } from './functions/dailyEmailAgent/resource';
-import { bulkEmailCampaign } from './functions/bulkEmailCampaign/resource';
+
 import { ghlWebhookHandler } from './functions/ghlWebhookHandler/resource';
 import { fixFailedSyncs } from './functions/fixFailedSyncs/resource';
 import { populateQueueFromGhl } from './functions/populateQueueFromGhl/resource';
@@ -33,7 +33,6 @@ const backend = defineBackend({
   aiFollowUpAgent,
   dailyOutreachAgent,
   dailyEmailAgent,
-  bulkEmailCampaign,
   ghlWebhookHandler,
   fixFailedSyncs,
   populateQueueFromGhl,
@@ -201,19 +200,6 @@ backend.dailyOutreachAgent.resources.lambda.addToRolePolicy(
       `${backend.data.resources.tables['OutreachQueue'].tableArn}/index/*`
     ]
   })
-);
-
-// 📧 Configure Bulk Email Campaign
-backend.bulkEmailCampaign.addEnvironment(
-  'AMPLIFY_DATA_GhlIntegration_TABLE_NAME',
-  backend.data.resources.tables['GhlIntegration'].tableName
-);
-
-backend.bulkEmailCampaign.addEnvironment('GHL_CLIENT_ID', process.env.GHL_CLIENT_ID || '');
-backend.bulkEmailCampaign.addEnvironment('GHL_CLIENT_SECRET', process.env.GHL_CLIENT_SECRET || '');
-
-backend.data.resources.tables['GhlIntegration'].grantReadWriteData(
-  backend.bulkEmailCampaign.resources.lambda
 );
 
 // 📧 Configure Daily Email Agent
