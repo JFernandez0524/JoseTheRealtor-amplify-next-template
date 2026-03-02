@@ -66,9 +66,11 @@ interface OutreachQueueItem {
  * @returns Queue item ID
  */
 export async function addToOutreachQueue(item: OutreachQueueItem): Promise<string> {
-  const id = item.id || `${item.userId}_${item.contactId}`;
+  // Create unique ID per contact+email combination (supports multiple emails per contact)
+  const emailSuffix = item.contactEmail ? `_${item.contactEmail.replace(/[^a-zA-Z0-9]/g, '')}` : '';
+  const id = item.id || `${item.userId}_${item.contactId}${emailSuffix}`;
   
-  // Check if contact already exists in queue
+  // Check if this specific contact+email already exists in queue
   try {
     const existing = await docClient.send(new GetCommand({
       TableName: OUTREACH_QUEUE_TABLE,
@@ -76,7 +78,7 @@ export async function addToOutreachQueue(item: OutreachQueueItem): Promise<strin
     }));
 
     if (existing.Item) {
-      console.log(`⚠️ Contact ${item.contactId} already in queue - skipping to preserve progress`);
+      console.log(`⚠️ Contact ${item.contactId} (${item.contactEmail}) already in queue - skipping to preserve progress`);
       return id;
     }
   } catch (error) {

@@ -106,21 +106,38 @@ export const handler: Handler = async () => {
     console.log(`Sample contact tags:`, aiOutreachContacts[0]?.tags);
 
     // Add to queue in batches (parallel processing)
+    // Create one queue entry per email address (supports multiple emails per contact)
     const BATCH_SIZE = 25;
-    for (let i = 0; i < aiOutreachContacts.length; i += BATCH_SIZE) {
-      const batch = aiOutreachContacts.slice(i, i + BATCH_SIZE);
+    const queueEntries: any[] = [];
+    
+    for (const contact of aiOutreachContacts) {
+      const emails = [contact.email];
+      if (contact.additionalEmails && contact.additionalEmails.length > 0) {
+        emails.push(...contact.additionalEmails.filter((e): e is string => e !== null && e.length > 0));
+      }
       
-      const results = await Promise.allSettled(
-        batch.map(contact => 
-          addToOutreachQueue({
+      // Create queue entry for each email
+      for (const email of emails) {
+        if (email) {
+          queueEntries.push({
             userId: integration.userId,
             locationId: tokenData.locationId,
             contactId: contact.id,
             contactName: `${contact.firstName || ''} ${contact.lastName || ''}`.trim(),
             contactPhone: contact.phone,
-            contactEmail: contact.email,
-          })
-        )
+            contactEmail: email,
+          });
+        }
+      }
+    }
+    
+    console.log(`📧 Created ${queueEntries.length} queue entries for ${aiOutreachContacts.length} contacts`);
+    
+    for (let i = 0; i < queueEntries.length; i += BATCH_SIZE) {
+      const batch = queueEntries.slice(i, i + BATCH_SIZE);
+      
+      const results = await Promise.allSettled(
+        batch.map(entry => addToOutreachQueue(entry))
       );
 
       const succeeded = results.filter(r => r.status === 'fulfilled').length;
