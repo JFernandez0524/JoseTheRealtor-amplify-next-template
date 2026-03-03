@@ -62,7 +62,7 @@ async function getAccessToken(): Promise<string> {
   cachedToken = tokenData.access_token;
   tokenExpiry = Date.now() + (tokenData.expires_in * 1000) - 60000;
 
-  return cachedToken;
+  return cachedToken!;
 }
 
 /**

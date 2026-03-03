@@ -770,13 +770,14 @@ async function handleTaskEvent(body: any) {
     console.log(`✅ [TASK] Task assigned to target user - processing ${type}`);
     
     // Import utilities
-    const { createCalendarEvent, deleteCalendarEvent, updateCalendarEvent } = await import('../shared/googleCalendar');
+    const { createCalendarEvent, deleteCalendarEvent, markEventCompleted } = await import('../shared/googleCalendar');
     const { DynamoDBDocumentClient, GetCommand, PutCommand, DeleteCommand } = await import('@aws-sdk/lib-dynamodb');
     const { DynamoDBClient } = await import('@aws-sdk/client-dynamodb');
     
     const dynamoClient = new DynamoDBClient({ region: process.env.AWS_REGION });
     const docClient = DynamoDBDocumentClient.from(dynamoClient);
     const TASK_SYNC_TABLE = process.env.AMPLIFY_DATA_TaskCalendarSync_TABLE_NAME;
+    const CALENDAR_ID = process.env.GOOGLE_CALENDAR_ID || 'jose.fernandez@josetherealtor.com';
     
     if (!TASK_SYNC_TABLE) {
       throw new Error('TaskCalendarSync table name not configured');
@@ -784,15 +785,16 @@ async function handleTaskEvent(body: any) {
     
     // Handle different task events
     if (type === 'TaskCreate') {
-      // For now, skip contact lookup since contactId isn't available
-      const contactData = {
-        name: 'Unknown Contact',
-      };
-      
       // Create calendar event
       const eventId = await createCalendarEvent(
-        { id, title, body: taskBody, dueDate },
-        contactData
+        { 
+          id, 
+          title, 
+          body: taskBody, 
+          dueDate,
+          assignedToEmail: assignedToEmail || 'jose.fernandez@josetherealtor.com'
+        },
+        CALENDAR_ID
       );
       
       // Store mapping in DynamoDB
@@ -826,7 +828,7 @@ async function handleTaskEvent(body: any) {
       
       if (Items && Items.length > 0) {
         const eventId = Items[0].calendarEventId;
-        await updateCalendarEvent(eventId, { completed: true });
+        await markEventCompleted(eventId, CALENDAR_ID);
         console.log(`✅ [TASK] Task marked as completed in calendar: ${eventId}`);
       }
       
@@ -847,7 +849,7 @@ async function handleTaskEvent(body: any) {
         const eventId = syncRecord.calendarEventId;
         
         // Delete from calendar
-        await deleteCalendarEvent(eventId);
+        await deleteCalendarEvent(eventId, CALENDAR_ID);
         
         // Delete mapping
         await docClient.send(new DeleteCommand({
