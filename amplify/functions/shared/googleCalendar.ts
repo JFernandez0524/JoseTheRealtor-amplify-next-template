@@ -1,27 +1,27 @@
 /**
- * Google Calendar Utility
+ * Google Calendar Utility (REST API)
  * 
- * Handles creating, updating, and deleting calendar events using a service account.
+ * Handles creating, updating, and deleting calendar events using direct REST API calls.
+ * Uses service account authentication without the heavy googleapis SDK.
  */
 
-import { google } from 'googleapis';
 import { SecretsManagerClient, GetSecretValueCommand } from '@aws-sdk/client-secrets-manager';
+import { createSign } from 'crypto';
 
 const secretsClient = new SecretsManagerClient({ region: process.env.AWS_REGION || 'us-east-1' });
 
-let cachedAuth: any = null;
+let cachedToken: string | null = null;
+let tokenExpiry: number = 0;
 
 /**
- * Get authenticated Google Calendar client
+ * Get OAuth access token using service account JWT
  */
-async function getCalendarClient() {
-  if (cachedAuth) {
-    return google.calendar({ version: 'v3', auth: cachedAuth });
+async function getAccessToken(): Promise<string> {
+  if (cachedToken && Date.now() < tokenExpiry) {
+    return cachedToken;
   }
 
-  // Load service account from Secrets Manager
   const secretName = process.env.GOOGLE_SERVICE_ACCOUNT_SECRET_NAME || 'google-calendar-service-account';
-  
   const command = new GetSecretValueCommand({ SecretId: secretName });
   const response = await secretsClient.send(command);
   
@@ -31,14 +31,38 @@ async function getCalendarClient() {
 
   const serviceAccount = JSON.parse(response.SecretString);
 
-  // Create JWT auth
-  cachedAuth = new google.auth.JWT({
-    email: serviceAccount.client_email,
-    key: serviceAccount.private_key,
-    scopes: ['https://www.googleapis.com/auth/calendar'],
+  // Create JWT
+  const now = Math.floor(Date.now() / 1000);
+  const header = Buffer.from(JSON.stringify({ alg: 'RS256', typ: 'JWT' })).toString('base64url');
+  const claim = Buffer.from(JSON.stringify({
+    iss: serviceAccount.client_email,
+    scope: 'https://www.googleapis.com/auth/calendar',
+    aud: 'https://oauth2.googleapis.com/token',
+    exp: now + 3600,
+    iat: now,
+  })).toString('base64url');
+
+  const signatureInput = `${header}.${claim}`;
+  const sign = createSign('RSA-SHA256');
+  sign.update(signatureInput);
+  const signature = sign.sign(serviceAccount.private_key, 'base64url');
+  const jwt = `${signatureInput}.${signature}`;
+
+  // Exchange JWT for access token
+  const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+      assertion: jwt,
+    }),
   });
 
-  return google.calendar({ version: 'v3', auth: cachedAuth });
+  const tokenData = await tokenResponse.json();
+  cachedToken = tokenData.access_token;
+  tokenExpiry = Date.now() + (tokenData.expires_in * 1000) - 60000;
+
+  return cachedToken;
 }
 
 /**
@@ -49,125 +73,115 @@ export async function createCalendarEvent(
     id: string;
     title: string;
     body?: string;
-    dueDate?: string;
-    contactId?: string;
+    dueDate: string;
+    assignedToEmail: string;
   },
-  contactData?: {
-    name?: string;
-    propertyAddress?: string;
-  }
+  calendarId: string
 ): Promise<string> {
-  const calendar = await getCalendarClient();
-  const calendarId = process.env.GOOGLE_CALENDAR_ID;
-
-  if (!calendarId) {
-    throw new Error('GOOGLE_CALENDAR_ID not set');
-  }
-
-  // Build event title
-  const contactName = contactData?.name || 'Unknown Contact';
-  const eventTitle = `${taskData.title} - ${contactName}`;
-
-  // Build event description
-  const descriptionParts = [
-    `Contact: ${contactName}`,
-  ];
+  const token = await getAccessToken();
   
-  if (contactData?.propertyAddress) {
-    descriptionParts.push(`Property: ${contactData.propertyAddress}`);
-  }
-  
-  if (taskData.body) {
-    descriptionParts.push(`\nNotes: ${taskData.body}`);
-  }
-  
-  descriptionParts.push(`\nGHL Task ID: ${taskData.id}`);
-
-  // Parse due date or default to now + 1 hour
-  const startTime = taskData.dueDate 
-    ? new Date(taskData.dueDate)
-    : new Date(Date.now() + 60 * 60 * 1000);
-  
-  const endTime = new Date(startTime.getTime() + 60 * 60 * 1000); // 1 hour duration
-
   const event = {
-    summary: eventTitle,
-    description: descriptionParts.join('\n'),
+    summary: taskData.title,
+    description: taskData.body || '',
     start: {
-      dateTime: startTime.toISOString(),
+      dateTime: taskData.dueDate,
       timeZone: 'America/New_York',
     },
     end: {
-      dateTime: endTime.toISOString(),
+      dateTime: new Date(new Date(taskData.dueDate).getTime() + 30 * 60000).toISOString(),
       timeZone: 'America/New_York',
+    },
+    extendedProperties: {
+      private: {
+        ghlTaskId: taskData.id,
+      },
     },
   };
 
-  console.log('[GOOGLE_CALENDAR] Creating event:', eventTitle);
+  const response = await fetch(
+    `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events`,
+    {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(event),
+    }
+  );
 
-  const response = await calendar.events.insert({
-    calendarId,
-    requestBody: event,
-  });
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`Failed to create calendar event: ${error}`);
+  }
 
-  console.log('[GOOGLE_CALENDAR] Event created:', response.data.id);
+  const data = await response.json();
+  return data.id;
+}
 
-  return response.data.id || '';
+/**
+ * Update calendar event to mark as completed
+ */
+export async function markEventCompleted(
+  eventId: string,
+  calendarId: string
+): Promise<void> {
+  const token = await getAccessToken();
+
+  // Get existing event
+  const getResponse = await fetch(
+    `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${eventId}`,
+    {
+      headers: { 'Authorization': `Bearer ${token}` },
+    }
+  );
+
+  if (!getResponse.ok) {
+    throw new Error('Event not found');
+  }
+
+  const event = await getResponse.json();
+
+  // Update with checkmark
+  event.summary = `✅ ${event.summary.replace(/^✅\s*/, '')}`;
+
+  const updateResponse = await fetch(
+    `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${eventId}`,
+    {
+      method: 'PUT',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(event),
+    }
+  );
+
+  if (!updateResponse.ok) {
+    const error = await updateResponse.text();
+    throw new Error(`Failed to update event: ${error}`);
+  }
 }
 
 /**
  * Delete a calendar event
  */
-export async function deleteCalendarEvent(eventId: string): Promise<void> {
-  const calendar = await getCalendarClient();
-  const calendarId = process.env.GOOGLE_CALENDAR_ID;
-
-  if (!calendarId) {
-    throw new Error('GOOGLE_CALENDAR_ID not set');
-  }
-
-  console.log('[GOOGLE_CALENDAR] Deleting event:', eventId);
-
-  await calendar.events.delete({
-    calendarId,
-    eventId,
-  });
-
-  console.log('[GOOGLE_CALENDAR] Event deleted');
-}
-
-/**
- * Update a calendar event (mark as completed)
- */
-export async function updateCalendarEvent(
+export async function deleteCalendarEvent(
   eventId: string,
-  updates: { completed?: boolean }
+  calendarId: string
 ): Promise<void> {
-  const calendar = await getCalendarClient();
-  const calendarId = process.env.GOOGLE_CALENDAR_ID;
+  const token = await getAccessToken();
 
-  if (!calendarId) {
-    throw new Error('GOOGLE_CALENDAR_ID not set');
+  const response = await fetch(
+    `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${eventId}`,
+    {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${token}` },
+    }
+  );
+
+  if (!response.ok && response.status !== 404) {
+    const error = await response.text();
+    throw new Error(`Failed to delete event: ${error}`);
   }
-
-  console.log('[GOOGLE_CALENDAR] Updating event:', eventId);
-
-  // Get existing event
-  const existingEvent = await calendar.events.get({
-    calendarId,
-    eventId,
-  });
-
-  // Update summary to show completion
-  if (updates.completed) {
-    existingEvent.data.summary = `✅ ${existingEvent.data.summary}`;
-  }
-
-  await calendar.events.update({
-    calendarId,
-    eventId,
-    requestBody: existingEvent.data,
-  });
-
-  console.log('[GOOGLE_CALENDAR] Event updated');
 }
