@@ -14,6 +14,8 @@ import { createCalendarEvent, deleteCalendarEvent, markEventCompleted } from './
 async function testCalendarUtils() {
   console.log('🧪 Testing Google Calendar utilities...\n');
 
+  const calendarId = process.env.GOOGLE_CALENDAR_ID!;
+
   try {
     // Test 1: Create event
     console.log('Test 1: Creating calendar event...');
@@ -44,7 +46,7 @@ async function testCalendarUtils() {
 
     // Test 3: Delete event
     console.log('Test 3: Deleting event...');
-    await deleteCalendarEvent(eventId);
+    await deleteCalendarEvent(eventId, calendarId);
     console.log('✅ Event deleted');
     console.log('');
 

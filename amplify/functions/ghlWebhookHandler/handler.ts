@@ -770,7 +770,7 @@ async function handleTaskEvent(body: any) {
     console.log(`✅ [TASK] Task assigned to target user - processing ${type}`);
     
     // Import utilities
-    const { createCalendarEvent, deleteCalendarEvent, markEventCompleted } = await import('../shared/googleCalendar');
+    const { createCalendarEvent, markEventCompleted } = await import('../shared/googleCalendar');
     const { DynamoDBDocumentClient, GetCommand, PutCommand, DeleteCommand } = await import('@aws-sdk/lib-dynamodb');
     const { DynamoDBClient } = await import('@aws-sdk/client-dynamodb');
     
@@ -832,34 +832,9 @@ async function handleTaskEvent(body: any) {
         console.log(`✅ [TASK] Task marked as completed in calendar: ${eventId}`);
       }
       
-    } else if (type === 'TaskDelete') {
-      // Find and delete calendar event using query
-      const { QueryCommand } = await import('@aws-sdk/lib-dynamodb');
-      const { Items } = await docClient.send(new QueryCommand({
-        TableName: TASK_SYNC_TABLE,
-        IndexName: 'byGhlTaskId',
-        KeyConditionExpression: 'ghlTaskId = :taskId',
-        ExpressionAttributeValues: {
-          ':taskId': id
-        }
-      }));
-      
-      if (Items && Items.length > 0) {
-        const syncRecord = Items[0];
-        const eventId = syncRecord.calendarEventId;
-        
-        // Delete from calendar
-        await deleteCalendarEvent(eventId, CALENDAR_ID);
-        
-        // Delete mapping
-        await docClient.send(new DeleteCommand({
-          TableName: TASK_SYNC_TABLE,
-          Key: { id: syncRecord.id }
-        }));
-        
-        console.log(`✅ [TASK] Task deleted from calendar: ${eventId}`);
-      }
     }
+    // Note: TaskDelete not handled - GHL doesn't trigger webhooks for task deletions
+    // Calendar events must be deleted manually when tasks are removed
     
     return {
       statusCode: 200,
