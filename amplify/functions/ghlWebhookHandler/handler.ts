@@ -35,10 +35,20 @@ export const handler = async (event: any) => {
     // Parse body (API Gateway sends stringified JSON)
     const body = typeof event.body === 'string' ? JSON.parse(event.body) : event.body;
     
+    console.log('📨 [WEBHOOK_LAMBDA] Parsed body type:', body.type);
+    
     // Check if this is an email bounce event (from GHL system webhook)
     if (body.type === 'EmailBounced') {
       return await handleEmailBounce(body);
     }
+    
+    // Check if this is a task event (from GHL workflow webhook)
+    if (body.type === 'TaskCreate' || body.type === 'TaskComplete' || body.type === 'TaskDelete') {
+      console.log('📋 [WEBHOOK_LAMBDA] Detected task event, routing to handleTaskEvent');
+      return await handleTaskEvent(body);
+    }
+    
+    console.log('📨 [WEBHOOK_LAMBDA] Not a task event, continuing with message handling');
     
     // Extract data from customData (workflow) or root level (system webhook)
     const { customData, message, contact, location } = body;
@@ -732,5 +742,134 @@ async function getTokenByLocation(locationId: string): Promise<string | null> {
   } catch (error: any) {
     console.error('❌ [EMAIL] Error getting token:', error.message);
     return null;
+  }
+}
+
+/**
+ * Handle GHL Task Events (Create, Complete, Delete)
+ * Syncs tasks to Google Calendar
+ */
+async function handleTaskEvent(body: any) {
+  console.log('📋 [TASK] Received task event:', body.type);
+  
+  try {
+    const { type, id, assignedToEmail, title, body: taskBody, dueDate, locationId } = body;
+    
+    // Filter: Only sync tasks assigned to the configured user email
+    const targetUserEmail = process.env.GHL_USER_EMAIL;
+    if (!targetUserEmail) {
+      console.log('⚠️ [TASK] GHL_USER_EMAIL not configured - skipping sync');
+      return { statusCode: 200, body: JSON.stringify({ message: 'User email not configured' }) };
+    }
+    
+    if (assignedToEmail !== targetUserEmail) {
+      console.log(`⏭️ [TASK] Task not assigned to target user (${assignedToEmail} !== ${targetUserEmail}) - skipping`);
+      return { statusCode: 200, body: JSON.stringify({ message: 'Task not assigned to target user' }) };
+    }
+    
+    console.log(`✅ [TASK] Task assigned to target user - processing ${type}`);
+    
+    // Import utilities
+    const { createCalendarEvent, deleteCalendarEvent, updateCalendarEvent } = await import('../shared/googleCalendar');
+    const { DynamoDBDocumentClient, GetCommand, PutCommand, DeleteCommand } = await import('@aws-sdk/lib-dynamodb');
+    const { DynamoDBClient } = await import('@aws-sdk/client-dynamodb');
+    
+    const dynamoClient = new DynamoDBClient({ region: process.env.AWS_REGION });
+    const docClient = DynamoDBDocumentClient.from(dynamoClient);
+    const TASK_SYNC_TABLE = process.env.AMPLIFY_DATA_TaskCalendarSync_TABLE_NAME;
+    
+    if (!TASK_SYNC_TABLE) {
+      throw new Error('TaskCalendarSync table name not configured');
+    }
+    
+    // Handle different task events
+    if (type === 'TaskCreate') {
+      // For now, skip contact lookup since contactId isn't available
+      const contactData = {
+        name: 'Unknown Contact',
+      };
+      
+      // Create calendar event
+      const eventId = await createCalendarEvent(
+        { id, title, body: taskBody, dueDate },
+        contactData
+      );
+      
+      // Store mapping in DynamoDB
+      await docClient.send(new PutCommand({
+        TableName: TASK_SYNC_TABLE,
+        Item: {
+          id: `${Date.now()}_${id}`, // Amplify requires unique id
+          ghlTaskId: id,
+          calendarEventId: eventId,
+          locationId,
+          userId: assignedToEmail,
+          taskTitle: title,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        }
+      }));
+      
+      console.log(`✅ [TASK] Task synced to calendar: ${eventId}`);
+      
+    } else if (type === 'TaskComplete') {
+      // Find calendar event ID using query
+      const { QueryCommand } = await import('@aws-sdk/lib-dynamodb');
+      const { Items } = await docClient.send(new QueryCommand({
+        TableName: TASK_SYNC_TABLE,
+        IndexName: 'byGhlTaskId',
+        KeyConditionExpression: 'ghlTaskId = :taskId',
+        ExpressionAttributeValues: {
+          ':taskId': id
+        }
+      }));
+      
+      if (Items && Items.length > 0) {
+        const eventId = Items[0].calendarEventId;
+        await updateCalendarEvent(eventId, { completed: true });
+        console.log(`✅ [TASK] Task marked as completed in calendar: ${eventId}`);
+      }
+      
+    } else if (type === 'TaskDelete') {
+      // Find and delete calendar event using query
+      const { QueryCommand } = await import('@aws-sdk/lib-dynamodb');
+      const { Items } = await docClient.send(new QueryCommand({
+        TableName: TASK_SYNC_TABLE,
+        IndexName: 'byGhlTaskId',
+        KeyConditionExpression: 'ghlTaskId = :taskId',
+        ExpressionAttributeValues: {
+          ':taskId': id
+        }
+      }));
+      
+      if (Items && Items.length > 0) {
+        const syncRecord = Items[0];
+        const eventId = syncRecord.calendarEventId;
+        
+        // Delete from calendar
+        await deleteCalendarEvent(eventId);
+        
+        // Delete mapping
+        await docClient.send(new DeleteCommand({
+          TableName: TASK_SYNC_TABLE,
+          Key: { id: syncRecord.id }
+        }));
+        
+        console.log(`✅ [TASK] Task deleted from calendar: ${eventId}`);
+      }
+    }
+    
+    return {
+      statusCode: 200,
+      body: JSON.stringify({ success: true, message: `Task ${type} processed` })
+    };
+    
+  } catch (error: any) {
+    console.error('❌ [TASK] Error handling task event:', error.message);
+    console.error(error);
+    return {
+      statusCode: 500,
+      body: JSON.stringify({ error: error.message })
+    };
   }
 }

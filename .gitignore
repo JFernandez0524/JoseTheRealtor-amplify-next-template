@@ -38,4 +38,7 @@ next-env.d.ts
 # amplify
 .amplify
 amplify_outputs*
-amplifyconfiguration*
+amplifyconfiguration*google-service-account-key.json
+
+# json
+google-service-account-key.json

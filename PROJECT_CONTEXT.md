@@ -1,6 +1,98 @@
 # Project Context - JoseTheRealtor Platform
 
-**Last Updated:** 2026-02-13 9:20 AM EST
+**Last Updated:** 2026-03-03 3:30 AM EST
+
+## 🚧 IN PROGRESS: Google Calendar Task Sync
+
+**Status:** Implementation 90% complete, deployment issue blocking testing
+
+**What's Done:**
+- ✅ Google Calendar service account created and tested
+- ✅ Service account JSON stored in AWS Secrets Manager (`google-calendar-service-account`)
+- ✅ DynamoDB table `TaskCalendarSync` created
+- ✅ Google Calendar utility module created (`amplify/functions/shared/googleCalendar.ts`)
+- ✅ Task event handler added to `ghlWebhookHandler` Lambda
+- ✅ Environment variables configured (GHL_USER_EMAIL, GOOGLE_CALENDAR_ID)
+- ✅ Secrets Manager permissions granted to Lambda
+- ✅ GHL workflows created (Task Added, Task Completed)
+
+**Current Issue:**
+- Lambda code changes not deploying via `npx ampx sandbox`
+- Old Lambda version still running (missing task event detection code)
+- Logs show it's hitting "Missing contact ID" error instead of task handler
+
+**Next Steps to Resume:**
+1. **Deploy Lambda code update** - Choose one approach:
+   
+   **Option A: Direct Lambda update (fastest)**
+   ```bash
+   cd amplify/functions/ghlWebhookHandler
+   zip -r function.zip .
+   aws lambda update-function-code \
+     --function-name amplify-d127hbsjypuuhr-ma-ghlWebhookHandlerlambda4-BcQTyuH1c0HW \
+     --zip-file fileb://function.zip \
+     --region us-east-1
+   cd ../../..
+   ```
+   
+   **Option B: Production deployment (more reliable)**
+   ```bash
+   git add .
+   git commit -m "Add Google Calendar task sync"
+   git push
+   ```
+
+2. **Test the integration:**
+   ```bash
+   # Test webhook manually
+   curl -X POST https://dpw6qwhfwor3hucpbsitt7skzq0itemx.lambda-url.us-east-1.on.aws/ \
+     -H "Content-Type: application/json" \
+     -d '{
+       "type": "TaskCreate",
+       "id": "test-123",
+       "assignedToEmail": "jose.fernandez@josetherealtor.com",
+       "title": "Test Task",
+       "body": "This is a test",
+       "dueDate": "2026-03-04T14:00:00.000Z",
+       "locationId": "mHaAy3ZaUHgrbPyughDG"
+     }'
+   
+   # Should return success, not "Missing contact ID"
+   ```
+
+3. **Test with real GHL task:**
+   - Create task in GHL assigned to yourself
+   - Check Google Calendar for the event
+   - Mark task complete in GHL
+   - Verify calendar event shows ✅
+
+4. **Monitor logs:**
+   ```bash
+   aws logs tail /aws/lambda/amplify-d127hbsjypuuhr-ma-ghlWebhookHandlerlambda4-BcQTyuH1c0HW --follow --region us-east-1
+   ```
+
+**Configuration Summary:**
+- **Service Account Secret:** `google-calendar-service-account` (AWS Secrets Manager)
+- **Calendar ID:** `jose.fernandez@josetherealtor.com`
+- **User Email Filter:** `jose.fernandez@josetherealtor.com`
+- **Lambda Function:** `amplify-d127hbsjypuuhr-ma-ghlWebhookHandlerlambda4-BcQTyuH1c0HW`
+- **Webhook URL:** `https://dpw6qwhfwor3hucpbsitt7skzq0itemx.lambda-url.us-east-1.on.aws/`
+- **GHL Workflows:** "Sync Task to Calendar - Created" and "Sync Task to Calendar - Completed"
+
+**Files Modified:**
+- `amplify/functions/ghlWebhookHandler/handler.ts` - Added `handleTaskEvent()` function
+- `amplify/functions/shared/googleCalendar.ts` - New file for Calendar API
+- `amplify/data/resource.ts` - Added `TaskCalendarSync` model
+- `amplify/backend.ts` - Added env vars and permissions
+- `.env.local` - Added `GHL_USER_EMAIL` and `GOOGLE_CALENDAR_ID`
+
+**Test Files (can delete after testing):**
+- `test-google-calendar.js` - Service account test
+- `test-calendar-utils.ts` - Calendar utility test
+- `find-ghl-user-id.ts` - User ID lookup
+- `google-service-account-key.json` - Service account credentials (keep secure!)
+
+---
 
 ## Current Status - February 2026
 

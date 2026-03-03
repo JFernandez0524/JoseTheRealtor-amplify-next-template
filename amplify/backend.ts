@@ -285,12 +285,34 @@ backend.ghlWebhookHandler.addEnvironment('GHL_CLIENT_ID', process.env.GHL_CLIENT
 backend.ghlWebhookHandler.addEnvironment('GHL_CLIENT_SECRET', process.env.GHL_CLIENT_SECRET || '');
 backend.ghlWebhookHandler.addEnvironment('OPENAI_API_KEY', process.env.OPENAI_API_KEY || '');
 
+// 📅 Google Calendar Task Sync Configuration
+backend.ghlWebhookHandler.addEnvironment('GHL_USER_EMAIL', process.env.GHL_USER_EMAIL || '');
+backend.ghlWebhookHandler.addEnvironment('GOOGLE_CALENDAR_ID', process.env.GOOGLE_CALENDAR_ID || '');
+backend.ghlWebhookHandler.addEnvironment('GOOGLE_SERVICE_ACCOUNT_SECRET_NAME', 'google-calendar-service-account');
+backend.ghlWebhookHandler.addEnvironment(
+  'AMPLIFY_DATA_TaskCalendarSync_TABLE_NAME',
+  backend.data.resources.tables['TaskCalendarSync'].tableName
+);
+
 backend.data.resources.tables['GhlIntegration'].grantReadWriteData(
   backend.ghlWebhookHandler.resources.lambda
 );
 
 backend.data.resources.tables['OutreachQueue'].grantReadWriteData(
   backend.ghlWebhookHandler.resources.lambda
+);
+
+backend.data.resources.tables['TaskCalendarSync'].grantReadWriteData(
+  backend.ghlWebhookHandler.resources.lambda
+);
+
+// Grant Secrets Manager access for Google Calendar service account
+backend.ghlWebhookHandler.resources.lambda.addToRolePolicy(
+  new PolicyStatement({
+    effect: Effect.ALLOW,
+    actions: ['secretsmanager:GetSecretValue'],
+    resources: [`arn:aws:secretsmanager:${process.env.AWS_REGION || 'us-east-1'}:*:secret:google-calendar-service-account-*`],
+  })
 );
 
 // Enable Function URL for webhook

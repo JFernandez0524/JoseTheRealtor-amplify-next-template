@@ -408,6 +408,23 @@ const schema = a.schema({
       totalSkipsPerformed: a.integer().default(0),
     })
     .authorization((allow) => [allow.owner(), allow.group('ADMINS')]),
+
+  TaskCalendarSync: a
+    .model({
+      ghlTaskId: a.string().required(),
+      calendarEventId: a.string().required(),
+      locationId: a.string(),
+      userId: a.string(),
+      taskTitle: a.string(),
+      contactId: a.string(),
+    })
+    .authorization((allow) => [
+      allow.owner().to(['create', 'read', 'update', 'delete']),
+      allow.groups(['ADMINS']).to(['create', 'read', 'update', 'delete']),
+    ])
+    .secondaryIndexes((index) => [
+      index('ghlTaskId').queryField('byGhlTaskId'),
+    ]),
 });
 
 export type Schema = ClientSchema<typeof schema>;
