@@ -199,29 +199,42 @@ export const handler: S3Handler = async (event) => {
         return;
       }
 
-      // Create job record
-      jobId = randomUUID();
+      // Find existing job record (created by frontend)
       const fileName = decodedKey.split('/').pop() || 'unknown.csv';
-      await docClient.send(new PutCommand({
+      const jobScan = await docClient.send(new ScanCommand({
         TableName: csvUploadJobTableName,
-        Item: {
-          id: jobId,
-          owner: ownerId,
-          userId: ownerId,
-          fileName,
-          leadType,
-          status: 'PROCESSING',
-          totalRows: 0,
-          processedRows: 0,
-          successCount: 0,
-          duplicateCount: 0,
-          errorCount: 0,
-          startedAt: new Date().toISOString(),
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
+        FilterExpression: 'userId = :userId AND fileName = :fileName AND #status = :status',
+        ExpressionAttributeNames: {
+          '#status': 'status'
+        },
+        ExpressionAttributeValues: {
+          ':userId': ownerId,
+          ':fileName': fileName,
+          ':status': 'PENDING'
         }
       }));
-      console.log(`📝 Created job record: ${jobId}`);
+
+      if (!jobScan.Items || jobScan.Items.length === 0) {
+        console.error(`❌ No pending job found for file: ${fileName}`);
+        return;
+      }
+
+      jobId = jobScan.Items[0].id as string;
+      console.log(`📝 Found job record: ${jobId}`);
+
+      // Update job status to PROCESSING
+      await docClient.send(new UpdateCommand({
+        TableName: csvUploadJobTableName,
+        Key: { id: jobId },
+        UpdateExpression: 'SET #status = :status, updatedAt = :updated',
+        ExpressionAttributeNames: {
+          '#status': 'status'
+        },
+        ExpressionAttributeValues: {
+          ':status': 'PROCESSING',
+          ':updated': new Date().toISOString(),
+        }
+      }));
 
       // 🛡️ 2. MEMBERSHIP PROTECTION GUARD
       try {
@@ -269,7 +282,34 @@ export const handler: S3Handler = async (event) => {
         return;
       }
 
-      // 3. Initiate Stream Processing
+      // 3. Count total rows first
+      const countResponse = await s3.send(
+        new GetObjectCommand({ Bucket: autoBucketName, Key: decodedKey })
+      );
+      const countStream = countResponse.Body as Readable;
+      const countParser = countStream.pipe(
+        parse({ columns: true, skip_empty_lines: true, trim: true, bom: true })
+      );
+      
+      let totalRows = 0;
+      for await (const _ of countParser) {
+        totalRows++;
+      }
+      
+      console.log(`📊 Total rows to process: ${totalRows}`);
+      
+      // Update job with total rows
+      await docClient.send(new UpdateCommand({
+        TableName: csvUploadJobTableName,
+        Key: { id: jobId },
+        UpdateExpression: 'SET totalRows = :total, updatedAt = :updated',
+        ExpressionAttributeValues: {
+          ':total': totalRows,
+          ':updated': new Date().toISOString(),
+        }
+      }));
+
+      // 4. Initiate Stream Processing
       const response = await s3.send(
         new GetObjectCommand({ Bucket: autoBucketName, Key: decodedKey })
       );
@@ -406,6 +446,22 @@ export const handler: S3Handler = async (event) => {
             if (existingLeadScan.Items && existingLeadScan.Items.length > 0) {
               console.log(`⏭️ Skipping duplicate lead for user ${ownerId}: ${duplicateCheckAddress}`);
               duplicateCount++;
+              
+              // Update progress for duplicates too
+              if (currentRow % 10 === 0) {
+                await docClient.send(new UpdateCommand({
+                  TableName: csvUploadJobTableName,
+                  Key: { id: jobId },
+                  UpdateExpression: 'SET processedRows = :processed, successCount = :success, duplicateCount = :duplicate, updatedAt = :updated',
+                  ExpressionAttributeValues: {
+                    ':processed': currentRow,
+                    ':success': successCount,
+                    ':duplicate': duplicateCount,
+                    ':updated': new Date().toISOString(),
+                  }
+                }));
+              }
+              
               continue; // Skip this lead
             }
           }
@@ -515,16 +571,31 @@ export const handler: S3Handler = async (event) => {
           }));
 
           successCount++;
+          
+          // Update progress every 10 rows
+          if (currentRow % 10 === 0) {
+            await docClient.send(new UpdateCommand({
+              TableName: csvUploadJobTableName,
+              Key: { id: jobId },
+              UpdateExpression: 'SET processedRows = :processed, successCount = :success, duplicateCount = :duplicate, updatedAt = :updated',
+              ExpressionAttributeValues: {
+                ':processed': currentRow,
+                ':success': successCount,
+                ':duplicate': duplicateCount,
+                ':updated': new Date().toISOString(),
+              }
+            }));
+          }
         } catch (rowError: any) {
           console.error(`❌ Row ${currentRow} failed:`, rowError.message);
         }
       }
 
-      // 4. Update job record as completed
+      // 5. Update job record as completed
       await docClient.send(new UpdateCommand({
         TableName: csvUploadJobTableName,
         Key: { id: jobId },
-        UpdateExpression: 'SET #status = :status, successCount = :success, duplicateCount = :duplicate, processedRows = :processed, completedAt = :completed, updatedAt = :updated',
+        UpdateExpression: 'SET #status = :status, successCount = :success, duplicateCount = :duplicate, errorCount = :errors, processedRows = :processed, completedAt = :completed, updatedAt = :updated',
         ExpressionAttributeNames: {
           '#status': 'status'
         },
@@ -532,6 +603,7 @@ export const handler: S3Handler = async (event) => {
           ':status': 'COMPLETED',
           ':success': successCount,
           ':duplicate': duplicateCount,
+          ':errors': currentRow - successCount - duplicateCount,
           ':processed': currentRow,
           ':completed': new Date().toISOString(),
           ':updated': new Date().toISOString(),
@@ -539,7 +611,7 @@ export const handler: S3Handler = async (event) => {
       }));
       console.log(`✅ Job ${jobId} completed`);
 
-      // 5. Cleanup S3 File
+      // 6. Cleanup S3 File
       await s3.send(
         new DeleteObjectCommand({ Bucket: autoBucketName, Key: decodedKey })
       );

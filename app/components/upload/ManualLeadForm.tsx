@@ -8,6 +8,7 @@ import { client } from '@/app/utils/aws/data/frontEndClient';
 import { useRouter } from 'next/navigation';
 import { useAccess } from '@/app/context/AccessContext';
 import { HiLockClosed } from 'react-icons/hi';
+import { UploadProgressModal } from './UploadProgressModal';
 
 const libraries: 'places'[] = ['places'];
 
@@ -32,6 +33,8 @@ export function ManualLeadForm() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
   const [file, setFile] = useState<File | null>(null);
+  const [uploadJobId, setUploadJobId] = useState<string | null>(null);
+  const [showProgressModal, setShowProgressModal] = useState(false);
   const [lead, setLead] = useState<any>({
     type: '',
     ownerFirstName: '',
@@ -195,6 +198,25 @@ export function ManualLeadForm() {
       const user = await getFrontEndUser();
       if (!user) throw new Error('Session expired.');
 
+      // Create job record first
+      const { data: newJob, errors } = await client.models.CsvUploadJob.create({
+        userId: user.userId,
+        fileName: file.name,
+        leadType: lead.type.toUpperCase(),
+        status: 'PENDING',
+        totalRows: 0,
+        processedRows: 0,
+        successCount: 0,
+        duplicateCount: 0,
+        errorCount: 0,
+        startedAt: new Date().toISOString(),
+      });
+
+      if (errors || !newJob) {
+        throw new Error('Failed to create upload job');
+      }
+
+      // Upload file to S3 (triggers Lambda)
       await uploadData({
         path: `leadFiles/${user.userId}/${file.name}`,
         data: file,
@@ -206,10 +228,9 @@ export function ManualLeadForm() {
         },
       }).result;
 
-      setMessage('✅ Upload started! Processing in background...');
-      setTimeout(() => {
-        router.push('/dashboard?upload=processing');
-      }, 1500);
+      // Show progress modal
+      setUploadJobId(newJob.id);
+      setShowProgressModal(true);
     } catch (err: any) {
       setMessage(`❌ Error: ${err.message}`);
     } finally {
@@ -438,6 +459,11 @@ export function ManualLeadForm() {
         >
           {message}
         </div>
+      )}
+      
+      {/* Upload Progress Modal */}
+      {showProgressModal && uploadJobId && (
+        <UploadProgressModal jobId={uploadJobId} />
       )}
     </div>
   );
