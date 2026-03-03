@@ -78,6 +78,14 @@ backend.uploadCsvHandler.addEnvironment(
   'AMPLIFY_DATA_CsvUploadJob_TABLE_NAME',
   backend.data.resources.tables['CsvUploadJob'].tableName
 );
+backend.uploadCsvHandler.addEnvironment(
+  'GOOGLE_MAPS_API_KEY',
+  process.env.GOOGLE_MAPS_API_KEY!
+);
+backend.uploadCsvHandler.addEnvironment(
+  'BRIDGE_API_KEY',
+  process.env.BRIDGE_API_KEY!
+);
 
 // 🛡️ Add table name environment variables to data stack functions
 backend.skipTraceLeads.addEnvironment(

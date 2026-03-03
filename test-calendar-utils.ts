@@ -23,12 +23,9 @@ async function testCalendarUtils() {
         title: 'Follow up with lead',
         body: 'Discuss property options and schedule viewing',
         dueDate: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(), // 2 hours from now
-        contactId: 'contact-456',
+        assignedToEmail: 'jose.fernandez@josetherealtor.com',
       },
-      {
-        name: 'John Smith',
-        propertyAddress: '123 Main St, Miami, FL 33101',
-      }
+      calendarId
     );
     console.log('✅ Event created:', eventId);
     console.log('');
