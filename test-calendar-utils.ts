@@ -9,7 +9,7 @@ process.env.GOOGLE_CALENDAR_ID = 'jose.fernandez@josetherealtor.com'; // Replace
 process.env.AWS_REGION = 'us-east-1';
 process.env.GOOGLE_SERVICE_ACCOUNT_SECRET_NAME = 'google-calendar-service-account';
 
-import { createCalendarEvent, deleteCalendarEvent, updateCalendarEvent } from './amplify/functions/shared/googleCalendar';
+import { createCalendarEvent, deleteCalendarEvent, markEventCompleted } from './amplify/functions/shared/googleCalendar';
 
 async function testCalendarUtils() {
   console.log('🧪 Testing Google Calendar utilities...\n');
@@ -38,7 +38,7 @@ async function testCalendarUtils() {
 
     // Test 2: Update event (mark completed)
     console.log('Test 2: Marking event as completed...');
-    await updateCalendarEvent(eventId, { completed: true });
+    await markEventCompleted(eventId, calendarId);
     console.log('✅ Event marked as completed');
     console.log('');
 
