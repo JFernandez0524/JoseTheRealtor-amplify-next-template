@@ -68,6 +68,8 @@ export function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
   const [navContext, setNavContext] = useState<NavContext | null>(null);
   const [isCoreInfoEditing, setIsCoreInfoEditing] = useState(false);
   const [access, setAccess] = useState({ isAdmin: false, isPro: false });
+  const [outreachData, setOutreachData] = useState<any>(null);
+  const [isLoadingOutreach, setIsLoadingOutreach] = useState(false);
 
   const { isLoaded: isMapLoaded } = useJsApiLoader({
     id: 'google-map-script',
@@ -104,6 +106,29 @@ export function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
     }
     checkAccess();
   }, []);
+
+  // 1.5. FETCH GHL OUTREACH DATA
+  useEffect(() => {
+    async function fetchOutreachData() {
+      if (!lead.ghlContactId) {
+        setOutreachData(null);
+        return;
+      }
+
+      setIsLoadingOutreach(true);
+      try {
+        const response = await axios.get(`/api/v1/ghl-outreach-data?contactId=${lead.ghlContactId}`);
+        setOutreachData(response.data);
+      } catch (error) {
+        console.error('Failed to fetch outreach data:', error);
+        setOutreachData(null);
+      } finally {
+        setIsLoadingOutreach(false);
+      }
+    }
+
+    fetchOutreachData();
+  }, [lead.ghlContactId]);
 
   // 2. DATA FETCHING (ANALYZER)
   useEffect(() => {
@@ -629,7 +654,7 @@ export function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
 
             <OutreachStatus 
               ghlContactId={lead.ghlContactId}
-              outreachData={lead.ghlOutreachData as any}
+              outreachData={outreachData}
             />
           </div>
         </div>
