@@ -15,12 +15,23 @@ const bridgeClient = axios.create({
 
 const cleanCityName = (city: string) => {
   if (!city) return '';
-  return city.replace(/\b(city|town|borough|township|village)\s+of\s+/i, '').trim();
+  return city
+    .replace(/\b(city|town|borough|township|village)\s+of\s+/i, '')
+    .replace(/\s+(beach|township|borough|village)$/i, '')
+    .trim();
 };
 
 const generateAddressVariations = (street: string) => {
   if (!street) return [street];
   const variations = new Set<string>();
+  
+  // Handle double lot addresses (e.g., "464-466 Boulevard" → "464 Boulevard", "466 Boulevard")
+  const doubleLotMatch = street.match(/^(\d+)-(\d+)\s+(.+)$/);
+  if (doubleLotMatch) {
+    const [, firstNum, secondNum, restOfAddress] = doubleLotMatch;
+    variations.add(`${firstNum} ${restOfAddress}`);
+    variations.add(`${secondNum} ${restOfAddress}`);
+  }
   
   // Convert to Title Case first (Bridge API prefers this format)
   const toTitleCase = (str: string) => {
@@ -30,6 +41,21 @@ const generateAddressVariations = (street: string) => {
   const titleCaseStreet = toTitleCase(street);
   variations.add(titleCaseStreet);
   variations.add(street); // Keep original too
+
+  // Convert word ordinals to numeric (First → 1st, Second → 2nd, etc.)
+  const ordinalMap: Record<string, string> = {
+    'First': '1st', 'Second': '2nd', 'Third': '3rd', 'Fourth': '4th',
+    'Fifth': '5th', 'Sixth': '6th', 'Seventh': '7th', 'Eighth': '8th',
+    'Ninth': '9th', 'Tenth': '10th'
+  };
+  
+  let withNumericOrdinals = titleCaseStreet;
+  Object.entries(ordinalMap).forEach(([word, numeric]) => {
+    withNumericOrdinals = withNumericOrdinals.replace(new RegExp(`\\b${word}\\b`, 'gi'), numeric);
+  });
+  if (withNumericOrdinals !== titleCaseStreet) {
+    variations.add(withNumericOrdinals);
+  }
 
   const transform = (addr: string, options: { directionStyle: 'full' | 'usps' | 'zillow'; removeOrdinals?: boolean; unitStyle?: 'abbreviated' | 'full' }) => {
     let result = addr;
