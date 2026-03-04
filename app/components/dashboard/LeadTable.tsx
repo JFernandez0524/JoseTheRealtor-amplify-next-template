@@ -375,9 +375,9 @@ export function LeadTable({
                     e.preventDefault();
                     onRowClick(lead.id);
                   }}
-                  className='hover:bg-gray-50 transition cursor-pointer select-none'
+                  className='hover:bg-gray-50 transition cursor-pointer'
                 >
-                  <td className='px-4 py-4 whitespace-nowrap sticky left-0 bg-white z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]'>
+                  <td className='px-4 py-4 whitespace-nowrap sticky left-0 bg-white z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] select-none'>
                     <input
                       type='checkbox'
                       className='rounded border-gray-300 text-blue-600 focus:ring-blue-500 h-4 w-4'
@@ -546,14 +546,14 @@ export function LeadTable({
                               const data = await res.json();
                               if (res.ok) {
                                 button.textContent = '✓';
-                                button.className = 'text-green-600 font-bold';
+                                button.className = 'text-green-600 font-bold select-none';
                                 // Wait a bit longer for database to update
                                 await new Promise(resolve => setTimeout(resolve, 1000));
                                 if (onRefresh) {
                                   await onRefresh();
                                 }
                                 button.textContent = '↻';
-                                button.className = 'text-gray-400 hover:text-green-600';
+                                button.className = 'text-gray-400 hover:text-green-600 select-none';
                                 button.disabled = false;
                               } else {
                                 button.textContent = '↻';
@@ -567,7 +567,7 @@ export function LeadTable({
                               alert(`Refresh failed: ${err.message}`);
                             }
                           }}
-                          className="text-gray-400 hover:text-green-600"
+                          className="text-gray-400 hover:text-green-600 select-none"
                           title="Refresh Zestimate"
                         >
                           ↻
@@ -591,7 +591,7 @@ export function LeadTable({
                         }
                       }}
                       onClick={(e) => e.stopPropagation()}
-                      className={`text-xs font-semibold px-2 py-1 rounded border-0 cursor-pointer ${
+                      className={`text-xs font-semibold px-2 py-1 rounded border-0 cursor-pointer select-none ${
                         lead.listingStatus === 'active' ? 'bg-green-100 text-green-800' :
                         lead.listingStatus === 'sold' ? 'bg-red-100 text-red-800' :
                         lead.listingStatus === 'pending' ? 'bg-yellow-100 text-yellow-800' :
