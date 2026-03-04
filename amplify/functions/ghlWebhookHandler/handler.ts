@@ -73,6 +73,7 @@ export const handler = async (event: any) => {
       userId = '44d8f4c8-10c1-7038-744b-271103170819';
     }
 
+    // Only require contactId for message handling (not task events)
     if (!contactId) {
       console.error('❌ [WEBHOOK_LAMBDA] Missing contact ID');
       return {
