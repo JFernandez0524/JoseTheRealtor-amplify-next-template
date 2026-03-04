@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { cookiesClient } from '@/app/utils/aws/auth/amplifyServerUtils.server';
+import { cookiesClient, AuthGetCurrentUserServer } from '@/app/utils/aws/auth/amplifyServerUtils.server';
 
 const GHL_CUSTOM_FIELDS = {
   call_attempt_counter: 'RkfK2vCGvjd4MjVLvJQo',
@@ -20,14 +20,14 @@ export async function GET(request: NextRequest) {
     }
 
     // Get current user from server-side auth
-    const { userId } = await cookiesClient.auth.fetchAuthSession();
-    if (!userId) {
+    const user = await AuthGetCurrentUserServer();
+    if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     // Get GHL integration
     const { data: integrations } = await cookiesClient.models.GhlIntegration.list({
-      filter: { userId: { eq: userId }, isActive: { eq: true } }
+      filter: { userId: { eq: user.userId }, isActive: { eq: true } }
     });
 
     if (!integrations || integrations.length === 0) {
