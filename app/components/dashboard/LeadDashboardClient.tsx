@@ -383,22 +383,34 @@ export default function LeadDashboardClient({}: Props) {
       return;
     }
 
-    // Filter out properties under $300k for direct mail campaigns
+    // Categorize leads by skip trace results and property value
     const selectedLeads = leads.filter(lead => selectedIds.includes(lead.id));
-    const highValueLeads = selectedLeads.filter(lead => {
-      const value = lead.zestimate || lead.estimatedValue || 0;
-      return value >= 300000;
+    
+    const callingLeads = selectedLeads.filter(lead => {
+      return lead.phones && lead.phones.length > 0;
     });
-    const lowValueLeads = selectedLeads.filter(lead => {
+    
+    const emailOnlyLeads = selectedLeads.filter(lead => {
       const value = lead.zestimate || lead.estimatedValue || 0;
-      return value < 300000;
+      return (!lead.phones || lead.phones.length === 0) && 
+             value >= 300000 && value <= 850000;
+    });
+    
+    const digitalOnlyLeads = selectedLeads.filter(lead => {
+      const value = lead.zestimate || lead.estimatedValue || 0;
+      return value < 300000 || value > 850000;
     });
 
-    let confirmMessage = `Sync ${selectedIds.length} leads to your CRM?`;
+    let confirmMessage = `Sync ${selectedIds.length} leads to your CRM?\n\n`;
     
-    if (lowValueLeads.length > 0) {
-      confirmMessage += `\n\n📬 Direct Mail: ${highValueLeads.length} leads over $300k will get "direct mail" tag`;
-      confirmMessage += `\n📱 Digital Only: ${lowValueLeads.length} leads under $300k will get "digital only" tag`;
+    if (callingLeads.length > 0) {
+      confirmMessage += `📞 Cold Calling: ${callingLeads.length} leads with qualified phones\n`;
+    }
+    if (emailOnlyLeads.length > 0) {
+      confirmMessage += `📬 Direct Mail/Email: ${emailOnlyLeads.length} email-only leads ($300k-$850k)\n`;
+    }
+    if (digitalOnlyLeads.length > 0) {
+      confirmMessage += `📱 Digital Only: ${digitalOnlyLeads.length} leads outside $300k-$850k range`;
     }
 
     if (!confirm(confirmMessage)) return;

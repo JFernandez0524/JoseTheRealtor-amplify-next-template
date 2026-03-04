@@ -190,9 +190,11 @@ export async function syncToGoHighLevel(
     if (lead.skipTraceStatus === 'COMPLETED') {
       tags.push('Data:SkipTraced'); // Phone/email from skip trace
       
-      // 🤖 AI OUTREACH - Only for AI plan users and admins
-      if (isAIPlan || isAdmin) {
-        tags.push('ai outreach'); // Enable AI outreach for skip traced leads (lowercase to match queue check)
+      // 🤖 AI OUTREACH - Only for email-only leads (AI plan users + specific admin)
+      const allowedAdminId = '44d8f4c8-10c1-7038-744b-271103170819';
+      const isAllowedUser = isAIPlan || (isAdmin && userId === allowedAdminId);
+      if (isAllowedUser && !specificPhone) {
+        tags.push('ai outreach'); // Enable AI email outreach for email-only leads (lowercase to match queue check)
       }
     } else if (specificPhone) {
       tags.push('Data:OriginalUpload'); // Phone was in original upload
@@ -212,12 +214,19 @@ export async function syncToGoHighLevel(
     const propertyValue = lead.zestimate || lead.estimatedValue || 0;
     const isDirectMailEligible = propertyValue >= 300000 && propertyValue <= 850000;
     
+    // 🔢 Multi-Phone-Lead tag only for leads with multiple phones
+    const hasMultiplePhones = lead.phones && lead.phones.length > 1;
+    
     if (isCallable) {
-      tags.push('Multi-Phone-Lead');
+      if (hasMultiplePhones) {
+        tags.push('Multi-Phone-Lead');
+      }
       // Removed 'start dialing campaign' - GHL workflow handles routing based on App:Synced tag
     } else if (specificPhone) {
       // Has phone but not callable (failed skip trace, DNC, etc.)
-      tags.push('Multi-Phone-Lead');
+      if (hasMultiplePhones) {
+        tags.push('Multi-Phone-Lead');
+      }
       if (isDirectMailEligible) {
         tags.push('Direct-Mail-Only'); // Route to mail for $300k-$850k properties
       } else {
