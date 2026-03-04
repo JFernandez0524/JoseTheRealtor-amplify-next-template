@@ -27,6 +27,7 @@ export default function AdminDashboard({
   const [users, setUsers] = useState(initialUsers);
   const [leads] = useState(initialLeads);
   const [loading, setLoading] = useState(false);
+  const [expandedLeadId, setExpandedLeadId] = useState<string | null>(null);
 
   const promoteUser = async (userId: string, email: string) => {
     if (!confirm(`Promote ${email} to ADMINS group?`)) return;
@@ -65,6 +66,49 @@ export default function AdminDashboard({
   const totalSkips = users.reduce(
     (sum, user) => sum + (user.totalSkipsPerformed || 0),
     0,
+  );
+
+  // Skip Trace Analytics
+  const skipTracedLeads = leads.filter(l => l.skipTraceStatus !== 'PENDING');
+  const completedLeads = leads.filter(l => l.skipTraceStatus === 'COMPLETED');
+  const failedLeads = leads.filter(l => 
+    l.skipTraceStatus === 'FAILED' || 
+    l.skipTraceStatus === 'NO_MATCH' || 
+    l.skipTraceStatus === 'NO_QUALITY_CONTACTS'
+  );
+  
+  const successRate = skipTracedLeads.length > 0 
+    ? ((completedLeads.length / skipTracedLeads.length) * 100).toFixed(1)
+    : '0.0';
+  
+  // Contact breakdown
+  const phonesOnly = completedLeads.filter(l => 
+    l.phones && l.phones.length > 0 && (!l.emails || l.emails.length === 0)
+  );
+  const emailsOnly = completedLeads.filter(l => 
+    l.emails && l.emails.length > 0 && (!l.phones || l.phones.length === 0)
+  );
+  const both = completedLeads.filter(l => 
+    l.phones && l.phones.length > 0 && l.emails && l.emails.length > 0
+  );
+  const neither = leads.filter(l => 
+    l.skipTraceStatus === 'NO_QUALITY_CONTACTS' || 
+    (l.skipTraceStatus === 'COMPLETED' && (!l.phones || l.phones.length === 0) && (!l.emails || l.emails.length === 0))
+  );
+  
+  // Cost analysis
+  const estimatedCost = (totalSkips * 0.10).toFixed(2);
+  
+  // Time-based (last 7 and 30 days)
+  const now = new Date();
+  const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+  const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+  
+  const last7Days = leads.filter(l => 
+    l.skipTraceCompletedAt && new Date(l.skipTraceCompletedAt) >= sevenDaysAgo
+  );
+  const last30Days = leads.filter(l => 
+    l.skipTraceCompletedAt && new Date(l.skipTraceCompletedAt) >= thirtyDaysAgo
   );
 
   return (
@@ -114,9 +158,240 @@ export default function AdminDashboard({
         </div>
       </div>
 
+      {/* Skip Trace Analytics */}
+      <div className='bg-white rounded-lg shadow-sm border p-6'>
+        <h2 className='text-lg font-semibold text-gray-900 mb-4'>
+          📊 Skip Trace Analytics
+        </h2>
+        
+        {/* Success Rate Cards */}
+        <div className='grid grid-cols-1 md:grid-cols-4 gap-4 mb-6'>
+          <div className='bg-green-50 p-4 rounded-lg border border-green-200'>
+            <p className='text-sm font-medium text-green-600'>Success Rate</p>
+            <p className='text-3xl font-bold text-green-900'>{successRate}%</p>
+            <p className='text-xs text-green-600 mt-1'>
+              {completedLeads.length} / {skipTracedLeads.length} completed
+            </p>
+          </div>
+          
+          <div className='bg-blue-50 p-4 rounded-lg border border-blue-200'>
+            <p className='text-sm font-medium text-blue-600'>Total Skips</p>
+            <p className='text-3xl font-bold text-blue-900'>{totalSkips}</p>
+            <p className='text-xs text-blue-600 mt-1'>
+              ${estimatedCost} estimated cost
+            </p>
+          </div>
+          
+          <div className='bg-purple-50 p-4 rounded-lg border border-purple-200'>
+            <p className='text-sm font-medium text-purple-600'>Last 7 Days</p>
+            <p className='text-3xl font-bold text-purple-900'>{last7Days.length}</p>
+            <p className='text-xs text-purple-600 mt-1'>skip traces completed</p>
+          </div>
+          
+          <div className='bg-orange-50 p-4 rounded-lg border border-orange-200'>
+            <p className='text-sm font-medium text-orange-600'>Last 30 Days</p>
+            <p className='text-3xl font-bold text-orange-900'>{last30Days.length}</p>
+            <p className='text-xs text-orange-600 mt-1'>skip traces completed</p>
+          </div>
+        </div>
+        
+        {/* Contact Quality Breakdown */}
+        <div className='grid grid-cols-1 md:grid-cols-2 gap-6'>
+          <div>
+            <h3 className='text-sm font-semibold text-gray-700 mb-3'>Contact Breakdown</h3>
+            <div className='space-y-2'>
+              <div className='flex justify-between items-center p-3 bg-gray-50 rounded'>
+                <span className='text-sm text-gray-700'>📞 Phones Only</span>
+                <span className='font-bold text-gray-900'>{phonesOnly.length}</span>
+              </div>
+              <div className='flex justify-between items-center p-3 bg-gray-50 rounded'>
+                <span className='text-sm text-gray-700'>📧 Emails Only</span>
+                <span className='font-bold text-gray-900'>{emailsOnly.length}</span>
+              </div>
+              <div className='flex justify-between items-center p-3 bg-green-50 rounded border border-green-200'>
+                <span className='text-sm text-green-700'>✅ Both Phone & Email</span>
+                <span className='font-bold text-green-900'>{both.length}</span>
+              </div>
+              <div className='flex justify-between items-center p-3 bg-red-50 rounded border border-red-200'>
+                <span className='text-sm text-red-700'>❌ No Contacts</span>
+                <span className='font-bold text-red-900'>{neither.length}</span>
+              </div>
+            </div>
+          </div>
+          
+          <div>
+            <h3 className='text-sm font-semibold text-gray-700 mb-3'>Status Breakdown</h3>
+            <div className='space-y-2'>
+              <div className='flex justify-between items-center p-3 bg-green-50 rounded border border-green-200'>
+                <span className='text-sm text-green-700'>✅ Completed</span>
+                <span className='font-bold text-green-900'>{completedLeads.length}</span>
+              </div>
+              <div className='flex justify-between items-center p-3 bg-yellow-50 rounded border border-yellow-200'>
+                <span className='text-sm text-yellow-700'>⏳ Pending</span>
+                <span className='font-bold text-yellow-900'>
+                  {leads.filter(l => l.skipTraceStatus === 'PENDING').length}
+                </span>
+              </div>
+              <div className='flex justify-between items-center p-3 bg-red-50 rounded border border-red-200'>
+                <span className='text-sm text-red-700'>❌ Failed</span>
+                <span className='font-bold text-red-900'>
+                  {leads.filter(l => l.skipTraceStatus === 'FAILED').length}
+                </span>
+              </div>
+              <div className='flex justify-between items-center p-3 bg-gray-50 rounded'>
+                <span className='text-sm text-gray-700'>🔍 No Match</span>
+                <span className='font-bold text-gray-900'>
+                  {leads.filter(l => l.skipTraceStatus === 'NO_MATCH').length}
+                </span>
+              </div>
+              <div className='flex justify-between items-center p-3 bg-gray-50 rounded'>
+                <span className='text-sm text-gray-700'>📭 No Quality Contacts</span>
+                <span className='font-bold text-gray-900'>
+                  {leads.filter(l => l.skipTraceStatus === 'NO_QUALITY_CONTACTS').length}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Detailed Failure Analysis */}
+      {failedLeads.length > 0 && (
+        <div className='bg-red-50 border border-red-200 rounded-lg p-6'>
+          <h3 className='text-lg font-bold text-red-900 mb-4'>
+            🔍 Failed Skip Trace Analysis ({failedLeads.length} leads)
+          </h3>
+          <p className='text-sm text-red-700 mb-4'>
+            These leads failed skip trace when they shouldn&apos;t have. Click to expand and see raw data.
+          </p>
+          <div className='space-y-3 max-h-[600px] overflow-y-auto'>
+            {failedLeads.map((lead) => {
+              const isExpanded = expandedLeadId === lead.id;
+              const history = lead.skipTraceHistory
+                ? typeof lead.skipTraceHistory === 'string'
+                  ? JSON.parse(lead.skipTraceHistory)
+                  : lead.skipTraceHistory
+                : [];
+              const rawData = lead.rawSkipTraceData
+                ? typeof lead.rawSkipTraceData === 'string'
+                  ? JSON.parse(lead.rawSkipTraceData)
+                  : lead.rawSkipTraceData
+                : null;
+              
+              return (
+                <div key={lead.id} className='bg-white rounded-lg border border-red-300 overflow-hidden'>
+                  <div 
+                    className='p-4 cursor-pointer hover:bg-red-50 transition-colors'
+                    onClick={() => setExpandedLeadId(isExpanded ? null : lead.id)}
+                  >
+                    <div className='flex justify-between items-start'>
+                      <div className='flex-1'>
+                        <div className='flex items-center gap-2 mb-2'>
+                          <span className={`px-2 py-1 text-xs font-semibold rounded ${
+                            lead.skipTraceStatus === 'FAILED' ? 'bg-red-100 text-red-800' :
+                            lead.skipTraceStatus === 'NO_MATCH' ? 'bg-orange-100 text-orange-800' :
+                            'bg-gray-100 text-gray-800'
+                          }`}>
+                            {lead.skipTraceStatus}
+                          </span>
+                          <span className='text-xs text-gray-500'>{lead.type}</span>
+                        </div>
+                        <p className='font-semibold text-gray-900'>
+                          {lead.ownerFirstName} {lead.ownerLastName}
+                        </p>
+                        <p className='text-sm text-gray-600'>
+                          {lead.ownerAddress}, {lead.ownerCity}, {lead.ownerState} {lead.ownerZip}
+                        </p>
+                        {history.length > 0 && (
+                          <p className='text-xs text-gray-500 mt-2'>
+                            Last attempt: {new Date(history[history.length - 1].timestamp).toLocaleString()}
+                            {history.length > 1 && ` (${history.length} total attempts)`}
+                          </p>
+                        )}
+                      </div>
+                      <div className='flex items-center gap-2'>
+                        <a
+                          href={`/lead/${lead.id}`}
+                          onClick={(e) => e.stopPropagation()}
+                          className='text-xs text-blue-600 hover:text-blue-800'
+                        >
+                          View Lead →
+                        </a>
+                        <span className='text-gray-400'>
+                          {isExpanded ? '▼' : '▶'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {isExpanded && (
+                    <div className='border-t border-red-200 p-4 bg-gray-50'>
+                      <div className='space-y-4'>
+                        {/* Search Parameters */}
+                        <div>
+                          <h4 className='font-semibold text-sm text-gray-900 mb-2'>Search Parameters:</h4>
+                          <div className='bg-white p-3 rounded border text-xs font-mono'>
+                            <div>Name: {lead.ownerFirstName} {lead.ownerLastName}</div>
+                            <div>Address: {lead.ownerAddress}</div>
+                            <div>City: {lead.ownerCity}</div>
+                            <div>State: {lead.ownerState}</div>
+                            <div>Zip: {lead.ownerZip}</div>
+                            {lead.standardizedAddress && (
+                              <div className='mt-2 pt-2 border-t'>
+                                <div className='text-green-700'>Standardized Address:</div>
+                                <pre className='text-xs whitespace-pre-wrap'>{JSON.stringify(lead.standardizedAddress, null, 2)}</pre>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        
+                        {/* Skip Trace History */}
+                        {history.length > 0 && (
+                          <div>
+                            <h4 className='font-semibold text-sm text-gray-900 mb-2'>Skip Trace History:</h4>
+                            <div className='bg-white p-3 rounded border space-y-2'>
+                              {history.map((attempt: any, idx: number) => (
+                                <div key={idx} className='text-xs border-b pb-2 last:border-b-0'>
+                                  <div className='font-semibold'>{new Date(attempt.timestamp).toLocaleString()}</div>
+                                  <div>Status: {attempt.status}</div>
+                                  <div>Phones Found: {attempt.phonesFound || 0}</div>
+                                  <div>Emails Found: {attempt.emailsFound || 0}</div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        
+                        {/* Raw Skip Trace Data */}
+                        {rawData && (
+                          <div>
+                            <h4 className='font-semibold text-sm text-gray-900 mb-2'>Raw Skip Trace Data:</h4>
+                            <div className='bg-white p-3 rounded border max-h-64 overflow-y-auto'>
+                              <pre className='text-xs font-mono whitespace-pre-wrap'>
+                                {JSON.stringify(rawData, null, 2)}
+                              </pre>
+                            </div>
+                          </div>
+                        )}
+                        
+                        {!rawData && (
+                          <div className='text-xs text-gray-500 italic'>
+                            No raw skip trace data available
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Skip Trace Failures Section */}
       {(() => {
-        const failedLeads = leads.filter(
+        const oldFailedLeads = leads.filter(
           (lead) =>
             lead.skipTraceStatus === 'FAILED' ||
             lead.skipTraceStatus === 'NO_MATCH',
@@ -124,7 +399,7 @@ export default function AdminDashboard({
 
         // Get today's failures from history
         const today = new Date().toISOString().split('T')[0];
-        const todayFailures = failedLeads.filter((lead) => {
+        const todayFailures = oldFailedLeads.filter((lead) => {
           if (!lead.skipTraceHistory) return false;
           const history =
             typeof lead.skipTraceHistory === 'string'
@@ -137,64 +412,9 @@ export default function AdminDashboard({
           );
         });
 
-        if (failedLeads.length === 0) return null;
+        if (oldFailedLeads.length === 0) return null;
 
-        return (
-          <div className='bg-yellow-50 border border-yellow-200 rounded-lg p-6'>
-            <h3 className='text-lg font-bold text-yellow-900 mb-4'>
-              ⚠️ Skip Trace Failures ({failedLeads.length} total,{' '}
-              {todayFailures.length} today)
-            </h3>
-            <div className='space-y-2 max-h-96 overflow-y-auto'>
-              {failedLeads.slice(0, 50).map((lead) => {
-                const history = lead.skipTraceHistory
-                  ? typeof lead.skipTraceHistory === 'string'
-                    ? JSON.parse(lead.skipTraceHistory)
-                    : lead.skipTraceHistory
-                  : [];
-                const lastAttempt = history[history.length - 1];
-
-                return (
-                  <div
-                    key={lead.id}
-                    className='bg-white p-3 rounded border border-yellow-200'
-                  >
-                    <div className='flex justify-between items-start'>
-                      <div className='flex-1'>
-                        <p className='font-semibold text-gray-900'>
-                          {lead.ownerAddress}, {lead.ownerCity},{' '}
-                          {lead.ownerState}
-                        </p>
-                        <p className='text-sm text-gray-600'>
-                          Type: {lead.type} | Status: {lead.skipTraceStatus}
-                        </p>
-                        {lastAttempt && (
-                          <p className='text-xs text-gray-500 mt-1'>
-                            Last attempt:{' '}
-                            {new Date(lastAttempt.timestamp).toLocaleString()}
-                            {history.length > 1 &&
-                              ` (${history.length} total attempts)`}
-                          </p>
-                        )}
-                      </div>
-                      <a
-                        href={`/lead/${lead.id}`}
-                        className='text-xs text-blue-600 hover:text-blue-800 ml-4'
-                      >
-                        View Details →
-                      </a>
-                    </div>
-                  </div>
-                );
-              })}
-              {failedLeads.length > 50 && (
-                <p className='text-sm text-gray-500 text-center pt-2'>
-                  Showing first 50 of {failedLeads.length} failed leads
-                </p>
-              )}
-            </div>
-          </div>
-        );
+        return null; // Replaced by detailed failure analysis above
       })()}
 
       {/* Invalid Leads Section */}
