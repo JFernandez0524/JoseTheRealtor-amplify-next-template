@@ -37,6 +37,8 @@ const GHL_CUSTOM_FIELD_ID_MAP: Record<string, string> = {
   last_email_date: '3xOBr4GvgRc22kBRNYCE',
   // 🎭 SENTIMENT TRACKING
   conversation_sentiment: 'vjhwCk3Ns0ekDEbMsuy5',
+  // 🏠 PROPERTY TIER
+  property_tier: 'lzL3NLRSgIW3SbhhLJ0O',
 };
 
 // Opportunity field (separate from contact fields)
@@ -161,6 +163,13 @@ export async function syncToGoHighLevel(
       lead_source_id: lead.id, // 🎯 Shared Lead ID for suppression workflows
       zestimate: zestimateValue, // Full market value (listing value)
       cash_offer: cashOfferValue, // 70% cash offer (as-is value)
+      // 🏠 Property tier based on value
+      property_tier: (() => {
+        const value = lead.zestimate || lead.estimatedValue || 0;
+        if (value > 850000) return 'luxury';
+        if (value >= 300000) return 'mid_range';
+        return 'entry_level';
+      })(),
       // 📧 Additional emails
       email_2: lead.emails?.[1] || undefined,
       email_3: lead.emails?.[2] || undefined,

@@ -110,6 +110,7 @@ async function sendGHLEmail(
   testMode = false,
   fromEmail?: string,
   contactId?: string,
+  toEmail?: string,
 ) {
   if (testMode) {
     console.log('🧪 TEST MODE - Would send email:', { subject, body });
@@ -138,6 +139,10 @@ async function sendGHLEmail(
 
     if (fromEmail) {
       messagePayload.emailFrom = fromEmail;
+    }
+
+    if (toEmail) {
+      messagePayload.emailTo = toEmail;
     }
 
     // Use contact-based endpoint if contactId provided
@@ -478,6 +483,7 @@ export async function generateEmailAIResponse(
         context.testMode,
         context.fromEmail,
         context.contactId,
+        context.toEmail,
       );
 
       return handoffEmail;
@@ -517,6 +523,7 @@ export async function generateEmailAIResponse(
       context.testMode,
       context.fromEmail,
       context.contactId,
+      context.toEmail,
     );
 
     return emailResponse;
@@ -536,6 +543,7 @@ export async function generateEmailAIResponse(
         context.testMode,
         context.fromEmail,
         context.contactId,
+        context.toEmail,
       );
     }
 
