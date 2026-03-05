@@ -557,7 +557,6 @@ export const handler: S3Handler = async (event) => {
               const scoreData = calculateLeadScore(leadItem as any);
               (leadItem as any).aiScore = scoreData.score;
               (leadItem as any).aiPriority = scoreData.priority;
-              (leadItem as any).aiInsights = scoreData.insights;
               (leadItem as any).aiLastCalculated = new Date().toISOString();
               console.log(`✅ AI Score calculated for preforeclosure lead: ${scoreData.score} (${scoreData.priority})`);
             } catch (scoreError) {

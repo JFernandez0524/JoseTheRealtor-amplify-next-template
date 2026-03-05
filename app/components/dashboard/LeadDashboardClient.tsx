@@ -15,7 +15,6 @@ import { useAccess } from '@/app/context/AccessContext';
 import { LeadTable } from './LeadTable';
 import { DashboardFilters } from './DashboardFilters';
 import { GhlConnection } from './GhlConnection';
-import { AIInsightsDashboard } from './AIInsightsDashboard';
 import { getFrontEndUser } from '@/app/utils/aws/auth/amplifyFrontEndUser';
 import type { Schema } from '@/amplify/data/resource';
 
@@ -929,20 +928,6 @@ export default function LeadDashboardClient({}: Props) {
 
   return (
     <div className='space-y-4'>
-      {/* AI Insights Dashboard */}
-      <AIInsightsDashboard
-        leads={filteredLeads}
-        onLeadClick={(leadId) => {
-          const leadIds = filteredLeads.map((lead) => lead.id);
-          const navContext = {
-            ids: leadIds,
-            filterType: filterType || null,
-          };
-          sessionStorage.setItem('leadNavContext', JSON.stringify(navContext));
-          router.push(`/lead/${leadId}`);
-        }}
-      />
-
       {/* Processing Status */}
       {isProcessing && (
         <div className="fixed top-4 right-4 bg-blue-500 text-white px-4 py-2 rounded-lg shadow-lg z-50">

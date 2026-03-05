@@ -33,7 +33,6 @@ export async function POST(request: NextRequest) {
             id,
             aiScore: scoreData.score,
             aiPriority: scoreData.priority,
-            aiInsights: scoreData.insights,
             aiLastCalculated: new Date().toISOString(),
           });
 

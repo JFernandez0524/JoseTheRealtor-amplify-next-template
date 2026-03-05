@@ -224,7 +224,6 @@ const schema = a.schema({
       // 🤖 AI-Powered Fields
       aiScore: a.integer(), // 0-100 lead score
       aiPriority: a.enum(['HIGH', 'MEDIUM', 'LOW']), // AI-calculated priority
-      aiInsights: a.string().array(), // AI-generated insights
       aiLastCalculated: a.datetime(), // When AI score was last calculated
       
       estimatedEquity: a.float(),

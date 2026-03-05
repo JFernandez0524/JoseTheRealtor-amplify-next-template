@@ -163,7 +163,6 @@ export default function DocsPage() {
                   <li>AI analyzes: equity, value, timeline, location, contact availability</li>
                   <li>Scores 0-100 with priority: HIGH (70+), MEDIUM (40-69), LOW (&lt;40)</li>
                   <li>Filter by AI Priority to focus on hottest leads</li>
-                  <li>View AI Insights Dashboard for top leads and urgent items</li>
                   <li>Sort by AI Score column to prioritize outreach</li>
                 </ul>
               </div>
