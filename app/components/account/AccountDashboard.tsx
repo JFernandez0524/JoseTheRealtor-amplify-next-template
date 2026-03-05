@@ -8,6 +8,7 @@ import {
   HiOutlineClock,
   HiOutlineExclamationCircle
 } from 'react-icons/hi2';
+import EmailAnalytics from '@/app/components/profile/EmailAnalytics';
 
 type UserAccount = Schema['UserAccount']['type'];
 type PropertyLead = Schema['PropertyLead']['type'];
@@ -239,6 +240,9 @@ export default function AccountDashboard({ initialAccount, initialLeads }: Accou
           </table>
         </div>
       </div>
+
+      {/* Email Analytics */}
+      <EmailAnalytics />
     </div>
   );
 }
