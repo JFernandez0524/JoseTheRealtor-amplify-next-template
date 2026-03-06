@@ -2,6 +2,14 @@
 
 A comprehensive real estate lead management platform built with AWS Amplify Gen2 and Next.js 14. Streamline your property lead analysis, skip tracing, and CRM integration workflow.
 
+## 📚 Documentation
+
+- **[PROJECT_STATUS.md](PROJECT_STATUS.md)** - Current project status, recent changes, and next steps
+- **[docs/DEVELOPER_GUIDE.md](docs/DEVELOPER_GUIDE.md)** - Technical reference for developers
+- **[docs/CHANGELOG.md](docs/CHANGELOG.md)** - Historical record of major changes
+- **[docs/AI_TESTING_GUIDE.md](docs/AI_TESTING_GUIDE.md)** - Testing procedures for AI features
+- **[docs/archive/](docs/archive/)** - Archived implementation summaries and planning docs
+
 ## Features
 
 - **Lead Management**: Import and analyze property leads (preforeclosure, probate)
