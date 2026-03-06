@@ -111,22 +111,24 @@
 
 ### High Priority
 
-1. Remove hardcoded contact info once GHL approves scopes
-2. Add error handling for failed message sends
-3. Implement retry logic for API failures
+1. ✅ **Environment Variable Validation** - Added config.ts validator (2026-03-06)
+2. ✅ **Webhook Idempotency** - Prevents duplicate message sends (2026-03-06)
+3. ✅ **Structured Error Logging** - JSON logs with context (2026-03-06)
+4. ✅ **Input Sanitization** - Sanitize IDs, emails, phones (2026-03-06)
 
 ### Medium Priority
 
-4. Add unit tests for AI conversation handlers
-5. Add integration tests for Lambda functions
-6. Improve CloudWatch logging and monitoring
-7. Add performance metrics tracking
+5. Add unit tests for AI conversation handlers
+6. Add integration tests for Lambda functions
+7. Improve CloudWatch logging and monitoring
+8. Add performance metrics tracking
+9. **Token Refresh Race Condition** - Add exponential backoff retry (planned)
 
 ### Low Priority
 
-8. Refactor duplicate code in Lambda functions
-9. Optimize database queries
-10. Add caching for frequently accessed data
+10. Refactor duplicate code in Lambda functions
+11. Optimize database queries
+12. Add caching for frequently accessed data
 
 ## 📊 Metrics
 

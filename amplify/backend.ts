@@ -80,11 +80,11 @@ backend.uploadCsvHandler.addEnvironment(
 );
 backend.uploadCsvHandler.addEnvironment(
   'GOOGLE_MAPS_API_KEY',
-  process.env.GOOGLE_MAPS_API_KEY!
+  process.env.GOOGLE_MAPS_API_KEY || 'placeholder'
 );
 backend.uploadCsvHandler.addEnvironment(
   'BRIDGE_API_KEY',
-  process.env.BRIDGE_API_KEY!
+  process.env.BRIDGE_API_KEY || 'placeholder'
 );
 
 // 🛡️ Add table name environment variables to data stack functions
@@ -312,6 +312,16 @@ backend.data.resources.tables['OutreachQueue'].grantReadWriteData(
 
 backend.data.resources.tables['TaskCalendarSync'].grantReadWriteData(
   backend.ghlWebhookHandler.resources.lambda
+);
+
+// Grant WebhookIdempotency table access
+backend.data.resources.tables['WebhookIdempotency'].grantReadWriteData(
+  backend.ghlWebhookHandler.resources.lambda
+);
+
+backend.ghlWebhookHandler.addEnvironment(
+  'AMPLIFY_DATA_WebhookIdempotency_TABLE_NAME',
+  backend.data.resources.tables['WebhookIdempotency'].tableName
 );
 
 // Grant Secrets Manager access for Google Calendar service account

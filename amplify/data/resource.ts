@@ -103,6 +103,21 @@ const schema = a.schema({
       allow.groups(['ADMINS']).to(['create', 'read', 'update', 'delete']),
     ]),
 
+  WebhookIdempotency: a
+    .model({
+      webhookId: a.string().required(),
+      processedAt: a.datetime().required(),
+      source: a.string(),
+      eventType: a.string(),
+      contactId: a.string(),
+      ttl: a.integer(),
+    })
+    .authorization((allow) => [
+      allow.publicApiKey().to(['create', 'read']),
+      allow.groups(['ADMINS']).to(['create', 'read', 'update', 'delete']),
+    ])
+    .identifier(['webhookId']),
+
   DoorKnockQueue: a
     .model({
       userId: a.string().required(),
@@ -430,5 +445,8 @@ export type Schema = ClientSchema<typeof schema>;
 
 export const data = defineData({
   schema,
-  authorizationModes: { defaultAuthorizationMode: 'userPool' },
+  authorizationModes: { 
+    defaultAuthorizationMode: 'userPool',
+    apiKeyAuthorizationMode: { expiresInDays: 30 }
+  },
 });

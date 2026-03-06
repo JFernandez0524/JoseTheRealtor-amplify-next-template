@@ -21,42 +21,75 @@
 
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, ScanCommand } from '@aws-sdk/lib-dynamodb';
+import { validateEnv } from '../shared/config';
+import { isProcessed, markProcessed, extractWebhookId } from '../shared/idempotency';
+import { logError, logWarning } from '../shared/logger';
+import { sanitizeId } from '../shared/sanitize';
+
+// Validate environment at module load time
+validateEnv('ghlWebhookHandler');
 
 const dynamoClient = new DynamoDBClient({ region: process.env.AWS_REGION });
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
 
-const GHL_INTEGRATION_TABLE = process.env.AMPLIFY_DATA_GhlIntegration_TABLE_NAME;
+const GHL_INTEGRATION_TABLE = process.env.AMPLIFY_DATA_GhlIntegration_TABLE_NAME!;
 
 export const handler = async (event: any) => {
   console.log('📨 [WEBHOOK_LAMBDA] Received event');
+  
+  // Check idempotency
+  const webhookId = extractWebhookId(event);
+  console.log(`🔑 [WEBHOOK_LAMBDA] Webhook ID: ${webhookId}`);
+
+  if (await isProcessed(webhookId)) {
+    console.log('⏭️ [WEBHOOK_LAMBDA] Already processed');
+    return {
+      statusCode: 200,
+      body: JSON.stringify({ message: 'Already processed', webhookId })
+    };
+  }
+
   console.log('📨 [WEBHOOK_LAMBDA] Event body:', event.body);
+
+  let body: any;
+  let metadata: any;
 
   try {
     // Parse body (API Gateway sends stringified JSON)
-    const body = typeof event.body === 'string' ? JSON.parse(event.body) : event.body;
+    body = typeof event.body === 'string' ? JSON.parse(event.body) : event.body;
     
     console.log('📨 [WEBHOOK_LAMBDA] Parsed body type:', body.type);
     
+    metadata = {
+      source: 'ghl',
+      eventType: body.type || 'unknown',
+      contactId: body.contactId || body.customData?.contactId
+    };
+    
     // Check if this is an email bounce event (from GHL system webhook)
     if (body.type === 'EmailBounced') {
-      return await handleEmailBounce(body);
+      const result = await handleEmailBounce(body);
+      await markProcessed(webhookId, metadata);
+      return result;
     }
     
     // Check if this is a task event (from GHL workflow webhook)
     if (body.type === 'TaskCreate' || body.type === 'TaskComplete' || body.type === 'TaskDelete') {
       console.log('📋 [WEBHOOK_LAMBDA] Detected task event, routing to handleTaskEvent');
-      return await handleTaskEvent(body);
+      const result = await handleTaskEvent(body);
+      await markProcessed(webhookId, metadata);
+      return result;
     }
     
     console.log('📨 [WEBHOOK_LAMBDA] Not a task event, continuing with message handling');
     
     // Extract data from customData (workflow) or root level (system webhook)
     const { customData, message, contact, location } = body;
-    let userId = customData?.userId || body.userId;
-    const contactId = customData?.contactId || body.contactId || contact?.id;
+    let userId = sanitizeId(customData?.userId || body.userId || '');
+    const contactId = sanitizeId(customData?.contactId || body.contactId || contact?.id || '');
     let messageBody = customData?.messageBody || body.body || message?.body;
     const messageType = customData?.type === 'InboundMessage' ? (message?.type || 1) : message?.type;
-    const locationId = customData?.locationId || body.locationId || location?.id;
+    const locationId = sanitizeId(customData?.locationId || body.locationId || location?.id || '');
     let conversationId = customData?.conversationId || body.conversationId || '';
 
 
@@ -64,7 +97,9 @@ export const handler = async (event: any) => {
 
     // Handle email replies (type 1)
     if (messageType === 1) {
-      return await handleEmailReply(body, contactId, locationId, messageBody, userId);
+      const result = await handleEmailReply(body, contactId, locationId, messageBody, userId);
+      await markProcessed(webhookId, metadata);
+      return result;
     }
 
     // Default to Jose's account for organic leads (no app_user_id)
@@ -75,7 +110,7 @@ export const handler = async (event: any) => {
 
     // Only require contactId for message handling (not task events)
     if (!contactId) {
-      console.error('❌ [WEBHOOK_LAMBDA] Missing contact ID');
+      logError('webhook_validation', new Error('Missing contact ID'), { body });
       return {
         statusCode: 400,
         body: JSON.stringify({ error: 'Missing contact ID' })
@@ -520,15 +555,25 @@ export const handler = async (event: any) => {
     await logOutboundContact(queueId);
     console.log('✅ [OUTBOUND] Logged AI response - daily limit updated');
 
+    // Mark webhook as processed
+    await markProcessed(webhookId, metadata);
+
     console.log('✅ [WEBHOOK_LAMBDA] Successfully processed webhook');
 
     return {
       statusCode: 200,
-      body: JSON.stringify({ success: true })
+      body: JSON.stringify({ success: true, webhookId })
     };
 
   } catch (error: any) {
-    console.error('❌ [WEBHOOK_LAMBDA] Error:', error);
+    logError('webhook_handler', error, {
+      webhookId,
+      contactId: body?.contactId,
+      userId: body?.customData?.userId,
+      eventType: body?.type
+    });
+    
+    // DON'T mark as processed on error - allow GHL to retry
     return {
       statusCode: 500,
       body: JSON.stringify({ error: error.message })
