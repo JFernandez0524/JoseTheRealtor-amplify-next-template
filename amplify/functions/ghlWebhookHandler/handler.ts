@@ -95,6 +95,18 @@ export const handler = async (event: any) => {
 
     console.log('📨 [WEBHOOK_LAMBDA] Extracted data:', { userId, contactId, messageBody, messageType, locationId, conversationId });
 
+    // Check message direction - only process INBOUND messages from leads
+    const messageDirection = customData?.direction || message?.direction || body.direction;
+    
+    if (messageDirection === 'outbound') {
+      console.log('🚫 [WEBHOOK_LAMBDA] Outbound message detected (from agent) - skipping AI response');
+      await markProcessed(webhookId, metadata);
+      return {
+        statusCode: 200,
+        body: JSON.stringify({ message: 'Outbound message - no AI response needed' })
+      };
+    }
+
     // Handle email replies (type 1)
     if (messageType === 1) {
       const result = await handleEmailReply(body, contactId, locationId, messageBody, userId);
