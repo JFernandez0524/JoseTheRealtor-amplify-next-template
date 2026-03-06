@@ -317,7 +317,6 @@ export function LeadTable({
                 </div>
               </th>
               {renderSortableHeader('type', 'Type')}
-              {renderSortableHeader('aiScore', 'AI Score', 'bg-purple-50')}
               {renderSortableHeader('skipTraceStatus', 'Skip Status')}
               {/* NEW GHL STATUS HEADER */}
               {renderSortableHeader('ghlSyncStatus', 'GHL Sync', 'bg-purple-50')}
@@ -391,24 +390,6 @@ export function LeadTable({
                     <span className='px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800 capitalize'>
                       {lead.type}
                     </span>
-                  </td>
-
-                  {/* AI Score Column */}
-                  <td className='px-4 py-4 whitespace-nowrap text-sm bg-purple-50/30'>
-                    {lead.aiScore !== null && lead.aiScore !== undefined ? (
-                      <div className='flex items-center gap-2'>
-                        <span className={`px-2 py-1 rounded-full text-xs font-bold ${
-                          lead.aiPriority === 'HIGH' ? 'bg-red-100 text-red-800' :
-                          lead.aiPriority === 'MEDIUM' ? 'bg-yellow-100 text-yellow-800' :
-                          'bg-gray-100 text-gray-800'
-                        }`}>
-                          {lead.aiScore}
-                        </span>
-                        {lead.aiPriority === 'HIGH' && <span>🔥</span>}
-                      </div>
-                    ) : (
-                      <span className='text-gray-400 text-xs'>-</span>
-                    )}
                   </td>
 
                   <td className='px-4 py-4 whitespace-nowrap text-sm'>

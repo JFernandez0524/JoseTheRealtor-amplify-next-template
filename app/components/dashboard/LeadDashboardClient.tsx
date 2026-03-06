@@ -277,7 +277,7 @@ export default function LeadDashboardClient({}: Props) {
         }
 
         // Handle number sorting
-        if (sortField === 'zestimate' || sortField === 'aiScore') {
+        if (sortField === 'zestimate') {
           aValue = parseFloat(aValue || 0);
           bValue = parseFloat(bValue || 0);
         }
@@ -577,56 +577,6 @@ export default function LeadDashboardClient({}: Props) {
     } catch (err) {
       console.error('Bulk status update error:', err);
       alert('Error updating lead statuses');
-    } finally {
-      setIsProcessing(false);
-      // Force page refresh to ensure all data is updated
-      window.location.reload();
-    }
-  };
-
-  const handleBulkAIScore = async () => {
-    if (selectedIds.length === 0) return;
-
-    // Filter to preforeclosure only
-    const selectedLeads = leads.filter((lead) => selectedIds.includes(lead.id));
-    const preforeclosureLeads = selectedLeads.filter(
-      (lead) => lead.type === 'PREFORECLOSURE'
-    );
-
-    if (preforeclosureLeads.length === 0) {
-      alert(
-        'AI scoring is only for preforeclosure leads (where we have equity data).'
-      );
-      return;
-    }
-
-    if (
-      !confirm(
-        `Calculate AI scores for ${preforeclosureLeads.length} preforeclosure leads?`
-      )
-    )
-      return;
-
-    setIsProcessing(true);
-    try {
-      const response = await fetch('/api/v1/ai/score-leads', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ leadIds: preforeclosureLeads.map((l) => l.id) }),
-      });
-
-      const result = await response.json();
-
-      if (!response.ok) throw new Error(result.error);
-
-      alert(
-        `✅ AI Scoring Complete!\nScored: ${result.scored}/${result.total} preforeclosure leads`
-      );
-      setSelectedIds([]);
-      await refreshLeads();
-    } catch (err) {
-      console.error('AI scoring error:', err);
-      alert('Error calculating AI scores');
     } finally {
       setIsProcessing(false);
       // Force page refresh to ensure all data is updated
@@ -974,7 +924,6 @@ export default function LeadDashboardClient({}: Props) {
         handleBulkSkipTrace={handleBulkSkipTrace}
         handleBulkGHLSync={handleBulkGHLSync}
         handleBulkStatusUpdate={handleBulkStatusUpdate}
-        handleBulkAIScore={handleBulkAIScore}
         handleBulkEnrichLeads={handleBulkEnrichLeads}
         handleBulkDirectMail={handleBulkDirectMail}
         handlePopulateQueue={handlePopulateQueue}

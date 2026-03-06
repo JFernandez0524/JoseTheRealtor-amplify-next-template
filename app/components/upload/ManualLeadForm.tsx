@@ -216,6 +216,9 @@ export function ManualLeadForm() {
         throw new Error('Failed to create upload job');
       }
 
+      // Wait for DynamoDB consistency (500ms)
+      await new Promise(resolve => setTimeout(resolve, 500));
+
       // Upload file to S3 (triggers Lambda)
       await uploadData({
         path: `leadFiles/${user.userId}/${file.name}`,

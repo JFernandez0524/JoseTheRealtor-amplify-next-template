@@ -38,7 +38,6 @@ type Props = {
   handleBulkSkipTrace: () => Promise<void>;
   handleBulkGHLSync: () => Promise<void>;
   handleBulkStatusUpdate: (status: string) => Promise<void>;
-  handleBulkAIScore: () => Promise<void>;
   handleBulkEnrichLeads: () => Promise<void>;
   handleBulkDirectMail: () => Promise<void>;
   handlePopulateQueue: () => Promise<void>;
@@ -88,7 +87,6 @@ export function DashboardFilters({
   handleBulkSkipTrace,
   handleBulkGHLSync,
   handleBulkStatusUpdate,
-  handleBulkAIScore,
   handleBulkEnrichLeads,
   handleBulkDirectMail,
   handlePopulateQueue,
@@ -390,27 +388,11 @@ export function DashboardFilters({
               )}
             </button>
 
-            {/* AI Score Button */}
-            <button
-              onClick={handleBulkAIScore}
-              disabled={isAiScoring || isSkipTracing || isGhlSyncing}
-              className={`text-sm px-3 py-1.5 rounded transition-colors flex items-center justify-center gap-1.5 shadow-sm w-full sm:w-auto
-                                ${isAiScoring ? 'bg-purple-300 text-white cursor-not-allowed' : 'bg-gradient-to-r from-purple-600 to-blue-600 text-white hover:from-purple-700 hover:to-blue-700'}`}
-            >
-              {isAiScoring ? (
-                <>
-                  <Loader size='small' variation='linear' /> Scoring...
-                </>
-              ) : (
-                <>🤖 Calculate AI Scores</>
-              )}
-            </button>
-
             {/* Enrich Leads Button (Preforeclosure only) */}
             {hasPreforeclosure && !isMixedTypes && (
               <button
                 onClick={handleBulkEnrichLeads}
-                disabled={isEnriching || isSkipTracing || isGhlSyncing || isAiScoring}
+                disabled={isEnriching || isSkipTracing || isGhlSyncing}
                 className={`text-sm px-3 py-1.5 rounded transition-colors flex items-center justify-center gap-1.5 shadow-sm w-full sm:w-auto
                                   ${isEnriching ? 'bg-orange-300 text-white cursor-not-allowed' : 'bg-gradient-to-r from-orange-600 to-red-600 text-white hover:from-orange-700 hover:to-red-700'}`}
                 title={selectedLeadsCount > 0 ? `Cost: $${(selectedLeadsCount * 0.29).toFixed(2)} (Preforeclosure only)` : ''}
