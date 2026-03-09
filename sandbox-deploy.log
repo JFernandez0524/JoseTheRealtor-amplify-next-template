@@ -1,0 +1,29 @@
+  
+  Amplify Sandbox
+  
+  Identifier: 	fernandez
+  Stack: 	amplify-awsamplifygen2-fernandez-sandbox-723541e4a6
+  Region: 	us-east-1
+  
+  To specify a different sandbox identifier, use --identifier
+
+6:57:48 PM Synthesizing backend...
+6:57:48 PM ✔ Backend synthesized in 0 seconds
+6:57:48 PM Running type checks...
+6:57:59 PM ✔ Type checks completed in 10.87 seconds
+6:57:59 PM [ERROR] [MultipleSandboxInstancesError] Multiple sandbox instances detected.
+  ∟ Caused by: [ToolkitError] Other CLIs (PID=1350609) are currently reading from /home/fernandez/repos/JoseTheRealtor-amplify-next-template/.amplify/artifacts/cdk.out. 
+Resolution: Make sure only one instance of sandbox is running for this project
+6:57:59 PM [Sandbox] Watching for file changes...
+
+Notices:
+
+3127	Amplify Function is dropping support of Node 16 Lambda Functions
+
+	If you have Node 16 Lambda functions defined with Amplify Function, we highly
+	recommend updating your function's runtime to newer Node LTS versions (Node 20+).
+
+	More information at: https://github.com/aws-amplify/amplify-backend/issues/3127
+
+
+If you don't want to see a notice anymore, use npx ampx notices acknowledge <notice-id>

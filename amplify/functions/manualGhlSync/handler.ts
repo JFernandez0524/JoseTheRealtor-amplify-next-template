@@ -105,8 +105,10 @@ async function processGhlSync(lead: any, groups: string[] = [], ownerId: string 
   // ✅ SYNC LEADS WITH PHONES (multiple contacts for multiple phones)
   if (phones.length > 0) {
     console.log(`📞 Syncing ${phones.length} phone contacts`);
+    const syncResults: string[] = [];
+    let primaryGhlId: string | null = null;
+    
     try {
-      const syncResults: string[] = [];
       for (let i = 0; i < phones.length; i++) {
         const ghlContactId = await syncToGoHighLevel(
           lead,
@@ -119,17 +121,33 @@ async function processGhlSync(lead: any, groups: string[] = [], ownerId: string 
           ghlLocationId
         );
         syncResults.push(ghlContactId);
+        
+        // 🛡️ SAVE PRIMARY CONTACT ID IMMEDIATELY after first successful sync
+        if (i === 0 && ghlContactId) {
+          primaryGhlId = ghlContactId;
+          await updateLeadSyncStatus(docClient, propertyLeadTableName!, lead.id, 'SUCCESS', primaryGhlId);
+          console.log(`✅ Saved primary contactId ${primaryGhlId} to database (before processing remaining phones)`);
+        }
       }
 
-      const primaryGhlId = syncResults[0];
-      await updateLeadSyncStatus(docClient, propertyLeadTableName!, lead.id, 'SUCCESS', primaryGhlId);
-
+      // All phones synced successfully
       return {
         status: 'SUCCESS',
         message: `Synced ${phones.length} phone contact(s).`,
-        ghlContactId: primaryGhlId,
+        ghlContactId: primaryGhlId || syncResults[0],
       };
     } catch (error: any) {
+      // If we already saved a contactId, don't mark as FAILED
+      if (primaryGhlId) {
+        console.warn(`⚠️ Error syncing additional phones, but primary contact ${primaryGhlId} was saved`);
+        return {
+          status: 'SUCCESS',
+          message: `Primary contact synced, but error on additional phones: ${error.message}`,
+          ghlContactId: primaryGhlId,
+        };
+      }
+      
+      // No contactId saved yet, mark as FAILED
       await updateLeadSyncStatus(docClient, propertyLeadTableName!, lead.id, 'FAILED');
       return { status: 'FAILED', message: error.message };
     }
@@ -149,7 +167,9 @@ async function processGhlSync(lead: any, groups: string[] = [], ownerId: string 
       ghlLocationId
     );
 
+    // 🛡️ SAVE CONTACT ID IMMEDIATELY after successful GHL sync
     await updateLeadSyncStatus(docClient, propertyLeadTableName!, lead.id, 'SUCCESS', ghlContactId);
+    console.log(`✅ Saved contactId ${ghlContactId} to database`);
 
     return {
       status: 'SUCCESS',
