@@ -8,6 +8,7 @@ import { manualGhlSync } from './functions/manualGhlSync/resource';
 import { aiFollowUpAgent } from './functions/aiFollowUpAgent/resource';
 import { dailyOutreachAgent } from './functions/dailyOutreachAgent/resource';
 import { dailyEmailAgent } from './functions/dailyEmailAgent/resource';
+import { checkManualModeExpiry } from './functions/checkManualModeExpiry/resource';
 
 import { ghlWebhookHandler } from './functions/ghlWebhookHandler/resource';
 import { fixFailedSyncs } from './functions/fixFailedSyncs/resource';
@@ -33,6 +34,7 @@ const backend = defineBackend({
   aiFollowUpAgent,
   dailyOutreachAgent,
   dailyEmailAgent,
+  checkManualModeExpiry,
   ghlWebhookHandler,
   fixFailedSyncs,
   populateQueueFromGhl,
@@ -242,6 +244,25 @@ backend.dailyEmailAgent.resources.lambda.addToRolePolicy(
       `${backend.data.resources.tables['OutreachQueue'].tableArn}/index/*`
     ]
   })
+);
+
+// 🔄 Configure Check Manual Mode Expiry Lambda
+backend.checkManualModeExpiry.addEnvironment(
+  'AMPLIFY_DATA_GhlIntegration_TABLE_NAME',
+  backend.data.resources.tables['GhlIntegration'].tableName
+);
+
+backend.checkManualModeExpiry.addEnvironment(
+  'AMPLIFY_DATA_OutreachQueue_TABLE_NAME',
+  backend.data.resources.tables['OutreachQueue'].tableName
+);
+
+backend.data.resources.tables['GhlIntegration'].grantReadWriteData(
+  backend.checkManualModeExpiry.resources.lambda
+);
+
+backend.data.resources.tables['OutreachQueue'].grantReadWriteData(
+  backend.checkManualModeExpiry.resources.lambda
 );
 
 // 🔧 Configure Fix Failed Syncs Lambda

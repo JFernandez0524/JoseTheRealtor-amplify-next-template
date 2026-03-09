@@ -424,7 +424,7 @@ export async function findQueueItemByContactId(contactId: string): Promise<Outre
  */
 export async function updateQueueStatus(
   id: string,
-  status: 'OUTREACH' | 'CONVERSATION' | 'DND' | 'WRONG_INFO' | 'COMPLETED',
+  status: 'OUTREACH' | 'CONVERSATION' | 'DND' | 'WRONG_INFO' | 'COMPLETED' | 'MANUAL_HANDLING',
   reason?: string
 ): Promise<void> {
   await docClient.send(new UpdateCommand({

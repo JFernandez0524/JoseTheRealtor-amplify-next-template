@@ -37,7 +37,7 @@ const schema = a.schema({
       facebookPsid: a.string(), // Facebook Page-Scoped ID for Messenger
       
       // Queue lifecycle status
-      queueStatus: a.enum(['OUTREACH', 'CONVERSATION', 'DND', 'WRONG_INFO', 'COMPLETED']),
+      queueStatus: a.enum(['OUTREACH', 'CONVERSATION', 'DND', 'WRONG_INFO', 'COMPLETED', 'MANUAL_HANDLING']),
       
       // Outreach channel status
       smsStatus: a.enum(['PENDING', 'SENT', 'REPLIED', 'FAILED', 'OPTED_OUT']),

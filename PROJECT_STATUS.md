@@ -1,11 +1,35 @@
 # Project Status - JoseTheRealtor Platform
 
-**Last Updated:** 2026-03-06  
-**Current Sprint:** Production Stability & Bug Fixes
+**Last Updated:** 2026-03-09  
+**Current Sprint:** AI Manual Intervention Detection
 
 ---
 
 ## 🎯 Current Focus
+
+### Recently Completed (Today - 2026-03-09)
+
+#### ✅ AI Manual Intervention Detection System
+- **30-Minute Activity Window** - Detects ANY outbound message in last 30 minutes (vs old 5-minute window)
+- **Persistent Manual Mode** - Uses `conversation:manual` tag for reliability
+- **Fast Path Check** - Checks tag first (no API calls if already in manual mode)
+- **Auto-Resume Logic** - Removes tag after 24 hours of complete inactivity
+- **Visibility** - Adds timestamped notes in GHL when mode changes
+- **OutreachQueue Integration** - New `MANUAL_HANDLING` status prevents automated outreach
+
+**Problem Solved:** AI was responding to every message during active conversations, even when agent was manually engaged (e.g., discussing meetings, answering questions, writing haikus).
+
+**Files Created:**
+- NEW: `amplify/functions/shared/conversationActivity.ts` (activity checker + manual mode activation)
+- NEW: `amplify/functions/checkManualModeExpiry/handler.ts` (hourly auto-resume Lambda)
+- NEW: `amplify/functions/checkManualModeExpiry/resource.ts`
+- NEW: `docs/AI_MANUAL_INTERVENTION_IMPLEMENTATION.md` (complete documentation)
+
+**Files Modified:**
+- MODIFIED: `amplify/functions/ghlWebhookHandler/handler.ts` (replaced old detection logic)
+- MODIFIED: `amplify/backend.ts` (added Lambda + permissions)
+- MODIFIED: `amplify/data/resource.ts` (added MANUAL_HANDLING status)
+- MODIFIED: `amplify/functions/shared/outreachQueue.ts` (updated type signature)
 
 ### Recently Completed (Last 7 Days)
 
@@ -35,16 +59,22 @@
 ## 🚧 Active Issues & Blockers
 
 ### High Priority
-1. **Deploy Critical Fixes to Production**
-   - Status: Ready for deployment
-   - Blocker: Need to test in sandbox first
-   - Action: Run `set -a && source .env.local && set +a && npx ampx sandbox`
+1. **Test AI Manual Intervention System**
+   - Status: Code complete, ready for testing
+   - Action: Deploy to sandbox and test with real conversations
+   - Test Cases:
+     - Send manual message → AI stops responding
+     - Check for `conversation:manual` tag in GHL
+     - Verify timestamped note appears
+     - Lead replies → AI still doesn't respond (fast path)
+     - Trigger auto-resume Lambda → Tag removed after 24h
    - ETA: Today
 
-2. **Enable TTL on WebhookIdempotency Table**
-   - Status: Table created, TTL not enabled
-   - Action: Run AWS CLI command after sandbox deployment
-   - ETA: Today
+2. **Deploy AI Manual Intervention to Production**
+   - Status: Pending sandbox testing
+   - Blocker: Need to verify no breaking changes
+   - Action: Test in sandbox first, then push to main
+   - ETA: Today (after testing)
 
 ### Medium Priority
 3. **Google Calendar Task Sync** (Paused)
@@ -164,42 +194,44 @@
 ## 🎯 Next Steps
 
 ### Immediate (Today)
-1. **Deploy critical fixes to sandbox**
+1. **Deploy to sandbox**
    ```bash
    set -a && source .env.local && set +a && npx ampx sandbox
    ```
 
-2. **Enable TTL on WebhookIdempotency table**
-   ```bash
-   TABLE_NAME=$(aws dynamodb list-tables --query "TableNames[?contains(@, 'WebhookIdempotency')]" --output text)
-   aws dynamodb update-time-to-live \
-     --table-name "$TABLE_NAME" \
-     --time-to-live-specification "Enabled=true, AttributeName=ttl"
-   ```
+2. **Test manual intervention detection**
+   - Send manual message to test lead in GHL
+   - Have lead reply
+   - Check CloudWatch logs for manual mode activation
+   - Verify `conversation:manual` tag appears
+   - Verify AI doesn't respond to subsequent messages
 
-3. **Test critical fixes**
-   - Send duplicate webhook (verify idempotency)
-   - Check CloudWatch logs for structured JSON errors
-   - Verify environment validation messages
-   - Test AI direction check (send message to lead, verify AI doesn't respond to YOUR message)
+3. **Test auto-resume**
+   ```bash
+   # Manually trigger Lambda
+   aws lambda invoke \
+     --function-name <checkManualModeExpiry-function-name> \
+     --payload '{}' \
+     response.json
+   ```
 
 4. **Deploy to production**
    ```bash
    git add .
-   git commit -m "feat: add critical production fixes + fix AI responding to agent messages"
+   git commit -m "feat: add AI manual intervention detection with 30-min window and auto-resume"
    git push origin main
    ```
 
 ### This Week
 5. **Monitor production for 24 hours**
-   - Zero duplicate messages
-   - No "Missing env var" errors
-   - Webhook success rate > 99%
-   - AI only responds to lead messages, not agent messages
+   - Zero AI responses during manual conversations
+   - Auto-resume working after 24h inactivity
+   - No webhook errors or timeouts
 
-6. **Resume Google Calendar integration** (if time permits)
-   - Deploy Lambda code update
-   - Test task sync functionality
+6. **Add dashboard UI for manual mode** (Task 5 - Optional)
+   - Add `conversation:manual` tag filter
+   - Show 🤚 icon for contacts in manual mode
+   - Add "Resume AI" button
 
 ### Next Sprint
 7. **Remove hardcoded values** once GHL approves scopes
