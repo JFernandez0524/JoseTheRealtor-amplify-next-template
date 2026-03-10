@@ -113,3 +113,76 @@ git push origin main
 
 **Status:** ✅ Changes applied, ready for testing  
 **Next:** Deploy to sandbox and verify behavior
+
+---
+
+## Backfilling Existing Contacts
+
+### Problem
+Contacts synced BEFORE this fix won't have:
+- "ai outreach" tag in GHL
+- Email entries in OutreachQueue
+
+### Solution
+Run the backfill script to update existing contacts:
+
+```bash
+# Install dependencies if needed
+npm install
+
+# Set environment variables
+export AMPLIFY_DATA_OutreachQueue_TABLE_NAME="OutreachQueue-<your-suffix>"
+export GHL_API_KEY="pit-a975757c-04a0-446d-a23b-3ef1050ae32a"
+
+# Run backfill script
+npx tsx scripts/backfill-ai-outreach.ts
+```
+
+### What the Script Does
+1. Scans PropertyLead table for leads with `ghlContactId` + emails
+2. Checks each GHL contact for "ai outreach" tag
+3. If missing:
+   - Adds "ai outreach" tag to GHL contact
+   - Adds email entries to OutreachQueue
+4. Rate limited: 2 seconds between contacts
+
+### Expected Output
+```
+🔍 Scanning for leads with ghlContactId + emails...
+📊 Found 150 synced leads with emails
+✅ Added "ai outreach" tag to b7UCMwtBKmZewpODX0Gv
+✅ Added user@example.com to OutreachQueue
+...
+📊 Backfill Complete:
+   Processed: 150 leads
+   Tagged: 120 contacts
+   Queued: 180 emails
+```
+
+### Manual Alternative (Single Contact)
+For contact `b7UCMwtBKmZewpODX0Gv`:
+
+1. **Add tag in GHL:**
+   - Go to contact in GHL
+   - Add tag: `ai outreach`
+
+2. **Add to OutreachQueue manually:**
+   ```bash
+   aws dynamodb put-item \
+     --table-name OutreachQueue-<suffix> \
+     --item '{
+       "id": {"S": "manual_b7UCMwtBKmZewpODX0Gv_email"},
+       "userId": {"S": "44d8f4c8-10c1-7038-744b-271103170819"},
+       "locationId": {"S": "mHaAy3ZaUHgrbPyughDG"},
+       "contactId": {"S": "b7UCMwtBKmZewpODX0Gv"},
+       "contactEmail": {"S": "contact-email@example.com"},
+       "queueStatus": {"S": "OUTREACH"},
+       "emailStatus": {"S": "PENDING"},
+       "emailAttempts": {"N": "0"},
+       "nextEmailDate": {"S": "'$(date -u +%Y-%m-%dT%H:%M:%SZ)'"},
+       "createdAt": {"S": "'$(date -u +%Y-%m-%dT%H:%M:%SZ)'"},
+       "updatedAt": {"S": "'$(date -u +%Y-%m-%dT%H:%M:%SZ)'"}
+     }'
+   ```
+
+---
