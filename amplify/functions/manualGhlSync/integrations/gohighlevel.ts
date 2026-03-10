@@ -199,11 +199,11 @@ export async function syncToGoHighLevel(
     if (lead.skipTraceStatus === 'COMPLETED') {
       tags.push('Data:SkipTraced'); // Phone/email from skip trace
       
-      // 🤖 AI OUTREACH - Only for email-only leads (AI plan users + specific admin)
+      // 🤖 AI OUTREACH - All skip traced leads (AI plan users + specific admin)
       const allowedAdminId = '44d8f4c8-10c1-7038-744b-271103170819';
       const isAllowedUser = isAIPlan || (isAdmin && userId === allowedAdminId);
-      if (isAllowedUser && !specificPhone) {
-        tags.push('ai outreach'); // Enable AI email outreach for email-only leads (lowercase to match queue check)
+      if (isAllowedUser) {
+        tags.push('ai outreach'); // Enable AI email outreach (EMAIL ONLY - no SMS)
       }
     } else if (specificPhone) {
       tags.push('Data:OriginalUpload'); // Phone was in original upload
@@ -364,23 +364,7 @@ export async function syncToGoHighLevel(
       try {
         const { addToOutreachQueue } = await import('../../shared/outreachQueue');
         
-        // Add queue item for phone (SMS)
-        if (specificPhone) {
-          await addToOutreachQueue({
-            userId,
-            locationId: ghlLocationId,
-            contactId,
-            leadId: lead.id,
-            contactName: `${basePayload.firstName} ${basePayload.lastName}`,
-            contactPhone: specificPhone,
-            contactEmail: undefined, // SMS only
-            propertyAddress: lead.ownerAddress,
-            propertyCity: lead.ownerCity,
-            propertyState: lead.ownerState,
-            leadType: lead.type,
-          });
-          console.log(`✅ Added phone ${specificPhone} to outreach queue`);
-        }
+        // SMS outreach disabled - EMAIL ONLY
         
         // Add queue items for each email (up to 3)
         const emails = [
