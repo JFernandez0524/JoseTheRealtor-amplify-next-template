@@ -4,7 +4,7 @@ import { analyzeBridgeProperty } from '../../../app/utils/bridge.server';
 const GHL_API_KEY = process.env.GHL_API_KEY;
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
-// Conversation states
+// Conversation states - Updated 2026-03-11
 type ConversationState = 
   | 'NEW_LEAD'
   | 'ASK_INTENT'
@@ -1124,6 +1124,9 @@ function getNextState(currentState: ConversationState, message: string, hasAddre
     case 'APPOINTMENT_BOOKING':
       return 'QUALIFIED';
       
+    case 'IDENTITY_CONFIRMATION':
+      return 'IDENTITY_CONFIRMATION';
+      
     default:
       return currentState;
   }
@@ -1155,7 +1158,7 @@ export async function generateAIResponse(context: ConversationContext): Promise<
     }
 
     // Calculate conversation state
-    const currentState = getCurrentState(context.contact);
+    const currentState: ConversationState = getCurrentState(context.contact);
     const hasAddress = !!(context.propertyAddress && context.propertyCity && context.propertyState);
     const nextState = getNextState(currentState, context.incomingMessage, hasAddress, context.leadIntent);
     

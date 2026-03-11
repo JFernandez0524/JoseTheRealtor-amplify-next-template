@@ -2,12 +2,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { cookiesClient, AuthGetCurrentUserServer } from '@/app/utils/aws/auth/amplifyServerUtils.server';
 
 const GHL_CUSTOM_FIELDS = {
-  call_attempt_counter: 'RkfK2vCGvjd4MjVLvJQo',
-  email_attempt_counter: 'qjBXAiMSe0Nt0zzPiMJu',
-  last_call_date: 'Nt0zzPiMJuqjBXAiMSe0',
-  last_email_date: 'e0Nt0zzPiMJuqjBXAiMS',
+  call_attempt_counter: '0MD4Pp2LCyOSCbCjA5qF',
+  email_attempt_counter: 'wWlrXoXeMXcM6kUexf2L',
+  last_call_date: 'dWNGeSckpRoVUxXLgxMj',
   ai_state: '1NxQW2kKMVgozjSUuu7s',
-  call_outcome: 'contact.customField.call_outcome__c',
+  call_outcome: 'LNyfm5JDal955puZGbu3',
+  mail_sent_count: 'DTEW0PLqxp35WHOiDLWR',
 };
 
 export async function GET(request: NextRequest) {
@@ -24,6 +24,19 @@ export async function GET(request: NextRequest) {
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+
+    // First, try to get data from database (faster and already synced by webhook)
+    const { data: leads } = await cookiesClient.models.PropertyLead.list({
+      filter: { ghlContactId: { eq: contactId } }
+    });
+
+    if (leads && leads.length > 0 && leads[0].ghlOutreachData) {
+      console.log('✅ Returning outreach data from database');
+      return NextResponse.json(leads[0].ghlOutreachData);
+    }
+
+    // Fallback: Fetch from GHL if not in database
+    console.log('⚠️ No database data, fetching from GHL');
 
     // Get GHL integration
     const { data: integrations } = await cookiesClient.models.GhlIntegration.list({
@@ -65,11 +78,9 @@ export async function GET(request: NextRequest) {
       smsAttempts: parseInt(getFieldValue(GHL_CUSTOM_FIELDS.call_attempt_counter) || '0'),
       emailAttempts: parseInt(getFieldValue(GHL_CUSTOM_FIELDS.email_attempt_counter) || '0'),
       lastSmsSent: getFieldValue(GHL_CUSTOM_FIELDS.last_call_date),
-      lastEmailSent: getFieldValue(GHL_CUSTOM_FIELDS.last_email_date),
-      smsStatus: 'PENDING', // Default status
-      emailStatus: 'PENDING', // Default status
       aiState: getFieldValue(GHL_CUSTOM_FIELDS.ai_state),
       callOutcome: getFieldValue(GHL_CUSTOM_FIELDS.call_outcome),
+      mailSentCount: parseInt(getFieldValue(GHL_CUSTOM_FIELDS.mail_sent_count) || '0'),
     };
 
     return NextResponse.json(outreachData);
