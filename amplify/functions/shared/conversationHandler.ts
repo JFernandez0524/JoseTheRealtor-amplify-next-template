@@ -1273,8 +1273,11 @@ export async function generateAIResponse(context: ConversationContext): Promise<
     if (isWrongPersonObjection(context.incomingMessage)) {
       console.log('🛑 Wrong person/property objection detected');
       
+      // Get fresh state to avoid type narrowing issues
+      const freshState = getCurrentState(context.contact);
+      
       // If already in IDENTITY_CONFIRMATION state, they disputed again - exit
-      if (currentState === 'IDENTITY_CONFIRMATION') {
+      if (freshState === 'IDENTITY_CONFIRMATION') {
         console.log('🛑 Second dispute - exiting conversation');
         
         if (!context.testMode && context.accessToken) {
