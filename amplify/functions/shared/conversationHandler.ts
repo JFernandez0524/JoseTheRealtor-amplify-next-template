@@ -12,6 +12,7 @@ type ConversationState =
   | 'SELLER_QUALIFICATION'
   | 'PROPERTY_VALUATION'
   | 'APPOINTMENT_BOOKING'
+  | 'IDENTITY_CONFIRMATION'
   | 'QUALIFIED';
 
 // Conversation goal tracking
@@ -159,11 +160,82 @@ function isHardObjection(message: string): boolean {
     'have a realtor',
     'working with',
     'already listed',
-    'not interested'
+    'not interested',
+    'not my property',
+    "that's not my property",
+    'wrong property',
+    'different property',
+    "don't own that",
+    "doesn't belong to me",
+    'never owned'
   ];
   
   const normalized = message.toLowerCase();
   return hardObjections.some(objection => normalized.includes(objection));
+}
+
+// Helper function to detect property ownership disputes specifically
+function isPropertyDispute(message: string): boolean {
+  const propertyDisputePhrases = [
+    'not my property',
+    "that's not my property",
+    'wrong property',
+    'different property',
+    "don't own that",
+    "doesn't belong to me",
+    'never owned'
+  ];
+  
+  const normalized = message.toLowerCase();
+  return propertyDisputePhrases.some(phrase => normalized.includes(phrase));
+}
+
+// Helper function to detect wrong person/number objections
+function isWrongPersonObjection(message: string): boolean {
+  const wrongPersonPhrases = [
+    'not my property',
+    "that's not my property",
+    'wrong property',
+    'different property',
+    "don't own that",
+    "doesn't belong to me",
+    'never owned',
+    'wrong number',
+    'wrong person',
+    'who is this',
+    "you have the wrong",
+    "this isn't"
+  ];
+  
+  const normalized = message.toLowerCase();
+  return wrongPersonPhrases.some(phrase => normalized.includes(phrase));
+}
+
+// Helper function to detect identity confirmation responses
+function detectIdentityConfirmation(message: string, expectedName: string): 'confirmed' | 'denied' | 'other_person' | 'unclear' {
+  const normalized = message.toLowerCase();
+  const firstName = expectedName.split(' ')[0].toLowerCase();
+  
+  // Check for explicit yes/no
+  if (normalized.match(/^(yes|yeah|yep|yup|correct|that's me|this is me)\b/)) {
+    return 'confirmed';
+  }
+  
+  if (normalized.match(/^(no|nope|nah)\b/)) {
+    return 'denied';
+  }
+  
+  // Check if they provide a different name
+  if (normalized.includes('this is') && !normalized.includes(firstName)) {
+    return 'other_person';
+  }
+  
+  // Check if message contains the expected name
+  if (normalized.includes(firstName)) {
+    return 'confirmed';
+  }
+  
+  return 'unclear';
 }
 
 // Get property analysis using Bridge API with address variations and coordinate fallback
@@ -1106,7 +1178,126 @@ export async function generateAIResponse(context: ConversationContext): Promise<
       throw new Error('CONVERSATION_ENDED');
     }
 
-    // 🛑 HARD STOP: Check for hard objections (keeping property, already sold, etc.)
+    // 🔍 IDENTITY CONFIRMATION: Handle responses when we're confirming identity
+    if (currentState === 'IDENTITY_CONFIRMATION') {
+      console.log('🔍 Processing identity confirmation response');
+      
+      const confirmation = detectIdentityConfirmation(context.incomingMessage, context.contactName);
+      const firstName = context.contactName.split(' ')[0];
+      
+      if (confirmation === 'confirmed') {
+        // They confirmed it's them but wrong property - data error
+        console.log('✅ Identity confirmed - wrong property data');
+        
+        if (!context.testMode && context.accessToken) {
+          await axios.post(
+            `https://services.leadconnectorhq.com/contacts/${context.contactId}/tags`,
+            { tags: ['not_for_sale', 'conversation_ended', 'data_error:wrong_property'] },
+            {
+              headers: {
+                'Authorization': `Bearer ${context.accessToken}`,
+                'Content-Type': 'application/json',
+                'Version': '2021-07-28'
+              }
+            }
+          );
+          await updateAIState(context.contactId, 'stopped', context.accessToken);
+        }
+        
+        const closeMessage = "I apologize for the confusion. It looks like we have incorrect information. I'll make sure this is corrected. Have a great day!";
+        await sendGHLMessage(context.conversationId, closeMessage, context.accessToken || '', context.testMode, context.fromNumber, context.contactId, context.messageType || 'SMS');
+        return closeMessage;
+      }
+      
+      if (confirmation === 'denied' || confirmation === 'other_person') {
+        // Wrong person - ask for correct contact method
+        console.log('❌ Wrong person - asking for correct contact');
+        
+        if (!context.testMode && context.accessToken) {
+          await axios.post(
+            `https://services.leadconnectorhq.com/contacts/${context.contactId}/tags`,
+            { tags: ['wrong_contact', 'conversation_ended', 'data_error:wrong_person'] },
+            {
+              headers: {
+                'Authorization': `Bearer ${context.accessToken}`,
+                'Content-Type': 'application/json',
+                'Version': '2021-07-28'
+              }
+            }
+          );
+          await updateAIState(context.contactId, 'stopped', context.accessToken);
+        }
+        
+        const askContactMessage = `My apologies for the confusion. What's the best way to reach ${firstName}?`;
+        await sendGHLMessage(context.conversationId, askContactMessage, context.accessToken || '', context.testMode, context.fromNumber, context.contactId, context.messageType || 'SMS');
+        return askContactMessage;
+      }
+      
+      // Unclear response - exit gracefully
+      console.log('❓ Unclear identity confirmation - exiting');
+      
+      if (!context.testMode && context.accessToken) {
+        await axios.post(
+          `https://services.leadconnectorhq.com/contacts/${context.contactId}/tags`,
+          { tags: ['conversation_ended', 'data_error:unclear'] },
+          {
+            headers: {
+              'Authorization': `Bearer ${context.accessToken}`,
+              'Content-Type': 'application/json',
+              'Version': '2021-07-28'
+            }
+          }
+        );
+        await updateAIState(context.contactId, 'stopped', context.accessToken);
+      }
+      
+      const closeMessage = "I apologize for any confusion. Have a great day!";
+      await sendGHLMessage(context.conversationId, closeMessage, context.accessToken || '', context.testMode, context.fromNumber, context.contactId, context.messageType || 'SMS');
+      return closeMessage;
+    }
+
+    // 🛑 HARD STOP: Check for wrong person/property objections
+    if (isWrongPersonObjection(context.incomingMessage)) {
+      console.log('🛑 Wrong person/property objection detected');
+      
+      // If already in IDENTITY_CONFIRMATION state, they disputed again - exit
+      if (currentState === 'IDENTITY_CONFIRMATION') {
+        console.log('🛑 Second dispute - exiting conversation');
+        
+        if (!context.testMode && context.accessToken) {
+          await axios.post(
+            `https://services.leadconnectorhq.com/contacts/${context.contactId}/tags`,
+            { tags: ['not_for_sale', 'conversation_ended', 'data_error:persistent_dispute'] },
+            {
+              headers: {
+                'Authorization': `Bearer ${context.accessToken}`,
+                'Content-Type': 'application/json',
+                'Version': '2021-07-28'
+              }
+            }
+          );
+          await updateAIState(context.contactId, 'stopped', context.accessToken);
+        }
+        
+        const closeMessage = "I apologize for the confusion. I'll make sure this is corrected. Have a great day!";
+        await sendGHLMessage(context.conversationId, closeMessage, context.accessToken || '', context.testMode, context.fromNumber, context.contactId, context.messageType || 'SMS');
+        return closeMessage;
+      }
+      
+      // First dispute - ask for identity confirmation
+      console.log('❓ First dispute - confirming identity');
+      
+      if (!context.testMode && context.accessToken) {
+        await updateAIState(context.contactId, 'IDENTITY_CONFIRMATION', context.accessToken);
+      }
+      
+      const firstName = context.contactName.split(' ')[0];
+      const confirmMessage = `My apologies! Did we reach ${firstName}?`;
+      await sendGHLMessage(context.conversationId, confirmMessage, context.accessToken || '', context.testMode, context.fromNumber, context.contactId, context.messageType || 'SMS');
+      return confirmMessage;
+    }
+
+    // 🛑 HARD STOP: Check for other hard objections (keeping property, already sold, etc.)
     if (isHardObjection(context.incomingMessage)) {
       console.log('🛑 Hard objection detected - ending conversation gracefully');
       
@@ -1126,7 +1317,6 @@ export async function generateAIResponse(context: ConversationContext): Promise<
         await updateAIState(context.contactId, 'stopped', context.accessToken);
       }
       
-      // Send ONE polite close, then stop
       const closeMessage = "I understand. If you ever want to explore options in the future, feel free to reach out. Best of luck!";
       await sendGHLMessage(context.conversationId, closeMessage, context.accessToken || '', context.testMode, context.fromNumber, context.contactId, context.messageType || 'SMS');
       return closeMessage;
