@@ -1060,27 +1060,21 @@ async function updateAIState(contactId: string, newState: string, accessToken: s
 // Get current conversation state from contact
 function getCurrentState(contact: any): ConversationState {
   const aiStateField = contact?.customFields?.find((f: any) => f.id === '1NxQW2kKMVgozjSUuu7s');
-  const currentState = aiStateField?.value;
+  const currentState = aiStateField?.value as string | undefined;
   
   // Map old states to new state machine
   if (currentState === 'handoff' || currentState === 'qualified') return 'QUALIFIED';
   if (currentState === 'valuation') return 'PROPERTY_VALUATION';
   
-  // Validate state is a valid ConversationState
-  const validStates: ConversationState[] = [
-    'NEW_LEAD',
-    'ASK_INTENT',
-    'BUYER_QUALIFICATION',
-    'SELLER_QUALIFICATION',
-    'PROPERTY_VALUATION',
-    'APPOINTMENT_BOOKING',
-    'IDENTITY_CONFIRMATION',
-    'QUALIFIED'
-  ];
-  
-  if (currentState && validStates.includes(currentState as ConversationState)) {
-    return currentState as ConversationState;
-  }
+  // Return valid states directly
+  if (currentState === 'NEW_LEAD') return 'NEW_LEAD';
+  if (currentState === 'ASK_INTENT') return 'ASK_INTENT';
+  if (currentState === 'BUYER_QUALIFICATION') return 'BUYER_QUALIFICATION';
+  if (currentState === 'SELLER_QUALIFICATION') return 'SELLER_QUALIFICATION';
+  if (currentState === 'PROPERTY_VALUATION') return 'PROPERTY_VALUATION';
+  if (currentState === 'APPOINTMENT_BOOKING') return 'APPOINTMENT_BOOKING';
+  if (currentState === 'IDENTITY_CONFIRMATION') return 'IDENTITY_CONFIRMATION';
+  if (currentState === 'QUALIFIED') return 'QUALIFIED';
   
   // Default to NEW_LEAD if no state or invalid state
   return 'NEW_LEAD';
