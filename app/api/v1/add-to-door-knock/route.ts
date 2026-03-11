@@ -3,6 +3,7 @@ import {
   AuthGetCurrentUserServer,
   cookiesClient,
 } from '@/app/utils/aws/auth/amplifyServerUtils.server';
+import { getLeadsByIds } from '@/app/utils/aws/data/lead.server';
 
 export async function POST(request: NextRequest) {
   try {
@@ -25,11 +26,7 @@ export async function POST(request: NextRequest) {
     );
 
     // Fetch the selected leads
-    const { data: leads } = await cookiesClient.models.PropertyLead.list({
-      filter: {
-        or: leadIds.map((id) => ({ id: { eq: id } })),
-      },
-    });
+    const leads = await getLeadsByIds(leadIds);
 
     if (!leads || leads.length === 0) {
       return NextResponse.json({ error: 'No leads found' }, { status: 404 });
