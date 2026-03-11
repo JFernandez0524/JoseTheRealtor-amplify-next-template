@@ -7,7 +7,7 @@ import type { DBLead } from '../aws/data/lead.server';
 
 // BatchData API Configuration
 const BATCHDATA_API_URL = 'https://api.batchdata.com/api/v1/property/lookup/all-attributes';
-const BATCHDATA_API_KEY = process.env.BATCHDATA_API_KEY;
+const BATCHDATA_API_KEY = process.env.BATCH_DATA_SERVER_TOKEN;
 
 // BatchData Response Types (based on your sample data)
 interface BatchDataAddress {
@@ -103,7 +103,7 @@ interface BatchDataResponse {
  */
 export async function enrichPreforeclosureLead(lead: DBLead): Promise<Partial<DBLead>> {
   if (!BATCHDATA_API_KEY) {
-    throw new Error('BATCHDATA_API_KEY not configured');
+    throw new Error('BATCH_DATA_SERVER_TOKEN not configured');
   }
 
   if (lead.type !== 'PREFORECLOSURE') {

@@ -1066,8 +1066,24 @@ function getCurrentState(contact: any): ConversationState {
   if (currentState === 'handoff' || currentState === 'qualified') return 'QUALIFIED';
   if (currentState === 'valuation') return 'PROPERTY_VALUATION';
   
-  // Default to NEW_LEAD if no state
-  return currentState as ConversationState || 'NEW_LEAD';
+  // Validate state is a valid ConversationState
+  const validStates: ConversationState[] = [
+    'NEW_LEAD',
+    'ASK_INTENT',
+    'BUYER_QUALIFICATION',
+    'SELLER_QUALIFICATION',
+    'PROPERTY_VALUATION',
+    'APPOINTMENT_BOOKING',
+    'IDENTITY_CONFIRMATION',
+    'QUALIFIED'
+  ];
+  
+  if (currentState && validStates.includes(currentState as ConversationState)) {
+    return currentState as ConversationState;
+  }
+  
+  // Default to NEW_LEAD if no state or invalid state
+  return 'NEW_LEAD';
 }
 
 // Determine next state based on current state and message
