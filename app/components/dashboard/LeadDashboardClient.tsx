@@ -15,6 +15,7 @@ import { useAccess } from '@/app/context/AccessContext';
 import { LeadTable } from './LeadTable';
 import { DashboardFilters } from './DashboardFilters';
 import { GhlConnection } from './GhlConnection';
+import { RouteExplanationModal } from './RouteExplanationModal';
 import { getFrontEndUser } from '@/app/utils/aws/auth/amplifyFrontEndUser';
 import type { Schema } from '@/amplify/data/resource';
 
@@ -32,6 +33,9 @@ export default function LeadDashboardClient({}: Props) {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [userAccount, setUserAccount] = useState<UserAccount | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [selectedLeadType, setSelectedLeadType] = useState<'PROBATE' | 'PREFORECLOSURE' | null>(null);
+  const [showRouteModal, setShowRouteModal] = useState(false);
+  const [pendingAction, setPendingAction] = useState<'skipTrace' | 'enrich' | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingMessage, setProcessingMessage] = useState('');
   const [isPopulatingQueue, setIsPopulatingQueue] = useState(false);
@@ -441,6 +445,17 @@ export default function LeadDashboardClient({}: Props) {
   const handleBulkSkipTrace = async () => {
     if (selectedIds.length === 0) return;
 
+    // Show modal first
+    if (!selectedLeadType) {
+      alert('Please select leads first');
+      return;
+    }
+
+    setPendingAction('skipTrace');
+    setShowRouteModal(true);
+  };
+
+  const executeSkipTrace = async () => {
     // Skip credit check for admins
     if (!isAdmin) {
       const currentCredits = userAccount?.credits || 0;
@@ -449,8 +464,6 @@ export default function LeadDashboardClient({}: Props) {
         return;
       }
     }
-
-    if (!confirm(`Skip-trace ${selectedIds.length} leads?`)) return;
 
     // Warn if batch is large
     if (selectedIds.length > 50) {
@@ -600,19 +613,12 @@ export default function LeadDashboardClient({}: Props) {
       return;
     }
 
-    const cost = preforeclosureLeads.length * 0.29;
-    if (
-      !confirm(
-        `Enrich ${preforeclosureLeads.length} preforeclosure leads with BatchData?\n\n` +
-          `Cost: $${cost.toFixed(2)}\n\n` +
-          `You'll get:\n` +
-          `• Real equity % and mortgage balances\n` +
-          `• Owner emails and phone numbers\n` +
-          `• Property flags (owner occupied, high equity, etc.)`
-      )
-    )
-      return;
+    // Show modal first
+    setPendingAction('enrich');
+    setShowRouteModal(true);
+  };
 
+  const executeEnrich = async () => {
     setIsProcessing(true);
     try {
       const response = await fetch('/api/v1/enrich-leads', {
@@ -916,6 +922,7 @@ export default function LeadDashboardClient({}: Props) {
         hasAI={isAI}
         selectedLeadsCount={selectedIds.length}
         selectedLeadTypes={leads.filter(l => selectedIds.includes(l.id)).map(l => l.type)}
+        selectedLeadType={selectedLeadType}
         isSkipTracing={isProcessing}
         isGhlSyncing={isProcessing}
         isAiScoring={isProcessing}
@@ -1045,27 +1052,63 @@ export default function LeadDashboardClient({}: Props) {
       <LeadTable
         leads={paginatedLeads}
         selectedIds={selectedIds}
+        selectedLeadType={selectedLeadType}
         isLoading={false}
         totalFilteredCount={filteredLeads.length}
         onRefresh={refreshLeads}
         onToggleAll={() => {
-          setSelectedIds(
-            selectedIds.length === paginatedLeads.length
-              ? []
-              : paginatedLeads.map((l) => l.id)
-          );
+          const newSelection = selectedIds.length === paginatedLeads.length
+            ? []
+            : paginatedLeads.map((l) => l.id);
+          
+          setSelectedIds(newSelection);
+          
+          // Update selectedLeadType
+          if (newSelection.length === 0) {
+            setSelectedLeadType(null);
+          } else {
+            const firstLead = paginatedLeads[0];
+            if (firstLead) {
+              setSelectedLeadType(firstLead.type as 'PROBATE' | 'PREFORECLOSURE');
+            }
+          }
         }}
         onToggleAllFiltered={() => {
-          setSelectedIds(
-            selectedIds.length === filteredLeads.length
-              ? []
-              : filteredLeads.map((l) => l.id)
-          );
+          const newSelection = selectedIds.length === filteredLeads.length
+            ? []
+            : filteredLeads.map((l) => l.id);
+          
+          setSelectedIds(newSelection);
+          
+          // Update selectedLeadType
+          if (newSelection.length === 0) {
+            setSelectedLeadType(null);
+          } else {
+            const firstLead = filteredLeads[0];
+            if (firstLead) {
+              setSelectedLeadType(firstLead.type as 'PROBATE' | 'PREFORECLOSURE');
+            }
+          }
         }}
         onToggleOne={(id) => {
-          setSelectedIds((prev) =>
-            prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
-          );
+          setSelectedIds((prev) => {
+            const newSelection = prev.includes(id) 
+              ? prev.filter((i) => i !== id) 
+              : [...prev, id];
+            
+            // Update selectedLeadType based on selection
+            if (newSelection.length === 0) {
+              setSelectedLeadType(null);
+            } else if (prev.length === 0) {
+              // First selection - set the lead type
+              const lead = leads.find(l => l.id === id);
+              if (lead) {
+                setSelectedLeadType(lead.type as 'PROBATE' | 'PREFORECLOSURE');
+              }
+            }
+            
+            return newSelection;
+          });
         }}
         onRowClick={(id) => {
           // Set navigation context for lead details page
@@ -1166,6 +1209,28 @@ export default function LeadDashboardClient({}: Props) {
             </button>
           </div>
         </div>
+      )}
+
+      {/* Route Explanation Modal */}
+      {showRouteModal && selectedLeadType && (
+        <RouteExplanationModal
+          isOpen={showRouteModal}
+          onClose={() => {
+            setShowRouteModal(false);
+            setPendingAction(null);
+          }}
+          onConfirm={async () => {
+            setShowRouteModal(false);
+            if (pendingAction === 'skipTrace') {
+              await executeSkipTrace();
+            } else if (pendingAction === 'enrich') {
+              await executeEnrich();
+            }
+            setPendingAction(null);
+          }}
+          leadType={selectedLeadType}
+          leadCount={selectedIds.length}
+        />
       )}
     </div>
   );

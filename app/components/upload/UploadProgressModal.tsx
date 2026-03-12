@@ -12,6 +12,8 @@ export function UploadProgressModal({ jobId }: UploadProgressModalProps) {
   const router = useRouter();
   const [job, setJob] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [retryCount, setRetryCount] = useState(0);
+  const MAX_RETRIES = 5;
 
   useEffect(() => {
     if (!jobId) return;
@@ -22,16 +24,26 @@ export function UploadProgressModal({ jobId }: UploadProgressModalProps) {
         
         if (data) {
           setJob(data);
+          setIsLoading(false);
           
           // Redirect immediately when completed
           if (data.status === 'COMPLETED') {
             router.push('/dashboard');
           }
+        } else if (retryCount < MAX_RETRIES) {
+          // Job not found yet, retry (DynamoDB consistency)
+          setRetryCount(prev => prev + 1);
+        } else {
+          // Max retries reached, stop loading
+          setIsLoading(false);
         }
       } catch (error) {
         console.error('Error checking upload progress:', error);
-      } finally {
-        setIsLoading(false);
+        if (retryCount < MAX_RETRIES) {
+          setRetryCount(prev => prev + 1);
+        } else {
+          setIsLoading(false);
+        }
       }
     };
 
@@ -39,7 +51,7 @@ export function UploadProgressModal({ jobId }: UploadProgressModalProps) {
     const interval = setInterval(checkProgress, 2000); // Poll every 2 seconds
 
     return () => clearInterval(interval);
-  }, [jobId, router]);
+  }, [jobId, router, retryCount]);
 
   if (isLoading || !job) {
     return (

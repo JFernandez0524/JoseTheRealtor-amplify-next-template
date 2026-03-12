@@ -23,6 +23,7 @@ type Lead = Schema['PropertyLead']['type'] & {
 type Props = {
   leads: Lead[];
   selectedIds: string[];
+  selectedLeadType: 'PROBATE' | 'PREFORECLOSURE' | null;
   isLoading: boolean;
   onToggleAll: () => void;
   onToggleAllFiltered: () => void;
@@ -95,6 +96,7 @@ const GhlStatusBadge: React.FC<{ status: Lead['ghlSyncStatus'] }> = ({
 export function LeadTable({
   leads,
   selectedIds,
+  selectedLeadType,
   isLoading,
   onToggleAll,
   onToggleAllFiltered,
@@ -377,13 +379,28 @@ export function LeadTable({
                   className='hover:bg-gray-50 transition cursor-pointer'
                 >
                   <td className='px-4 py-4 whitespace-nowrap sticky left-0 bg-white z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] select-none'>
-                    <input
-                      type='checkbox'
-                      className='rounded border-gray-300 text-blue-600 focus:ring-blue-500 h-4 w-4'
-                      checked={selectedIds.includes(lead.id)}
-                      onClick={(e) => e.stopPropagation()}
-                      onChange={() => onToggleOne(lead.id)}
-                    />
+                    {(() => {
+                      const isDisabled = selectedLeadType && selectedLeadType !== lead.type;
+                      return (
+                        <div className="relative group">
+                          <input
+                            type='checkbox'
+                            className={`rounded border-gray-300 text-blue-600 focus:ring-blue-500 h-4 w-4 ${
+                              isDisabled ? 'opacity-50 cursor-not-allowed' : ''
+                            }`}
+                            checked={selectedIds.includes(lead.id)}
+                            disabled={isDisabled}
+                            onClick={(e) => e.stopPropagation()}
+                            onChange={() => onToggleOne(lead.id)}
+                          />
+                          {isDisabled && (
+                            <div className="absolute left-0 top-6 hidden group-hover:block z-50 w-64 p-2 bg-gray-900 text-white text-xs rounded shadow-lg">
+                              Cannot mix probate and preforeclosure leads. Deselect current leads first.
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </td>
 
                   <td className='px-4 py-4 whitespace-nowrap text-sm'>

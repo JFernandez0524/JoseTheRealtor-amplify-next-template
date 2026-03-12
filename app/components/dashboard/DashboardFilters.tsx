@@ -35,6 +35,7 @@ type Props = {
   // Bulk Action Props
   selectedLeadsCount: number;
   selectedLeadTypes: string[]; // NEW: Array of types of selected leads
+  selectedLeadType: 'PROBATE' | 'PREFORECLOSURE' | null; // NEW: Single selected type
   handleBulkSkipTrace: () => Promise<void>;
   handleBulkGHLSync: () => Promise<void>;
   handleBulkStatusUpdate: (status: string) => Promise<void>;
@@ -84,6 +85,7 @@ export function DashboardFilters({
   hasAI = false,
   selectedLeadsCount,
   selectedLeadTypes,
+  selectedLeadType,
   handleBulkSkipTrace,
   handleBulkGHLSync,
   handleBulkStatusUpdate,
@@ -345,22 +347,24 @@ export function DashboardFilters({
               <option value="door_knock">Door Knock</option>
             </select>
 
-            {/* Skip Trace Button */}
-            <button
-              onClick={handleBulkSkipTrace}
-              disabled={isSkipTracing || isGhlSyncing}
-              className={`text-sm px-3 py-1.5 rounded transition-colors flex items-center justify-center gap-1.5 shadow-sm w-full sm:w-auto
-                                ${isSkipTracing ? 'bg-indigo-300 text-white cursor-not-allowed' : 'bg-indigo-600 text-white hover:bg-indigo-700'}`}
-              title={selectedLeadsCount > 0 ? `Cost: $${(selectedLeadsCount * 0.10).toFixed(2)}` : ''}
-            >
-              {isSkipTracing ? (
-                <>
-                  <Loader size='small' variation='linear' /> Tracing...
-                </>
-              ) : (
-                'Skip Trace'
-              )}
-            </button>
+            {/* Skip Trace Button - Only for PROBATE */}
+            {(!selectedLeadType || selectedLeadType === 'PROBATE') && (
+              <button
+                onClick={handleBulkSkipTrace}
+                disabled={isSkipTracing || isGhlSyncing || selectedLeadsCount === 0}
+                className={`text-sm px-3 py-1.5 rounded transition-colors flex items-center justify-center gap-1.5 shadow-sm w-full sm:w-auto
+                                  ${isSkipTracing ? 'bg-indigo-300 text-white cursor-not-allowed' : 'bg-indigo-600 text-white hover:bg-indigo-700'}`}
+                title={selectedLeadsCount > 0 ? `Cost: $${(selectedLeadsCount * 0.10).toFixed(2)}` : ''}
+              >
+                {isSkipTracing ? (
+                  <>
+                    <Loader size='small' variation='linear' /> Tracing...
+                  </>
+                ) : (
+                  'Skip Trace'
+                )}
+              </button>
+            )}
 
             {/* View Details Button (only when 1 lead selected) */}
             {selectedLeadsCount === 1 && (
@@ -388,11 +392,11 @@ export function DashboardFilters({
               )}
             </button>
 
-            {/* Enrich Leads Button (Preforeclosure only) */}
-            {hasPreforeclosure && !isMixedTypes && (
+            {/* Enrich Leads Button - Only for PREFORECLOSURE */}
+            {(!selectedLeadType || selectedLeadType === 'PREFORECLOSURE') && (
               <button
                 onClick={handleBulkEnrichLeads}
-                disabled={isEnriching || isSkipTracing || isGhlSyncing}
+                disabled={isEnriching || isSkipTracing || isGhlSyncing || selectedLeadsCount === 0}
                 className={`text-sm px-3 py-1.5 rounded transition-colors flex items-center justify-center gap-1.5 shadow-sm w-full sm:w-auto
                                   ${isEnriching ? 'bg-orange-300 text-white cursor-not-allowed' : 'bg-gradient-to-r from-orange-600 to-red-600 text-white hover:from-orange-700 hover:to-red-700'}`}
                 title={selectedLeadsCount > 0 ? `Cost: $${(selectedLeadsCount * 0.29).toFixed(2)} (Preforeclosure only)` : ''}
