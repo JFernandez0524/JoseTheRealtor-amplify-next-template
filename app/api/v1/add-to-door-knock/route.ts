@@ -11,6 +11,8 @@ export async function POST(request: NextRequest) {
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    
+    // Door knock queue endpoint
 
     const { leadIds } = await request.json();
 
