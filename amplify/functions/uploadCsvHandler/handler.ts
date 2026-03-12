@@ -450,7 +450,7 @@ export const handler: S3Handler = async (event) => {
               // Collect duplicate lead information
               duplicateLeads.push({
                 csvData: {
-                  ownerName: `${finalOwnerFirst || ''} ${finalOwnerLast || ''}`.trim(),
+                  ownerName: `${ownerFirstName || ''} ${ownerLastName || ''}`.trim(),
                   address: finalPropAddr,
                   city: finalPropCity,
                   state: finalPropState,
