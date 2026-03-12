@@ -380,7 +380,7 @@ export function LeadTable({
                 >
                   <td className='px-4 py-4 whitespace-nowrap sticky left-0 bg-white z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] select-none'>
                     {(() => {
-                      const isDisabled = selectedLeadType && selectedLeadType !== lead.type;
+                      const isDisabled = !!(selectedLeadType && selectedLeadType !== lead.type);
                       return (
                         <div className="relative group">
                           <input
