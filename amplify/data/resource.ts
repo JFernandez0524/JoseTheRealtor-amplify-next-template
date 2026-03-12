@@ -17,6 +17,7 @@ const schema = a.schema({
       duplicateCount: a.integer().default(0),
       errorCount: a.integer().default(0),
       errorMessage: a.string(),
+      duplicateLeads: a.json().array(), // Array of {csvData: {ownerName, address, city, state, zip}, existingLeadId: string, existingLeadData: {ownerName, address, zestimate}}
       startedAt: a.datetime(),
       completedAt: a.datetime(),
     })

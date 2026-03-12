@@ -603,7 +603,7 @@ export default function LeadDashboardClient({}: Props) {
     // Filter to preforeclosure only
     const selectedLeads = leads.filter((lead) => selectedIds.includes(lead.id));
     const preforeclosureLeads = selectedLeads.filter(
-      (lead) => lead.type === 'PREFORECLOSURE'
+      (lead) => lead.type?.toUpperCase() === 'PREFORECLOSURE'
     );
 
     if (preforeclosureLeads.length === 0) {

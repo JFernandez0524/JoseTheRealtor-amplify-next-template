@@ -177,6 +177,7 @@ export const handler: S3Handler = async (event) => {
     let currentRow = 0;
     let successCount = 0;
     let duplicateCount = 0;
+    const duplicateLeads: any[] = [];
     let ownerId = '';
     let jobId = '';
 
@@ -443,7 +444,26 @@ export const handler: S3Handler = async (event) => {
             }));
 
             if (existingLeadScan.Items && existingLeadScan.Items.length > 0) {
+              const existingLead = existingLeadScan.Items[0];
               console.log(`⏭️ Skipping duplicate lead for user ${ownerId}: ${duplicateCheckAddress}`);
+              
+              // Collect duplicate lead information
+              duplicateLeads.push({
+                csvData: {
+                  ownerName: `${finalOwnerFirst || ''} ${finalOwnerLast || ''}`.trim(),
+                  address: finalPropAddr,
+                  city: finalPropCity,
+                  state: finalPropState,
+                  zip: finalPropZip,
+                },
+                existingLeadId: existingLead.id,
+                existingLeadData: {
+                  ownerName: `${existingLead.ownerFirstName || ''} ${existingLead.ownerLastName || ''}`.trim(),
+                  address: existingLead.ownerAddress,
+                  zestimate: existingLead.zestimate,
+                },
+              });
+              
               duplicateCount++;
               
               // Update progress for duplicates too
@@ -451,11 +471,12 @@ export const handler: S3Handler = async (event) => {
                 await docClient.send(new UpdateCommand({
                   TableName: csvUploadJobTableName,
                   Key: { id: jobId },
-                  UpdateExpression: 'SET processedRows = :processed, successCount = :success, duplicateCount = :duplicate, updatedAt = :updated',
+                  UpdateExpression: 'SET processedRows = :processed, successCount = :success, duplicateCount = :duplicate, duplicateLeads = :duplicates, updatedAt = :updated',
                   ExpressionAttributeValues: {
                     ':processed': currentRow,
                     ':success': successCount,
                     ':duplicate': duplicateCount,
+                    ':duplicates': duplicateLeads,
                     ':updated': new Date().toISOString(),
                   }
                 }));
@@ -562,11 +583,12 @@ export const handler: S3Handler = async (event) => {
             await docClient.send(new UpdateCommand({
               TableName: csvUploadJobTableName,
               Key: { id: jobId },
-              UpdateExpression: 'SET processedRows = :processed, successCount = :success, duplicateCount = :duplicate, updatedAt = :updated',
+              UpdateExpression: 'SET processedRows = :processed, successCount = :success, duplicateCount = :duplicate, duplicateLeads = :duplicates, updatedAt = :updated',
               ExpressionAttributeValues: {
                 ':processed': currentRow,
                 ':success': successCount,
                 ':duplicate': duplicateCount,
+                ':duplicates': duplicateLeads,
                 ':updated': new Date().toISOString(),
               }
             }));
@@ -580,7 +602,7 @@ export const handler: S3Handler = async (event) => {
       await docClient.send(new UpdateCommand({
         TableName: csvUploadJobTableName,
         Key: { id: jobId },
-        UpdateExpression: 'SET #status = :status, successCount = :success, duplicateCount = :duplicate, errorCount = :errors, processedRows = :processed, completedAt = :completed, updatedAt = :updated',
+        UpdateExpression: 'SET #status = :status, successCount = :success, duplicateCount = :duplicate, duplicateLeads = :duplicates, errorCount = :errors, processedRows = :processed, completedAt = :completed, updatedAt = :updated',
         ExpressionAttributeNames: {
           '#status': 'status'
         },
@@ -588,6 +610,7 @@ export const handler: S3Handler = async (event) => {
           ':status': 'COMPLETED',
           ':success': successCount,
           ':duplicate': duplicateCount,
+          ':duplicates': duplicateLeads,
           ':errors': currentRow - successCount - duplicateCount,
           ':processed': currentRow,
           ':completed': new Date().toISOString(),

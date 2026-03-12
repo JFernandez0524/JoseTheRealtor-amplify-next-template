@@ -31,7 +31,7 @@ export async function POST(request: NextRequest) {
 
     // Filter to preforeclosure only
     const preforeclosureLeads = leads.filter(
-      (lead) => lead.type === 'PREFORECLOSURE'
+      (lead) => lead.type?.toUpperCase() === 'PREFORECLOSURE'
     );
 
     if (preforeclosureLeads.length === 0) {
