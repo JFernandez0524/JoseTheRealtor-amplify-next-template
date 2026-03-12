@@ -127,6 +127,9 @@ export async function getLead(id: string): Promise<DBLead | null> {
         Key: { id },
       });
       const { Item } = await ddbDocClient.send(command);
+      if (!Item) {
+        console.warn(`⚠️ Lead not found in DynamoDB: ${id}`);
+      }
       return (Item as DBLead) || null;
     } else {
       // ✅ NEXT.JS / AMPLIFY IMPLEMENTATION
@@ -136,12 +139,16 @@ export async function getLead(id: string): Promise<DBLead | null> {
           id,
         });
       if (errors) {
+        console.error(`❌ Amplify errors fetching lead ${id}:`, errors);
         throw new Error(errors.map((e: any) => e.message).join(', '));
+      }
+      if (!lead) {
+        console.warn(`⚠️ Lead not found in Amplify: ${id}`);
       }
       return lead as DBLead;
     }
   } catch (error: any) {
-    console.error('❌ getLead error:', error.message);
+    console.error(`❌ getLead error for ${id}:`, error.message);
     return null;
   }
 }
@@ -152,7 +159,14 @@ export async function getLead(id: string): Promise<DBLead | null> {
 export async function getLeadsByIds(ids: string[]): Promise<DBLead[]> {
   try {
     const leads = await Promise.all(ids.map(id => getLead(id)));
-    return leads.filter((lead): lead is DBLead => lead !== null);
+    const validLeads = leads.filter((lead): lead is DBLead => lead !== null);
+    
+    if (validLeads.length < ids.length) {
+      const failedIds = ids.filter((id, index) => leads[index] === null);
+      console.warn(`⚠️ Failed to fetch ${failedIds.length} leads:`, failedIds);
+    }
+    
+    return validLeads;
   } catch (error: any) {
     console.error('❌ getLeadsByIds error:', error.message);
     return [];

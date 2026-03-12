@@ -23,13 +23,20 @@ export async function POST(request: NextRequest) {
 
     console.log(
       `🚪 Adding ${leadIds.length} leads to door knock queue for user ${user.userId}`,
+      'Lead IDs:', leadIds
     );
 
     // Fetch the selected leads
     const leads = await getLeadsByIds(leadIds);
 
+    console.log(`📊 Retrieved ${leads.length} leads out of ${leadIds.length} requested`);
+
     if (!leads || leads.length === 0) {
-      return NextResponse.json({ error: 'No leads found' }, { status: 404 });
+      console.error('❌ No leads found for IDs:', leadIds);
+      return NextResponse.json({ 
+        error: 'No leads found',
+        details: `Could not find any leads for the ${leadIds.length} provided IDs`
+      }, { status: 404 });
     }
 
     let addedCount = 0;
