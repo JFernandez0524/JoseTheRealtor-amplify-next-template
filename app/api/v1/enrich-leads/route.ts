@@ -28,6 +28,12 @@ export async function POST(request: NextRequest) {
 
     // Fetch leads
     const leads = await getLeadsByIds(leadIds);
+    
+    console.log('📊 Enrich Debug:', {
+      requestedIds: leadIds,
+      fetchedCount: leads.length,
+      leadTypes: leads.map(l => ({ id: l.id, type: l.type }))
+    });
 
     // Filter to preforeclosure only
     const preforeclosureLeads = leads.filter(
@@ -36,7 +42,14 @@ export async function POST(request: NextRequest) {
 
     if (preforeclosureLeads.length === 0) {
       return NextResponse.json(
-        { error: 'No preforeclosure leads found in selection' },
+        { 
+          error: 'No preforeclosure leads found in selection',
+          debug: {
+            requestedIds: leadIds,
+            fetchedCount: leads.length,
+            leadTypes: leads.map(l => ({ id: l.id, type: l.type }))
+          }
+        },
         { status: 400 }
       );
     }
