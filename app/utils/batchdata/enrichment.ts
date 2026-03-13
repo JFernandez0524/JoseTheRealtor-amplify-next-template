@@ -106,7 +106,7 @@ export async function enrichPreforeclosureLead(lead: DBLead): Promise<Partial<DB
     throw new Error('BATCH_DATA_SERVER_TOKEN not configured');
   }
 
-  if (lead.type !== 'PREFORECLOSURE') {
+  if (lead.type?.toUpperCase() !== 'PREFORECLOSURE') {
     throw new Error('BatchData enrichment only for PREFORECLOSURE leads');
   }
 
@@ -237,7 +237,7 @@ export async function enrichPreforeclosureLeads(leads: DBLead[]): Promise<Map<st
   
   // Filter to only preforeclosure leads that haven't been enriched
   const leadsToEnrich = leads.filter(
-    lead => lead.type === 'PREFORECLOSURE' && !lead.batchDataEnriched
+    lead => lead.type?.toUpperCase() === 'PREFORECLOSURE' && !lead.batchDataEnriched
   );
 
   if (leadsToEnrich.length === 0) {
