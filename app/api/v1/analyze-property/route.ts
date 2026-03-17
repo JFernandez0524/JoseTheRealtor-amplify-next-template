@@ -34,12 +34,16 @@ import {
 } from '@/app/utils/aws/auth/amplifyServerUtils.server';
 import { analyzeBridgeProperty } from '@/app/utils/bridge.server';
 
-const ALLOWED_ORIGIN = 'https://jose-fernandez.remax.com';
+const ALLOWED_ORIGINS = [
+  'https://jose-fernandez.remax.com',
+  'https://www.josetherealtor.com',
+];
 
 const getCorsHeaders = (req: Request) => {
-  const origin = req.headers.get('origin');
+  const origin = req.headers.get('origin') || '';
+  const allowedOrigin = ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
   return {
-    'Access-Control-Allow-Origin': origin === ALLOWED_ORIGIN ? ALLOWED_ORIGIN : ALLOWED_ORIGIN,
+    'Access-Control-Allow-Origin': allowedOrigin,
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, Authorization',
   };
