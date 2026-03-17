@@ -258,6 +258,10 @@ export const handler: Handler = async (event) => {
     throw new Error('Unauthorized: Missing user identity or lead data.');
   }
 
+  if (leadIds.length > 100) {
+    throw new Error('Maximum 100 leads can be skip traced at once.');
+  }
+
   // 🛡️ 2. Tier Authorization Check
   const isAuthorized = groups.some((g: string) =>
     ['PRO', 'AI_PLAN', 'ADMINS'].includes(g)
@@ -350,13 +354,17 @@ export const handler: Handler = async (event) => {
 
     console.log(`✅ Fetched ${leads.length} valid leads`);
 
-    // Filter out sold/skip leads
+    // Filter out sold/skip leads AND already-completed skip traces
     const leadsToProcess = leads.filter(lead => 
-      lead.listingStatus !== 'sold' && lead.listingStatus !== 'skip'
+      lead.listingStatus !== 'sold' &&
+      lead.listingStatus !== 'skip' &&
+      lead.skipTraceStatus !== 'COMPLETED'
     );
 
     const skippedLeads = leads.filter(lead => 
-      lead.listingStatus === 'sold' || lead.listingStatus === 'skip'
+      lead.listingStatus === 'sold' ||
+      lead.listingStatus === 'skip' ||
+      lead.skipTraceStatus === 'COMPLETED'
     );
 
     const results: any[] = skippedLeads.map(lead => ({
@@ -510,15 +518,17 @@ export const handler: Handler = async (event) => {
     console.log(`📊 Results: ${processedSuccessfully} successful, ${noQualityContacts} no quality contacts, ${noMatch} no match, ${failed} failed`);
 
     // 💰 7. Deduct Credits (all users except OWNER)
-    if (processedSuccessfully > 0 && !isOwner && userAccount) {
-      console.log(`💳 Deducting ${processedSuccessfully} credits...`);
+    // BatchData charges for every request regardless of match quality
+    const chargeableCount = updateResults.filter(r => ['SUCCESS', 'NO_QUALITY_CONTACTS', 'NO_MATCH'].includes(r.status)).length;
+    if (chargeableCount > 0 && !isOwner && userAccount) {
+      console.log(`💳 Deducting ${chargeableCount} credits (all API calls are chargeable)...`);
       await docClient.send(new UpdateCommand({
         TableName: userAccountTableName,
         Key: { id: userAccount.id },
         UpdateExpression: 'SET credits = :newCredits, totalSkipsPerformed = :newTotal',
         ExpressionAttributeValues: {
-          ':newCredits': (userAccount.credits || 0) - processedSuccessfully,
-          ':newTotal': (userAccount.totalSkipsPerformed || 0) + processedSuccessfully
+          ':newCredits': (userAccount.credits || 0) - chargeableCount,
+          ':newTotal': (userAccount.totalSkipsPerformed || 0) + chargeableCount
         }
       }));
     }

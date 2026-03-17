@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { client } from '@/app/utils/aws/data/frontEndClient';
 import { 
@@ -442,6 +442,8 @@ export default function LeadDashboardClient({}: Props) {
     }
   };
 
+  const skipTraceInFlight = useRef(false);
+
   const handleBulkSkipTrace = async () => {
     if (selectedIds.length === 0) return;
 
@@ -451,70 +453,82 @@ export default function LeadDashboardClient({}: Props) {
       return;
     }
 
+    // Warn about already-completed leads
+    const alreadyTraced = leads.filter(
+      l => selectedIds.includes(l.id) && l.skipTraceStatus === 'COMPLETED'
+    );
+    if (alreadyTraced.length > 0) {
+      const proceed = confirm(
+        `⚠️ ${alreadyTraced.length} of ${selectedIds.length} selected leads have already been skip traced and will be skipped.\n\n` +
+        `Only ${selectedIds.length - alreadyTraced.length} leads will be charged ($${((selectedIds.length - alreadyTraced.length) * 0.10).toFixed(2)}).\n\nContinue?`
+      );
+      if (!proceed) return;
+    }
+
     setPendingAction('skipTrace');
     setShowRouteModal(true);
   };
 
   const executeSkipTrace = async () => {
+    if (skipTraceInFlight.current) return;
+    skipTraceInFlight.current = true;
+
+    // Filter out already-completed leads
+    const idsToProcess = selectedIds.filter(id => {
+      const lead = leads.find(l => l.id === id);
+      return lead?.skipTraceStatus !== 'COMPLETED';
+    });
+
+    if (idsToProcess.length === 0) {
+      alert('All selected leads have already been skip traced.');
+      skipTraceInFlight.current = false;
+      return;
+    }
+
     // Skip credit check for admins
     if (!isAdmin) {
       const currentCredits = userAccount?.credits || 0;
-      if (currentCredits < selectedIds.length) {
-        alert(`Insufficient Credits! You need ${selectedIds.length}...`);
+      if (currentCredits < idsToProcess.length) {
+        alert(`Insufficient Credits! You need ${idsToProcess.length}...`);
+        skipTraceInFlight.current = false;
         return;
       }
     }
 
     // Warn if batch is large
-    if (selectedIds.length > 50) {
+    if (idsToProcess.length > 50) {
       if (!confirm(
-        `⚠️ Large batch detected (${selectedIds.length} leads)\n\n` +
+        `⚠️ Large batch detected (${idsToProcess.length} leads)\n\n` +
         `This will be processed in batches of 50 to ensure reliability.\n` +
         `This may take several minutes to complete.\n\n` +
         `Continue?`
-      )) return;
+      )) {
+        skipTraceInFlight.current = false;
+        return;
+      }
+    }
+
+    // Final cost confirmation before any API calls
+    const estimatedCost = (idsToProcess.length * 0.10).toFixed(2);
+    if (!confirm(
+      `💳 You are about to skip trace ${idsToProcess.length} leads.\n\n` +
+      `Estimated cost: $${estimatedCost}\n\n` +
+      `This cannot be undone. Continue?`
+    )) {
+      skipTraceInFlight.current = false;
+      return;
     }
 
     setIsProcessing(true);
-    setProcessingMessage(`Skip tracing ${selectedIds.length} leads...`);
+    setProcessingMessage(`Skip tracing ${idsToProcess.length} leads...`);
     
     try {
-      const BATCH_SIZE = 50;
-      const allResults = [];
-      
-      // Process in batches of 50
-      for (let i = 0; i < selectedIds.length; i += BATCH_SIZE) {
-        const batch = selectedIds.slice(i, i + BATCH_SIZE);
-        const batchNum = Math.floor(i / BATCH_SIZE) + 1;
-        const totalBatches = Math.ceil(selectedIds.length / BATCH_SIZE);
-        
-        setProcessingMessage(`Skip tracing batch ${batchNum}/${totalBatches} (${batch.length} leads)...`);
-        console.log(`📦 Processing batch ${batchNum}/${totalBatches}: ${batch.length} leads`);
-        
-        const batchResults = await skipTraceLeads(batch);
-        allResults.push(...(Array.isArray(batchResults) ? batchResults : []));
-        
-        // Small delay between batches to avoid rate limits
-        if (i + BATCH_SIZE < selectedIds.length) {
-          await new Promise(resolve => setTimeout(resolve, 1000));
-        }
-      }
+      const results = await skipTraceLeads(idsToProcess).then(r => Array.isArray(r) ? r : []);
 
-      console.log('Skip trace complete:', allResults.length, 'results');
-
-      // Handle response - data is the array directly
-      const results = allResults;
-      console.log('Results array:', results);
-      console.log('Results length:', results.length);
+      console.log('Skip trace complete:', results.length, 'results');
       
-      const successful = results.filter((r: any) => {
-        console.log('Checking result:', r, 'status:', r?.status);
-        return r?.status === 'SUCCESS';
-      }).length;
-      
-      const failed = results.filter(
-        (r: any) => r?.status === 'FAILED' || r?.status === 'ERROR'
-      ).length;
+      const successful = results.filter((r: any) => r?.status === 'SUCCESS').length;
+      const failed = results.filter((r: any) => r?.status === 'FAILED' || r?.status === 'ERROR').length;
       
       const noMatch = results.filter(
         (r: any) => r?.status === 'NO_MATCH'
@@ -543,6 +557,7 @@ export default function LeadDashboardClient({}: Props) {
     } finally {
       setIsProcessing(false);
       setProcessingMessage('');
+      skipTraceInFlight.current = false;
     }
   };
   const handleDeleteLeads = async () => {
@@ -1059,54 +1074,54 @@ export default function LeadDashboardClient({}: Props) {
         onToggleAll={() => {
           const newSelection = selectedIds.length === paginatedLeads.length
             ? []
-            : paginatedLeads.map((l) => l.id);
-          
+            : paginatedLeads.slice(0, 100).map((l) => l.id);
+
+          if (paginatedLeads.length > 100 && selectedIds.length !== paginatedLeads.length) {
+            alert('Maximum 100 leads can be selected at once.');
+          }
+
           setSelectedIds(newSelection);
-          
-          // Update selectedLeadType
           if (newSelection.length === 0) {
             setSelectedLeadType(null);
           } else {
             const firstLead = paginatedLeads[0];
-            if (firstLead) {
-              setSelectedLeadType(firstLead.type as 'PROBATE' | 'PREFORECLOSURE');
-            }
+            if (firstLead) setSelectedLeadType(firstLead.type as 'PROBATE' | 'PREFORECLOSURE');
           }
         }}
         onToggleAllFiltered={() => {
           const newSelection = selectedIds.length === filteredLeads.length
             ? []
-            : filteredLeads.map((l) => l.id);
-          
+            : filteredLeads.slice(0, 100).map((l) => l.id);
+
+          if (filteredLeads.length > 100 && selectedIds.length !== filteredLeads.length) {
+            alert('Maximum 100 leads can be selected at once.');
+          }
+
           setSelectedIds(newSelection);
-          
-          // Update selectedLeadType
           if (newSelection.length === 0) {
             setSelectedLeadType(null);
           } else {
             const firstLead = filteredLeads[0];
-            if (firstLead) {
-              setSelectedLeadType(firstLead.type as 'PROBATE' | 'PREFORECLOSURE');
-            }
+            if (firstLead) setSelectedLeadType(firstLead.type as 'PROBATE' | 'PREFORECLOSURE');
           }
         }}
         onToggleOne={(id) => {
           setSelectedIds((prev) => {
-            const newSelection = prev.includes(id) 
-              ? prev.filter((i) => i !== id) 
+            if (!prev.includes(id) && prev.length >= 100) {
+              alert('Maximum 100 leads can be selected at once.');
+              return prev;
+            }
+            const newSelection = prev.includes(id)
+              ? prev.filter((i) => i !== id)
               : [...prev, id];
-            
-            // Update selectedLeadType based on selection
+
             if (newSelection.length === 0) {
               setSelectedLeadType(null);
             } else if (prev.length === 0) {
-              // First selection - set the lead type
               const lead = leads.find(l => l.id === id);
-              if (lead) {
-                setSelectedLeadType(lead.type as 'PROBATE' | 'PREFORECLOSURE');
-              }
+              if (lead) setSelectedLeadType(lead.type as 'PROBATE' | 'PREFORECLOSURE');
             }
-            
+
             return newSelection;
           });
         }}
