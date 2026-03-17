@@ -11,6 +11,14 @@ const addressValidationClient = new AddressValidationClient({
 });
 
 /**
+ * Helper to convert ALL CAPS to Title Case
+ */
+export const toTitleCase = (str: string) => {
+  if (!str) return str;
+  return str.toLowerCase().replace(/\b\w/g, (char) => char.toUpperCase());
+};
+
+/**
  * Validates an address using Google Address Validation API with USPS CASS.
  * Returns standardized address components with USPS postal city names.
  */
@@ -53,12 +61,6 @@ export async function validateAddressWithGoogle(address: string) {
       (standardizedAddr.zipCodeExtension ? `${standardizedAddr.zipCode}-${standardizedAddr.zipCodeExtension}` : standardizedAddr.zipCode) :
       postalAddress.postalCode || '';
     
-    // Helper to convert ALL CAPS to Title Case
-    const toTitleCase = (str: string) => {
-      if (!str) return str;
-      return str.toLowerCase().replace(/\b\w/g, (char) => char.toUpperCase());
-    };
-    
     return {
       success: true,
       formattedAddress: result?.address?.formattedAddress || '',
@@ -68,7 +70,7 @@ export async function validateAddressWithGoogle(address: string) {
       components: {
         street: toTitleCase(street),
         city: toTitleCase(standardizedAddr?.city || postalAddress.locality || ''),
-        county: postalAddress.administrativeArea || '',
+        county: toTitleCase(uspsData?.county || postalAddress.sublocality || ''),
         state: standardizedAddr?.state || postalAddress.administrativeArea || '',
         zip,
       },

@@ -10,7 +10,7 @@ import { DynamoDBDocumentClient, PutCommand, ScanCommand, UpdateCommand } from '
 import { parse } from 'csv-parse';
 import { Readable } from 'stream';
 import { randomUUID } from 'crypto';
-import { validateAddressWithGoogle } from '../../../app/utils/google.server';
+import { validateAddressWithGoogle, toTitleCase } from '../../../app/utils/google.server';
 import { fetchBestZestimate } from '../../../app/utils/bridge.server';
 
 const s3 = new S3Client({ region: process.env.AWS_REGION });
@@ -339,8 +339,8 @@ export const handler: S3Handler = async (event) => {
 
           const std = propValidation?.components;
           // Keep original CSV address for Zillow links, use standardized for geocoding
-          const finalPropAddr = rawPropAddr; // Use original CSV address
-          const finalPropCity = rawPropCity; // Use original CSV city
+          const finalPropAddr = toTitleCase(rawPropAddr); // Apply Title Case to CSV address
+          const finalPropCity = toTitleCase(rawPropCity); // Apply Title Case to CSV city
           const finalPropState = std?.state || rawPropState; // Use standardized state (NJ vs New Jersey)
           // Strip +4 from zip codes (keep only 5 digits)
           const finalPropZip = (std?.zip || rawPropZip)?.split('-')[0];
@@ -395,8 +395,8 @@ export const handler: S3Handler = async (event) => {
                 `${rawAdminAddr}, ${sanitize(row['adminCity'])} ${rawAdminZip}`
               );
               const aStd = adminValidation?.components;
-              finalMailAddr = aStd?.street || rawAdminAddr;
-              finalMailCity = aStd?.city || sanitize(row['adminCity']);
+              finalMailAddr = toTitleCase(aStd?.street || rawAdminAddr);
+              finalMailCity = toTitleCase(aStd?.city || sanitize(row['adminCity']));
               finalMailState = aStd?.state || sanitize(row['adminState']);
               // Strip +4 from admin zip
               finalMailZip = (aStd?.zip || rawAdminZip)?.split('-')[0];
