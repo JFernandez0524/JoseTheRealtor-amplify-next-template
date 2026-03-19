@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { GoogleMap, LoadScript, Marker, InfoWindow } from '@react-google-maps/api';
+import { GoogleMap, Marker, InfoWindow } from '@react-google-maps/api';
+import { useGoogleMaps } from '@/app/components/GoogleMapsProvider';
 
 const mapContainerStyle = {
   width: '100%',
@@ -31,6 +32,7 @@ interface DoorKnockLead {
 }
 
 export default function DoorKnockMapPage() {
+  const { isLoaded } = useGoogleMaps();
   const [leads, setLeads] = useState<DoorKnockLead[]>([]);
   const [selectedLead, setSelectedLead] = useState<DoorKnockLead | null>(null);
   const [mapCenter, setMapCenter] = useState(defaultCenter);
@@ -184,7 +186,7 @@ export default function DoorKnockMapPage() {
 
         {/* Map */}
         <div className="bg-white rounded-lg shadow overflow-hidden">
-          <LoadScript googleMapsApiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || ''}>
+          {isLoaded ? (
             <GoogleMap
               mapContainerStyle={mapContainerStyle}
               center={mapCenter}
@@ -272,7 +274,11 @@ export default function DoorKnockMapPage() {
                 </InfoWindow>
               )}
             </GoogleMap>
-          </LoadScript>
+          ) : (
+            <div className="h-96 flex items-center justify-center bg-gray-100">
+              <div className="text-gray-500">Loading map...</div>
+            </div>
+          )}
         </div>
 
         {/* Legend */}

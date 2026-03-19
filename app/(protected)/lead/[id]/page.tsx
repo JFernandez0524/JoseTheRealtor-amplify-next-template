@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 import { cookiesClient } from '@/app/utils/aws/auth/amplifyServerUtils.server';
-import { LeadDetailClient } from '../../../components/leadDetails/LeadDetailClient';
+import { LeadDetailWrapper } from '../../../components/leadDetails/LeadDetailClient';
 import { Suspense } from 'react';
 
 type Props = {
@@ -60,7 +60,7 @@ export default async function Page({ params }: Props) {
         </div>
       }
     >
-      <LeadDetailClient initialLead={sanitizedLead} />
+      <LeadDetailWrapper initialLead={sanitizedLead} />
     </Suspense>
   );
 }

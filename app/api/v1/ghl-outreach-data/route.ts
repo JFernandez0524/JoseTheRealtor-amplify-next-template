@@ -81,6 +81,7 @@ export async function GET(request: NextRequest) {
       aiState: getFieldValue(GHL_CUSTOM_FIELDS.ai_state),
       callOutcome: getFieldValue(GHL_CUSTOM_FIELDS.call_outcome),
       mailSentCount: parseInt(getFieldValue(GHL_CUSTOM_FIELDS.mail_sent_count) || '0'),
+      tags: contact.tags || [],
     };
 
     return NextResponse.json(outreachData);

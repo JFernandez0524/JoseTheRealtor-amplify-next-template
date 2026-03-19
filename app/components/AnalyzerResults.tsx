@@ -1,6 +1,7 @@
 'use client';
 
 import { GoogleMap, MarkerF } from '@react-google-maps/api';
+import { useGoogleMaps } from './GoogleMapsProvider';
 import { AnalysisResult } from '@/app/types/analysis';
 import DataAttribution from './DataAttribution';
 import SignUpCTA from './SignUpCTA';
@@ -24,6 +25,8 @@ export default function AnalyzerResults({
   result,
   authStatus,
 }: AnalyzerResultsProps) {
+  const { isLoaded } = useGoogleMaps();
+  
   if (!result) {
     return null;
   }
@@ -131,7 +134,7 @@ export default function AnalyzerResults({
       </div>
 
       {/* --- Google Map --- */}
-      {location && location.lat && (
+      {location && location.lat && isLoaded && (
         <GoogleMap
           mapContainerStyle={mapContainerStyle}
           center={location}

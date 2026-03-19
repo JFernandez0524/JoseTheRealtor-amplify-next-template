@@ -1,13 +1,12 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import axios from 'axios';
 import {
   GoogleMap,
-  useJsApiLoader,
-  Libraries,
 } from '@react-google-maps/api';
+import { useGoogleMaps } from '../GoogleMapsProvider';
 import { Loader } from '@aws-amplify/ui-react';
 
 // Icons
@@ -23,9 +22,15 @@ import { CoreLeadInfo } from './CoreLeadInfo';
 import { GhlActions } from './GhlActions';
 import { LeadStatusBadge } from './LeadStatusBadge';
 import { CardWrapper } from './CardWrapper';
-import { TagsManager } from './TagsManager';
 import { OutreachStatus } from './OutreachStatus';
 import { SkipTraceHistory } from './SkipTraceHistory';
+import { ErrorBoundary } from './ErrorBoundary';
+import { ToastProvider, useToast } from './ToastProvider';
+import { 
+  MapSkeleton, 
+  PropertyInfoSkeleton, 
+  SidebarSkeleton 
+} from './SkeletonLoaders';
 
 // Utils
 import { client } from '@/app/utils/aws/data/frontEndClient';
@@ -39,7 +44,7 @@ type Lead = Schema['PropertyLead']['type'] & {
   ghlSyncDate?: string | null;
 };
 
-const libraries: Libraries = ['places', 'marker'];
+
 const mapContainerStyle = { width: '100%', height: '100%' };
 
 const formatCurrency = (v?: any) =>
@@ -58,8 +63,19 @@ interface NavContext {
   isLast: boolean;
 }
 
-export function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
+export function LeadDetailWrapper({ initialLead }: { initialLead: Lead }) {
+  return (
+    <ErrorBoundary>
+      <ToastProvider>
+        <LeadDetailClient initialLead={initialLead} />
+      </ToastProvider>
+    </ErrorBoundary>
+  );
+}
+
+function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
   const router = useRouter();
+  const { addToast } = useToast();
   const [lead, setLead] = useState<Lead>(initialLead);
   const [marketData, setMarketData] = useState<any | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -69,12 +85,10 @@ export function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
   const [access, setAccess] = useState({ isAdmin: false, isPro: false });
   const [outreachData, setOutreachData] = useState<any>(null);
   const [isLoadingOutreach, setIsLoadingOutreach] = useState(false);
+  const [marketDataError, setMarketDataError] = useState<string | null>(null);
+  const [outreachError, setOutreachError] = useState<string | null>(null);
 
-  const { isLoaded: isMapLoaded } = useJsApiLoader({
-    id: 'google-map-script',
-    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY!,
-    libraries,
-  });
+  const { isLoaded: isMapLoaded } = useGoogleMaps();
 
   const refreshLeadData = async () => {
     try {
@@ -106,28 +120,74 @@ export function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
     checkAccess();
   }, []);
 
-  // 1.5. FETCH GHL OUTREACH DATA
-  useEffect(() => {
-    async function fetchOutreachData() {
-      if (!lead.ghlContactId) {
-        setOutreachData(null);
-        return;
-      }
-
-      setIsLoadingOutreach(true);
-      try {
-        const response = await axios.get(`/api/v1/ghl-outreach-data?contactId=${lead.ghlContactId}`);
-        setOutreachData(response.data);
-      } catch (error) {
-        console.error('Failed to fetch outreach data:', error);
-        setOutreachData(null);
-      } finally {
-        setIsLoadingOutreach(false);
-      }
+  // Enhanced outreach data fetching with error handling
+  const fetchOutreachData = useCallback(async () => {
+    if (!lead.ghlContactId) {
+      setOutreachData(null);
+      return;
     }
 
-    fetchOutreachData();
+    setIsLoadingOutreach(true);
+    setOutreachError(null);
+    
+    try {
+      const response = await axios.get(`/api/v1/ghl-outreach-data?contactId=${lead.ghlContactId}`);
+      setOutreachData(response.data);
+    } catch (error) {
+      console.error('Failed to fetch outreach data:', error);
+      setOutreachError('Failed to load outreach data');
+      setOutreachData(null);
+    } finally {
+      setIsLoadingOutreach(false);
+    }
   }, [lead.ghlContactId]);
+
+  // Enhanced market data fetching with error handling
+  const fetchMarketIntel = useCallback(async () => {
+    if (!initialLead?.id || (!initialLead?.latitude && !initialLead.standardizedAddress)) {
+      return;
+    }
+    
+    setIsAnalyzing(true);
+    setMarketDataError(null);
+
+    let street = lead?.ownerAddress || initialLead.ownerAddress || '';
+    let city = lead?.ownerCity || initialLead.ownerCity || '';
+    let state = lead?.ownerState || initialLead.ownerState || '';
+    let zip = lead?.ownerZip || initialLead.ownerZip || '';
+
+    const rawAddress = initialLead.standardizedAddress;
+    if (typeof rawAddress === 'string' && rawAddress.trim().startsWith('{')) {
+      try {
+        const parsed = JSON.parse(rawAddress);
+        street = parsed.street || street;
+        city = parsed.city || city;
+        state = parsed.state || state;
+        zip = parsed.zip || zip;
+      } catch (e) {}
+    }
+
+    try {
+      const response = await axios.post('/api/v1/analyze-property', {
+        lat: Number(initialLead.latitude),
+        lng: Number(initialLead.longitude),
+        street,
+        city,
+        state,
+        zip,
+      });
+      if (response.data.success) {
+        setMarketData(response.data);
+      } else {
+        setMarketDataError('Property analysis unavailable');
+      }
+    } catch (err) {
+      console.error('Analysis Failed:', err);
+      setMarketDataError('Failed to load property analysis');
+    } finally {
+      setIsAnalyzing(false);
+    }
+  }, [initialLead, lead?.ownerAddress, lead?.ownerCity, lead?.ownerState, lead?.ownerZip]);
 
   // 2. DATA FETCHING (ANALYZER)
   useEffect(() => {
@@ -249,9 +309,20 @@ export function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
     try {
       await client.mutations.skipTraceLeads({ leadIds: [lead.id] });
       const { data } = await client.models.PropertyLead.get({ id: lead.id });
-      if (data) setLead(data as Lead);
+      if (data) {
+        setLead(data as Lead);
+        addToast({
+          type: 'success',
+          title: 'Skip Trace Complete',
+          message: 'Contact information has been updated'
+        });
+      }
     } catch (err: any) {
-      alert(err.message);
+      addToast({
+        type: 'error',
+        title: 'Skip Trace Failed',
+        message: err.message || 'Please try again'
+      });
     } finally {
       setIsSkipTracing(false);
     }
@@ -296,30 +367,30 @@ export function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
   };
 
   return (
-    <main className='max-w-[1600px] mx-auto py-6 px-8 bg-slate-50 min-h-screen'>
-      {/* HEADER / NAV */}
-      <div className='flex items-center justify-between mb-8'>
-        <div className='flex items-center gap-6'>
+    <main className='max-w-[1600px] mx-auto py-4 md:py-6 px-4 md:px-8 bg-slate-50 min-h-screen'>
+      {/* HEADER / NAV - Mobile Optimized */}
+      <div className='flex items-center justify-between mb-6 md:mb-8'>
+        <div className='flex items-center gap-3 md:gap-6'>
           <button
             onClick={() => router.push('/dashboard')}
-            className='p-2 hover:bg-white rounded-full border border-slate-200 transition'
+            className='p-2 md:p-2 hover:bg-white rounded-full border border-slate-200 transition touch-manipulation'
           >
-            <HiChevronLeft className='text-xl text-slate-600' />
+            <HiChevronLeft className='text-lg md:text-xl text-slate-600' />
           </button>
-          <h1 className='text-xl font-bold text-slate-800 uppercase tracking-tight'>
+          <h1 className='text-lg md:text-xl font-bold text-slate-800 uppercase tracking-tight'>
             PROPERTY RECORD
           </h1>
         </div>
 
-        <div className='flex items-center gap-4'>
+        <div className='flex items-center gap-2 md:gap-4'>
           <button
             onClick={handlePrevious}
             disabled={!navContext || navContext.isFirst}
-            className='px-4 py-2 text-xs font-black uppercase tracking-widest text-slate-600 hover:text-indigo-600 disabled:opacity-30 transition-colors'
+            className='px-3 py-2 md:px-4 md:py-2 text-xs font-black uppercase tracking-widest text-slate-600 hover:text-indigo-600 disabled:opacity-30 transition-colors touch-manipulation'
           >
             PREV
           </button>
-          <div className='px-4 py-2 bg-white border border-slate-200 rounded-lg shadow-sm'>
+          <div className='px-3 py-2 md:px-4 md:py-2 bg-white border border-slate-200 rounded-lg shadow-sm'>
             <span className='text-xs font-black text-slate-800'>
               {navContext
                 ? `${navContext.currentIndex + 1} / ${navContext.ids.length}`
@@ -329,26 +400,27 @@ export function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
           <button
             onClick={handleNext}
             disabled={!navContext || navContext.isLast}
-            className='px-4 py-2 text-xs font-black uppercase tracking-widest text-slate-600 hover:text-indigo-600 disabled:opacity-30 transition-colors'
+            className='px-3 py-2 md:px-4 md:py-2 text-xs font-black uppercase tracking-widest text-slate-600 hover:text-indigo-600 disabled:opacity-30 transition-colors touch-manipulation'
           >
             NEXT
           </button>
         </div>
       </div>
 
-      <div className='grid grid-cols-12 gap-8'>
-        <div className='col-span-12 lg:col-span-9 space-y-8'>
-          {/* MAP & HERO */}
-          <section className='bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden'>
-            <div className='h-[350px] bg-slate-100 relative'>
-              {isMapLoaded && mapCenter ? (
+      <div className='grid grid-cols-1 lg:grid-cols-12 gap-6 md:gap-8'>
+        <div className='lg:col-span-9 space-y-6 md:space-y-8'>
+          {/* MAP & HERO - Mobile Optimized */}
+          <section className='bg-white rounded-2xl md:rounded-3xl shadow-sm border border-slate-200 overflow-hidden'>
+            <div className='h-[250px] md:h-[350px] bg-slate-100 relative'>
+              {!isMapLoaded ? (
+                <MapSkeleton />
+              ) : mapCenter ? (
                 <GoogleMap
                   mapContainerStyle={mapContainerStyle}
                   center={mapCenter}
                   zoom={18}
                   options={{ disableDefaultUI: true, mapId: 'DEMO_MAP_ID' }}
                   onLoad={(map) => {
-                    // Create AdvancedMarkerElement
                     if (window.google?.maps?.marker?.AdvancedMarkerElement) {
                       new window.google.maps.marker.AdvancedMarkerElement({
                         map,
@@ -356,37 +428,41 @@ export function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
                       });
                     }
                   }}
-                >
-                </GoogleMap>
+                />
               ) : (
                 <div className='flex items-center justify-center h-full text-slate-400 font-bold uppercase text-[10px] tracking-widest'>
                   <FiMapPin className='mr-2 text-lg' /> Map Data Loading...
                 </div>
               )}
             </div>
-            <div className='p-10 flex flex-col md:flex-row justify-between items-start md:items-end gap-6'>
-              <div className='flex-1'>
-                <span className='bg-indigo-600 text-white text-[10px] font-black px-2.5 py-1 rounded uppercase tracking-widest mb-3 inline-block'>
-                  {lead.type}
-                </span>
-                <h2 className='text-4xl font-black text-slate-900 tracking-tight leading-tight'>
-                  {displayAddress}
-                </h2>
+            
+            {!lead ? (
+              <PropertyInfoSkeleton />
+            ) : (
+              <div className='p-6 md:p-10 flex flex-col md:flex-row justify-between items-start md:items-end gap-4 md:gap-6'>
+                <div className='flex-1'>
+                  <span className='bg-indigo-600 text-white text-[10px] font-black px-2.5 py-1 rounded uppercase tracking-widest mb-3 inline-block'>
+                    {lead.type}
+                  </span>
+                  <h2 className='text-2xl md:text-4xl font-black text-slate-900 tracking-tight leading-tight'>
+                    {displayAddress}
+                  </h2>
+                </div>
+                <div className='bg-slate-50 p-4 md:p-6 rounded-2xl border border-slate-100 text-right min-w-[200px] md:min-w-[240px] w-full md:w-auto'>
+                  <p className='text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1'>
+                    Zestimate® Value
+                  </p>
+                  <p className='text-2xl md:text-4xl font-black text-indigo-600 tracking-tighter'>
+                    {access.isAdmin || access.isPro
+                      ? formatCurrency(valuation?.zestimate)
+                      : '$XX,XXX (PRO Only)'}
+                  </p>
+                </div>
               </div>
-              <div className='bg-slate-50 p-6 rounded-2xl border border-slate-100 text-right min-w-[240px]'>
-                <p className='text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1'>
-                  Zestimate® Value
-                </p>
-                <p className='text-4xl font-black text-indigo-600 tracking-tighter'>
-                  {access.isAdmin || access.isPro
-                    ? formatCurrency(valuation?.zestimate)
-                    : '$XX,XXX (PRO Only)'}
-                </p>
-              </div>
-            </div>
+            )}
           </section>
 
-          <div className='grid grid-cols-1 md:grid-cols-2 gap-8'>
+          <div className='grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8'>
             <CardWrapper
               title='Owner & Contacts'
               isEditable
@@ -605,12 +681,6 @@ export function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
                 <SkipTraceHistory history={lead.skipTraceHistory} />
               </div>
             </CardWrapper>
-
-            {/* Tags Management */}
-            <TagsManager
-              lead={lead}
-              onUpdate={(updatedLead) => setLead(updatedLead as any)}
-            />
           </div>
 
           <CardWrapper title='Technical Property Analysis'>
@@ -618,8 +688,23 @@ export function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
               <div className='py-10 flex justify-center'>
                 <Loader size='large' />
               </div>
+            ) : marketDataError ? (
+              <div className='py-10 text-center'>
+                <div className='text-red-500 mb-4'>
+                  <svg className='w-8 h-8 mx-auto' fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <p className='text-gray-600 mb-4'>{marketDataError}</p>
+                <button
+                  onClick={fetchMarketIntel}
+                  className='bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors'
+                >
+                  Retry Analysis
+                </button>
+              </div>
             ) : (
-              <div className='grid grid-cols-2 md:grid-cols-4 gap-y-10 gap-x-8'>
+              <div className='grid grid-cols-2 md:grid-cols-4 gap-y-6 md:gap-y-10 gap-x-4 md:gap-x-8'>
                 <InfoRow label='APN' value={parcel?.apn} />
                 <InfoRow
                   label='Living Area'
@@ -650,68 +735,75 @@ export function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
           </CardWrapper>
         </div>
 
-        {/* SIDEBAR */}
-        <div className='col-span-12 lg:col-span-3 space-y-6'>
-          <div className='sticky top-8 space-y-6'>
-            <div className='bg-slate-900 rounded-[2.5rem] p-10 shadow-2xl border border-slate-800'>
-              <h3 className='text-white text-[10px] font-black uppercase mb-10 flex items-center gap-3 tracking-widest'>
-                <span className='w-2 h-2 bg-green-500 rounded-full animate-pulse' />{' '}
-                Progression
-              </h3>
-              <div className='space-y-5'>
-                <button
-                  onClick={handleSkipTrace}
-                  disabled={
-                    isSkipTracing || lead.skipTraceStatus === 'COMPLETED'
-                  }
-                  className='w-full bg-white text-slate-900 font-black text-[10px] uppercase py-5 rounded-2xl shadow-lg disabled:opacity-40 flex items-center justify-center gap-2'
-                >
-                  {isSkipTracing ? (
-                    <Loader size='small' />
-                  ) : lead.skipTraceStatus === 'COMPLETED' ? (
-                    '✓ Traced'
-                  ) : (
-                    'Run Skip Trace'
-                  )}
-                </button>
-                <GhlActions
-                  leadId={lead.id}
+        {/* SIDEBAR - Mobile Optimized */}
+        <div className='lg:col-span-3 space-y-6'>
+          <div className='lg:sticky lg:top-8 space-y-6'>
+            {!lead ? (
+              <SidebarSkeleton />
+            ) : (
+              <>
+                <div className='bg-slate-900 rounded-[2.5rem] p-6 md:p-10 shadow-2xl border border-slate-800'>
+                  <h3 className='text-white text-[10px] font-black uppercase mb-6 md:mb-10 flex items-center gap-3 tracking-widest'>
+                    <span className='w-2 h-2 bg-green-500 rounded-full animate-pulse' />{' '}
+                    Progression
+                  </h3>
+                  <div className='space-y-4 md:space-y-5'>
+                    <button
+                      onClick={handleSkipTrace}
+                      disabled={
+                        isSkipTracing || lead.skipTraceStatus === 'COMPLETED'
+                      }
+                      className='w-full bg-white text-slate-900 font-black text-[10px] uppercase py-4 md:py-5 rounded-2xl shadow-lg disabled:opacity-40 flex items-center justify-center gap-2 touch-manipulation'
+                    >
+                      {isSkipTracing ? (
+                        <Loader size='small' />
+                      ) : lead.skipTraceStatus === 'COMPLETED' ? (
+                        '✓ Traced'
+                      ) : (
+                        'Run Skip Trace'
+                      )}
+                    </button>
+                    <GhlActions
+                      leadId={lead.id}
+                      ghlContactId={lead.ghlContactId}
+                      ghlSyncStatus={lead.ghlSyncStatus}
+                      skipTraceStatus={lead.skipTraceStatus}
+                      onSyncComplete={refreshLeadData}
+                      client={client}
+                    />
+                  </div>
+                </div>
+
+                <CardWrapper title='Lead Pipeline'>
+                  <div className='space-y-4 pt-2'>
+                    <div className='flex justify-between items-center'>
+                      <span className='text-[10px] font-bold text-slate-400 uppercase tracking-tighter'>
+                        Discovery
+                      </span>
+                      <LeadStatusBadge
+                        type='SKIP_TRACE'
+                        status={lead.skipTraceStatus}
+                      />
+                    </div>
+                    <div className='flex justify-between items-center'>
+                      <span className='text-[10px] font-bold text-slate-400 uppercase tracking-tighter'>
+                        CRM Sync
+                      </span>
+                      <LeadStatusBadge
+                        type='GHL_SYNC'
+                        status={lead.ghlSyncStatus}
+                      />
+                    </div>
+                  </div>
+                </CardWrapper>
+
+                <OutreachStatus 
                   ghlContactId={lead.ghlContactId}
-                  ghlSyncStatus={lead.ghlSyncStatus}
-                  skipTraceStatus={lead.skipTraceStatus}
-                  onSyncComplete={refreshLeadData}
-                  client={client}
+                  outreachData={outreachData}
+                  onDataUpdate={setOutreachData}
                 />
-              </div>
-            </div>
-
-            <CardWrapper title='Lead Pipeline'>
-              <div className='space-y-4 pt-2'>
-                <div className='flex justify-between items-center'>
-                  <span className='text-[10px] font-bold text-slate-400 uppercase tracking-tighter'>
-                    Discovery
-                  </span>
-                  <LeadStatusBadge
-                    type='SKIP_TRACE'
-                    status={lead.skipTraceStatus}
-                  />
-                </div>
-                <div className='flex justify-between items-center'>
-                  <span className='text-[10px] font-bold text-slate-400 uppercase tracking-tighter'>
-                    CRM Sync
-                  </span>
-                  <LeadStatusBadge
-                    type='GHL_SYNC'
-                    status={lead.ghlSyncStatus}
-                  />
-                </div>
-              </div>
-            </CardWrapper>
-
-            <OutreachStatus 
-              ghlContactId={lead.ghlContactId}
-              outreachData={outreachData}
-            />
+              </>
+            )}
           </div>
         </div>
       </div>

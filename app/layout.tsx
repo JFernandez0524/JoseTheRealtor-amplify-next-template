@@ -6,6 +6,7 @@ import Navbar from './components/Navbar';
 import { ConversationsProvider } from './context/ConversationsContext';
 import { AccessProvider } from './context/AccessContext';
 import { GhlProvider } from './context/GhlContext';
+import { GoogleMapsProvider } from './components/GoogleMapsProvider';
 import SessionTimeout from './components/SessionTimeout';
 
 const inter = Inter({ subsets: ['latin'] });
@@ -47,9 +48,10 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
           <AccessProvider>
             <GhlProvider>
               <ConversationsProvider>
-                <SessionTimeout />
-                <Navbar />
-                {children}
+                <GoogleMapsProvider>
+                  <SessionTimeout />
+                  <Navbar />
+                  {children}
                 <footer className='bg-gray-50 py-8 px-4 sm:px-6 lg:px-8 border-t border-gray-200'>
                   <div className='max-w-7xl mx-auto text-center'>
                     <p className='text-gray-600 mb-4'>
@@ -74,6 +76,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
                     </div>
                   </div>
                 </footer>
+                </GoogleMapsProvider>
               </ConversationsProvider>
             </GhlProvider>
           </AccessProvider>

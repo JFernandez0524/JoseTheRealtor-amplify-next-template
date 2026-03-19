@@ -1,8 +1,10 @@
 'use client';
 
+import { useState } from 'react';
 import { CardWrapper } from './CardWrapper';
-import { HiOutlinePhone, HiOutlineClock, HiOutlineCheckCircle } from 'react-icons/hi2';
+import { HiOutlinePhone, HiOutlineClock, HiOutlineCheckCircle, HiOutlineTag } from 'react-icons/hi2';
 import { HiOutlineMail } from 'react-icons/hi';
+import axios from 'axios';
 
 interface OutreachData {
   smsAttempts?: number;
@@ -13,14 +15,20 @@ interface OutreachData {
   emailStatus?: string;
   callOutcome?: string;
   aiState?: string;
+  tags?: string[];
 }
 
 interface OutreachStatusProps {
   ghlContactId?: string | null;
   outreachData?: OutreachData | null;
+  onDataUpdate?: (data: OutreachData) => void;
 }
 
-export function OutreachStatus({ ghlContactId, outreachData }: OutreachStatusProps) {
+export function OutreachStatus({ ghlContactId, outreachData, onDataUpdate }: OutreachStatusProps) {
+  const [newTag, setNewTag] = useState('');
+  const [isTagLoading, setIsTagLoading] = useState(false);
+  const [tagError, setTagError] = useState<string | null>(null);
+
   if (!ghlContactId) {
     return (
       <CardWrapper title="📤 Outreach Status">
@@ -30,6 +38,51 @@ export function OutreachStatus({ ghlContactId, outreachData }: OutreachStatusPro
       </CardWrapper>
     );
   }
+
+  const addTag = async () => {
+    if (!newTag.trim() || !ghlContactId) return;
+    
+    setIsTagLoading(true);
+    setTagError(null);
+    
+    try {
+      const response = await axios.post('/api/v1/ghl-tags', {
+        contactId: ghlContactId,
+        tag: newTag.trim()
+      });
+      
+      if (onDataUpdate && response.data.tags) {
+        onDataUpdate({ ...outreachData, tags: response.data.tags });
+      }
+      
+      setNewTag('');
+    } catch (error) {
+      console.error('Failed to add tag:', error);
+      setTagError('Failed to add tag');
+    } finally {
+      setIsTagLoading(false);
+    }
+  };
+
+  const removeTag = async (tag: string) => {
+    if (!ghlContactId) return;
+    
+    setIsTagLoading(true);
+    setTagError(null);
+    
+    try {
+      const response = await axios.delete(`/api/v1/ghl-tags?contactId=${ghlContactId}&tag=${encodeURIComponent(tag)}`);
+      
+      if (onDataUpdate && response.data.tags) {
+        onDataUpdate({ ...outreachData, tags: response.data.tags });
+      }
+    } catch (error) {
+      console.error('Failed to remove tag:', error);
+      setTagError('Failed to remove tag');
+    } finally {
+      setIsTagLoading(false);
+    }
+  };
 
   const formatDate = (dateString?: string) => {
     if (!dateString) return 'Never';
@@ -139,6 +192,65 @@ export function OutreachStatus({ ghlContactId, outreachData }: OutreachStatusPro
             </div>
           </div>
         )}
+
+        {/* GHL Tags */}
+        <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
+          <HiOutlineTag className="w-5 h-5 text-purple-600 mt-0.5" />
+          <div className="flex-1">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm font-medium text-gray-700">GHL Tags</span>
+              {isTagLoading && (
+                <div className="w-4 h-4 border-2 border-purple-600 border-t-transparent rounded-full animate-spin"></div>
+              )}
+            </div>
+            
+            {/* Display Tags */}
+            <div className="flex flex-wrap gap-1 mb-2">
+              {outreachData?.tags?.map((tag, index) => (
+                <span
+                  key={index}
+                  className="inline-flex items-center gap-1 px-2 py-1 bg-purple-100 text-purple-800 text-xs rounded-full"
+                >
+                  {tag}
+                  <button
+                    onClick={() => removeTag(tag)}
+                    className="text-purple-600 hover:text-purple-800 ml-1"
+                    disabled={isTagLoading}
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+              {(!outreachData?.tags || outreachData.tags.length === 0) && (
+                <span className="text-gray-400 text-xs">No tags</span>
+              )}
+            </div>
+
+            {/* Add Tag Input */}
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={newTag}
+                onChange={(e) => setNewTag(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && addTag()}
+                placeholder="Add tag..."
+                className="flex-1 text-xs border border-gray-300 rounded px-2 py-1 focus:ring-2 focus:ring-purple-500 outline-none"
+                disabled={isTagLoading}
+              />
+              <button
+                onClick={addTag}
+                disabled={!newTag.trim() || isTagLoading}
+                className="px-3 py-1 bg-purple-500 text-white text-xs rounded hover:bg-purple-600 disabled:opacity-50"
+              >
+                Add
+              </button>
+            </div>
+
+            {tagError && (
+              <div className="text-xs text-red-600 mt-1">{tagError}</div>
+            )}
+          </div>
+        </div>
       </div>
     </CardWrapper>
   );
