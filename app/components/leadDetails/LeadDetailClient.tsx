@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import axios from 'axios';
 import {
   GoogleMap,
+  MarkerF,
 } from '@react-google-maps/api';
 import { useGoogleMaps } from '../GoogleMapsProvider';
 import { Loader } from '@aws-amplify/ui-react';
@@ -425,15 +426,9 @@ function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
                     zoomControl: true,
                     gestureHandling: 'cooperative'
                   }}
-                  onLoad={(map) => {
-                    if (window.google?.maps?.marker?.AdvancedMarkerElement) {
-                      new window.google.maps.marker.AdvancedMarkerElement({
-                        map,
-                        position: mapCenter,
-                      });
-                    }
-                  }}
-                />
+                >
+                  <MarkerF position={mapCenter} />
+                </GoogleMap>
               ) : (
                 <div className='flex items-center justify-center h-full text-slate-400 font-bold uppercase text-[10px] tracking-widest'>
                   <FiMapPin className='mr-2 text-lg' /> Map Data Loading...
