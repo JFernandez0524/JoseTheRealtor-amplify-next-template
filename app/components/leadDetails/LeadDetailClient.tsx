@@ -419,7 +419,12 @@ function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
                   mapContainerStyle={mapContainerStyle}
                   center={mapCenter}
                   zoom={18}
-                  options={{ disableDefaultUI: true, mapId: 'DEMO_MAP_ID' }}
+                  options={{ 
+                    disableDefaultUI: true, 
+                    mapId: 'DEMO_MAP_ID',
+                    zoomControl: true,
+                    gestureHandling: 'cooperative'
+                  }}
                   onLoad={(map) => {
                     if (window.google?.maps?.marker?.AdvancedMarkerElement) {
                       new window.google.maps.marker.AdvancedMarkerElement({
