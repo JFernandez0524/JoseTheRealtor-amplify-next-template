@@ -34,12 +34,17 @@ export function OutreachStatus({ ghlContactId, outreachData }: OutreachStatusPro
   const formatDate = (dateString?: string) => {
     if (!dateString) return 'Never';
     try {
-      return new Date(dateString).toLocaleDateString('en-US', {
+      const date = new Date(dateString);
+      // Check if the date is valid
+      if (isNaN(date.getTime())) return 'Invalid date';
+      
+      return date.toLocaleDateString('en-US', {
         month: 'short',
         day: 'numeric',
         year: 'numeric',
         hour: 'numeric',
-        minute: '2-digit'
+        minute: '2-digit',
+        timeZone: 'America/New_York' // EST/EDT - consistent business timezone
       });
     } catch {
       return 'Invalid date';

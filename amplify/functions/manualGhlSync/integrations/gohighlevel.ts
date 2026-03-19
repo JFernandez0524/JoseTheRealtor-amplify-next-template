@@ -199,11 +199,11 @@ export async function syncToGoHighLevel(
     if (lead.skipTraceStatus === 'COMPLETED') {
       tags.push('Data:SkipTraced'); // Phone/email from skip trace
       
-      // 🤖 AI OUTREACH - All skip traced leads (AI plan users + specific admin)
+      // 🤖 AI OUTREACH - Only skip traced leads with EMAIL addresses (AI plan users + specific admin)
       const allowedAdminId = '44d8f4c8-10c1-7038-744b-271103170819';
       const isAllowedUser = isAIPlan || (isAdmin && userId === allowedAdminId);
-      if (isAllowedUser) {
-        tags.push('ai outreach'); // Enable AI email outreach (EMAIL ONLY - no SMS)
+      if (isAllowedUser && primaryEmail) {
+        tags.push('ai outreach'); // Enable AI email outreach (EMAIL ONLY - requires email address)
       }
     } else if (specificPhone) {
       tags.push('Data:OriginalUpload'); // Phone was in original upload

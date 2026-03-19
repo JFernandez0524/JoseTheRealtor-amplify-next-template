@@ -81,7 +81,7 @@ export function ManualLeadForm() {
   };
 
   useEffect(() => {
-    if (!isLoaded || mode !== 'manual') return;
+    if (mode !== 'manual') return;
 
     const handleOwnerSelect = async (e: any) => {
       const place = e.detail.place;
@@ -155,7 +155,7 @@ export function ManualLeadForm() {
       ownerEl?.removeEventListener('gmp-places-select', handleOwnerSelect);
       adminEl?.removeEventListener('gmp-places-select', handleAdminSelect);
     };
-  }, [isLoaded, mode]);
+  }, [mode]);
 
   const handleManualSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -241,8 +241,6 @@ export function ManualLeadForm() {
       setLoading(false);
     }
   };
-
-  if (!isLoaded) return <div className='p-10 text-center'>Loading Maps...</div>;
 
   return (
     <div className='space-y-6 max-w-2xl mx-auto p-4 bg-white shadow-sm rounded-lg'>

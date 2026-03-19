@@ -403,6 +403,38 @@ export function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
 
             <CardWrapper title='Skip Trace Results'>
               <div className='space-y-6'>
+                {/* Skip Trace Status and Dates */}
+                <div className='bg-slate-50 p-4 rounded-xl border border-slate-100'>
+                  <div className='grid grid-cols-2 gap-4 text-xs'>
+                    <div>
+                      <span className='font-bold text-slate-400 uppercase tracking-wide'>Lead Uploaded:</span>
+                      <p className='text-slate-700 font-medium'>
+                        {lead.createdAt ? new Date(lead.createdAt).toLocaleDateString('en-US', {
+                          month: 'short',
+                          day: 'numeric',
+                          year: 'numeric',
+                          hour: 'numeric',
+                          minute: '2-digit',
+                          timeZone: 'America/New_York'
+                        }) : 'Unknown'}
+                      </p>
+                    </div>
+                    <div>
+                      <span className='font-bold text-slate-400 uppercase tracking-wide'>Skip Traced:</span>
+                      <p className='text-slate-700 font-medium'>
+                        {lead.skipTraceCompletedAt ? new Date(lead.skipTraceCompletedAt).toLocaleDateString('en-US', {
+                          month: 'short',
+                          day: 'numeric',
+                          year: 'numeric',
+                          hour: 'numeric',
+                          minute: '2-digit',
+                          timeZone: 'America/New_York'
+                        }) : lead.skipTraceStatus === 'COMPLETED' ? 'Completed (date unknown)' : 'Not completed'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
                 {/* Quality Contacts Section */}
                 <div>
                   <h4 className='text-[10px] font-black uppercase text-slate-400 mb-3 flex items-center gap-2'>
@@ -460,25 +492,47 @@ export function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
                     ? JSON.parse(lead.rawSkipTraceData) 
                     : lead.rawSkipTraceData;
                   
-                  const hasUnqualifiedData = rawData.allPhones?.length > 0 || rawData.allEmails?.length > 0;
+                  // Filter out DNC phone numbers completely
+                  const nonDncPhones = (rawData.allPhones || []).filter((p: any) => !p.dnc);
+                  const allEmails = rawData.allEmails || [];
+                  
+                  // Calculate comprehensive counts
+                  const totalPhonesFound = rawData.allPhones?.length || 0;
+                  const totalEmailsFound = allEmails.length;
+                  const qualifiedPhones = lead.phones?.length || 0;
+                  const qualifiedEmails = lead.emails?.length || 0;
+                  const dncPhonesFiltered = totalPhonesFound - nonDncPhones.length;
+                  
+                  const hasUnqualifiedData = nonDncPhones.length > 0 || allEmails.length > 0;
                   
                   if (!hasUnqualifiedData) return null;
                   
                   return (
                   <div className='border-t pt-6'>
                     <div className='bg-amber-50 border border-amber-200 rounded-lg p-4 mb-4'>
-                      <p className='text-xs text-amber-800'>
-                        <strong>⚠️ Additional contacts found</strong> but didn't pass quality filters (Mobile 90+ score, not DNC, tested emails). Use at your discretion.
+                      <p className='text-xs text-amber-800 mb-2'>
+                        <strong>⚠️ Additional contacts found:</strong> {totalPhonesFound} phones, {totalEmailsFound} emails
                       </p>
+                      <p className='text-xs text-amber-700 mb-2'>
+                        <strong>Passed filters:</strong> {qualifiedPhones} phones, {qualifiedEmails} emails
+                      </p>
+                      <p className='text-xs text-amber-700 mb-2'>
+                        <strong>Filter criteria:</strong> Mobile phones 90+ score, not DNC, verified emails only
+                      </p>
+                      {dncPhonesFiltered > 0 && (
+                        <p className='text-xs text-red-700'>
+                          <strong>Note:</strong> {dncPhonesFiltered} phone(s) hidden due to DNC status
+                        </p>
+                      )}
                     </div>
                     
-                    {rawData.allPhones?.length > 0 && (
+                    {nonDncPhones.length > 0 && (
                       <div className='mb-4'>
                         <h4 className='text-[10px] font-black uppercase text-slate-400 mb-3'>
-                          All Phone Numbers Found
+                          Additional Phone Numbers (Non-DNC)
                         </h4>
                         <div className='space-y-2'>
-                          {rawData.allPhones.map((p: any, idx: number) => (
+                          {nonDncPhones.map((p: any, idx: number) => (
                             <div
                               key={idx}
                               className='flex items-center justify-between p-3 bg-amber-50 rounded-xl border border-amber-100'
@@ -493,11 +547,6 @@ export function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
                                 <span className='bg-slate-100 text-slate-600 px-2 py-0.5 rounded'>
                                   Score: {p.score}
                                 </span>
-                                {p.dnc && (
-                                  <span className='bg-red-100 text-red-700 px-2 py-0.5 rounded'>
-                                    DNC
-                                  </span>
-                                )}
                               </div>
                             </div>
                           ))}
@@ -505,13 +554,13 @@ export function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
                       </div>
                     )}
 
-                    {rawData.allEmails?.length > 0 && (
+                    {allEmails.length > 0 && (
                       <div>
                         <h4 className='text-[10px] font-black uppercase text-slate-400 mb-3'>
                           All Email Addresses Found
                         </h4>
                         <div className='space-y-2'>
-                          {rawData.allEmails.map((e: any, idx: number) => (
+                          {allEmails.map((e: any, idx: number) => (
                             <div
                               key={idx}
                               className='flex items-center justify-between p-3 bg-amber-50 rounded-xl border border-amber-100'

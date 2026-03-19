@@ -50,6 +50,30 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
                 <SessionTimeout />
                 <Navbar />
                 {children}
+                <footer className='bg-gray-50 py-8 px-4 sm:px-6 lg:px-8 border-t border-gray-200'>
+                  <div className='max-w-7xl mx-auto text-center'>
+                    <p className='text-gray-600 mb-4'>
+                      © {new Date().getFullYear()} JoseTheRealtor.com - Streamlining Real Estate Lead Management
+                    </p>
+                    <div className='flex justify-center flex-wrap gap-x-6 gap-y-2 text-sm'>
+                      <a href='/terms-of-service' className='text-gray-500 hover:text-gray-700 transition-colors'>
+                        Terms of Service
+                      </a>
+                      <a href='/privacy-policy' className='text-gray-500 hover:text-gray-700 transition-colors'>
+                        Privacy Policy
+                      </a>
+                      <a href='/cookie-policy' className='text-gray-500 hover:text-gray-700 transition-colors'>
+                        Cookie Policy
+                      </a>
+                      <a href='/tcpa-compliance' className='text-gray-500 hover:text-gray-700 transition-colors'>
+                        TCPA Compliance
+                      </a>
+                      <a href='/compliance' className='text-gray-500 hover:text-gray-700 transition-colors'>
+                        Compliance Hub
+                      </a>
+                    </div>
+                  </div>
+                </footer>
               </ConversationsProvider>
             </GhlProvider>
           </AccessProvider>
