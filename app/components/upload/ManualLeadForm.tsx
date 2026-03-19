@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { useJsApiLoader } from '@react-google-maps/api';
 import { uploadData } from 'aws-amplify/storage';
 import { getFrontEndUser } from '@/app/utils/aws/auth/amplifyFrontEndUser';
 import { client } from '@/app/utils/aws/data/frontEndClient';
@@ -9,8 +8,6 @@ import { useRouter } from 'next/navigation';
 import { useAccess } from '@/app/context/AccessContext';
 import { HiLockClosed } from 'react-icons/hi';
 import { UploadProgressModal } from './UploadProgressModal';
-
-const libraries: 'places'[] = ['places'];
 
 // 🎯 CSV Template Headers matching your updated Probate file requirements
 const PROBATE_TEMPLATE =
@@ -21,12 +18,6 @@ const PREFORECLOSURE_TEMPLATE =
 export function ManualLeadForm() {
   const { hasPaidPlan, isAdmin } = useAccess();
   const canUsePremium = hasPaidPlan || isAdmin;
-
-  const { isLoaded } = useJsApiLoader({
-    id: 'google-map-script',
-    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY!,
-    libraries,
-  });
 
   const router = useRouter();
   const [mode, setMode] = useState<'csv' | 'manual'>('manual');
@@ -46,6 +37,16 @@ export function ManualLeadForm() {
 
   const ownerRef = useRef<any>(null);
   const adminRef = useRef<any>(null);
+
+  useEffect(() => {
+    // Load Google Maps API if not already loaded
+    if (!window.google && !document.querySelector('script[src*="maps.googleapis.com"]')) {
+      const script = document.createElement('script');
+      script.src = `https://maps.googleapis.com/maps/api/js?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}&libraries=places&loading=async`;
+      script.async = true;
+      document.head.appendChild(script);
+    }
+  }, []);
 
   const downloadTemplate = () => {
     if (!lead.type) return alert('Please select a Lead Type first.');

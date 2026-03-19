@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Loader } from '@aws-amplify/ui-react';
 import { useFormFocus } from '@/app/context/FormFocusContext';
 
 type AnalyzerFormProps = {
@@ -32,9 +31,17 @@ export default function AnalyzerForm({
   const autocompleteRef = useRef<any>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const [hasText, setHasText] = useState(false);
-
-  // 🎯 Store the Google details without triggering the API immediately
   const [pendingDetails, setPendingDetails] = useState<any>(null);
+
+  useEffect(() => {
+    // Load Google Maps API if not already loaded
+    if (!window.google && !document.querySelector('script[src*="maps.googleapis.com"]')) {
+      const script = document.createElement('script');
+      script.src = `https://maps.googleapis.com/maps/api/js?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}&libraries=places&loading=async`;
+      script.async = true;
+      document.head.appendChild(script);
+    }
+  }, []);
 
   useEffect(() => {
     if (inputRef.current && inputRef.current.value !== address) {
@@ -63,8 +70,7 @@ export default function AnalyzerForm({
           };
 
           const details = {
-            street:
-              `${getComp('street_number') || ''} ${getComp('route') || ''}`.trim(),
+            street: `${getComp('street_number') || ''} ${getComp('route') || ''}`.trim(),
             city: getComp('locality'),
             state: getComp('administrative_area_level_1', true),
             zip: getComp('postal_code'),
@@ -75,9 +81,10 @@ export default function AnalyzerForm({
           if (place.formattedAddress) {
             setAddress(place.formattedAddress);
             setHasText(true);
-            setPendingDetails(details); // ✅ Save details for manual submit
-            if (inputRef.current)
+            setPendingDetails(details);
+            if (inputRef.current) {
               inputRef.current.value = place.formattedAddress;
+            }
           }
         } catch (err) {
           console.error('Error fetching details:', err);
@@ -131,7 +138,7 @@ export default function AnalyzerForm({
           ${hasText && !isLoading ? 'bg-indigo-600 text-white hover:bg-indigo-700' : 'bg-slate-200 text-slate-400 cursor-not-allowed'}`}
         disabled={isLoading || !hasText}
       >
-        {isLoading ? <Loader size='small' /> : 'Analyze'}
+        {isLoading ? <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full"></div> : 'Analyze'}
       </button>
     </form>
   );

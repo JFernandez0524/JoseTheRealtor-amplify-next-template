@@ -1,37 +1,52 @@
 'use client';
 
-import { useState } from 'react';
-import { useJsApiLoader, Libraries } from '@react-google-maps/api';
+import { useState, useEffect } from 'react';
 import { useFormFocus } from '@/app/context/FormFocusContext';
 import { Loader } from '@aws-amplify/ui-react';
-import { AuthUser } from 'aws-amplify/auth'; // Ensure this type is imported
+import { AuthUser } from 'aws-amplify/auth';
 
 import AnalyzerForm from './AnalyzerForm';
 import PropertyReportView from './shared/PropertyReportView';
 
-const GOOGLE_MAPS_LIBRARIES: Libraries = ['places'];
-
-// 🎯 Accept the server-verified user as a prop
 interface PropertyAnalyzerProps {
   user: AuthUser | null;
 }
 
 export default function PropertyAnalyzer({ user }: PropertyAnalyzerProps) {
-  const { isLoaded } = useJsApiLoader({
-    id: 'google-map-script',
-    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY!,
-    libraries: GOOGLE_MAPS_LIBRARIES,
-  });
 
   const [address, setAddress] = useState('');
   const [result, setResult] = useState<any | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [mapsLoaded, setMapsLoaded] = useState(false);
 
-  // 🎯 SOURCE OF TRUTH: isLoggedIn is derived directly from the server-side user prop
   const isLoggedIn = !!user;
-
   const { setHasAnalysisRun } = useFormFocus();
+
+  useEffect(() => {
+    // Check if Google Maps is already loaded
+    if (window.google) {
+      setMapsLoaded(true);
+      return;
+    }
+
+    // Load Google Maps API if not already loading
+    if (!document.querySelector('script[src*="maps.googleapis.com"]')) {
+      const script = document.createElement('script');
+      script.src = `https://maps.googleapis.com/maps/api/js?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}&libraries=places&loading=async`;
+      script.async = true;
+      script.onload = () => setMapsLoaded(true);
+      document.head.appendChild(script);
+    } else {
+      // Script is loading, wait for it
+      const checkLoaded = setInterval(() => {
+        if (window.google) {
+          setMapsLoaded(true);
+          clearInterval(checkLoaded);
+        }
+      }, 100);
+    }
+  }, []);
 
   /**
    * 🎯 HANDLE SUBMIT
@@ -86,15 +101,16 @@ export default function PropertyAnalyzer({ user }: PropertyAnalyzerProps) {
     }
   };
 
-  if (!isLoaded)
+  if (!mapsLoaded) {
     return (
       <div className='flex flex-col items-center gap-4 py-20'>
         <Loader size='large' />
         <p className='text-slate-400 font-bold uppercase text-xs tracking-widest'>
-          Initializing Intelligence...
+          Loading Google Maps...
         </p>
       </div>
     );
+  }
 
   return (
     <div className='w-full max-w-6xl flex flex-col items-center'>
