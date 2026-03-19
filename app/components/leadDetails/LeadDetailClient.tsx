@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation';
 import axios from 'axios';
 import {
   GoogleMap,
-  MarkerF,
   useJsApiLoader,
   Libraries,
 } from '@react-google-maps/api';
@@ -40,7 +39,7 @@ type Lead = Schema['PropertyLead']['type'] & {
   ghlSyncDate?: string | null;
 };
 
-const libraries: Libraries = ['places'];
+const libraries: Libraries = ['places', 'marker'];
 const mapContainerStyle = { width: '100%', height: '100%' };
 
 const formatCurrency = (v?: any) =>
@@ -347,9 +346,17 @@ export function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
                   mapContainerStyle={mapContainerStyle}
                   center={mapCenter}
                   zoom={18}
-                  options={{ disableDefaultUI: true }}
+                  options={{ disableDefaultUI: true, mapId: 'DEMO_MAP_ID' }}
+                  onLoad={(map) => {
+                    // Create AdvancedMarkerElement
+                    if (window.google?.maps?.marker?.AdvancedMarkerElement) {
+                      new window.google.maps.marker.AdvancedMarkerElement({
+                        map,
+                        position: mapCenter,
+                      });
+                    }
+                  }}
                 >
-                  <MarkerF position={mapCenter} />
                 </GoogleMap>
               ) : (
                 <div className='flex items-center justify-center h-full text-slate-400 font-bold uppercase text-[10px] tracking-widest'>
