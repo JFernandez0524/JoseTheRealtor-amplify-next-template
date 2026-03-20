@@ -42,3 +42,6 @@ amplifyconfiguration*google-service-account-key.json
 
 # json
 google-service-account-key.json
+
+# Scripts (contain hardcoded tokens/table names)
+scripts/
