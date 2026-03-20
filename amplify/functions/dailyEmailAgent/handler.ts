@@ -1,3 +1,4 @@
+// v2 - force redeploy with updated shared outreachQueue index names
 import { DynamoDBClient, ScanCommand } from "@aws-sdk/client-dynamodb";
 import axios from "axios";
 import { isWithinBusinessHours, getNextBusinessHourMessage } from '../shared/businessHours';
