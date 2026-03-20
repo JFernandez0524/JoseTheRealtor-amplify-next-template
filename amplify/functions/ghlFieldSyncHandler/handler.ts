@@ -16,6 +16,7 @@ const FIELD_IDS = {
 export const handler: Handler = async (event) => {
   try {
     const payload = JSON.parse(event.body || '{}');
+    console.log('📦 [FIELD_SYNC] Full payload:', JSON.stringify(payload));
     const contactId = payload.contact_id || payload.contactId || payload.id;
 
     if (!contactId) {
@@ -35,7 +36,6 @@ export const handler: Handler = async (event) => {
       TableName: process.env.AMPLIFY_DATA_PropertyLead_TABLE_NAME,
       FilterExpression: 'ghlContactId = :contactId',
       ExpressionAttributeValues: { ':contactId': contactId },
-      Limit: 1,
     }));
 
     if (!scan.Items?.length) {
