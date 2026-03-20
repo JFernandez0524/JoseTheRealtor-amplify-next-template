@@ -175,7 +175,7 @@ async function handleDisposition(payload: any, contactId: string, callOutcome: s
     // Use leadId GSI for fast query
     const result = await docClient.send(new QueryCommand({
       TableName: process.env.AMPLIFY_DATA_OutreachQueue_TABLE_NAME,
-      IndexName: 'outreachQueuesByLeadId',
+      IndexName: 'byLeadId',
       KeyConditionExpression: 'leadId = :leadId',
       ExpressionAttributeValues: {
         ':leadId': leadId

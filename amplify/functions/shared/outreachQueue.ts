@@ -131,7 +131,7 @@ export async function addToOutreachQueue(item: OutreachQueueItem): Promise<strin
 export async function getPendingSmsContacts(userId: string, limit: number = 50): Promise<OutreachQueueItem[]> {
   const result = await docClient.send(new QueryCommand({
     TableName: OUTREACH_QUEUE_TABLE,
-    IndexName: 'outreachQueuesByUserIdAndSmsStatus',
+    IndexName: 'byUserAndSmsStatus',
     KeyConditionExpression: 'userId = :userId AND smsStatus = :status',
     ExpressionAttributeValues: {
       ':userId': userId,
@@ -209,7 +209,7 @@ export async function getPendingSmsContacts(userId: string, limit: number = 50):
 export async function getPendingEmailContacts(userId: string, limit: number = 50): Promise<OutreachQueueItem[]> {
   const result = await docClient.send(new QueryCommand({
     TableName: OUTREACH_QUEUE_TABLE,
-    IndexName: 'outreachQueuesByUserIdAndEmailStatus',
+    IndexName: 'byUserAndEmailStatus',
     KeyConditionExpression: 'userId = :userId AND emailStatus = :status',
     ExpressionAttributeValues: {
       ':userId': userId,
