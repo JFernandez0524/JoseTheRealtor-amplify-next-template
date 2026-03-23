@@ -52,6 +52,15 @@ export async function validateAddressWithGoogle(address: string) {
     // Use USPS standardized address when available
     const standardizedAddr = uspsData?.standardizedAddress;
     
+    // Extract county from addressComponents if uspsData.county is empty
+    let county = uspsData?.county || '';
+    if (!county && result?.address?.addressComponents) {
+      const countyComponent = result.address.addressComponents.find(
+        (comp: any) => comp.componentType === 'administrative_area_level_2'
+      );
+      county = countyComponent?.componentName?.text || '';
+    }
+    
     // Build street from USPS components
     let street = '';
     if (standardizedAddr) {
@@ -78,7 +87,7 @@ export async function validateAddressWithGoogle(address: string) {
       components: {
         street: toTitleCase(street),
         city: toTitleCase(standardizedAddr?.city || postalAddress.locality || ''),
-        county: toTitleCase(uspsData?.county || postalAddress.sublocality || ''),
+        county: toTitleCase(county || postalAddress.sublocality || ''),
         state: standardizedAddr?.state || postalAddress.administrativeArea || '',
         zip,
       },
