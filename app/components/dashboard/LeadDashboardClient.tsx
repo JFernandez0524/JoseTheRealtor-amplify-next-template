@@ -561,6 +561,8 @@ export default function LeadDashboardClient({}: Props) {
     }
   };
   const handleDeleteLeads = async () => {
+    console.log('🗑️ Delete clicked. isAdmin:', isAdmin, 'selectedIds:', selectedIds);
+    
     if (!isAdmin) {
       alert('Unauthorized: Only Admins can bulk delete leads.');
       return;
@@ -575,13 +577,15 @@ export default function LeadDashboardClient({}: Props) {
     setIsProcessing(true);
     setProcessingMessage(`Deleting ${selectedIds.length} leads...`);
     try {
+      console.log('🗑️ Calling bulkDeleteLeads with ids:', selectedIds);
       await bulkDeleteLeads(selectedIds);
+      console.log('✅ Delete completed, reloading page...');
       // Wait 2 seconds for deletes to propagate
       await new Promise(resolve => setTimeout(resolve, 2000));
       // Immediately reload - don't wait for anything else
       window.location.reload();
     } catch (err) {
-      console.error('Delete error:', err);
+      console.error('❌ Delete error:', err);
       alert(`Error deleting leads: ${err instanceof Error ? err.message : 'Unknown error'}`);
       setIsProcessing(false);
       setProcessingMessage('');
