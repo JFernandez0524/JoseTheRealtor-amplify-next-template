@@ -15,7 +15,9 @@ import { fetchBestZestimate } from '../../../app/utils/bridge.server';
 
 const s3 = new S3Client({ region: process.env.AWS_REGION });
 const dynamoClient = new DynamoDBClient({ region: process.env.AWS_REGION });
-const docClient = DynamoDBDocumentClient.from(dynamoClient);
+const docClient = DynamoDBDocumentClient.from(dynamoClient, {
+  marshallOptions: { removeUndefinedValues: true }
+});
 
 console.log('🔧 [CSV_UPLOAD] Lambda initialized');
 console.log('🔧 [CSV_UPLOAD] Environment:', {
@@ -408,7 +410,7 @@ export const handler: S3Handler = async (event) => {
                   city: { S: finalMailCity },
                   state: { S: finalMailState },
                   zip: { S: finalMailZip },
-                  county: aStd?.county ? { S: aStd.county } : undefined,
+                  county: { S: aStd?.county || '' },
                 };
               }
               

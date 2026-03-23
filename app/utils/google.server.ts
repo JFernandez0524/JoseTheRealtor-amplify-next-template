@@ -37,6 +37,14 @@ export async function validateAddressWithGoogle(address: string) {
     const postalAddress = result?.address?.postalAddress;
     const uspsData = result?.uspsData;
 
+    // Log full validation response for debugging
+    console.log('📍 Google Validation Response:', JSON.stringify({
+      address,
+      uspsData,
+      postalAddress,
+      county: uspsData?.county,
+    }, null, 2));
+
     if (!postalAddress) {
       throw new Error('No results found for that address.');
     }
