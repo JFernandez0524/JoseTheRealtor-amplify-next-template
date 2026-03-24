@@ -154,8 +154,7 @@ const schema = a.schema({
 
   PropertyLead: a
     .model({
-      // 🔒 Security: Make 'owner' read-only so it can't be reassigned
-      owner: a.string().authorization((allow) => [allow.owner().to(['read'])]),
+      owner: a.string(),
 
       // --- Basic Lead Info ---
       type: a.string().required(), // 'PREFORECLOSURE' or 'PROBATE'
