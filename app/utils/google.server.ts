@@ -43,6 +43,7 @@ export async function validateAddressWithGoogle(address: string) {
       uspsData,
       postalAddress,
       county: uspsData?.county,
+      addressComponents: result?.address?.addressComponents,
     }, null, 2));
 
     if (!postalAddress) {
