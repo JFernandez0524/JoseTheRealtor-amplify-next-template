@@ -61,6 +61,29 @@ export async function validateAddressWithGoogle(address: string) {
       );
       county = countyComponent?.componentName?.text || '';
     }
+    // Fallback: Geocoding API reliably returns administrative_area_level_2
+    if (!county && postalAddress) {
+      const geocodeQuery = [
+        postalAddress.addressLines?.[0],
+        postalAddress.locality,
+        postalAddress.administrativeArea,
+        postalAddress.postalCode,
+      ].filter(Boolean).join(', ');
+      try {
+        const geoRes = await fetch(
+          `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(geocodeQuery)}&key=${GOOGLE_MAPS_API_KEY}`
+        );
+        const geoData = await geoRes.json();
+        if (geoData.status === 'OK' && geoData.results?.[0]) {
+          const countyComp = geoData.results[0].address_components?.find(
+            (c: any) => c.types.includes('administrative_area_level_2')
+          );
+          county = countyComp?.long_name || '';
+        }
+      } catch {
+        // non-fatal, county stays empty
+      }
+    }
     
     // Build street from USPS components
     let street = '';
