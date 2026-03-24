@@ -19,7 +19,9 @@ export async function POST(req: Request) {
       ids.map(async (id: string) => {
         try {
           const result = await cookiesClient.models.PropertyLead.delete({ id });
-          console.log(`✅ Deleted lead ${id}:`, result);
+          if (result.errors?.length) {
+            throw new Error(result.errors.map((e: any) => e.message).join(', '));
+          }
           return result;
         } catch (err) {
           console.error(`❌ Failed to delete lead ${id}:`, err);
