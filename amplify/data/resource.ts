@@ -270,7 +270,7 @@ const schema = a.schema({
       activities: a.hasMany('Activity', 'leadId'),
       doorKnockQueue: a.hasMany('DoorKnockQueue', 'leadId'),
     })
-    .authorization((allow) => [allow.owner(), allow.group('ADMINS')])
+    .authorization((allow) => [allow.owner().identityClaim('sub'), allow.group('ADMINS')])
     .secondaryIndexes((index) => [
       index('owner')
         .sortKeys(['ownerAddress'])
