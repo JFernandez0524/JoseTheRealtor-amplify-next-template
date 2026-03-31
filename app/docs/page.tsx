@@ -21,6 +21,8 @@ export default function DocsPage() {
               <a href="#dashboard" className="text-blue-600 hover:underline">• Dashboard Features</a>
               <a href="#skip-tracing" className="text-blue-600 hover:underline">• Skip Tracing</a>
               <a href="#ghl-integration" className="text-blue-600 hover:underline">• GoHighLevel Integration</a>
+              <a href="#ghl-tags" className="text-blue-600 hover:underline">• GHL Tags Reference</a>
+              <a href="#direct-mail" className="text-blue-600 hover:underline">• Direct Mail (Thanks.io)</a>
               <a href="#pricing" className="text-blue-600 hover:underline">• Pricing & Plans</a>
               <a href="#troubleshooting" className="text-blue-600 hover:underline">• Troubleshooting</a>
             </div>
@@ -96,6 +98,18 @@ export default function DocsPage() {
                   <li>Lead categorization and labeling</li>
                 </ol>
               </div>
+
+              <div className="bg-blue-50 p-4 rounded-lg">
+                <h4 className="font-medium text-blue-800 mb-2">📈 Upload Progress Tracking</h4>
+                <ul className="list-disc list-inside space-y-1 text-blue-700 text-sm">
+                  <li>After clicking "Start CSV Import", a progress modal appears automatically</li>
+                  <li>Shows real-time row count: processed / total with a progress bar</li>
+                  <li>Displays success, duplicate, and error counts as rows are processed</li>
+                  <li>Duplicate leads are listed with links to existing records</li>
+                  <li>Download a duplicate report before the modal closes</li>
+                  <li>Automatically redirects to dashboard when complete</li>
+                </ul>
+              </div>
             </div>
           </section>
 
@@ -151,8 +165,23 @@ export default function DocsPage() {
                   <li>Click Zestimate amount to view property on Zillow</li>
                   <li>Age indicator shows days since last update (e.g., "45d old")</li>
                   <li>⚠️ Red warning appears for data older than 180 days</li>
-                  <li>Click refresh button (↻) to fetch current property value</li>
-                  <li>Automatic rate limiting prevents API failures</li>
+                  <li>Click refresh button (↻) to fetch current property value from Zillow</li>
+                  <li><strong>✏️ Manual Override</strong>: Click the ✏️ pencil icon to type in a value manually when Zillow can't find the property — saves directly to the lead and shows a "✏️ manual" badge</li>
+                </ul>
+              </div>
+
+              <div className="bg-yellow-50 p-4 rounded-lg">
+                <h4 className="font-medium text-yellow-800 mb-2">🗂️ Listing Status Column</h4>
+                <p className="text-sm text-yellow-700 mb-2">Track the MLS/market status of each property directly in the table. Change via dropdown — no need to open lead details:</p>
+                <ul className="list-disc list-inside space-y-1 text-yellow-700 text-sm">
+                  <li><strong>Off Market</strong> — not listed anywhere</li>
+                  <li><strong>Active</strong> — currently listed on MLS</li>
+                  <li><strong>Sold</strong> — recently sold</li>
+                  <li><strong>Pending</strong> — under contract</li>
+                  <li><strong>FSBO</strong> — For Sale By Owner</li>
+                  <li><strong>Auction</strong> — going to auction</li>
+                  <li><strong>Skip</strong> — skip this property</li>
+                  <li><strong>Door Knock</strong> — flagged for in-person visit</li>
                 </ul>
               </div>
 
@@ -302,7 +331,7 @@ export default function DocsPage() {
                 <h4 className="font-medium text-blue-800 mb-2">📧 Email Campaign System</h4>
                 <ul className="list-disc list-inside space-y-1 text-blue-700 text-sm">
                   <li><strong>Initial Email</strong>: Automatically sent when contact is created in GHL</li>
-                  <li><strong>Daily Automated Outreach</strong>: Runs hourly during business hours for contacts with "AI Outreach" tag</li>
+                  <li><strong>Business Hours</strong>: Mon–Fri 9AM–7PM EST, Sat 9AM–12PM EST, Sunday closed</li>
                   <li>Emails sent to ALL addresses (primary + email_2 + email_3)</li>
                   <li>Personalized with property data (address, Zestimate, cash offer)</li>
                   <li>Reply detection: Automatically tags replied contacts and stops automation</li>
@@ -313,17 +342,16 @@ export default function DocsPage() {
               </div>
 
               <div className="bg-green-50 p-4 rounded-lg">
-                <h4 className="font-medium text-green-800 mb-2">📱 AI SMS Campaign System</h4>
+                <h4 className="font-medium text-green-800 mb-2">📱 AI Multi-Channel Outreach (SMS, Facebook, Instagram, WhatsApp)</h4>
                 <ul className="list-disc list-inside space-y-1 text-green-700 text-sm">
-                  <li><strong>Daily Automated Outreach</strong>: Runs hourly during business hours for contacts with "AI Outreach" tag</li>
-                  <li>AI-generated messages using OpenAI with proven 5-step script</li>
-                  <li>Adapts to lead type (preforeclosure vs probate)</li>
-                  <li>Handles inbound replies with contextual AI responses</li>
-                  <li>Business hours compliance (9 AM - 8 PM EST only)</li>
+                  <li><strong>Channels</strong>: SMS, Facebook Messenger, Instagram DMs, WhatsApp — same AI handles all four</li>
+                  <li><strong>Business Hours</strong>: Mon–Fri 9AM–7PM EST, Sat 9AM–12PM EST, Sunday closed</li>
+                  <li>AI uses a proven 5-step script to qualify leads and schedule property visits</li>
+                  <li>Adapts message based on lead type (preforeclosure vs probate)</li>
+                  <li>Instant webhook responses to inbound replies (no polling delay)</li>
                   <li>Tags contact for human handoff when qualified</li>
                   <li>Configure phone number in Profile → GHL Settings</li>
                   <li>Rate limited: 2 seconds between messages</li>
-                  <li>Tracks conversation history to avoid duplicates</li>
                 </ul>
               </div>
 
@@ -340,15 +368,30 @@ export default function DocsPage() {
               </div>
 
               <div className="bg-indigo-50 p-4 rounded-lg">
-                <h4 className="font-medium text-indigo-800 mb-2">📬 Direct Mail Automation</h4>
+                <h4 className="font-medium text-indigo-800 mb-2">📬 Outreach Queue & 7-Touch Cadence</h4>
+                <p className="text-sm text-indigo-700 mb-2">Each contact with the <code className="bg-indigo-100 px-1 rounded">ai outreach</code> tag gets up to <strong>7 touches per channel</strong> over 28 days:</p>
+                <div className="grid grid-cols-2 gap-1 text-xs text-indigo-700 mb-3 font-mono">
+                  <div>Touch 1: Day 1</div><div>Touch 2: Day 5</div>
+                  <div>Touch 3: Day 9</div><div>Touch 4: Day 13</div>
+                  <div>Touch 5: Day 17</div><div>Touch 6: Day 21</div>
+                  <div>Touch 7: Day 25</div>
+                </div>
                 <ul className="list-disc list-inside space-y-1 text-indigo-700 text-sm">
-                  <li>Zestimate and Cash Offer automatically sent to GHL</li>
-                  <li>Leads tagged as "Direct-Mail-Only" or "Direct_Mail_Eligible"</li>
-                  <li>GHL automation triggers Click2Mail webhook</li>
-                  <li>Mail merge inserts property values into letter template</li>
-                  <li>Letters show both listing and cash purchase options</li>
-                  <li>No manual letter generation needed - fully automated</li>
+                  <li>Contacts with multiple phones/emails get 7 touches <em>per channel</em> (e.g., 2 phones + 2 emails = up to 28 total touches)</li>
+                  <li>Touches stop automatically when contact replies, bounces, or opts out</li>
+                  <li>Queue is populated automatically when contact is synced to GHL with <code className="bg-indigo-100 px-1 rounded">ai outreach</code> tag</li>
                 </ul>
+              </div>
+
+              <div className="bg-red-50 p-4 rounded-lg">
+                <h4 className="font-medium text-red-800 mb-2">🛑 Stopping the AI / Taking Over Manually</h4>
+                <p className="text-sm text-red-700 mb-2">To stop the AI from responding to a contact and take over the conversation yourself:</p>
+                <ol className="list-decimal list-inside space-y-1 text-red-700 text-sm">
+                  <li>Open the contact in GoHighLevel</li>
+                  <li>Remove the <code className="bg-red-100 px-1 rounded">ai outreach</code> tag</li>
+                  <li>The AI immediately stops all automated outreach and webhook responses for that contact</li>
+                </ol>
+                <p className="text-sm text-red-600 mt-2">💡 To resume AI outreach later, simply re-add the <code className="bg-red-100 px-1 rounded">ai outreach</code> tag</p>
               </div>
 
               <div className="bg-yellow-50 p-4 rounded-lg">
@@ -359,6 +402,109 @@ export default function DocsPage() {
                   <li>Use Tags Manager to add/remove tags</li>
                   <li>Tags are searchable from dashboard</li>
                   <li>Use for custom GHL workflow triggers</li>
+                </ul>
+              </div>
+            </div>
+          </section>
+
+          {/* GHL Tags Reference */}
+          <section id="ghl-tags" className="mb-12">
+            <h2 className="text-2xl font-semibold text-gray-900 mb-6">🏷️ GHL Tags Reference</h2>
+            <div className="space-y-6">
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <h4 className="font-medium text-gray-800 mb-3">System Tags (added automatically on sync)</h4>
+                <div className="space-y-2 text-sm">
+                  <div className="flex gap-3 items-start"><code className="bg-gray-200 px-2 py-0.5 rounded text-xs whitespace-nowrap">app:synced</code><span className="text-gray-700">Contact was synced from the app to GHL</span></div>
+                  <div className="flex gap-3 items-start"><code className="bg-green-100 px-2 py-0.5 rounded text-xs whitespace-nowrap">ai outreach</code><span className="text-gray-700">Contact is eligible for AI email + SMS outreach. <strong>Remove this tag to stop all AI automation.</strong></span></div>
+                  <div className="flex gap-3 items-start"><code className="bg-blue-100 px-2 py-0.5 rounded text-xs whitespace-nowrap">direct mail only</code><span className="text-gray-700">No qualified contact info found — direct mail only, no AI outreach</span></div>
+                </div>
+              </div>
+
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <h4 className="font-medium text-gray-800 mb-3">Outreach Status Tags (added automatically during conversations)</h4>
+                <div className="space-y-2 text-sm">
+                  <div className="flex gap-3 items-start"><code className="bg-yellow-100 px-2 py-0.5 rounded text-xs whitespace-nowrap">conversation:active</code><span className="text-gray-700">Contact replied to an SMS/social message — AI is in active conversation</span></div>
+                  <div className="flex gap-3 items-start"><code className="bg-yellow-100 px-2 py-0.5 rounded text-xs whitespace-nowrap">email:replied</code><span className="text-gray-700">Contact replied to an email</span></div>
+                  <div className="flex gap-3 items-start"><code className="bg-red-100 px-2 py-0.5 rounded text-xs whitespace-nowrap">email:bounced</code><span className="text-gray-700">Email bounced — no further emails will be sent to this address</span></div>
+                  <div className="flex gap-3 items-start"><code className="bg-gray-200 px-2 py-0.5 rounded text-xs whitespace-nowrap">conversation_ended</code><span className="text-gray-700">AI conversation completed — no further automated follow-ups</span></div>
+                </div>
+              </div>
+
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <h4 className="font-medium text-gray-800 mb-3">Direct Mail Tags (added by Thanks.io webhook on delivery/scan)</h4>
+                <div className="space-y-2 text-sm">
+                  <div className="flex gap-3 items-start"><code className="bg-indigo-100 px-2 py-0.5 rounded text-xs whitespace-nowrap">mail:delivered</code><span className="text-gray-700">Any mail piece was delivered</span></div>
+                  <div className="flex gap-3 items-start"><code className="bg-indigo-100 px-2 py-0.5 rounded text-xs whitespace-nowrap">mail:touch1</code><span className="text-gray-700">First mail piece delivered → move to "Touch 1 - Delivered" pipeline stage</span></div>
+                  <div className="flex gap-3 items-start"><code className="bg-indigo-100 px-2 py-0.5 rounded text-xs whitespace-nowrap">mail:touch2</code><span className="text-gray-700">Second mail piece delivered → move to "Touch 2 - Delivered" pipeline stage</span></div>
+                  <div className="flex gap-3 items-start"><code className="bg-indigo-100 px-2 py-0.5 rounded text-xs whitespace-nowrap">mail:touch3</code><span className="text-gray-700">Third mail piece delivered → move to "Touch 3 - Delivered" pipeline stage</span></div>
+                  <div className="flex gap-3 items-start"><code className="bg-orange-200 px-2 py-0.5 rounded text-xs whitespace-nowrap">mail:scanned</code><span className="text-gray-700">🔥 QR code scanned — HOT LEAD! Move to "Engaged" stage and call immediately</span></div>
+                  <div className="flex gap-3 items-start"><code className="bg-orange-200 px-2 py-0.5 rounded text-xs whitespace-nowrap">high-engagement</code><span className="text-gray-700">Added alongside mail:scanned to flag high-engagement contacts</span></div>
+                </div>
+              </div>
+
+              <div className="bg-blue-50 p-4 rounded-lg">
+                <h4 className="font-medium text-blue-800 mb-3">Recommended GHL Workflow Automations</h4>
+                <div className="space-y-1 text-sm text-blue-700 font-mono">
+                  <div>Tag <code className="bg-blue-100 px-1 rounded">mail:touch1</code> added → Move to "Touch 1 - Delivered"</div>
+                  <div>Tag <code className="bg-blue-100 px-1 rounded">mail:touch2</code> added → Move to "Touch 2 - Delivered"</div>
+                  <div>Tag <code className="bg-blue-100 px-1 rounded">mail:touch3</code> added → Move to "Touch 3 - Delivered"</div>
+                  <div>Tag <code className="bg-orange-100 px-1 rounded">mail:scanned</code> added → Move to "Engaged" + notify you</div>
+                  <div>60 days in "Touch 3" without <code className="bg-blue-100 px-1 rounded">mail:scanned</code> → Move to "Dead"</div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* Direct Mail */}
+          <section id="direct-mail" className="mb-12">
+            <h2 className="text-2xl font-semibold text-gray-900 mb-6">📮 Direct Mail Automation (Thanks.io)</h2>
+            <div className="space-y-6">
+              <div className="border-l-4 border-indigo-500 pl-4">
+                <h3 className="text-lg font-medium text-gray-900 mb-2">Setup Requirements</h3>
+                <ol className="list-decimal list-inside space-y-2 text-gray-700 text-sm">
+                  <li>Skip trace probate leads in the app</li>
+                  <li>Leads without qualified contact info get the <code className="bg-gray-100 px-1 rounded">direct mail only</code> tag automatically</li>
+                  <li>Sync to GHL — contact enters "New Lead" pipeline stage</li>
+                  <li>Export contacts with <code className="bg-gray-100 px-1 rounded">direct mail only</code> tag from GHL</li>
+                  <li>Upload to Thanks.io — set <code className="bg-gray-100 px-1 rounded">custom_1</code> field = GHL contact ID (<code className="bg-gray-100 px-1 rounded">{`{{contact.contact_id}}`}</code>)</li>
+                  <li>Configure webhook in Thanks.io dashboard: <strong>dashboard.thanks.io/profile/webhooks</strong></li>
+                </ol>
+              </div>
+
+              <div className="bg-indigo-50 p-4 rounded-lg">
+                <h4 className="font-medium text-indigo-800 mb-3">📅 Automated Mail Flow</h4>
+                <div className="space-y-2 text-sm text-indigo-700">
+                  <div className="flex gap-2"><span className="font-bold whitespace-nowrap">Day 0:</span><span>Mail #1 sent via Thanks.io</span></div>
+                  <div className="flex gap-2"><span className="font-bold whitespace-nowrap">Day 3–5:</span><span>Mail #1 delivered → webhook fires → <code className="bg-indigo-100 px-1 rounded">mail:touch1</code> tag → move to "Touch 1 - Delivered"</span></div>
+                  <div className="flex gap-2"><span className="font-bold whitespace-nowrap">Day 21:</span><span>Mail #2 sent via Thanks.io</span></div>
+                  <div className="flex gap-2"><span className="font-bold whitespace-nowrap">Day 24–26:</span><span>Mail #2 delivered → webhook fires → <code className="bg-indigo-100 px-1 rounded">mail:touch2</code> tag → move to "Touch 2 - Delivered"</span></div>
+                  <div className="flex gap-2"><span className="font-bold whitespace-nowrap">Day 42:</span><span>Mail #3 sent via Thanks.io</span></div>
+                  <div className="flex gap-2"><span className="font-bold whitespace-nowrap">Day 45–47:</span><span>Mail #3 delivered → webhook fires → <code className="bg-indigo-100 px-1 rounded">mail:touch3</code> tag → move to "Touch 3 - Delivered"</span></div>
+                  <div className="flex gap-2"><span className="font-bold whitespace-nowrap text-orange-700">Any time:</span><span className="text-orange-700">QR scan → webhook fires → <code className="bg-orange-100 px-1 rounded">mail:scanned</code> + <code className="bg-orange-100 px-1 rounded">high-engagement</code> → move to "Engaged" → <strong>Call immediately!</strong></span></div>
+                  <div className="flex gap-2"><span className="font-bold whitespace-nowrap">Day 107:</span><span>60 days after Touch 3 with no engagement → move to "Dead"</span></div>
+                </div>
+              </div>
+
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <h4 className="font-medium text-gray-800 mb-3">Pipeline Stages</h4>
+                <ol className="list-decimal list-inside space-y-1 text-sm text-gray-700">
+                  <li>New Lead</li>
+                  <li>Touch 1 - Delivered</li>
+                  <li>Touch 2 - Delivered</li>
+                  <li>Touch 3 - Delivered</li>
+                  <li className="text-orange-700 font-semibold">Engaged (Hot! — QR scanned)</li>
+                  <li>Dead</li>
+                </ol>
+              </div>
+
+              <div className="bg-green-50 p-4 rounded-lg">
+                <h4 className="font-medium text-green-800 mb-2">✅ Key Points</h4>
+                <ul className="list-disc list-inside space-y-1 text-green-700 text-sm">
+                  <li>Thanks.io controls mail timing (21-day intervals between pieces)</li>
+                  <li>Webhook tracks delivery and moves pipeline stages automatically</li>
+                  <li>QR scan = instant hot lead notification — call immediately</li>
+                  <li><code className="bg-green-100 px-1 rounded">mail_sent_count</code> only increments on actual delivery, not send</li>
+                  <li>No engagement after 60 days past Touch 3 = Dead</li>
                 </ul>
               </div>
             </div>
