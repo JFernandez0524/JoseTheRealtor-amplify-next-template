@@ -118,6 +118,20 @@ export function LeadTable({
     state: '',
     zip: '',
   });
+  const [editingZestimateLead, setEditingZestimateLead] = useState<Lead | null>(null);
+  const [zestimateInput, setZestimateInput] = useState('');
+
+  const handleSaveZestimate = async (lead: Lead) => {
+    const parsed = parseFloat(zestimateInput.replace(/[^0-9.]/g, ''));
+    if (isNaN(parsed) || parsed <= 0) return;
+    try {
+      await updateLead(lead.id, { zestimate: parsed });
+      setEditingZestimateLead(null);
+      if (onRefresh) await onRefresh();
+    } catch (err) {
+      console.error('Failed to save zestimate:', err);
+    }
+  };
 
   // Normalize address for comparison (handles abbreviations and variations)
   const normalizeAddress = (addr: string | undefined | null): string => {
@@ -475,103 +489,123 @@ export function LeadTable({
                   </td>
 
                   {/* Zestimate Column */}
-                  <td className='px-4 py-4 whitespace-nowrap text-sm text-gray-900 bg-yellow-50/30'>
-                    <div className="flex items-center gap-2">
-                      <div className="flex flex-col">
-                        {lead.zestimate && typeof lead.zestimate === 'number' ? (
-                          <>
-                            <div className="flex items-center gap-1">
-                              <a 
-                                href={
-                                  lead.zillowUrl || 
-                                  (lead.zillowZpid ? `https://www.zillow.com/homes/${lead.zillowZpid}_zpid/` : '#')
-                                }
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className='font-semibold text-green-700 hover:text-green-900 hover:underline relative group'
-                              >
-                                ${lead.zestimate.toLocaleString()}
-                                <span className='invisible group-hover:visible absolute left-0 top-full mt-1 w-64 bg-gray-900 text-white text-xs rounded p-2 z-50 whitespace-normal'>
-                                  {lead.zillowAddress && !addressesMatch(lead.zillowAddress, lead.ownerAddress)
-                                    ? `⚠️ ADDRESS MISMATCH: Zillow shows "${lead.zillowAddress}" but lead is "${lead.ownerAddress}". Click to verify, then use edit button (✏️) to fix.`
-                                    : 'Click to view property on Zillow'
-                                  }
-                                </span>
-                              </a>
-                              {lead.zillowAddress && !addressesMatch(lead.zillowAddress, lead.ownerAddress) && (
-                                <span className="text-red-600 text-xs font-bold" title={`Zillow address: ${lead.zillowAddress}`}>⚠️</span>
-                              )}
-                            </div>
-                            {lead.zillowLastUpdated && (() => {
-                              const ageInDays = Math.floor((Date.now() - new Date(lead.zillowLastUpdated).getTime()) / (1000 * 60 * 60 * 24));
-                              const isStale = ageInDays > 180;
-                              return (
-                                <span className={`text-xs ${isStale ? 'text-red-600 font-semibold' : 'text-gray-500'}`}>
-                                  {isStale && '⚠️ '}{ageInDays}d old
-                                </span>
-                              );
-                            })()}
-                          </>
-                        ) : lead.estimatedValue && typeof lead.estimatedValue === 'number' ? (
-                          <span className='text-gray-600'>
-                            ${lead.estimatedValue.toLocaleString()}
-                          </span>
-                        ) : (
-                          <span className='text-gray-400'>-</span>
-                        )}
+                  <td className='px-4 py-4 whitespace-nowrap text-sm text-gray-900 bg-yellow-50/30' onClick={(e) => e.stopPropagation()}>
+                    {editingZestimateLead?.id === lead.id ? (
+                      <div className="flex items-center gap-1">
+                        <span className="text-gray-500 text-xs">$</span>
+                        <input
+                          type="number"
+                          value={zestimateInput}
+                          onChange={(e) => setZestimateInput(e.target.value)}
+                          onKeyDown={(e) => { if (e.key === 'Enter') handleSaveZestimate(lead); if (e.key === 'Escape') setEditingZestimateLead(null); }}
+                          autoFocus
+                          className="w-24 border border-blue-400 rounded px-1 py-0.5 text-xs"
+                          placeholder="e.g. 350000"
+                        />
+                        <button onClick={() => handleSaveZestimate(lead)} className="text-green-600 text-xs font-bold hover:text-green-800">✓</button>
+                        <button onClick={() => setEditingZestimateLead(null)} className="text-gray-400 text-xs hover:text-gray-600">✕</button>
                       </div>
-                      {(lead.latitude && lead.longitude) || (lead.ownerAddress && lead.ownerCity && lead.ownerState && lead.ownerZip) ? (
-                        <button
-                          onClick={async (e) => {
-                            e.stopPropagation();
-                            const button = e.currentTarget;
-                            button.disabled = true;
-                            button.textContent = '⏳';
-                            try {
-                              const res = await fetch('/api/v1/refresh-zestimate', {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({
-                                  leadId: lead.id,
-                                  street: lead.ownerAddress,
-                                  city: lead.ownerCity,
-                                  state: lead.ownerState,
-                                  zip: lead.ownerZip,
-                                  latitude: lead.latitude,
-                                  longitude: lead.longitude,
-                                }),
-                              });
-                              const data = await res.json();
-                              if (res.ok) {
-                                button.textContent = '✓';
-                                button.className = 'text-green-600 font-bold select-none';
-                                // Wait a bit longer for database to update
-                                await new Promise(resolve => setTimeout(resolve, 1000));
-                                if (onRefresh) {
-                                  await onRefresh();
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <div className="flex flex-col">
+                          {lead.zestimate && typeof lead.zestimate === 'number' ? (
+                            <>
+                              <div className="flex items-center gap-1">
+                                <a
+                                  href={lead.zillowUrl || (lead.zillowZpid ? `https://www.zillow.com/homes/${lead.zillowZpid}_zpid/` : '#')}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className='font-semibold text-green-700 hover:text-green-900 hover:underline relative group'
+                                >
+                                  ${lead.zestimate.toLocaleString()}
+                                  <span className='invisible group-hover:visible absolute left-0 top-full mt-1 w-64 bg-gray-900 text-white text-xs rounded p-2 z-50 whitespace-normal'>
+                                    {lead.zillowAddress && !addressesMatch(lead.zillowAddress, lead.ownerAddress)
+                                      ? `⚠️ ADDRESS MISMATCH: Zillow shows "${lead.zillowAddress}" but lead is "${lead.ownerAddress}". Click to verify, then use edit button (✏️) to fix.`
+                                      : 'Click to view property on Zillow'
+                                    }
+                                  </span>
+                                </a>
+                                {lead.zillowAddress && !addressesMatch(lead.zillowAddress, lead.ownerAddress) && (
+                                  <span className="text-red-600 text-xs font-bold" title={`Zillow address: ${lead.zillowAddress}`}>⚠️</span>
+                                )}
+                              </div>
+                              {!lead.zillowZpid && (
+                                <span className="text-xs text-gray-400">✏️ manual</span>
+                              )}
+                              {lead.zillowLastUpdated && lead.zillowZpid && (() => {
+                                const ageInDays = Math.floor((Date.now() - new Date(lead.zillowLastUpdated).getTime()) / (1000 * 60 * 60 * 24));
+                                const isStale = ageInDays > 180;
+                                return (
+                                  <span className={`text-xs ${isStale ? 'text-red-600 font-semibold' : 'text-gray-500'}`}>
+                                    {isStale && '⚠️ '}{ageInDays}d old
+                                  </span>
+                                );
+                              })()}
+                            </>
+                          ) : lead.estimatedValue && typeof lead.estimatedValue === 'number' ? (
+                            <span className='text-gray-600'>${lead.estimatedValue.toLocaleString()}</span>
+                          ) : (
+                            <span className='text-gray-400'>-</span>
+                          )}
+                        </div>
+                        <div className="flex flex-col gap-1">
+                          <button
+                            onClick={() => { setZestimateInput(lead.zestimate ? String(lead.zestimate) : ''); setEditingZestimateLead(lead); }}
+                            className="text-gray-400 hover:text-blue-600 select-none text-xs"
+                            title="Manually set Zestimate"
+                          >
+                            ✏️
+                          </button>
+                          {((lead.latitude && lead.longitude) || (lead.ownerAddress && lead.ownerCity && lead.ownerState && lead.ownerZip)) && (
+                            <button
+                              onClick={async (e) => {
+                                e.stopPropagation();
+                                const button = e.currentTarget;
+                                button.disabled = true;
+                                button.textContent = '⏳';
+                                try {
+                                  const res = await fetch('/api/v1/refresh-zestimate', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({
+                                      leadId: lead.id,
+                                      street: lead.ownerAddress,
+                                      city: lead.ownerCity,
+                                      state: lead.ownerState,
+                                      zip: lead.ownerZip,
+                                      latitude: lead.latitude,
+                                      longitude: lead.longitude,
+                                    }),
+                                  });
+                                  const data = await res.json();
+                                  if (res.ok) {
+                                    button.textContent = '✓';
+                                    button.className = 'text-green-600 font-bold select-none';
+                                    await new Promise(resolve => setTimeout(resolve, 1000));
+                                    if (onRefresh) await onRefresh();
+                                    button.textContent = '↻';
+                                    button.className = 'text-gray-400 hover:text-green-600 select-none';
+                                    button.disabled = false;
+                                  } else {
+                                    button.textContent = '↻';
+                                    button.disabled = false;
+                                    alert(`Refresh failed: ${data.error}`);
+                                  }
+                                } catch (err: any) {
+                                  button.textContent = '↻';
+                                  button.disabled = false;
+                                  alert(`Refresh failed: ${err.message}`);
                                 }
-                                button.textContent = '↻';
-                                button.className = 'text-gray-400 hover:text-green-600 select-none';
-                                button.disabled = false;
-                              } else {
-                                button.textContent = '↻';
-                                button.disabled = false;
-                                alert(`Refresh failed: ${data.error}`);
-                              }
-                            } catch (err: any) {
-                              button.textContent = '↻';
-                              button.disabled = false;
-                              console.error('Refresh failed:', err);
-                              alert(`Refresh failed: ${err.message}`);
-                            }
-                          }}
-                          className="text-gray-400 hover:text-green-600 select-none"
-                          title="Refresh Zestimate"
-                        >
-                          ↻
-                        </button>
-                      ) : null}
-                    </div>
+                              }}
+                              className="text-gray-400 hover:text-green-600 select-none"
+                              title="Refresh Zestimate from Zillow"
+                            >
+                              ↻
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    )}
                   </td>
 
                   {/* Listing Status Column */}
