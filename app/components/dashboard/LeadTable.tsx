@@ -672,9 +672,13 @@ export function LeadTable({
                       onChange={async (e) => {
                         const newStatus = e.target.value as 'off_market' | 'active' | 'sold' | 'pending' | 'fsbo' | 'auction' | 'skip' | 'door_knock' | '';
                         try {
-                          await updateLead(lead.id, {
-                            listingStatus: newStatus || null
-                          });
+                          const updates: any = { listingStatus: newStatus || null };
+                          if (newStatus && newStatus !== 'off_market' && lead.skipTraceStatus === 'PENDING') {
+                            updates.skipTraceStatus = 'NOT_ELIGIBLE';
+                          } else if ((!newStatus || newStatus === 'off_market') && lead.skipTraceStatus === 'NOT_ELIGIBLE') {
+                            updates.skipTraceStatus = 'PENDING';
+                          }
+                          await updateLead(lead.id, updates);
                         } catch (err) {
                           console.error('Failed to update status:', err);
                         }

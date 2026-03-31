@@ -3,6 +3,21 @@
 import React, { Dispatch, SetStateAction } from 'react';
 import { Loader } from '@aws-amplify/ui-react'; // Ensure Loader is imported
 
+function getDatePreset(preset: string): { from: string; to: string } {
+  const fmt = (d: Date) => d.toISOString().split('T')[0];
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  switch (preset) {
+    case 'today': return { from: fmt(today), to: fmt(today) };
+    case 'yesterday': { const d = new Date(today); d.setDate(d.getDate() - 1); return { from: fmt(d), to: fmt(d) }; }
+    case 'last7': { const d = new Date(today); d.setDate(d.getDate() - 6); return { from: fmt(d), to: fmt(today) }; }
+    case 'last30': { const d = new Date(today); d.setDate(d.getDate() - 29); return { from: fmt(d), to: fmt(today) }; }
+    case 'thisMonth': { const d = new Date(today.getFullYear(), today.getMonth(), 1); return { from: fmt(d), to: fmt(today) }; }
+    case 'lastMonth': { const from = new Date(today.getFullYear(), today.getMonth() - 1, 1); const to = new Date(today.getFullYear(), today.getMonth(), 0); return { from: fmt(from), to: fmt(to) }; }
+    default: return { from: '', to: '' };
+  }
+}
+
 type Props = {
   filterType: string;
   setFilterType: (val: string) => void;
@@ -167,6 +182,7 @@ export function DashboardFilters({
             <option value='NO_QUALITY_CONTACTS'>No Quality Contacts</option>
             <option value='FAILED'>Failed/Error</option>
             <option value='NO_MATCH'>No Match</option>
+            <option value='NOT_ELIGIBLE'>Not Eligible</option>
           </select>
 
           {/* 3. GHL SYNC STATUS FILTER */}
@@ -229,6 +245,19 @@ export function DashboardFilters({
           {/* 7. DATE ADDED FILTER */}
           <div className='flex flex-col gap-1'>
             <label className='text-xs text-gray-600'>Date Added (From):</label>
+            <select
+              onChange={(e) => { if (!e.target.value) return; const { from, to } = getDatePreset(e.target.value); setFilterDateAdded(from); setFilterDateAddedTo(to); e.target.value = ''; }}
+              className='border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none w-full'
+            >
+              <option value=''>Quick Select...</option>
+              <option value='today'>Today</option>
+              <option value='yesterday'>Yesterday</option>
+              <option value='last7'>Last 7 Days</option>
+              <option value='last30'>Last 30 Days</option>
+              <option value='thisMonth'>This Month</option>
+              <option value='lastMonth'>Last Month</option>
+              <option value='clear'>Clear</option>
+            </select>
             <input
               type='date'
               value={filterDateAdded}
@@ -260,23 +289,36 @@ export function DashboardFilters({
           </select>
 
           {/* 9. SKIP TRACE DATE FILTERS */}
-          <div className='flex flex-col sm:flex-row gap-2 items-center'>
-            <label className='text-xs text-gray-600 whitespace-nowrap'>Skip Traced:</label>
-            <input
-              type='date'
-              value={skipTraceFromDate}
-              onChange={(e) => setSkipTraceFromDate(e.target.value)}
-              className='border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none w-full sm:w-auto'
-              placeholder='From Date'
-            />
-            <span className='text-gray-400 text-xs'>to</span>
-            <input
-              type='date'
-              value={skipTraceToDate}
-              onChange={(e) => setSkipTraceToDate(e.target.value)}
-              className='border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none w-full sm:w-auto'
-              placeholder='To Date'
-            />
+          <div className='flex flex-col gap-1'>
+            <label className='text-xs text-gray-600'>Skip Traced:</label>
+            <select
+              onChange={(e) => { if (!e.target.value) return; const { from, to } = getDatePreset(e.target.value); setSkipTraceFromDate(from); setSkipTraceToDate(to); e.target.value = ''; }}
+              className='border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none w-full'
+            >
+              <option value=''>Quick Select...</option>
+              <option value='today'>Today</option>
+              <option value='yesterday'>Yesterday</option>
+              <option value='last7'>Last 7 Days</option>
+              <option value='last30'>Last 30 Days</option>
+              <option value='thisMonth'>This Month</option>
+              <option value='lastMonth'>Last Month</option>
+              <option value='clear'>Clear</option>
+            </select>
+            <div className='flex items-center gap-2'>
+              <input
+                type='date'
+                value={skipTraceFromDate}
+                onChange={(e) => setSkipTraceFromDate(e.target.value)}
+                className='border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none w-full'
+              />
+              <span className='text-gray-400 text-xs'>to</span>
+              <input
+                type='date'
+                value={skipTraceToDate}
+                onChange={(e) => setSkipTraceToDate(e.target.value)}
+                className='border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none w-full'
+              />
+            </div>
           </div>
         </div>
 

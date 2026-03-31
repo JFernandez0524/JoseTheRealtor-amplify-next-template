@@ -193,7 +193,7 @@ const schema = a.schema({
       standardizedAddress: a.json(), // Google Validation Object
 
       // Statuses
-      skipTraceStatus: a.enum(['PENDING', 'COMPLETED', 'FAILED', 'NO_MATCH', 'NO_QUALITY_CONTACTS']),
+      skipTraceStatus: a.enum(['PENDING', 'COMPLETED', 'FAILED', 'NO_MATCH', 'NO_QUALITY_CONTACTS', 'NOT_ELIGIBLE']),
       skipTraceCompletedAt: a.datetime(),
       skipTraceHistory: a.json(), // Array of { timestamp, status, phonesFound, emailsFound }
       rawSkipTraceData: a.json(), // Store all skip trace results even if they don't pass filters

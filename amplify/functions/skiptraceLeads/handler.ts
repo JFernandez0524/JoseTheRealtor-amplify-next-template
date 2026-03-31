@@ -365,10 +365,21 @@ export const handler: Handler = async (event) => {
       lead.skipTraceStatus === 'COMPLETED'
     );
 
-    const results: any[] = skippedLeads.map(lead => ({
-      id: lead.id,
-      status: 'SKIPPED',
-      reason: lead.skipTraceStatus === 'COMPLETED' ? 'Already skip traced' : `Not eligible: listing status is ${lead.listingStatus}`
+    const results: any[] = await Promise.all(skippedLeads.map(async (lead) => {
+      // Mark non-eligible leads (not already completed) as NOT_ELIGIBLE
+      if (lead.skipTraceStatus !== 'COMPLETED' && lead.listingStatus && lead.listingStatus !== 'off_market') {
+        await docClient.send(new UpdateCommand({
+          TableName: propertyLeadTableName,
+          Key: { id: lead.id },
+          UpdateExpression: 'SET skipTraceStatus = :status',
+          ExpressionAttributeValues: { ':status': 'NOT_ELIGIBLE' },
+        }));
+      }
+      return {
+        id: lead.id,
+        status: 'SKIPPED',
+        reason: lead.skipTraceStatus === 'COMPLETED' ? 'Already skip traced' : `Not eligible: listing status is ${lead.listingStatus}`,
+      };
     }));
 
     if (leadsToProcess.length === 0) {

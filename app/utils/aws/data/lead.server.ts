@@ -21,7 +21,8 @@ export type SkipTraceStatus =
   | 'NO_MATCH'
   | 'NOT_FOUND'
   | 'NOT_AUTHORIZED'
-  | 'INVALID_DATA';
+  | 'INVALID_DATA'
+  | 'NOT_ELIGIBLE';
 
 // 💥 1. Extend the PropertyLead type to include the new GHL status fields
 export type DBLead = Schema['PropertyLead']['type'] & {
