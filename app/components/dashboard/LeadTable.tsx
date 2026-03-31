@@ -146,7 +146,7 @@ export function LeadTable({
       const res = await fetch('/api/v1/refresh-zestimate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ leadId: lead.id, zpid: match[1] }),
+        body: JSON.stringify({ leadId: lead.id, zillowUrl: zestimateUrlInput }),
       });
       const data = await res.json();
       if (!res.ok) { setZestimateError(data.error || 'Failed'); return; }
