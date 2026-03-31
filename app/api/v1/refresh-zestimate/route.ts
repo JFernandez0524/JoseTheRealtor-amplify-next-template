@@ -69,6 +69,14 @@ export async function POST(request: NextRequest) {
     });
 
     if (!result.valuation) {
+      if (zillowUrl && resolvedZpid) {
+        await cookiesClient.models.PropertyLead.update({
+          id: leadId,
+          zillowZpid: resolvedZpid,
+          zillowUrl: resolvedZillowUrl,
+        });
+        return NextResponse.json({ success: true, partial: true, message: 'Zillow link saved. Enter the value manually using $ Manual.' });
+      }
       return NextResponse.json({ error: 'No Zestimate data found' }, { status: 404 });
     }
 
