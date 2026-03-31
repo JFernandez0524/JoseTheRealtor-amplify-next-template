@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { type Schema } from '@/amplify/data/resource';
 import { client } from '@/app/utils/aws/data/frontEndClient';
 import {
@@ -28,6 +28,18 @@ export default function AdminDashboard({
   const [leads] = useState(initialLeads);
   const [loading, setLoading] = useState(false);
   const [expandedLeadId, setExpandedLeadId] = useState<string | null>(null);
+  const [emailStats, setEmailStats] = useState<{
+    total: number;
+    addedToday: number;
+    byStatus: Record<string, number>;
+  } | null>(null);
+
+  useEffect(() => {
+    fetch('/api/v1/admin/outreach-queue-stats')
+      .then(r => r.json())
+      .then(setEmailStats)
+      .catch(console.error);
+  }, []);
 
   const promoteUser = async (userId: string, email: string) => {
     if (!confirm(`Promote ${email} to ADMINS group?`)) return;
@@ -253,6 +265,33 @@ export default function AdminDashboard({
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Email Outreach Queue Stats */}
+      <div className='bg-white rounded-lg shadow-sm border p-6'>
+        <h2 className='text-lg font-semibold text-gray-900 mb-4'>
+          📧 Email Outreach Queue
+        </h2>
+        {!emailStats ? (
+          <p className='text-sm text-gray-500'>Loading...</p>
+        ) : (
+          <div className='grid grid-cols-2 md:grid-cols-4 gap-4'>
+            <div className='bg-blue-50 p-4 rounded-lg border border-blue-200 text-center'>
+              <p className='text-sm text-blue-600'>Total</p>
+              <p className='text-3xl font-bold text-blue-900'>{emailStats.total}</p>
+            </div>
+            <div className='bg-green-50 p-4 rounded-lg border border-green-200 text-center'>
+              <p className='text-sm text-green-600'>Added Today</p>
+              <p className='text-3xl font-bold text-green-900'>{emailStats.addedToday}</p>
+            </div>
+            {Object.entries(emailStats.byStatus).map(([status, count]) => (
+              <div key={status} className='bg-gray-50 p-4 rounded-lg border text-center'>
+                <p className='text-sm text-gray-500'>{status}</p>
+                <p className='text-3xl font-bold text-gray-900'>{count}</p>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Detailed Failure Analysis */}
