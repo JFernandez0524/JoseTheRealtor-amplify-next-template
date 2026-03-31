@@ -1,6 +1,6 @@
 import type { Handler } from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, ScanCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, GetCommand, ScanCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 
 const docClient = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 
@@ -32,18 +32,31 @@ export const handler: Handler = async (event) => {
 
     console.log(`🔄 [FIELD_SYNC] contactId=${contactId}`, { callAttempts, emailAttempts, lastCallDate, aiState, mailSentCount, callOutcome });
 
-    const scan = await docClient.send(new ScanCommand({
-      TableName: process.env.AMPLIFY_DATA_PropertyLead_TABLE_NAME,
-      FilterExpression: 'ghlContactId = :contactId',
-      ExpressionAttributeValues: { ':contactId': contactId },
-    }));
+    // 1. Try direct lookup by App Lead ID (fast, works for newly synced contacts)
+    let lead: Record<string, any> | undefined;
+    const appLeadId = payload['App Lead ID'] || payload['Lead Source Id'];
+    if (appLeadId) {
+      const get = await docClient.send(new GetCommand({
+        TableName: process.env.AMPLIFY_DATA_PropertyLead_TABLE_NAME,
+        Key: { id: appLeadId },
+      }));
+      lead = get.Item;
+    }
 
-    if (!scan.Items?.length) {
+    // 2. Fall back to scan by ghlContactId for older contacts
+    if (!lead) {
+      const scan = await docClient.send(new ScanCommand({
+        TableName: process.env.AMPLIFY_DATA_PropertyLead_TABLE_NAME,
+        FilterExpression: 'ghlContactId = :contactId',
+        ExpressionAttributeValues: { ':contactId': contactId },
+      }));
+      lead = scan.Items?.[0];
+    }
+
+    if (!lead) {
       console.log(`⚠️ No PropertyLead found for contact ${contactId}`);
       return { statusCode: 200, body: JSON.stringify({ success: true, message: 'Contact not found in app' }) };
     }
-
-    const lead = scan.Items[0];
     const outreachData: any = { ...(lead.ghlOutreachData || {}) };
 
     if (callAttempts  !== undefined && callAttempts  !== '') outreachData.smsAttempts  = parseInt(callAttempts)  || 0;
