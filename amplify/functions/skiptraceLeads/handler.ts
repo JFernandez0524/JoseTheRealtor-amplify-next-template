@@ -354,23 +354,21 @@ export const handler: Handler = async (event) => {
 
     console.log(`✅ Fetched ${leads.length} valid leads`);
 
-    // Filter out sold/skip leads AND already-completed skip traces
-    const leadsToProcess = leads.filter(lead => 
-      lead.listingStatus !== 'sold' &&
-      lead.listingStatus !== 'skip' &&
+    // Only skip trace off_market leads (or leads with no listing status)
+    const leadsToProcess = leads.filter(lead =>
+      (!lead.listingStatus || lead.listingStatus === 'off_market') &&
       lead.skipTraceStatus !== 'COMPLETED'
     );
 
-    const skippedLeads = leads.filter(lead => 
-      lead.listingStatus === 'sold' ||
-      lead.listingStatus === 'skip' ||
+    const skippedLeads = leads.filter(lead =>
+      (lead.listingStatus && lead.listingStatus !== 'off_market') ||
       lead.skipTraceStatus === 'COMPLETED'
     );
 
     const results: any[] = skippedLeads.map(lead => ({
       id: lead.id,
       status: 'SKIPPED',
-      reason: `Marked as ${lead.listingStatus}`
+      reason: lead.skipTraceStatus === 'COMPLETED' ? 'Already skip traced' : `Not eligible: listing status is ${lead.listingStatus}`
     }));
 
     if (leadsToProcess.length === 0) {
