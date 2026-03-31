@@ -272,7 +272,7 @@ export async function syncToGHL(leadIds: string[], onProgress?: (current: number
           const response = result.value as any;
           
           // Extract the actual Lambda response from GraphQL wrapper
-          const lambdaResult = response?.data?.manualGhlSync;
+          const lambdaResult = response?.data;
           
           // Parse if it's a JSON string
           let syncData = lambdaResult;
