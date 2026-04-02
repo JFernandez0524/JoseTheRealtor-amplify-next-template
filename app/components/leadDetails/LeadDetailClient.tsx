@@ -143,6 +143,10 @@ function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
     }
   }, [lead.ghlContactId]);
 
+  useEffect(() => {
+    fetchOutreachData();
+  }, [fetchOutreachData]);
+
   // Enhanced market data fetching with error handling
   const fetchMarketIntel = useCallback(async () => {
     if (!initialLead?.id || (!initialLead?.latitude && !initialLead.standardizedAddress)) {
@@ -742,6 +746,12 @@ function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
               <SidebarSkeleton />
             ) : (
               <>
+                <OutreachStatus 
+                  ghlContactId={lead.ghlContactId}
+                  outreachData={outreachData}
+                  onDataUpdate={setOutreachData}
+                />
+
                 <div className='bg-slate-900 rounded-[2.5rem] p-6 md:p-10 shadow-2xl border border-slate-800'>
                   <h3 className='text-white text-[10px] font-black uppercase mb-6 md:mb-10 flex items-center gap-3 tracking-widest'>
                     <span className='w-2 h-2 bg-green-500 rounded-full animate-pulse' />{' '}
@@ -796,12 +806,6 @@ function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
                     </div>
                   </div>
                 </CardWrapper>
-
-                <OutreachStatus 
-                  ghlContactId={lead.ghlContactId}
-                  outreachData={outreachData}
-                  onDataUpdate={setOutreachData}
-                />
               </>
             )}
           </div>

@@ -30,61 +30,46 @@ export async function GET(request: NextRequest) {
       filter: { ghlContactId: { eq: contactId } }
     });
 
-    if (leads && leads.length > 0 && leads[0].ghlOutreachData) {
-      console.log('✅ Returning outreach data from database');
-      return NextResponse.json(leads[0].ghlOutreachData);
-    }
-
-    // Fallback: Fetch from GHL if not in database
-    console.log('⚠️ No database data, fetching from GHL');
-
-    // Get GHL integration
+    // Always fetch live tags from GHL (tags are not stored in ghlOutreachData)
     const { data: integrations } = await cookiesClient.models.GhlIntegration.list({
       filter: { userId: { eq: user.userId }, isActive: { eq: true } }
     });
 
-    if (!integrations || integrations.length === 0) {
-      return NextResponse.json({ error: 'No active GHL integration' }, { status: 404 });
-    }
+    let liveTags: string[] = [];
+    let liveCustomFields: any[] = [];
 
-    const integration = integrations[0];
-
-    // Fetch contact from GHL
-    const response = await fetch(
-      `https://services.leadconnectorhq.com/contacts/${contactId}`,
-      {
-        headers: {
-          'Authorization': `Bearer ${integration.accessToken}`,
-          'Version': '2021-07-28'
-        }
+    if (integrations && integrations.length > 0) {
+      const integration = integrations[0];
+      const ghlResponse = await fetch(
+        `https://services.leadconnectorhq.com/contacts/${contactId}`,
+        { headers: { 'Authorization': `Bearer ${integration.accessToken}`, 'Version': '2021-07-28' } }
+      );
+      if (ghlResponse.ok) {
+        const ghlData = await ghlResponse.json();
+        liveTags = ghlData.contact?.tags || [];
+        liveCustomFields = ghlData.contact?.customFields || [];
       }
-    );
-
-    if (!response.ok) {
-      console.error('GHL API error:', response.status, await response.text());
-      return NextResponse.json({ error: 'Failed to fetch contact from GHL' }, { status: 500 });
     }
 
-    const data = await response.json();
-    const contact = data.contact;
+    if (leads && leads.length > 0 && leads[0].ghlOutreachData) {
+      return NextResponse.json({ ...(leads[0].ghlOutreachData as object), tags: liveTags });
+    }
 
-    // Extract custom fields
+    // Fallback: build from GHL custom fields if no DB data
     const getFieldValue = (fieldId: string) => {
-      const field = contact.customFields?.find((f: any) => f.id === fieldId);
+      const field = liveCustomFields.find((f: any) => f.id === fieldId);
       return field?.value || null;
     };
 
-    const outreachData = {
+    return NextResponse.json({
       smsAttempts: parseInt(getFieldValue(GHL_CUSTOM_FIELDS.call_attempt_counter) || '0'),
       emailAttempts: parseInt(getFieldValue(GHL_CUSTOM_FIELDS.email_attempt_counter) || '0'),
       lastSmsSent: getFieldValue(GHL_CUSTOM_FIELDS.last_call_date),
       aiState: getFieldValue(GHL_CUSTOM_FIELDS.ai_state),
       callOutcome: getFieldValue(GHL_CUSTOM_FIELDS.call_outcome),
       mailSentCount: parseInt(getFieldValue(GHL_CUSTOM_FIELDS.mail_sent_count) || '0'),
-      tags: contact.tags || [],
-    };
-
-    return NextResponse.json(outreachData);
+      tags: liveTags,
+    });
 
   } catch (error: any) {
     console.error('Error fetching GHL outreach data:', error);
