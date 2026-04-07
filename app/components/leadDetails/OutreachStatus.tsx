@@ -87,17 +87,19 @@ export function OutreachStatus({ ghlContactId, outreachData, onDataUpdate }: Out
   const formatDate = (dateString?: string) => {
     if (!dateString) return 'Never';
     try {
-      const date = new Date(dateString);
-      // Check if the date is valid
+      // Date-only strings (YYYY-MM-DD) anchored to noon to avoid UTC offset shifting the day
+      const normalized = /^\d{4}-\d{2}-\d{2}$/.test(dateString)
+        ? `${dateString}T12:00:00`
+        : dateString;
+      const date = new Date(normalized);
       if (isNaN(date.getTime())) return 'Invalid date';
-      
       return date.toLocaleDateString('en-US', {
         month: 'short',
         day: 'numeric',
         year: 'numeric',
         hour: 'numeric',
         minute: '2-digit',
-        timeZone: 'America/New_York' // EST/EDT - consistent business timezone
+        timeZone: 'America/New_York',
       });
     } catch {
       return 'Invalid date';
@@ -134,14 +136,14 @@ export function OutreachStatus({ ghlContactId, outreachData, onDataUpdate }: Out
           <HiOutlinePhone className="w-5 h-5 text-blue-600 mt-0.5" />
           <div className="flex-1">
             <div className="flex items-center justify-between mb-1">
-              <span className="text-sm font-medium text-gray-700">SMS Outreach</span>
+              <span className="text-sm font-medium text-gray-700">Call Outreach</span>
               <span className={`text-xs px-2 py-1 rounded-full ${getStatusColor(outreachData?.smsStatus)}`}>
                 {outreachData?.smsStatus || 'PENDING'}
               </span>
             </div>
             <div className="text-xs text-gray-600 space-y-1">
-              <div>Attempts: <span className="font-medium">{outreachData?.smsAttempts || 0}/7</span></div>
-              <div>Last sent: <span className="font-medium">{formatDate(outreachData?.lastSmsSent)}</span></div>
+              <div>Call Attempts: <span className="font-medium">{outreachData?.smsAttempts || 0}/7</span></div>
+              <div>Last call: <span className="font-medium">{formatDate(outreachData?.lastSmsSent)}</span></div>
             </div>
           </div>
         </div>

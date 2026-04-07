@@ -329,10 +329,10 @@ export async function syncToGHL(leadIds: string[], onProgress?: (current: number
  * Observe leads in real-time
  * Returns a subscription that auto-updates when data changes
  */
-export function observeLeads(callback: (leads: Lead[]) => void) {
+export function observeLeads(callback: (leads: Lead[], isSynced: boolean) => void) {
   return client.models.PropertyLead.observeQuery().subscribe({
-    next: ({ items }) => {
-      callback(items as Lead[]);
+    next: ({ items, isSynced }) => {
+      callback(items as Lead[], isSynced);
     },
   });
 }

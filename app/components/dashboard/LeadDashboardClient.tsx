@@ -40,7 +40,7 @@ export default function LeadDashboardClient({}: Props) {
   const [processingMessage, setProcessingMessage] = useState('');
   const [isPopulatingQueue, setIsPopulatingQueue] = useState(false);
 
-  // Pagination State
+  const [isLoading, setIsLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(100); // Show 100 leads per page
 
@@ -97,9 +97,12 @@ export default function LeadDashboardClient({}: Props) {
 
   // Fetch leads with observeQuery
   useEffect(() => {
-    const sub = observeLeads((items) => {
-      setLeads([...items]);
-      console.log('📊 Loaded leads:', items.length);
+    const sub = observeLeads((items, isSynced) => {
+      if (isSynced) {
+        setLeads([...items]);
+        setIsLoading(false);
+        console.log('📊 Loaded leads:', items.length);
+      }
     });
 
     return () => sub.unsubscribe();
@@ -1072,7 +1075,7 @@ export default function LeadDashboardClient({}: Props) {
         leads={paginatedLeads}
         selectedIds={selectedIds}
         selectedLeadType={selectedLeadType}
-        isLoading={false}
+        isLoading={isLoading}
         totalFilteredCount={filteredLeads.length}
         onRefresh={refreshLeads}
         onToggleAll={() => {
