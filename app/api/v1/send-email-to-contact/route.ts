@@ -78,8 +78,10 @@ export async function POST(req: Request) {
 
     const contact = contactResponse.data.contact;
     
-    // Use provided email or fall back to contact's primary email
-    const recipientEmail = toEmail || contact.email;
+    // Only set emailTo when targeting a secondary email (not the primary).
+    // GHL rejects emailTo even when it matches the primary — omitting it lets GHL use the primary automatically.
+    const isPrimaryEmail = !toEmail || toEmail.toLowerCase() === contact.email?.toLowerCase();
+    const recipientEmail = isPrimaryEmail ? undefined : toEmail;
 
     // Extract property data from custom fields
     const propertyAddress = contact?.customFields?.find((f: any) => f.id === 'p3NOYiInAERYbe0VsLHB')?.value;

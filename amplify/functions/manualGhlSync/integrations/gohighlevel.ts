@@ -281,6 +281,10 @@ export async function syncToGoHighLevel(
       lastName: `${lead.adminLastName || lead.ownerLastName || 'Owner'}${specificPhone && phoneIndex > 1 ? ` (${phoneIndex})` : ''}`,
       email: isPrimary ? primaryEmail : undefined, // Attach email only to primary to avoid duplicates
       phone: specificPhone || undefined, // Don't send empty phone
+      // Pass secondary emails via GHL's native additionalEmails so emailTo works for them
+      ...(isPrimary && lead.emails && lead.emails.length > 1 && {
+        additionalEmails: lead.emails.slice(1).filter((e): e is string => !!e).map(e => e.toLowerCase()),
+      }),
       tags,
       source: 'JTR_SkipTrace_App',
       customFields,
