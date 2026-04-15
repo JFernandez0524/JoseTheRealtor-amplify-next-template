@@ -34,6 +34,7 @@ export async function GET() {
         });
 
       for (const item of page.data) {
+        if (!item) continue;
         total++;
         const status = item.emailStatus as string | null;
         if (status && status in byStatus) byStatus[status]++;
