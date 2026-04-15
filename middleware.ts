@@ -16,7 +16,8 @@ export async function middleware(request: NextRequest) {
     '/contact',
     '/docs',
     '/logout',
-    '/forgot-password'
+    '/forgot-password',
+    '/cost-breakdown',
   ];
   const isPublicPath = publicPaths.some((path) => pathname.startsWith(path));
 

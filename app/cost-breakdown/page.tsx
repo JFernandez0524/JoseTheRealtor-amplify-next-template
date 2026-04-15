@@ -154,7 +154,7 @@ export default function CostBreakdownPage() {
         <section>
           <h2 className="text-2xl font-bold text-gray-900 mb-2 text-center">📮 Thanks.io — Direct Mail (Optional Add-On)</h2>
           <p className="text-gray-600 text-center mb-8 max-w-2xl mx-auto">
-            Automated handwritten direct mail with QR code tracking. Requires Thanks.io Business plan subscription.
+            Automated handwritten direct mail with QR code tracking. Requires Thanks.io Business plan subscription $50/month.
           </p>
           <div className="bg-white rounded-xl p-8 shadow-sm border border-gray-200 max-w-3xl mx-auto">
             <h4 className="text-sm font-semibold text-gray-700 mb-4">Per-Piece Pricing (Business Plan, includes postage)</h4>
