@@ -31,7 +31,6 @@ export async function suggestNextAction(
 LEAD CONTEXT:
 - Lead ID: ${leadId}
 - Type: ${leadType}
-- AI Score: ${leadScore}/100
 - Days since last contact: ${daysSinceLastContact}
 ${propertyValue ? `- Property Value: $${propertyValue.toLocaleString()}` : ''}
 

@@ -52,7 +52,8 @@ export async function GET(request: NextRequest) {
     }
 
     if (leads && leads.length > 0 && leads[0].ghlOutreachData) {
-      return NextResponse.json({ ...(leads[0].ghlOutreachData as object), tags: liveTags });
+      const outreach = typeof leads[0].ghlOutreachData === 'string' ? JSON.parse(leads[0].ghlOutreachData) : leads[0].ghlOutreachData;
+      return NextResponse.json({ ...outreach, tags: liveTags });
     }
 
     // Fallback: build from GHL custom fields if no DB data

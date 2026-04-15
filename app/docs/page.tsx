@@ -185,17 +185,6 @@ export default function DocsPage() {
                 </ul>
               </div>
 
-              <div className="bg-purple-50 p-4 rounded-lg">
-                <h4 className="font-medium text-purple-800 mb-2">🤖 AI Lead Scoring</h4>
-                <ul className="list-disc list-inside space-y-1 text-purple-700 text-sm">
-                  <li>Select leads and click "🤖 Calculate AI Scores"</li>
-                  <li>AI analyzes: equity, value, timeline, location, contact availability</li>
-                  <li>Scores 0-100 with priority: HIGH (70+), MEDIUM (40-69), LOW (&lt;40)</li>
-                  <li>Filter by AI Priority to focus on hottest leads</li>
-                  <li>Sort by AI Score column to prioritize outreach</li>
-                </ul>
-              </div>
-
               <div className="bg-orange-50 p-4 rounded-lg">
                 <h4 className="font-medium text-orange-800 mb-2">🏦 Property Enrichment (Preforeclosure Only)</h4>
                 <ul className="list-disc list-inside space-y-1 text-orange-700 text-sm">

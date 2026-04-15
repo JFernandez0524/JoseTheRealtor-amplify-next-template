@@ -31,8 +31,6 @@ type Props = {
   setFilterHasPhone: (val: string) => void;
   filterListingStatus: string;
   setFilterListingStatus: (val: string) => void;
-  filterAiPriority: string;
-  setFilterAiPriority: (val: string) => void;
   filterDateAdded: string;
   setFilterDateAdded: (val: string) => void;
   filterDateAddedTo: string;
@@ -45,7 +43,6 @@ type Props = {
   setSkipTraceToDate: (val: string) => void;
 
   // Access Control
-  hasAI?: boolean;
 
   // Bulk Action Props
   selectedLeadsCount: number;
@@ -65,7 +62,6 @@ type Props = {
   handleViewDetails: () => void;
   isSkipTracing: boolean;
   isGhlSyncing: boolean;
-  isAiScoring: boolean;
   isEnriching: boolean;
   isGeneratingLetters: boolean;
   isEmailCampaigning: boolean;
@@ -85,8 +81,6 @@ export function DashboardFilters({
   setFilterHasPhone,
   filterListingStatus,
   setFilterListingStatus,
-  filterAiPriority,
-  setFilterAiPriority,
   filterDateAdded,
   setFilterDateAdded,
   filterDateAddedTo,
@@ -97,7 +91,6 @@ export function DashboardFilters({
   setSkipTraceFromDate,
   skipTraceToDate,
   setSkipTraceToDate,
-  hasAI = false,
   selectedLeadsCount,
   selectedLeadTypes,
   selectedLeadType,
@@ -115,7 +108,6 @@ export function DashboardFilters({
   handleViewDetails,
   isSkipTracing,
   isGhlSyncing,
-  isAiScoring,
   isEnriching,
   isGeneratingLetters,
   isEmailCampaigning,
@@ -227,20 +219,6 @@ export function DashboardFilters({
             <option value='skip'>Skip</option>
             <option value='door_knock'>Door Knock</option>
           </select>
-
-          {/* 6. AI PRIORITY FILTER - AI PLAN ONLY */}
-          {hasAI && (
-            <select
-              value={filterAiPriority}
-              onChange={(e) => setFilterAiPriority(e.target.value)}
-              className='border border-purple-300 rounded-md px-3 py-1.5 text-sm focus:ring-2 focus:ring-purple-500 outline-none w-full bg-purple-50'
-            >
-              <option value=''>All AI Priorities</option>
-              <option value='HIGH'>🔥 High Priority</option>
-              <option value='MEDIUM'>⚡ Medium Priority</option>
-              <option value='LOW'>📊 Low Priority</option>
-            </select>
-          )}
 
           {/* 7. DATE ADDED FILTER */}
           <div className='flex flex-col gap-1'>

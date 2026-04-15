@@ -51,7 +51,6 @@ export default function LeadDashboardClient({}: Props) {
   const [filterCrmStatus, setFilterCrmStatus] = useState('');
   const [filterHasPhone, setFilterHasPhone] = useState('');
   const [filterListingStatus, setFilterListingStatus] = useState('');
-  const [filterAiPriority, setFilterAiPriority] = useState('');
   const [filterDateAdded, setFilterDateAdded] = useState('');
   const [filterDateAddedTo, setFilterDateAddedTo] = useState('');
   const [filterSource, setFilterSource] = useState('');
@@ -206,9 +205,6 @@ export default function LeadDashboardClient({}: Props) {
             ? !lead.listingStatus
             : lead.listingStatus === filterListingStatus);
 
-        const matchesAiPriority =
-          !filterAiPriority || lead.aiPriority === filterAiPriority;
-
         const matchesDateAdded = (() => {
           if (!filterDateAdded && !filterDateAddedTo) return true;
           if (!lead.createdAt) return false;
@@ -262,7 +258,6 @@ export default function LeadDashboardClient({}: Props) {
           matchesCrm &&
           matchesPhone &&
           matchesListingStatus &&
-          matchesAiPriority &&
           matchesDateAdded &&
           matchesSource &&
           matchesDateRange
@@ -320,7 +315,6 @@ export default function LeadDashboardClient({}: Props) {
     filterCrmStatus,
     filterHasPhone,
     filterListingStatus,
-    filterAiPriority,
     filterDateAdded,
     filterDateAddedTo,
     filterSource,
@@ -355,7 +349,6 @@ export default function LeadDashboardClient({}: Props) {
     filterCrmStatus,
     filterHasPhone,
     filterListingStatus,
-    filterAiPriority,
     skipTraceFromDate,
     skipTraceToDate,
     sortField,
@@ -929,8 +922,6 @@ export default function LeadDashboardClient({}: Props) {
         setFilterHasPhone={setFilterHasPhone}
         filterListingStatus={filterListingStatus}
         setFilterListingStatus={setFilterListingStatus}
-        filterAiPriority={filterAiPriority}
-        setFilterAiPriority={setFilterAiPriority}
         filterDateAdded={filterDateAdded}
         setFilterDateAdded={setFilterDateAdded}
         filterDateAddedTo={filterDateAddedTo}
@@ -941,13 +932,11 @@ export default function LeadDashboardClient({}: Props) {
         setSkipTraceFromDate={setSkipTraceFromDate}
         skipTraceToDate={skipTraceToDate}
         setSkipTraceToDate={setSkipTraceToDate}
-        hasAI={isAI}
         selectedLeadsCount={selectedIds.length}
         selectedLeadTypes={leads.filter(l => selectedIds.includes(l.id)).map(l => l.type)}
         selectedLeadType={selectedLeadType}
         isSkipTracing={isProcessing}
         isGhlSyncing={isProcessing}
-        isAiScoring={isProcessing}
         isEnriching={isProcessing}
         isGeneratingLetters={isProcessing}
         handleBulkSkipTrace={handleBulkSkipTrace}

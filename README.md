@@ -13,8 +13,6 @@ A comprehensive real estate lead management platform built with AWS Amplify Gen2
 ## Features
 
 - **Lead Management**: Import and analyze property leads (preforeclosure, probate)
-- **AI Lead Scoring**: Intelligent prioritization with 0-100 scores based on equity, value, timeline, location, and contact availability
-- **AI Insights Dashboard**: View top hottest leads, urgent attention items, and best ROI opportunities
 - **AI Messaging Bot**: Automated conversations across SMS, Facebook Messenger, Instagram DMs, and WhatsApp using OpenAI
 - **Multi-Channel Outreach**: Coordinated messaging with instant AI responses on all platforms
 - **Outreach Queue System**: Efficient DynamoDB-based queue for tracking outreach status (90% reduction in API costs)
@@ -22,8 +20,8 @@ A comprehensive real estate lead management platform built with AWS Amplify Gen2
 - **Business Hours Compliance**: All outreach respects Mon-Fri 9AM-7PM, Sat 9AM-12PM EST schedule
 - **Property Enrichment (Preforeclosure)**: Real equity data, mortgage balances, and quality contact info via BatchData ($0.35/lead)
 - **Skip Tracing**: Pay-per-use contact lookup at $0.10 per skip (probate leads)
-- **Bulk Operations**: Update multiple lead statuses, skip trace, enrich, calculate AI scores, and sync in one click
-- **Smart Filtering**: Filter by manual status, AI priority, owner occupied, high equity, skip trace date, and property type
+- **Bulk Operations**: Update multiple lead statuses, skip trace, enrich, and sync in one click
+- **Smart Filtering**: Filter by manual status, owner occupied, high equity, skip trace date, and property type
 - **Property Valuation**: Real-time Zestimate data with refresh capability and age indicators
 - **CRM Integration**: Seamless GoHighLevel synchronization with rate limiting protection
 - **Direct Mail Automation**: Automatic Zestimate and cash offer calculation for GHL Click2Mail campaigns
@@ -129,14 +127,7 @@ For detailed deployment instructions, see the [Amplify documentation](https://do
    - System automatically validates addresses, fetches Zestimate data, and processes leads
    - Rate-limited API calls prevent service interruptions during large uploads
 
-2. **AI Lead Scoring**
-   - Select leads from dashboard
-   - Click "🤖 Calculate AI Scores" to analyze leads
-   - AI scores (0-100) based on equity, value, timeline, location, and contact availability
-   - Filter by AI Priority (HIGH/MEDIUM/LOW) to focus on hottest leads
-   - View AI Insights Dashboard for top leads, urgent items, and best ROI opportunities
-
-3. **Property Enrichment (Preforeclosure Only)**
+2. **Property Enrichment (Preforeclosure Only)**
    - Select preforeclosure leads from dashboard
    - Click "🏦 Enrich Leads" to get real property data ($0.35/lead)
    - Enrichment includes:

@@ -120,9 +120,6 @@
 - ✅ Role-based access (FREE, SYNC PLAN, AI OUTREACH PLAN, ADMIN)
 
 ### AI Features
-- ✅ **AI Lead Scoring** - 0-100 scores based on equity, value, timeline, location, contact
-- ✅ **AI Insights Dashboard** - Top leads, urgent items, best ROI opportunities
-- ✅ **AI Priority Classification** - HIGH/MEDIUM/LOW automatic categorization
 - ✅ **AI SMS Bot** - Automated text conversations with 5-step script
 - ✅ **AI Email Bot** - Automated email outreach with AMMO framework
 - ✅ **AI Reply Handling** - Contextual responses to SMS and email replies

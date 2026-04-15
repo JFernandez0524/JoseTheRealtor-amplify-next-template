@@ -24,15 +24,14 @@ export default function CostBreakdownPage() {
           <h2 className="text-2xl font-bold text-gray-900 mb-8 text-center">What You Get</h2>
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
             {[
-              { icon: '📊', title: 'Lead Dashboard', desc: 'All your leads stored securely in the cloud. Filter by status, AI priority, property type, equity, and more. Real-time updates — no page reloads needed.' },
+              { icon: '📊', title: 'Lead Dashboard', desc: 'All your leads stored securely in the cloud. Filter by status, property type, equity, and more. Real-time updates — no page reloads needed.' },
               { icon: '🔍', title: 'Skip Tracing', desc: 'Find phone numbers, emails, and mailing addresses for property owners. Pay only for successful matches at $0.10/lead.' },
               { icon: '🏦', title: 'Property Enrichment', desc: 'Get real equity percentages, mortgage balances, quality phone numbers (mobile, 90+ score, not DNC), and property flags at $0.35/lead.' },
               { icon: '🔗', title: 'GoHighLevel Sync', desc: 'One-click sync to your GHL account. Leads arrive with tags, Zestimate values, cash offers, and proper routing for dialer or direct mail campaigns.' },
               { icon: '📥', title: 'CSV Import & Export', desc: 'Bulk import leads from any list source. Export skip-traced data with contact info, status, and completion dates for targeted outreach.' },
               { icon: '💰', title: 'Property Valuations', desc: 'Real-time Zestimate data with refresh capability. See property values, age indicators, and click through to Zillow for details.' },
-              { icon: '🎯', title: 'Smart Filtering', desc: 'Filter by manual status, AI priority, owner occupied, high equity, skip trace date, property type, and more. Find your best leads instantly.' },
+              { icon: '🎯', title: 'Smart Filtering', desc: 'Filter by manual status, owner occupied, high equity, skip trace date, property type, and more. Find your best leads instantly.' },
               { icon: '📬', title: 'Direct Mail Automation', desc: 'Automatic Zestimate and cash offer calculation for GHL Click2Mail campaigns. Webhook tracking for delivery and QR code scans.' },
-              { icon: '🤖', title: 'AI Lead Scoring', desc: 'Intelligent 0-100 scores based on equity, value, timeline, location, and contact availability. Focus on the hottest leads first.' },
             ].map((f) => (
               <div key={f.title} className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
                 <div className="text-3xl mb-3">{f.icon}</div>

@@ -27,7 +27,7 @@
  * PROCESSING:
  * This endpoint only parses the CSV. Actual processing happens in:
  * - Lambda: amplify/functions/uploadCsvHandler (triggered by S3 upload)
- * - Process: Validate addresses → Fetch Zestimates → Calculate AI scores → Store
+ * - Process: Validate addresses → Fetch Zestimates → Store
  * 
  * AUTHENTICATION:
  * - Required (user must be logged in)

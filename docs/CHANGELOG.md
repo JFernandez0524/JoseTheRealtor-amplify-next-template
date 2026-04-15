@@ -91,31 +91,6 @@ All notable changes to the JoseTheRealtor platform.
 
 ---
 
-## [2026-01-XX] - Phase 1: AI Lead Scoring & Insights
-
-### Added
-- **AI Lead Scoring** - 0-100 scores based on equity, value, timeline, location, contact availability
-  - Automatic prioritization of hottest leads
-  - HIGH/MEDIUM/LOW classification
-  - Bulk scoring from dashboard
-
-- **AI Insights Dashboard** - View top leads, urgent items, and best ROI opportunities
-  - Top 10 hottest leads by AI score
-  - Urgent attention items (foreclosure auction < 30 days)
-  - Best ROI opportunities (high equity + high value)
-
-- **Sentiment Detection** - Track lead sentiment in conversations
-  - POSITIVE, NEUTRAL, FRUSTRATED, URGENT, DISENGAGING
-  - Automatic tagging in GHL
-  - Sentiment-based response guidance
-
-- **Follow-Up Suggestion Engine** - AI-powered action recommendations
-  - Actions: SEND_CMA, SEND_VALUATION, BOOK_CALL, WAIT, CLOSE_OUT
-  - Includes reasoning, draft message, urgency, confidence score
-  - AI suggests, humans execute (never auto-trigger)
-
----
-
 ## [2026-01-XX] - Outreach Queue System
 
 ### Added

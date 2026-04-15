@@ -68,8 +68,7 @@ amplify/
 1. User uploads CSV → `POST /api/v1/upload-leads`
 2. Validate addresses → Google Maps API
 3. Fetch Zestimates → Bridge API
-4. Calculate AI scores → OpenAI
-5. Store in DynamoDB → Lead table
+4. Store in DynamoDB → Lead table
 
 **AI Outreach:**
 1. Hourly cron → `dailyOutreachAgent` Lambda
@@ -165,8 +164,7 @@ CSV lead upload with validation
 1. Parse CSV
 2. Validate addresses (Google Maps)
 3. Fetch Zestimates (Bridge API)
-4. Calculate AI scores
-5. Store in DynamoDB
+4. Store in DynamoDB
 
 #### POST /api/v1/refresh-zestimate
 Refresh Zestimate for a specific lead
