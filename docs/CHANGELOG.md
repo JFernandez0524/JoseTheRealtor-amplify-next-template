@@ -176,7 +176,7 @@ All notable changes to the JoseTheRealtor platform.
 ## [2026-01-XX] - Property Enrichment (BatchData)
 
 ### Added
-- **Preforeclosure Enrichment** - Real property data via BatchData API ($0.29/lead)
+- **Preforeclosure Enrichment** - Real property data via BatchData API ($0.35/lead)
   - Real equity percentage and mortgage balances
   - Owner emails and quality phone numbers (mobile, 90+ score, not DNC)
   - Property flags (owner occupied, high equity, free & clear)

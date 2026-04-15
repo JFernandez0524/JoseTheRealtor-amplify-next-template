@@ -37,7 +37,7 @@ For each preforeclosure lead enriched, you receive:
 
 ## Cost
 
-**$0.29 per preforeclosure lead**
+**$0.35 per preforeclosure lead**
 
 Includes:
 - Contact Enrichment ($0.07) - Emails + phones

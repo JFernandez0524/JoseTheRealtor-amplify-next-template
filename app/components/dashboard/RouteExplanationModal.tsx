@@ -18,7 +18,7 @@ export function RouteExplanationModal({
   if (!isOpen) return null;
 
   const isProbate = leadType === 'PROBATE';
-  const costPerLead = isProbate ? 0.10 : 0.29;
+  const costPerLead = isProbate ? 0.10 : 0.35;
   const totalCost = (leadCount * costPerLead).toFixed(2);
 
   const routeInfo = isProbate
@@ -35,7 +35,7 @@ export function RouteExplanationModal({
       }
     : {
         title: 'Property Enrichment',
-        cost: '$0.29/lead',
+        cost: '$0.35/lead',
         description: 'Complete property data + contacts',
         features: [
           'Real equity percentage & mortgage balances',

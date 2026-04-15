@@ -200,7 +200,7 @@ export default function DocsPage() {
                 <h4 className="font-medium text-orange-800 mb-2">🏦 Property Enrichment (Preforeclosure Only)</h4>
                 <ul className="list-disc list-inside space-y-1 text-orange-700 text-sm">
                   <li>Select preforeclosure leads and click "🏦 Enrich Leads"</li>
-                  <li>Cost: $0.29 per lead (includes contact info + property data)</li>
+                  <li>Cost: $0.35 per lead (includes contact info + property data)</li>
                   <li>Get real equity %, mortgage balances, property value</li>
                   <li>Quality phone numbers: Mobile only, score 90+, not DNC</li>
                   <li>Owner emails and property flags (owner occupied, high equity)</li>

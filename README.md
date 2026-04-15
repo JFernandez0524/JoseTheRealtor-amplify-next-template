@@ -20,7 +20,7 @@ A comprehensive real estate lead management platform built with AWS Amplify Gen2
 - **Outreach Queue System**: Efficient DynamoDB-based queue for tracking outreach status (90% reduction in API costs)
 - **Automated Email Campaigns**: AI-powered prospecting emails with personalized property details, Zestimate values, and cash offers
 - **Business Hours Compliance**: All outreach respects Mon-Fri 9AM-7PM, Sat 9AM-12PM EST schedule
-- **Property Enrichment (Preforeclosure)**: Real equity data, mortgage balances, and quality contact info via BatchData ($0.29/lead)
+- **Property Enrichment (Preforeclosure)**: Real equity data, mortgage balances, and quality contact info via BatchData ($0.35/lead)
 - **Skip Tracing**: Pay-per-use contact lookup at $0.10 per skip (probate leads)
 - **Bulk Operations**: Update multiple lead statuses, skip trace, enrich, calculate AI scores, and sync in one click
 - **Smart Filtering**: Filter by manual status, AI priority, owner occupied, high equity, skip trace date, and property type
@@ -138,7 +138,7 @@ For detailed deployment instructions, see the [Amplify documentation](https://do
 
 3. **Property Enrichment (Preforeclosure Only)**
    - Select preforeclosure leads from dashboard
-   - Click "🏦 Enrich Leads" to get real property data ($0.29/lead)
+   - Click "🏦 Enrich Leads" to get real property data ($0.35/lead)
    - Enrichment includes:
      - Real equity percentage and mortgage balances
      - Owner emails and quality phone numbers (mobile, score 90+, not DNC)

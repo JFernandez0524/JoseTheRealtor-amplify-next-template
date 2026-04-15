@@ -72,7 +72,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Calculate cost ($0.30 per lead)
-    const costPerLead = 0.3;
+    const costPerLead = 0.35;
     const totalCost = toEnrich.length * costPerLead;
 
     // Enrich leads

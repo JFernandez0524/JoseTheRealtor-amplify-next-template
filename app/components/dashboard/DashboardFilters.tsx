@@ -441,7 +441,7 @@ export function DashboardFilters({
                 disabled={isEnriching || isSkipTracing || isGhlSyncing || selectedLeadsCount === 0}
                 className={`text-sm px-3 py-1.5 rounded transition-colors flex items-center justify-center gap-1.5 shadow-sm w-full sm:w-auto
                                   ${isEnriching ? 'bg-orange-300 text-white cursor-not-allowed' : 'bg-gradient-to-r from-orange-600 to-red-600 text-white hover:from-orange-700 hover:to-red-700'}`}
-                title={selectedLeadsCount > 0 ? `Cost: $${(selectedLeadsCount * 0.29).toFixed(2)} (Preforeclosure only)` : ''}
+                title={selectedLeadsCount > 0 ? `Cost: $${(selectedLeadsCount * 0.35).toFixed(2)} (Preforeclosure only)` : ''}
               >
                 {isEnriching ? (
                   <>

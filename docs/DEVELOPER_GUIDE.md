@@ -517,7 +517,7 @@ curl -X POST https://dpw6qwhfwor3hucpbsitt7skzq0itemx.lambda-url.us-east-1.on.aw
 1. Upload preforeclosure leads
 2. Select leads from dashboard
 3. Click "🏦 Enrich Leads"
-4. Verify cost preview ($0.29/lead)
+4. Verify cost preview ($0.35/lead)
 5. Confirm enrichment
 6. Check lead details for enriched data
 

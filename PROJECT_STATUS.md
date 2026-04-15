@@ -113,7 +113,7 @@
 - ✅ Address validation (Google Maps API)
 - ✅ Property valuation (Zestimate via Bridge API)
 - ✅ Skip tracing ($0.10/lead for probate)
-- ✅ Property enrichment ($0.29/lead for preforeclosure)
+- ✅ Property enrichment ($0.35/lead for preforeclosure)
 - ✅ Manual lead status management
 - ✅ Bulk operations (status update, skip trace, sync)
 - ✅ Dashboard filtering and sorting
@@ -202,7 +202,7 @@
 - **SMS Outreach:** Enabled, running hourly
 - **Email Outreach:** Enabled, running hourly
 - **Skip Traces:** $0.10/lead
-- **Enrichments:** $0.29/lead (preforeclosure only)
+- **Enrichments:** $0.35/lead (preforeclosure only)
 
 ### Known Issues
 - ⚠️ **Hardcoded Contact Info** - Phone and email hardcoded until GHL approves scopes
