@@ -210,6 +210,19 @@ RE/MAX Homeland Realtors
               }
             } else {
               console.error(`Failed to send email to ${contact.email}:`, response.data.error);
+              
+              // Mark permanent failures in queue so they don't retry forever
+              const errorMsg = response.data.error || '';
+              const isPermanentFailure = errorMsg.includes('DND is active') || errorMsg.includes('Contact has no email');
+              if (isPermanentFailure) {
+                try {
+                  const { updateEmailStatus } = await import('../shared/outreachQueue');
+                  await updateEmailStatus(contact._queueId, 'FAILED');
+                  console.log(`📋 [QUEUE] Marked ${contact._queueId} as FAILED (${errorMsg})`);
+                } catch (queueError: any) {
+                  console.error(`❌ [QUEUE] Failed to update status:`, queueError.message);
+                }
+              }
             }
 
             // Rate limiting: 2 seconds between emails

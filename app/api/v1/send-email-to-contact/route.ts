@@ -78,10 +78,33 @@ export async function POST(req: Request) {
 
     const contact = contactResponse.data.contact;
     
-    // Only set emailTo when targeting a secondary email (not the primary).
-    // GHL rejects emailTo even when it matches the primary — omitting it lets GHL use the primary automatically.
-    const isPrimaryEmail = !toEmail || toEmail.toLowerCase() === contact.email?.toLowerCase();
-    const recipientEmail = isPrimaryEmail ? undefined : toEmail;
+    // Validate toEmail against contact's known emails in GHL
+    // GHL rejects emailTo if it's not the primary or an additional email
+    const ghlPrimaryEmail = contact.email?.toLowerCase();
+    const ghlAdditionalEmails = (contact.additionalEmails || []).map((e: string) => e.toLowerCase());
+    const allGhlEmails = [ghlPrimaryEmail, ...ghlAdditionalEmails].filter(Boolean);
+    
+    let recipientEmail: string | undefined;
+    if (toEmail && toEmail.toLowerCase() !== ghlPrimaryEmail) {
+      if (allGhlEmails.includes(toEmail.toLowerCase())) {
+        // toEmail is a valid additional email
+        recipientEmail = toEmail;
+      } else {
+        // toEmail not recognized by GHL — fall back to primary
+        console.warn(`⚠️ Queue email ${toEmail} not found on GHL contact ${contactId}. Falling back to primary: ${contact.email}`);
+        recipientEmail = undefined; // Let GHL use primary
+      }
+    }
+
+    // Guard: contact must have at least a primary email
+    if (!contact.email && allGhlEmails.length === 0) {
+      return NextResponse.json({ success: false, error: 'Contact has no email' }, { status: 400 });
+    }
+
+    // Guard: check DND for email
+    if (contact.dndSettings?.Email?.status === 'active' || contact.dnd) {
+      return NextResponse.json({ success: false, error: 'Cannot send message as DND is active for Email.' }, { status: 400 });
+    }
 
     // Extract property data from custom fields
     const propertyAddress = contact?.customFields?.find((f: any) => f.id === 'p3NOYiInAERYbe0VsLHB')?.value;

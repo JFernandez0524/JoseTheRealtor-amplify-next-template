@@ -207,21 +207,31 @@ export async function getPendingSmsContacts(userId: string, limit: number = 50):
  * @returns Array of pending contacts ready for next touch
  */
 export async function getPendingEmailContacts(userId: string, limit: number = 50): Promise<OutreachQueueItem[]> {
-  const result = await docClient.send(new QueryCommand({
-    TableName: OUTREACH_QUEUE_TABLE,
-    IndexName: 'outreachQueuesByUserIdAndEmailStatus',
-    KeyConditionExpression: 'userId = :userId AND emailStatus = :status',
-    ExpressionAttributeValues: {
-      ':userId': userId,
-      ':status': 'PENDING',
-    },
-    Limit: 1000, // Get more to filter by date
-  }));
+  // Paginate through ALL pending email contacts (not just first 1000)
+  let items: OutreachQueueItem[] = [];
+  let lastEvaluatedKey: any = undefined;
+  
+  do {
+    const params: any = {
+      TableName: OUTREACH_QUEUE_TABLE,
+      IndexName: 'outreachQueuesByUserIdAndEmailStatus',
+      KeyConditionExpression: 'userId = :userId AND emailStatus = :status',
+      ExpressionAttributeValues: {
+        ':userId': userId,
+        ':status': 'PENDING',
+      },
+      Limit: 1000,
+    };
+    if (lastEvaluatedKey) {
+      params.ExclusiveStartKey = lastEvaluatedKey;
+    }
+    const result = await docClient.send(new QueryCommand(params));
+    items.push(...(result.Items || []) as OutreachQueueItem[]);
+    lastEvaluatedKey = result.LastEvaluatedKey;
+  } while (lastEvaluatedKey);
 
   const today = new Date();
   today.setHours(0, 0, 0, 0); // Start of today
-  
-  const items = (result.Items || []) as OutreachQueueItem[];
   
   // Filter by nextEmailDate and queue status
   return items.filter(item => {
