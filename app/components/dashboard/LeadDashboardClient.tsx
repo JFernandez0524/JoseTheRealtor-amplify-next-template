@@ -909,6 +909,15 @@ export default function LeadDashboardClient({}: Props) {
         </div>
       )}
 
+      {/* Mobile Loading Overlay */}
+      {isLoading && (
+        <div className='flex flex-col items-center justify-center py-32 sm:hidden'>
+          <div className='animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600 mb-3'></div>
+          <p className='text-gray-600 font-medium'>Loading your leads...</p>
+        </div>
+      )}
+
+      <div className={isLoading ? 'hidden sm:contents' : ''}>
       <DashboardFilters
         filterType={filterType}
         setFilterType={setFilterType}
@@ -1243,6 +1252,7 @@ export default function LeadDashboardClient({}: Props) {
           leadCount={selectedIds.length}
         />
       )}
+      </div>
     </div>
   );
 }
