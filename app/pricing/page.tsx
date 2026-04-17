@@ -20,24 +20,23 @@ export default function PricingPage() {
     },
     {
       title: 'SYNC PLAN',
-      price: '$97',
+      price: '$49',
       planId: 'sync-plan',
       popular: true,
       features: [
-        'Advanced lead management',
         'Connect your GHL account',
         'Automated lead sync to GHL',
-        'Manual outreach workflows (call/text)',
+        'Zestimate & cash offer sent to GHL',
         'Direct mail workflow automation',
-        'Advanced filtering & export',
-        'Priority support',
+        'Manual outreach workflows (call)',
         'Buy skip credits separately'
       ]
     },
     {
       title: 'AI OUTREACH PLAN',
-      price: '$250',
+      price: 'Coming Soon',
       planId: 'ai-outreach',
+      comingSoon: true,
       features: [
         'Everything in SYNC PLAN',
         'Automated text agent outreach',
@@ -116,7 +115,7 @@ export default function PricingPage() {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-8 text-left">
               <div className="border-l-4 border-blue-500 pl-4 sm:pl-6">
                 <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-2">
-                  SYNC PLAN ($97/month)
+                  SYNC PLAN ($49/month)
                 </h3>
                 <p className="text-sm sm:text-base text-gray-600 mb-4">
                   Perfect for agents who want to manage their own outreach. Connect your 
@@ -128,7 +127,7 @@ export default function PricingPage() {
               
               <div className="border-l-4 border-purple-500 pl-4 sm:pl-6">
                 <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-2">
-                  AI OUTREACH PLAN ($250/month)
+                  AI OUTREACH PLAN (Coming Soon)
                 </h3>
                 <p className="text-sm sm:text-base text-gray-600 mb-4">
                   Fully automated lead outreach with our AI text agent. Set it and 

@@ -9,6 +9,7 @@ interface PricingCardProps {
   planId: string;
   popular?: boolean;
   ghlIncluded?: boolean;
+  comingSoon?: boolean;
 }
 
 export default function PricingCard({ 
@@ -17,7 +18,8 @@ export default function PricingCard({
   features, 
   planId, 
   popular = false,
-  ghlIncluded = false 
+  ghlIncluded = false,
+  comingSoon = false 
 }: PricingCardProps) {
   const [loading, setLoading] = useState(false);
 
@@ -56,7 +58,7 @@ export default function PricingCard({
         <h3 className="text-2xl font-bold text-gray-900 mb-2">{title}</h3>
         <div className="mb-6">
           <span className="text-4xl font-bold text-gray-900">{price}</span>
-          {price !== 'Free' && <span className="text-gray-500">/month</span>}
+          {price !== 'Free' && !comingSoon && <span className="text-gray-500">/month</span>}
         </div>
 
         {ghlIncluded && (
@@ -83,16 +85,18 @@ export default function PricingCard({
 
         <button
           onClick={handleSubscribe}
-          disabled={loading || planId === 'free'}
+          disabled={loading || planId === 'free' || comingSoon}
           className={`w-full py-3 px-6 rounded-lg font-semibold transition-colors ${
-            popular
+            comingSoon
+              ? 'bg-gray-100 text-gray-500 cursor-not-allowed'
+              : popular
               ? 'bg-purple-500 text-white hover:bg-purple-600'
               : planId === 'free'
               ? 'bg-gray-100 text-gray-500 cursor-not-allowed'
               : 'bg-gray-900 text-white hover:bg-gray-800'
           }`}
         >
-          {loading ? 'Loading...' : planId === 'free' ? 'Current Plan' : 'Get Started'}
+          {loading ? 'Loading...' : comingSoon ? 'Coming Soon' : planId === 'free' ? 'Current Plan' : 'Get Started'}
         </button>
       </div>
     </div>

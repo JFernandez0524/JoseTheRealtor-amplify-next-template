@@ -24,7 +24,7 @@ export default async function ServicesPage() {
           <FeatureCard
             icon="📊"
             title="Smart Lead Management"
-            description="Upload CSV files and watch our system automatically validate addresses, fetch property values, and organize your leads with intelligent categorization."
+            description="Upload CSV files and watch our system automatically validate addresses, fetch property values, and organize your leads for easy filtering and management."
             features={[
               "Automatic address validation",
               "Property value estimation", 
@@ -46,6 +46,19 @@ export default async function ServicesPage() {
             ]}
             gradient="from-green-500 to-green-600"
           />
+
+          <FeatureCard
+            icon="🏦"
+            title="Property Enrichment"
+            description="Get real property data for preforeclosure leads including equity, mortgage balances, and quality contact info to identify your best opportunities."
+            features={[
+              "Real equity & mortgage data",
+              "Owner occupied & high equity flags",
+              "Quality phone numbers & emails",
+              "Foreclosure & lender details"
+            ]}
+            gradient="from-teal-500 to-teal-600"
+          />
           
           <FeatureCard
             icon="🔗"
@@ -58,19 +71,6 @@ export default async function ServicesPage() {
               "Workflow automation ready"
             ]}
             gradient="from-purple-500 to-purple-600"
-          />
-          
-          <FeatureCard
-            icon="🤖"
-            title="AI-Powered Analysis"
-            description="Get intelligent insights on your leads with our AI assistant. Analyze market conditions, equity potential, and receive follow-up suggestions."
-            features={[
-              "Property analysis",
-              "Market insights",
-              "Follow-up suggestions",
-              "24/7 availability"
-            ]}
-            gradient="from-orange-500 to-orange-600"
           />
         </div>
       </Section>
