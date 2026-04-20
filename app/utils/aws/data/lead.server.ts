@@ -9,7 +9,7 @@ import { GetCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 const IS_LAMBDA_CONTEXT = !!process.env.LAMBDA_TASK_ROOT;
 // 🛑 IMPORTANT: Replace this with the actual environment variable name for your DynamoDB table
 const PROPERTY_LEAD_TABLE_NAME =
-  process.env.AMPLIFY_DATA_LEAD_TABLE_NAME || 'PropertyLead_Default_Table';
+  process.env.AMPLIFY_DATA_PropertyLead_TABLE_NAME || 'PropertyLead_Default_Table';
 
 // --- Reusable Types ---
 
