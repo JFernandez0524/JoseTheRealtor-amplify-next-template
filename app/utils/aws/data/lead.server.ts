@@ -4,12 +4,10 @@ import { type Schema } from '../../../../amplify/data/resource';
 import { ddbDocClient } from './dynamoClient.server';
 import { GetCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 
-// Check if we are running inside an AWS Lambda environment
-// LAMBDA_TASK_ROOT only exists in Lambda, not in Amplify hosting
-const IS_LAMBDA_CONTEXT = !!process.env.LAMBDA_TASK_ROOT;
-// 🛑 IMPORTANT: Replace this with the actual environment variable name for your DynamoDB table
-const PROPERTY_LEAD_TABLE_NAME =
-  process.env.AMPLIFY_DATA_PropertyLead_TABLE_NAME || 'PropertyLead_Default_Table';
+// Use DynamoDB direct access only when the table name env var is set (dedicated Lambda functions).
+// Amplify SSR hosting also runs in Lambda but doesn't have this env var — use cookiesClient there.
+const PROPERTY_LEAD_TABLE_NAME = process.env.AMPLIFY_DATA_PropertyLead_TABLE_NAME || '';
+const IS_LAMBDA_CONTEXT = !!PROPERTY_LEAD_TABLE_NAME;
 
 // --- Reusable Types ---
 
