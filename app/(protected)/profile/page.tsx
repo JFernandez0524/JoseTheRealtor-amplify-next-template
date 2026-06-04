@@ -35,10 +35,19 @@ export default async function ProfilePage() {
   ]);
 
   // 2. Fetch User Account (Wallet/Stats) from DB - Filter by current user
-  const { data: accounts } = await cookiesClient.models.UserAccount.list({
+  const { data: accountsByOwner } = await cookiesClient.models.UserAccount.list({
     filter: { owner: { eq: user.userId } },
   });
-  const userAccount = accounts?.[0];
+
+  let userAccount = accountsByOwner?.[0];
+
+  // Fallback: find by email if owner query returned nothing (handles Google login owner mismatch)
+  if (!userAccount && attributes?.email) {
+    const { data: accountsByEmail } = await cookiesClient.models.UserAccount.list({
+      filter: { email: { eq: attributes.email } },
+    });
+    userAccount = accountsByEmail?.[0];
+  }
 
   // 3. Fetch GHL Integration for email templates
   const { data: ghlIntegrations } = await cookiesClient.models.GhlIntegration.list({

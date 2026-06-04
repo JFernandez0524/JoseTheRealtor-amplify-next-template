@@ -2,10 +2,12 @@
 'use client';
 
 import { useGhl } from '@/app/context/GhlContext';
+import { useAccess } from '@/app/context/AccessContext';
 import { client } from '@/app/utils/aws/data/frontEndClient';
 
 export function GhlConnection() {
   const { isConnected, locationId, integrationId, isLoading } = useGhl();
+  const { hasPaidPlan } = useAccess();
 
   const handleConnect = () => {
     window.location.href = '/api/v1/oauth/start';
@@ -59,13 +61,17 @@ export function GhlConnection() {
             >
               Disconnect
             </button>
-          ) : (
+          ) : hasPaidPlan ? (
             <button
               onClick={handleConnect}
               className="px-3 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600"
             >
               Connect GHL
             </button>
+          ) : (
+            <a href="/pricing" className="px-3 py-1 text-xs bg-indigo-500 text-white rounded hover:bg-indigo-600">
+              Upgrade to Connect
+            </a>
           )}
         </div>
       </div>

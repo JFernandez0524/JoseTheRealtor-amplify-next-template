@@ -2,10 +2,12 @@
 
 import { useState } from 'react';
 import { useGhl } from '@/app/context/GhlContext';
+import { useAccess } from '@/app/context/AccessContext';
 import { client } from '@/app/utils/aws/data/frontEndClient';
 
 export default function GhlSettingsCard() {
   const { isConnected, locationId, integrationId, isLoading } = useGhl();
+  const { hasPaidPlan } = useAccess();
   const [disconnecting, setDisconnecting] = useState(false);
 
   const handleConnect = () => {
@@ -117,12 +119,18 @@ export default function GhlSettingsCard() {
             </ul>
           </div>
 
-          <button
-            onClick={handleConnect}
-            className='w-full bg-blue-600 text-white py-3 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-blue-700 transition-colors'
-          >
-            Connect GoHighLevel
-          </button>
+          {hasPaidPlan ? (
+            <button
+              onClick={handleConnect}
+              className='w-full bg-blue-600 text-white py-3 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-blue-700 transition-colors'
+            >
+              Connect GoHighLevel
+            </button>
+          ) : (
+            <a href="/pricing" className='block text-center w-full bg-indigo-600 text-white py-3 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-indigo-700 transition-colors'>
+              Upgrade to Sync Plan to Connect
+            </a>
+          )}
         </>
       )}
     </div>
