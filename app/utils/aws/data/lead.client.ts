@@ -74,7 +74,7 @@ export async function fetchLeads(): Promise<Lead[]> {
     let nextToken: string | null | undefined;
 
     do {
-      const result = await client.models.PropertyLead.list();
+      const result = await client.models.PropertyLead.list({ nextToken: nextToken ?? undefined });
       allLeads.push(...(result.data || []));
       nextToken = result.nextToken;
     } while (nextToken);
