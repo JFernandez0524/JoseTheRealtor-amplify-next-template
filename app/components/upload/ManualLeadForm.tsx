@@ -8,6 +8,13 @@ import { useRouter } from 'next/navigation';
 import { useAccess } from '@/app/context/AccessContext';
 import { HiLockClosed } from 'react-icons/hi';
 import { UploadProgressModal } from './UploadProgressModal';
+import { fetchLeads } from '@/app/utils/aws/data/lead.client';
+
+interface CsvPreview {
+  rowCount: number;
+  duplicateCount: number;
+  loading: boolean;
+}
 
 // 🎯 CSV Template Headers matching your updated Probate file requirements
 const PROBATE_TEMPLATE =
@@ -26,6 +33,7 @@ export function ManualLeadForm() {
   const [file, setFile] = useState<File | null>(null);
   const [uploadJobId, setUploadJobId] = useState<string | null>(null);
   const [showProgressModal, setShowProgressModal] = useState(false);
+  const [csvPreview, setCsvPreview] = useState<CsvPreview | null>(null);
   const [lead, setLead] = useState<any>({
     type: '',
     ownerFirstName: '',
@@ -47,6 +55,52 @@ export function ManualLeadForm() {
       document.head.appendChild(script);
     }
   }, []);
+
+  const parseFilePreview = async (selectedFile: File) => {
+    setCsvPreview({ rowCount: 0, duplicateCount: 0, loading: true });
+    try {
+      const text = await selectedFile.text();
+      const lines = text.trim().split('\n').filter(l => l.trim());
+      if (lines.length < 2) {
+        setCsvPreview({ rowCount: 0, duplicateCount: 0, loading: false });
+        return;
+      }
+      const rowCount = lines.length - 1;
+
+      const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+      const addrIdx = headers.indexOf('owneraddress');
+      const zipIdx = headers.indexOf('ownerzip');
+
+      if (addrIdx === -1 || zipIdx === -1) {
+        setCsvPreview({ rowCount, duplicateCount: 0, loading: false });
+        return;
+      }
+
+      const csvKeys = new Set<string>();
+      for (let i = 1; i < lines.length; i++) {
+        const cols = lines[i].split(',');
+        const addr = (cols[addrIdx] || '').trim().toLowerCase();
+        const zip = (cols[zipIdx] || '').trim().replace(/\D/g, '').slice(0, 5);
+        if (addr && zip) csvKeys.add(`${addr}|${zip}`);
+      }
+
+      const existingLeads = await fetchLeads();
+      const existingKeys = new Set(
+        existingLeads.map(l =>
+          `${(l.ownerAddress || '').trim().toLowerCase()}|${(l.ownerZip || '').trim().replace(/\D/g, '').slice(0, 5)}`
+        )
+      );
+
+      let duplicateCount = 0;
+      for (const key of csvKeys) {
+        if (existingKeys.has(key)) duplicateCount++;
+      }
+
+      setCsvPreview({ rowCount, duplicateCount, loading: false });
+    } catch {
+      setCsvPreview({ rowCount: 0, duplicateCount: 0, loading: false });
+    }
+  };
 
   const downloadTemplate = () => {
     if (!lead.type) return alert('Please select a Lead Type first.');
@@ -290,7 +344,10 @@ export function ManualLeadForm() {
               </label>
               <select
                 value={lead.type}
-                onChange={(e) => setLead({ ...lead, type: e.target.value })}
+                onChange={(e) => {
+                  setLead({ ...lead, type: e.target.value });
+                  setCsvPreview(null);
+                }}
                 className='w-full border p-2 rounded bg-white outline-none focus:ring-2 focus:ring-blue-100'
               >
                 <option value=''>Select Type</option>
@@ -321,9 +378,34 @@ export function ManualLeadForm() {
               <input
                 type='file'
                 accept='.csv'
-                onChange={(e) => setFile(e.target.files?.[0] || null)}
+                onChange={(e) => {
+                  const selected = e.target.files?.[0] || null;
+                  setFile(selected);
+                  setCsvPreview(null);
+                  if (selected) parseFilePreview(selected);
+                }}
                 className='w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100'
               />
+
+              {csvPreview && (
+                <div className='mt-3 text-left'>
+                  {csvPreview.loading ? (
+                    <p className='text-xs text-gray-500 flex items-center gap-2'>
+                      <span className='inline-block w-3 h-3 border-2 border-blue-400 border-t-transparent rounded-full animate-spin' />
+                      Checking for duplicates...
+                    </p>
+                  ) : csvPreview.duplicateCount > 0 ? (
+                    <p className='text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2'>
+                      📄 <strong>{csvPreview.rowCount}</strong> leads found &nbsp;·&nbsp;
+                      ⚠️ <strong>{csvPreview.duplicateCount}</strong> already in your account — they will be skipped
+                    </p>
+                  ) : (
+                    <p className='text-xs text-green-700 bg-green-50 border border-green-200 rounded px-3 py-2'>
+                      ✅ <strong>{csvPreview.rowCount}</strong> leads found, ready to import
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
 
             <button

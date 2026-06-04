@@ -5,7 +5,6 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { client } from '@/app/utils/aws/data/frontEndClient';
 import { 
   fetchLeads, 
-  observeLeads, 
   bulkDeleteLeads, 
   bulkUpdateStatus, 
   skipTraceLeads, 
@@ -94,18 +93,44 @@ export default function LeadDashboardClient({}: Props) {
     }
   }, []);
 
-  // Fetch leads with observeQuery
+  // Fetch leads on mount (no real-time subscription to prevent memory leak)
   useEffect(() => {
-    const sub = observeLeads((items, isSynced) => {
-      if (isSynced) {
-        setLeads([...items]);
+    async function loadLeads() {
+      try {
+        const data = await fetchLeads();
+        setLeads(data);
         setIsLoading(false);
-        console.log('📊 Loaded leads:', items.length);
+        console.log('📊 Loaded leads:', data.length);
+        
+        // Warn if dataset is very large
+        if (data.length > 10000) {
+          console.warn('⚠️ Large dataset detected:', data.length, 'leads. Consider archiving old data.');
+        }
+      } catch (err) {
+        console.error('Failed to load leads:', err);
+        setIsLoading(false);
       }
-    });
-
-    return () => sub.unsubscribe();
+    }
+    loadLeads();
   }, []);
+
+  // Background refresh every 60 seconds to keep data fresh
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      // Skip refresh during processing operations
+      if (isProcessing) return;
+      
+      try {
+        const data = await fetchLeads();
+        setLeads(data);
+        console.log('🔄 Background refresh:', data.length, 'leads');
+      } catch (err) {
+        console.error('Background refresh failed:', err);
+      }
+    }, 60000); // 60 seconds
+
+    return () => clearInterval(interval);
+  }, [isProcessing]);
 
 
 
@@ -147,14 +172,12 @@ export default function LeadDashboardClient({}: Props) {
     const refresh = searchParams.get('refresh');
     if (refresh === 'true') {
       console.log(
-        '🔄 Upload redirect detected, observeQuery will sync automatically'
+        '🔄 Upload redirect detected, triggering refresh'
       );
+      refreshLeads();
       router.replace('/dashboard', { scroll: false });
     }
   }, [searchParams, router]);
-
-  // 4. Remove visibility change handler - observeQuery handles real-time sync
-  // (removed)
 
   // --- Filter Logic ---
   const filteredLeads = useMemo(() => {

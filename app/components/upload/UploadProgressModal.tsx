@@ -151,13 +151,13 @@ export function UploadProgressModal({ jobId }: UploadProgressModalProps) {
                     </button>
                   </div>
                   <div className="max-h-[200px] overflow-y-auto border rounded-lg bg-gray-50 p-3 space-y-2">
-                    {job.duplicateLeads.map((dup: any, idx: number) => (
+                    {job.duplicateLeads.filter(Boolean).map((dup: any, idx: number) => (
                       <div key={idx} className="text-xs bg-white p-2 rounded border">
                         <div className="font-medium text-gray-900">
-                          {dup.csvData.ownerName}
+                          {dup?.csvData?.ownerName}
                         </div>
                         <div className="text-gray-600">
-                          {dup.csvData.address}, {dup.csvData.city}, {dup.csvData.state} {dup.csvData.zip}
+                          {dup?.csvData?.address}, {dup?.csvData?.city}, {dup?.csvData?.state} {dup?.csvData?.zip}
                         </div>
                         <a
                           href={`/lead-details/${dup.existingLeadId}`}
