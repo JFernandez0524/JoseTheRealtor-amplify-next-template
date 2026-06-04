@@ -2,7 +2,6 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { client } from '@/app/utils/aws/data/frontEndClient';
 import type { Schema } from '@/amplify/data/resource';
 import {
   HiCheck,
@@ -34,6 +33,7 @@ const subscriptions = [
     ],
     icon: <HiOutlineUserGroup className='text-3xl text-indigo-500' />,
     tier: 'PRO',
+    plan: 'sync-plan',
   },
   {
     name: 'AI Outreach Plan',
@@ -47,34 +47,14 @@ const subscriptions = [
     ],
     icon: <HiOutlineSparkles className='text-3xl text-purple-500' />,
     tier: 'AI_PLAN',
+    plan: 'ai-outreach',
   },
 ];
 
 const creditPacks = [
-  {
-    id: 'pack_10',
-    name: '$10 Pack',
-    price: '$10',
-    credits: 100,
-    label: 'Starter',
-    value: 100,
-  },
-  {
-    id: 'pack_20',
-    name: '$20 Pack',
-    price: '$20',
-    credits: 200,
-    label: 'Growth',
-    value: 200,
-  },
-  {
-    id: 'pack_50',
-    name: '$50 Pack',
-    price: '$50',
-    credits: 500,
-    label: 'Pro',
-    value: 500,
-  },
+  { id: '100', name: '$10 Pack', price: '$10', credits: 100, label: 'Starter' },
+  { id: '250', name: '$25 Pack', price: '$25', credits: 250, label: 'Growth' },
+  { id: '500', name: '$50 Pack', price: '$50', credits: 500, label: 'Pro' },
 ];
 
 export default function PricingClient({
@@ -89,47 +69,44 @@ export default function PricingClient({
   );
   const [loading, setLoading] = useState<string | null>(null);
 
-  const handleSubscriptionUpgrade = async (tier: string) => {
+  const handleSubscriptionUpgrade = async (tier: string, plan: string) => {
     if (!userId) {
       alert('Please log in to upgrade.');
       return router.push('/login');
     }
     setLoading(tier);
     try {
-      await client.mutations.addUserToGroup({
-        userId: userId,
-        groupName: tier,
+      const res = await fetch('/api/v1/billing/create-checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ plan }),
       });
-
-      alert(`Success! You are now subscribed to the ${tier} plan.`);
-      // router.refresh() re-runs the server component to update the 'groups' and 'hasPaidPlan'
-      router.refresh();
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      window.location.href = data.checkoutUrl;
     } catch (err: any) {
-      alert(`Upgrade Error: ${err.message}`);
-    } finally {
+      alert(`Error: ${err.message}`);
       setLoading(null);
     }
   };
 
-  const handleCreditPurchase = async (packId: string, amount: number) => {
-    if (!userAccount) {
-      alert('Please log in to refill your wallet.');
+  const handleCreditPurchase = async (packId: string) => {
+    if (!userId) {
+      alert('Please log in to purchase credits.');
       return router.push('/login');
     }
     setLoading(packId);
     try {
-      const { data: updatedAccount } = await client.models.UserAccount.update({
-        id: userAccount.id,
-        credits: (userAccount.credits || 0) + amount,
+      const res = await fetch('/api/v1/billing/buy-credits', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ package: packId }),
       });
-
-      if (updatedAccount) {
-        setUserAccount(updatedAccount);
-        alert(`Successfully added ${amount} credits to your wallet!`);
-      }
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      window.location.href = data.checkoutUrl;
     } catch (err: any) {
-      alert(`Refill Error: ${err.message}`);
-    } finally {
+      alert(`Error: ${err.message}`);
       setLoading(null);
     }
   };
@@ -198,7 +175,7 @@ export default function PricingClient({
                 </ul>
 
                 <button
-                  onClick={() => handleSubscriptionUpgrade(sub.tier)}
+                  onClick={() => handleSubscriptionUpgrade(sub.tier, sub.plan)}
                   disabled={isCurrent || loading === sub.tier}
                   className={`w-full py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] transition-all flex items-center justify-center gap-2 group ${
                     isCurrent
@@ -263,12 +240,12 @@ export default function PricingClient({
                     Skips
                   </p>
                   <button
-                    onClick={() => handleCreditPurchase(pack.id, pack.value)}
+                    onClick={() => handleCreditPurchase(pack.id)}
                     disabled={loading === pack.id}
                     className='w-full py-4 bg-white text-indigo-600 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-indigo-50 transition shadow-xl disabled:opacity-50'
                   >
                     {loading === pack.id
-                      ? 'Refilling...'
+                      ? 'Processing...'
                       : `Buy for ${pack.price}`}
                   </button>
                 </div>
