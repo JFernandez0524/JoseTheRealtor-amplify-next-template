@@ -2,9 +2,11 @@
 import { defineAuth, secret } from '@aws-amplify/backend';
 import { addUserToGroup } from '../data/add-user-to-group/resource';
 import { postConfirmation } from './post-confirmation/resource';
+import { preSignUp } from './pre-signup/resource';
 
 export const auth = defineAuth({
   loginWith: {
+    email: true,
     externalProviders: {
       google: {
         clientId: secret('GOOGLE_CLIENT_ID'),
@@ -37,10 +39,12 @@ export const auth = defineAuth({
   },
   groups: ['ADMINS', 'PRO', 'AI_PLAN', 'FREE'],
   triggers: {
+    preSignUp,
     postConfirmation,
   },
   access: (allow) => [
     allow.resource(addUserToGroup).to(['addUserToGroup']),
     allow.resource(postConfirmation).to(['addUserToGroup']),
+    allow.resource(preSignUp).to(['listUsers']),
   ],
 });
