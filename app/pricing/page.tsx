@@ -105,39 +105,6 @@ export default function PricingPage() {
           </div>
         </div>
 
-        <div className="mt-12 sm:mt-16 text-center px-4">
-          <div className="bg-white rounded-lg p-6 sm:p-8 max-w-4xl mx-auto">
-            <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-4 sm:mb-6">
-              Plan Comparison
-            </h2>
-            
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-8 text-left">
-              <div className="border-l-4 border-blue-500 pl-4 sm:pl-6">
-                <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-2">
-                  SYNC PLAN ($49/month)
-                </h3>
-                <p className="text-sm sm:text-base text-gray-600 mb-4">
-                  Perfect for agents who want to manage their own outreach. Connect your 
-                  GoHighLevel account and get pre-built workflows for manual calling, 
-                  texting, and direct mail campaigns.
-                </p>
-                <div className="text-blue-600 font-medium text-sm sm:text-base">✓ Manual outreach workflows included</div>
-              </div>
-              
-              <div className="border-l-4 border-purple-500 pl-4 sm:pl-6">
-                <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-2">
-                  AI OUTREACH PLAN (Coming Soon)
-                </h3>
-                <p className="text-sm sm:text-base text-gray-600 mb-4">
-                  Fully automated lead outreach with our AI text agent. Set it and 
-                  forget it - our AI handles conversations, follow-ups, and lead 
-                  qualification automatically.
-                </p>
-                <div className="text-purple-600 font-medium text-sm sm:text-base">✓ Automated AI text agent included</div>
-              </div>
-            </div>
-          </div>
-        </div>
       </div>
     </div>
   );
