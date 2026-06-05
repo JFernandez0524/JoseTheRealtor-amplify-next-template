@@ -1,6 +1,7 @@
 'use client';
 
 import PricingCard from '../components/pricing/PricingCard';
+import BuyCreditsButton from '../components/pricing/BuyCreditsButton';
 
 export default function PricingPage() {
   const plans = [
@@ -97,9 +98,7 @@ export default function PricingPage() {
                   <div className="text-xs sm:text-sm text-gray-500 mb-4">
                     {pkg.perCredit} per skip
                   </div>
-                  <button className="w-full bg-blue-500 text-white py-2 px-4 rounded-lg font-semibold hover:bg-blue-600 transition-colors text-sm sm:text-base">
-                    Buy Credits
-                  </button>
+                  <BuyCreditsButton packId={pkg.credits.toString()} price={pkg.price} />
                 </div>
               ))}
             </div>
