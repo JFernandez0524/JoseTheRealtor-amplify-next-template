@@ -6,6 +6,8 @@ interface RouteExplanationModalProps {
   onConfirm: () => void;
   leadType: 'PROBATE' | 'PREFORECLOSURE';
   leadCount: number;
+  alreadyTracedCount?: number;
+  isLargeBatch?: boolean;
 }
 
 export function RouteExplanationModal({
@@ -14,12 +16,15 @@ export function RouteExplanationModal({
   onConfirm,
   leadType,
   leadCount,
+  alreadyTracedCount = 0,
+  isLargeBatch = false,
 }: RouteExplanationModalProps) {
   if (!isOpen) return null;
 
   const isProbate = leadType === 'PROBATE';
   const costPerLead = isProbate ? 0.10 : 0.35;
-  const totalCost = (leadCount * costPerLead).toFixed(2);
+  const chargeableCount = leadCount - alreadyTracedCount;
+  const totalCost = (chargeableCount * costPerLead).toFixed(2);
 
   const routeInfo = isProbate
     ? {
@@ -57,6 +62,25 @@ export function RouteExplanationModal({
             <p className="text-sm text-gray-600">{routeInfo.description}</p>
           </div>
 
+          {/* Already-traced warning */}
+          {alreadyTracedCount > 0 && (
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+              <p className="text-sm text-yellow-800">
+                <span className="font-semibold">{alreadyTracedCount} lead{alreadyTracedCount !== 1 ? 's' : ''}</span> already skip traced will be skipped.
+                Only <span className="font-semibold">{chargeableCount}</span> will be charged.
+              </p>
+            </div>
+          )}
+
+          {/* Large batch warning */}
+          {isLargeBatch && (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+              <p className="text-sm text-blue-800">
+                <span className="font-semibold">Large batch ({chargeableCount} leads)</span> — will process in batches of 50. This may take a few minutes.
+              </p>
+            </div>
+          )}
+
           {/* Cost Info */}
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
             <div className="flex justify-between items-center mb-2">
@@ -65,7 +89,7 @@ export function RouteExplanationModal({
             </div>
             <div className="flex justify-between items-center">
               <span className="text-sm font-medium text-gray-700">
-                Total for {leadCount} lead{leadCount !== 1 ? 's' : ''}:
+                Total for {chargeableCount} lead{chargeableCount !== 1 ? 's' : ''}:
               </span>
               <span className="text-xl font-bold text-blue-600">${totalCost}</span>
             </div>

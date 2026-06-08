@@ -3,14 +3,17 @@
 import { useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { fetchAuthSession } from 'aws-amplify/auth';
+import { useToast } from '@/app/components/leadDetails/ToastProvider';
 
 export default function OAuthSuccessPage() {
   const searchParams = useSearchParams();
   const locationId = searchParams.get('locationId');
   const [countdown, setCountdown] = useState(5);
   const [redirectUrl, setRedirectUrl] = useState('/dashboard');
+  const { addToast } = useToast();
 
   useEffect(() => {
+    addToast({ type: 'success', title: 'GoHighLevel Connected!', message: 'Your GHL account is linked and ready to sync leads.', duration: 8000 });
     checkUserGroups();
   }, []);
 

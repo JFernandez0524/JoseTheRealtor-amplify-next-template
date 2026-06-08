@@ -40,6 +40,8 @@ export default function LeadDashboardClient({}: Props) {
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingMessage, setProcessingMessage] = useState('');
   const [isPopulatingQueue, setIsPopulatingQueue] = useState(false);
+  const [alreadyTracedCount, setAlreadyTracedCount] = useState(0);
+  const [isLargeBatch, setIsLargeBatch] = useState(false);
 
   const [isLoading, setIsLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
@@ -474,18 +476,13 @@ export default function LeadDashboardClient({}: Props) {
       return;
     }
 
-    // Warn about already-completed leads
     const alreadyTraced = leads.filter(
       l => selectedIds.includes(l.id) && l.skipTraceStatus === 'COMPLETED'
     );
-    if (alreadyTraced.length > 0) {
-      const proceed = confirm(
-        `⚠️ ${alreadyTraced.length} of ${selectedIds.length} selected leads have already been skip traced and will be skipped.\n\n` +
-        `Only ${selectedIds.length - alreadyTraced.length} leads will be charged ($${((selectedIds.length - alreadyTraced.length) * 0.10).toFixed(2)}).\n\nContinue?`
-      );
-      if (!proceed) return;
-    }
+    const chargeableCount = selectedIds.length - alreadyTraced.length;
 
+    setAlreadyTracedCount(alreadyTraced.length);
+    setIsLargeBatch(chargeableCount > 50);
     setPendingAction('skipTrace');
     setShowRouteModal(true);
   };
@@ -514,30 +511,6 @@ export default function LeadDashboardClient({}: Props) {
         skipTraceInFlight.current = false;
         return;
       }
-    }
-
-    // Warn if batch is large
-    if (idsToProcess.length > 50) {
-      if (!confirm(
-        `⚠️ Large batch detected (${idsToProcess.length} leads)\n\n` +
-        `This will be processed in batches of 50 to ensure reliability.\n` +
-        `This may take several minutes to complete.\n\n` +
-        `Continue?`
-      )) {
-        skipTraceInFlight.current = false;
-        return;
-      }
-    }
-
-    // Final cost confirmation before any API calls
-    const estimatedCost = (idsToProcess.length * 0.10).toFixed(2);
-    if (!confirm(
-      `💳 You are about to skip trace ${idsToProcess.length} leads.\n\n` +
-      `Estimated cost: $${estimatedCost}\n\n` +
-      `This cannot be undone. Continue?`
-    )) {
-      skipTraceInFlight.current = false;
-      return;
     }
 
     setIsProcessing(true);
@@ -926,6 +899,22 @@ export default function LeadDashboardClient({}: Props) {
       )}
 
       <div className={isLoading ? 'hidden sm:contents' : ''}>
+
+      {/* Free Plan Upsell Banner */}
+      {!hasPaidPlan && (
+        <div className='bg-indigo-50 border border-indigo-200 rounded-lg px-4 py-3 flex items-center justify-between'>
+          <p className='text-sm text-indigo-800'>
+            You're on the <strong>Free Plan</strong> — GHL sync, lead enrichment, and automated outreach are locked.
+          </p>
+          <a
+            href='/pricing'
+            className='text-xs font-semibold bg-indigo-600 text-white px-3 py-1.5 rounded-lg hover:bg-indigo-700 transition-colors whitespace-nowrap ml-4'
+          >
+            Upgrade Now
+          </a>
+        </div>
+      )}
+
       <DashboardFilters
         filterType={filterType}
         setFilterType={setFilterType}
@@ -980,9 +969,12 @@ export default function LeadDashboardClient({}: Props) {
       <div className='flex justify-end items-center gap-4 px-2'>
         <div className='flex items-center gap-2 text-[11px] font-bold uppercase tracking-tighter text-slate-500 bg-white border border-slate-200 px-4 py-1.5 rounded-full shadow-sm'>
           <span className='w-2 h-2 rounded-full bg-green-500 animate-pulse' />
-          Available Wallet:{' '}
+          Wallet:{' '}
           <span className='text-slate-900'>
-            {userAccount?.credits || 0} Credits
+            {userAccount?.credits || 0} credits
+          </span>
+          <span className='normal-case font-normal text-slate-400'>
+            · $0.10/skip trace
           </span>
         </div>
       </div>
@@ -1259,6 +1251,8 @@ export default function LeadDashboardClient({}: Props) {
           }}
           leadType={selectedLeadType}
           leadCount={selectedIds.length}
+          alreadyTracedCount={alreadyTracedCount}
+          isLargeBatch={isLargeBatch}
         />
       )}
       </div>
