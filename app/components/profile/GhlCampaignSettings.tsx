@@ -4,8 +4,11 @@ import { useState, useEffect } from 'react';
 import { client } from '@/app/utils/aws/data/frontEndClient';
 import { getFrontEndUser } from '@/app/utils/aws/auth/amplifyFrontEndUser';
 import { HiOutlineCog6Tooth } from 'react-icons/hi2';
+import { useAccess } from '@/app/context/AccessContext';
+import Link from 'next/link';
 
 export default function GhlCampaignSettings() {
+  const { hasPaidPlan } = useAccess();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [integration, setIntegration] = useState<any>(null);
@@ -63,6 +66,23 @@ export default function GhlCampaignSettings() {
       setSaving(false);
     }
   };
+
+  if (!hasPaidPlan) {
+    return (
+      <div className="bg-white border border-slate-200 rounded-[2rem] p-8 shadow-sm">
+        <h3 className="text-lg font-black text-slate-900 mb-2 flex items-center gap-2">
+          <HiOutlineCog6Tooth className="text-indigo-500" /> Campaign Settings
+        </h3>
+        <p className="text-slate-500 text-sm mb-4">A Sync Plan is required to configure GHL campaign settings.</p>
+        <Link
+          href="/pricing"
+          className="inline-block bg-indigo-600 text-white text-sm font-semibold px-5 py-2 rounded-xl hover:bg-indigo-700 transition-colors"
+        >
+          Upgrade to Sync Plan
+        </Link>
+      </div>
+    );
+  }
 
   if (loading) {
     return (

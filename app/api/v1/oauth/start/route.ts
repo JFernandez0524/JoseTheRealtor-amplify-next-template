@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { randomBytes } from 'crypto';
-import { AuthGetCurrentUserServer } from '@/app/utils/aws/auth/amplifyServerUtils.server';
+import { AuthGetCurrentUserServer, AuthGetUserGroupsServer } from '@/app/utils/aws/auth/amplifyServerUtils.server';
 
 const GHL_CLIENT_ID = process.env.GHL_CLIENT_ID;
 const GHL_REDIRECT_URI = process.env.GHL_REDIRECT_URI || 
@@ -27,6 +27,13 @@ export async function GET(req: Request) {
     const user = await AuthGetCurrentUserServer();
     if (!user) {
       return NextResponse.redirect('https://leads.josetherealtor.com/oauth/error?error=user_not_authenticated');
+    }
+
+    // Require a paid plan to connect GHL
+    const groups = await AuthGetUserGroupsServer();
+    const hasPaidPlan = groups.includes('PRO') || groups.includes('AI_PLAN') || groups.includes('ADMINS');
+    if (!hasPaidPlan) {
+      return NextResponse.redirect('https://leads.josetherealtor.com/pricing');
     }
 
     // Generate state with user ID encoded

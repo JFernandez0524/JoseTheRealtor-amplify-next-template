@@ -1,7 +1,11 @@
+'use client';
+
 // app/components/leadDetails/GhlActions.tsx
 
 import { useState } from 'react';
 import { Loader } from '@aws-amplify/ui-react';
+import { useAccess } from '@/app/context/AccessContext';
+import Link from 'next/link';
 
 interface GhlActionsProps {
   leadId: string;
@@ -21,6 +25,7 @@ export function GhlActions({
   client,
 }: GhlActionsProps) {
   const [isSyncing, setIsSyncing] = useState(false);
+  const { hasPaidPlan } = useAccess();
 
   // Status Check Helpers (Case-Insensitive)
   const currentGhlStatus = ghlSyncStatus?.toUpperCase();
@@ -61,6 +66,21 @@ export function GhlActions({
   const isReadyToSync = currentSkipStatus === 'COMPLETED';
   const canClickSync = isReadyToSync && !isSyncing;
   const isAlreadySynced = currentGhlStatus === 'SUCCESS';
+
+  if (!hasPaidPlan) {
+    return (
+      <div className='bg-white shadow border rounded-lg p-6 border-l-4 border-l-purple-500'>
+        <h2 className='text-xl font-semibold mb-2'>GHL Actions & Status</h2>
+        <p className='text-sm text-slate-500 mb-4'>CRM sync requires a Sync Plan or higher.</p>
+        <Link
+          href='/pricing'
+          className='block w-full text-center bg-indigo-600 text-white text-sm font-semibold px-4 py-2 rounded hover:bg-indigo-700 transition-colors'
+        >
+          Upgrade to Sync Plan
+        </Link>
+      </div>
+    );
+  }
 
   return (
     <div className='bg-white shadow border rounded-lg p-6 border-l-4 border-l-purple-500'>
