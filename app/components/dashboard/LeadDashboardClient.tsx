@@ -11,6 +11,7 @@ import {
   syncToGHL
 } from '@/app/utils/aws/data/lead.client';
 import { useAccess } from '@/app/context/AccessContext';
+import { useToast } from '@/app/components/leadDetails/ToastProvider';
 import { LeadTable } from './LeadTable';
 import { DashboardFilters } from './DashboardFilters';
 import { GhlConnection } from './GhlConnection';
@@ -27,6 +28,7 @@ export default function LeadDashboardClient({}: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { hasPaidPlan, isAdmin, isAI } = useAccess();
+  const { addToast } = useToast();
 
   // --- State ---
   const [leads, setLeads] = useState<Lead[]>([]);
@@ -400,7 +402,7 @@ export default function LeadDashboardClient({}: Props) {
     if (selectedIds.length === 0) return;
 
     if (!hasPaidPlan) {
-      alert('CRM Sync requires a PRO or AI membership.');
+      addToast({ type: 'warning', title: 'PRO Plan Required', message: 'CRM Sync requires a PRO or AI membership.' });
       router.push('/pricing');
       return;
     }
@@ -448,7 +450,7 @@ export default function LeadDashboardClient({}: Props) {
       setProcessingMessage('');
       setSelectedIds([]);
       
-      alert(`CRM Sync Complete!\n✅ Successful: ${successful}\n⏭️ Skipped: ${skipped}\n❌ Failed: ${failed}`);
+      addToast({ type: 'success', title: 'CRM Sync Complete', message: `Synced: ${successful} | Skipped: ${skipped} | Failed: ${failed}`, duration: 8000 });
       
       // Refresh page after alert is dismissed
       window.location.reload();
@@ -457,7 +459,7 @@ export default function LeadDashboardClient({}: Props) {
       console.error('Sync error:', err);
       setIsProcessing(false);
       setProcessingMessage('');
-      alert('Error initiating CRM sync. Ensure leads are skip-traced first.');
+      addToast({ type: 'error', title: 'CRM Sync Failed', message: 'Ensure leads are skip-traced first.' });
     }
   };
 
@@ -468,7 +470,7 @@ export default function LeadDashboardClient({}: Props) {
 
     // Show modal first
     if (!selectedLeadType) {
-      alert('Please select leads first');
+      addToast({ type: 'warning', title: 'No leads selected', message: 'Please select leads first.' });
       return;
     }
 
@@ -499,7 +501,7 @@ export default function LeadDashboardClient({}: Props) {
     });
 
     if (idsToProcess.length === 0) {
-      alert('All selected leads have already been skip traced.');
+      addToast({ type: 'info', title: 'Already Traced', message: 'All selected leads have already been skip traced.' });
       skipTraceInFlight.current = false;
       return;
     }
@@ -508,7 +510,7 @@ export default function LeadDashboardClient({}: Props) {
     if (!isAdmin) {
       const currentCredits = userAccount?.credits || 0;
       if (currentCredits < idsToProcess.length) {
-        alert(`Insufficient Credits! You need ${idsToProcess.length}...`);
+        addToast({ type: 'error', title: 'Insufficient Credits', message: `You need ${idsToProcess.length} credits but only have ${currentCredits}. Purchase more credits to continue.` });
         skipTraceInFlight.current = false;
         return;
       }
@@ -562,9 +564,7 @@ export default function LeadDashboardClient({}: Props) {
       console.log('No Match count:', noMatch);
       console.log('No Quality count:', noQuality);
 
-      alert(
-        `Skip-trace complete!\n✅ Successful: ${successful}\n❌ Failed: ${failed}\n⚠️ No Match: ${noMatch}\n📭 No Quality Contacts: ${noQuality}\n\nPage will refresh in 1 second...`
-      );
+      addToast({ type: 'success', title: 'Skip-trace complete!', message: `Successful: ${successful} | Failed: ${failed} | No Match: ${noMatch} | No Quality: ${noQuality}`, duration: 8000 });
 
       setSelectedIds([]);
       
@@ -572,7 +572,7 @@ export default function LeadDashboardClient({}: Props) {
       setTimeout(() => window.location.reload(), 1000);
     } catch (err: any) {
       console.error('Skip-trace error:', err);
-      alert(`Error during skip-trace: ${err.message || 'Check your network connection'}`);
+      addToast({ type: 'error', title: 'Skip-trace Error', message: err.message || 'Check your network connection' });
     } finally {
       setIsProcessing(false);
       setProcessingMessage('');
@@ -583,7 +583,7 @@ export default function LeadDashboardClient({}: Props) {
     console.log('🗑️ Delete clicked. isAdmin:', isAdmin, 'selectedIds:', selectedIds);
     
     if (!isAdmin) {
-      alert('Unauthorized: Only Admins can bulk delete leads.');
+      addToast({ type: 'error', title: 'Unauthorized', message: 'Only Admins can bulk delete leads.' });
       return;
     }
     if (
@@ -605,7 +605,7 @@ export default function LeadDashboardClient({}: Props) {
       window.location.reload();
     } catch (err) {
       console.error('❌ Delete error:', err);
-      alert(`Error deleting leads: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      addToast({ type: 'error', title: 'Delete Failed', message: err instanceof Error ? err.message : 'Unknown error' });
       setIsProcessing(false);
       setProcessingMessage('');
     }
@@ -622,12 +622,12 @@ export default function LeadDashboardClient({}: Props) {
         selectedIds,
         status as 'off_market' | 'active' | 'sold' | 'pending' | 'fsbo' | 'auction' | 'skip' | 'door_knock'
       );
-      alert(`Successfully updated ${selectedIds.length} leads to ${status}`);
+      addToast({ type: 'success', title: 'Status Updated', message: `Successfully updated ${selectedIds.length} leads to ${status}` });
       setSelectedIds([]);
       await refreshLeads();
     } catch (err) {
       console.error('Bulk status update error:', err);
-      alert('Error updating lead statuses');
+      addToast({ type: 'error', title: 'Update Failed', message: 'Error updating lead statuses' });
     } finally {
       setIsProcessing(false);
       // Force page refresh to ensure all data is updated
@@ -645,9 +645,7 @@ export default function LeadDashboardClient({}: Props) {
     );
 
     if (preforeclosureLeads.length === 0) {
-      alert(
-        'No preforeclosure leads selected. BatchData enrichment is only for preforeclosure leads.'
-      );
+      addToast({ type: 'warning', title: 'No Eligible Leads', message: 'BatchData enrichment is only for preforeclosure leads.' });
       return;
     }
 
@@ -669,21 +667,12 @@ export default function LeadDashboardClient({}: Props) {
 
       if (!response.ok) throw new Error(result.error);
 
-      alert(
-        `✅ Enrichment Complete!\n\n` +
-          `Enriched: ${result.enriched} leads\n` +
-          `Skipped: ${result.skipped} (already enriched)\n` +
-          `Failed: ${result.failed}\n` +
-          `Cost: $${result.cost.toFixed(2)}`
-      );
+      addToast({ type: 'success', title: 'Enrichment Complete!', message: `Enriched: ${result.enriched} | Skipped: ${result.skipped} | Failed: ${result.failed} | Cost: $${result.cost.toFixed(2)}`, duration: 8000 });
       setSelectedIds([]);
       await refreshLeads();
     } catch (err) {
       console.error('Enrichment error:', err);
-      alert(
-        'Error enriching leads: ' +
-          (err instanceof Error ? err.message : String(err))
-      );
+      addToast({ type: 'error', title: 'Enrichment Failed', message: err instanceof Error ? err.message : String(err) });
     } finally {
       setIsProcessing(false);
       // Force page refresh to ensure all data is updated
@@ -725,14 +714,12 @@ export default function LeadDashboardClient({}: Props) {
 
       const { sent, failed } = result.mailResults;
 
-      alert(
-        `✅ Direct Mail Campaign Complete!\n\nSent: ${sent}/${result.generated} letters\nFailed: ${failed}\n\nTracking numbers saved to leads.\nExpected delivery: 3-5 business days`
-      );
+      addToast({ type: 'success', title: 'Direct Mail Campaign Complete!', message: `Sent ${sent}/${result.generated} letters | Failed: ${failed} | Delivery: 3-5 business days`, duration: 10000 });
 
       setSelectedIds([]);
     } catch (err) {
       console.error('Direct mail generation error:', err);
-      alert('Error sending letters via Click2Mail');
+      addToast({ type: 'error', title: 'Direct Mail Failed', message: 'Error sending letters via Click2Mail' });
     } finally {
       setIsProcessing(false);
       // Force page refresh to ensure all data is updated
@@ -758,12 +745,10 @@ export default function LeadDashboardClient({}: Props) {
 
       const result = JSON.parse(data as string);
 
-      alert(
-        `✅ Queue Population Complete!\n\nTotal GHL contacts: ${result.totalContacts}\nAI outreach contacts: ${result.aiOutreachContacts}\nQueue entries added: ${result.queueEntriesAdded}${result.errors ? `\nErrors: ${result.errors.length}` : ''}`
-      );
+      addToast({ type: 'success', title: 'Queue Population Complete!', message: `GHL contacts: ${result.totalContacts} | AI outreach: ${result.aiOutreachContacts} | Added: ${result.queueEntriesAdded}${result.errors ? ` | Errors: ${result.errors.length}` : ''}`, duration: 8000 });
     } catch (err: any) {
       console.error('Queue population error:', err);
-      alert(`Error populating queue: ${err.message}`);
+      addToast({ type: 'error', title: 'Queue Population Failed', message: err.message });
     } finally {
       setIsPopulatingQueue(false);
     }
@@ -771,7 +756,7 @@ export default function LeadDashboardClient({}: Props) {
 
   const handleAddToDoorKnock = async () => {
     if (selectedIds.length === 0) {
-      alert('Please select leads to add to door knock queue.');
+      addToast({ type: 'warning', title: 'No leads selected', message: 'Please select leads to add to door knock queue.' });
       return;
     }
 
@@ -789,12 +774,12 @@ export default function LeadDashboardClient({}: Props) {
 
       if (!response.ok) throw new Error(result.error);
 
-      alert(`✅ Added ${result.added} leads to door knock queue!`);
+      addToast({ type: 'success', title: 'Door Knock Queue Updated', message: `Added ${result.added} leads to door knock queue.` });
       setSelectedIds([]);
       
     } catch (err: any) {
       console.error('Door knock add error:', err);
-      alert(`Error adding leads to door knock queue: ${err.message}`);
+      addToast({ type: 'error', title: 'Door Knock Failed', message: err.message });
     } finally {
       setIsProcessing(false);
     }
@@ -814,10 +799,10 @@ export default function LeadDashboardClient({}: Props) {
 
       if (!response.ok) throw new Error(result.error);
 
-      alert(`✅ Listing Status Sync Complete!\n\nUpdated: ${result.updated}/${result.total} contacts`);
+      addToast({ type: 'success', title: 'Listing Status Sync Complete!', message: `Updated: ${result.updated}/${result.total} contacts` });
     } catch (err: any) {
       console.error('Listing status sync error:', err);
-      alert(`Error syncing listing status: ${err.message}`);
+      addToast({ type: 'error', title: 'Sync Failed', message: err.message });
     } finally {
       setIsProcessing(false);
       setProcessingMessage('');
@@ -826,7 +811,7 @@ export default function LeadDashboardClient({}: Props) {
 
   const handleDownloadSkipTraced = () => {
     if (selectedIds.length === 0) {
-      alert('Please select leads to download.');
+      addToast({ type: 'warning', title: 'No leads selected', message: 'Please select leads to download.' });
       return;
     }
 
@@ -835,7 +820,7 @@ export default function LeadDashboardClient({}: Props) {
     );
 
     if (selectedLeads.length === 0) {
-      alert('No selected leads found.');
+      addToast({ type: 'warning', title: 'No leads found', message: 'No selected leads found.' });
       return;
     }
 
@@ -917,7 +902,7 @@ export default function LeadDashboardClient({}: Props) {
     document.body.removeChild(a);
     window.URL.revokeObjectURL(url);
 
-    alert(`Downloaded ${selectedLeads.length} selected leads to CSV.`);
+    addToast({ type: 'success', title: 'Download Complete', message: `Downloaded ${selectedLeads.length} leads to CSV.` });
   };
 
   return (
@@ -967,6 +952,7 @@ export default function LeadDashboardClient({}: Props) {
         selectedLeadsCount={selectedIds.length}
         selectedLeadTypes={leads.filter(l => selectedIds.includes(l.id)).map(l => l.type)}
         selectedLeadType={selectedLeadType}
+        hasPaidPlan={hasPaidPlan}
         isSkipTracing={isProcessing}
         isGhlSyncing={isProcessing}
         isEnriching={isProcessing}
@@ -980,7 +966,7 @@ export default function LeadDashboardClient({}: Props) {
         handleAddToDoorKnock={handleAddToDoorKnock}
         handleSyncListingStatus={handleSyncListingStatus}
         handleDelete={handleDeleteLeads}
-        handleExport={() => alert('Exporting leads to CSV...')}
+        handleExport={() => addToast({ type: 'info', title: 'Export', message: 'Exporting leads to CSV...' })}
         handleDownloadSkipTraced={handleDownloadSkipTraced}
         handleViewDetails={handleViewDetails}
         isEmailCampaigning={false}
@@ -1105,7 +1091,7 @@ export default function LeadDashboardClient({}: Props) {
             : paginatedLeads.slice(0, 100).map((l) => l.id);
 
           if (paginatedLeads.length > 100 && selectedIds.length !== paginatedLeads.length) {
-            alert('Maximum 100 leads can be selected at once.');
+            addToast({ type: 'warning', title: 'Selection Limit', message: 'Maximum 100 leads can be selected at once.' });
           }
 
           setSelectedIds(newSelection);
@@ -1122,7 +1108,7 @@ export default function LeadDashboardClient({}: Props) {
             : filteredLeads.slice(0, 100).map((l) => l.id);
 
           if (filteredLeads.length > 100 && selectedIds.length !== filteredLeads.length) {
-            alert('Maximum 100 leads can be selected at once.');
+            addToast({ type: 'warning', title: 'Selection Limit', message: 'Maximum 100 leads can be selected at once.' });
           }
 
           setSelectedIds(newSelection);
@@ -1134,11 +1120,11 @@ export default function LeadDashboardClient({}: Props) {
           }
         }}
         onToggleOne={(id) => {
+          if (!selectedIds.includes(id) && selectedIds.length >= 100) {
+            addToast({ type: 'warning', title: 'Selection Limit', message: 'Maximum 100 leads can be selected at once.' });
+            return;
+          }
           setSelectedIds((prev) => {
-            if (!prev.includes(id) && prev.length >= 100) {
-              alert('Maximum 100 leads can be selected at once.');
-              return prev;
-            }
             const newSelection = prev.includes(id)
               ? prev.filter((i) => i !== id)
               : [...prev, id];

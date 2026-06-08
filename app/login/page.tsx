@@ -40,7 +40,7 @@ function CustomAuthenticator() {
 
   useEffect(() => {
     if (user) {
-      redirect('/');
+      redirect('/dashboard');
     }
   }, [user]);
 

@@ -43,6 +43,7 @@ type Props = {
   setSkipTraceToDate: (val: string) => void;
 
   // Access Control
+  hasPaidPlan: boolean;
 
   // Bulk Action Props
   selectedLeadsCount: number;
@@ -106,6 +107,7 @@ export function DashboardFilters({
   handleExport,
   handleDownloadSkipTraced,
   handleViewDetails,
+  hasPaidPlan,
   isSkipTracing,
   isGhlSyncing,
   isEnriching,
@@ -401,12 +403,18 @@ export function DashboardFilters({
               onClick={handleBulkGHLSync}
               disabled={isGhlSyncing || isSkipTracing}
               className={`text-sm px-3 py-1.5 rounded transition-colors flex items-center justify-center gap-1.5 shadow-sm w-full sm:w-auto
-                                ${isGhlSyncing ? 'bg-purple-300 text-white cursor-not-allowed' : 'bg-purple-600 text-white hover:bg-purple-700'}`}
+                ${isGhlSyncing
+                  ? 'bg-purple-300 text-white cursor-not-allowed'
+                  : !hasPaidPlan
+                  ? 'bg-gray-200 text-gray-500 cursor-pointer'
+                  : 'bg-purple-600 text-white hover:bg-purple-700'}`}
             >
               {isGhlSyncing ? (
                 <>
                   <Loader size='small' variation='linear' /> Syncing...
                 </>
+              ) : !hasPaidPlan ? (
+                '🔒 Sync GHL (PRO+)'
               ) : (
                 'Sync GHL'
               )}

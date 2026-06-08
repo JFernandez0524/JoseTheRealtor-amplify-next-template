@@ -8,6 +8,7 @@ import { AccessProvider } from './context/AccessContext';
 import { GhlProvider } from './context/GhlContext';
 import { GoogleMapsProvider } from './components/GoogleMapsProvider';
 import SessionTimeout from './components/SessionTimeout';
+import { ToastProvider } from './components/leadDetails/ToastProvider';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -45,6 +46,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
           </noscript>
         )}
         <AuthProvider>
+          <ToastProvider>
           <AccessProvider>
             <GhlProvider>
               <ConversationsProvider>
@@ -80,6 +82,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
               </ConversationsProvider>
             </GhlProvider>
           </AccessProvider>
+          </ToastProvider>
         </AuthProvider>
       </body>
     </html>
