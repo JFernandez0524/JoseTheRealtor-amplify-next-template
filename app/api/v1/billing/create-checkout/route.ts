@@ -36,8 +36,12 @@ export async function POST(req: NextRequest) {
         'mode': 'subscription',
         'line_items[0][price]': priceId,
         'line_items[0][quantity]': '1',
+        // Session metadata — used by checkout.session.completed webhook
         'metadata[userId]': user.userId,
         'metadata[plan]': plan,
+        // Subscription metadata — used by subscription.updated/deleted webhooks
+        'subscription_data[metadata][userId]': user.userId,
+        'subscription_data[metadata][plan]': plan,
       };
       if (userEmail) params['customer_email'] = userEmail;
 
