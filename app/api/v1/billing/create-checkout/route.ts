@@ -25,9 +25,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid plan' }, { status: 400 });
     }
 
+    const host = req.headers.get('x-forwarded-host') || req.headers.get('host') || new URL(req.url).host;
+    const proto = req.headers.get('x-forwarded-proto') || 'https';
+    const baseUrl = `${proto}://${host}`;
+
     const params: Record<string, string> = {
-        'success_url': `${new URL(req.url).origin}/billing/success?session_id={CHECKOUT_SESSION_ID}`,
-        'cancel_url': `${new URL(req.url).origin}/pricing`,
+        'success_url': `${baseUrl}/billing/success?session_id={CHECKOUT_SESSION_ID}`,
+        'cancel_url': `${baseUrl}/pricing`,
         'payment_method_types[0]': 'card',
         'mode': 'subscription',
         'line_items[0][price]': priceId,
