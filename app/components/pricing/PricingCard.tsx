@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 
 interface PricingCardProps {
   title: string;
@@ -22,6 +23,7 @@ export default function PricingCard({
   comingSoon = false 
 }: PricingCardProps) {
   const [loading, setLoading] = useState(false);
+  const router = useRouter();
 
   const handleSubscribe = async () => {
     setLoading(true);
@@ -31,6 +33,11 @@ export default function PricingCard({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ plan: planId }),
       });
+
+      if (response.status === 401) {
+        router.push('/login');
+        return;
+      }
 
       const data = await response.json();
       if (!response.ok || !data.checkoutUrl) {
