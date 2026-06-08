@@ -20,42 +20,48 @@ const cognitoClient = new CognitoIdentityProviderClient({ region: process.env.AW
 const USER_ACCOUNT_TABLE = process.env.AMPLIFY_DATA_UserAccount_TABLE_NAME!;
 const USER_POOL_ID = process.env.AMPLIFY_AUTH_USERPOOL_ID || 'us-east-1_NR5bJQGrO';
 
-async function getUserAccount(userId: string) {
+// Amplify stores owner as "sub::identityId" — use begins_with to match on sub alone
+async function getUserAccounts(userId: string) {
   const { Items } = await docClient.send(new ScanCommand({
     TableName: USER_ACCOUNT_TABLE,
-    FilterExpression: '#owner = :userId',
+    FilterExpression: 'begins_with(#owner, :userId)',
     ExpressionAttributeNames: { '#owner': 'owner' },
     ExpressionAttributeValues: { ':userId': userId },
   }));
-  return Items?.[0];
+  return Items || [];
 }
 
 export async function addCreditsToUser(userId: string, credits: number) {
-  const account = await getUserAccount(userId);
-  if (!account) throw new Error(`No account found for user ${userId}`);
+  const accounts = await getUserAccounts(userId);
+  if (accounts.length === 0) throw new Error(`No account found for user ${userId}`);
 
-  await docClient.send(new UpdateCommand({
-    TableName: USER_ACCOUNT_TABLE,
-    Key: { id: account.id },
-    UpdateExpression: 'SET credits = :credits',
-    ExpressionAttributeValues: {
-      ':credits': (account.credits || 0) + credits,
-    },
-  }));
+  // Update all records (user may have duplicates from prior race condition)
+  await Promise.all(accounts.map((account) =>
+    docClient.send(new UpdateCommand({
+      TableName: USER_ACCOUNT_TABLE,
+      Key: { id: account.id },
+      UpdateExpression: 'SET credits = :credits',
+      ExpressionAttributeValues: {
+        ':credits': (account.credits || 0) + credits,
+      },
+    }))
+  ));
 
-  console.log(`✅ Added ${credits} credits to user ${userId}`);
+  console.log(`✅ Added ${credits} credits to ${accounts.length} account record(s) for user ${userId}`);
 }
 
 export async function updateUserAccountForPlan(userId: string, plan: string) {
-  const account = await getUserAccount(userId);
-  if (!account) throw new Error(`No account found for user ${userId}`);
+  const accounts = await getUserAccounts(userId);
+  if (accounts.length === 0) throw new Error(`No account found for user ${userId}`);
 
-  await docClient.send(new UpdateCommand({
-    TableName: USER_ACCOUNT_TABLE,
-    Key: { id: account.id },
-    UpdateExpression: 'SET ghlIntegrationType = :type',
-    ExpressionAttributeValues: { ':type': 'OAUTH' },
-  }));
+  await Promise.all(accounts.map((account) =>
+    docClient.send(new UpdateCommand({
+      TableName: USER_ACCOUNT_TABLE,
+      Key: { id: account.id },
+      UpdateExpression: 'SET ghlIntegrationType = :type',
+      ExpressionAttributeValues: { ':type': 'OAUTH' },
+    }))
+  ));
 
   console.log(`✅ Updated account settings for ${plan} - user ${userId}`);
 }
