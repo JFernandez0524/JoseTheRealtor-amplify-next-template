@@ -96,6 +96,20 @@ export async function createLeadInDatabase(lead: Lead) {
   }
 }
 
+export async function AuthGetUserEmailServer(): Promise<string | null> {
+  try {
+    const session = await runWithAmplifyServerContext({
+      nextServerContext: { cookies },
+      operation: (ctx) => fetchAuthSession(ctx),
+    });
+    const email = session.tokens?.idToken?.payload?.email as string | undefined;
+    return email || null;
+  } catch (error) {
+    console.error('AuthGetUserEmailServer error:', error);
+    return null;
+  }
+}
+
 export async function AuthGetUserGroupsServer(): Promise<string[]> {
   try {
     const session = await runWithAmplifyServerContext({

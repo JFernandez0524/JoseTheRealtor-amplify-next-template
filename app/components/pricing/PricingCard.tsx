@@ -32,10 +32,14 @@ export default function PricingCard({
         body: JSON.stringify({ plan: planId }),
       });
 
-      const { checkoutUrl } = await response.json();
-      window.location.href = checkoutUrl;
+      const data = await response.json();
+      if (!response.ok || !data.checkoutUrl) {
+        throw new Error(data.error || 'Failed to create checkout session');
+      }
+      window.location.href = data.checkoutUrl;
     } catch (error) {
       console.error('Checkout error:', error);
+      alert(`Error: ${error instanceof Error ? error.message : 'Failed to create checkout session'}`);
       setLoading(false);
     }
   };
