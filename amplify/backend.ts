@@ -191,7 +191,7 @@ backend.dailyOutreachAgent.addEnvironment(
 
 backend.dailyOutreachAgent.addEnvironment('GHL_CLIENT_ID', process.env.GHL_CLIENT_ID || '');
 backend.dailyOutreachAgent.addEnvironment('GHL_CLIENT_SECRET', process.env.GHL_CLIENT_SECRET || '');
-backend.dailyOutreachAgent.addEnvironment('API_ENDPOINT', process.env.API_ENDPOINT || 'https://leads.JoseTheRealtor.com');
+backend.dailyOutreachAgent.addEnvironment('API_ENDPOINT', process.env.NEXT_PUBLIC_APP_URL || 'https://leads.josetherealtor.com');
 
 backend.data.resources.tables['GhlIntegration'].grantReadWriteData(
   backend.dailyOutreachAgent.resources.lambda
@@ -223,7 +223,7 @@ backend.dailyEmailAgent.addEnvironment(
   backend.data.resources.tables['OutreachQueue'].tableName
 );
 
-backend.dailyEmailAgent.addEnvironment('APP_URL', process.env.APP_URL || 'https://leads.josetherealtor.com');
+backend.dailyEmailAgent.addEnvironment('APP_URL', process.env.NEXT_PUBLIC_APP_URL || 'https://leads.josetherealtor.com');
 backend.dailyEmailAgent.addEnvironment('GHL_CLIENT_ID', process.env.GHL_CLIENT_ID || '');
 backend.dailyEmailAgent.addEnvironment('GHL_CLIENT_SECRET', process.env.GHL_CLIENT_SECRET || '');
 
@@ -488,7 +488,7 @@ backend.facebookWebhookHandler.addEnvironment('META_VERIFY_TOKEN', process.env.M
 backend.facebookWebhookHandler.addEnvironment('META_APP_SECRET', process.env.META_APP_SECRET || '');
 backend.facebookWebhookHandler.addEnvironment('FB_PAGE_ACCESS_TOKEN', process.env.FB_PAGE_ACCESS_TOKEN || '');
 backend.facebookWebhookHandler.addEnvironment('OPENAI_API_KEY', process.env.OPENAI_API_KEY || '');
-backend.facebookWebhookHandler.addEnvironment('APP_URL', process.env.APP_URL || 'https://main.d127hbsjypuuhr.amplifyapp.com');
+backend.facebookWebhookHandler.addEnvironment('APP_URL', process.env.NEXT_PUBLIC_APP_URL || 'https://leads.josetherealtor.com');
 
 backend.data.resources.tables['GhlIntegration'].grantReadWriteData(
   backend.facebookWebhookHandler.resources.lambda

@@ -70,7 +70,7 @@ async function getPropertyAnalysis(
 ): Promise<PropertyAnalysis | null> {
   try {
     const response = await fetch(
-      `${process.env.NEXTAUTH_URL}/api/v1/analyze-property`,
+      `${process.env.NEXT_PUBLIC_APP_URL}/api/v1/analyze-property`,
       {
         method: 'POST',
         headers: {
@@ -119,7 +119,7 @@ async function sendGHLEmail(
 
   // Add unsubscribe link to email body
   const unsubscribeLink = contactId
-    ? `${process.env.NEXTAUTH_URL || 'https://leads.josetherealtor.com'}/unsubscribe?contact=${contactId}`
+    ? `${process.env.NEXT_PUBLIC_APP_URL || 'https://leads.josetherealtor.com'}/unsubscribe?contact=${contactId}`
     : '';
 
   const emailWithUnsubscribe = unsubscribeLink

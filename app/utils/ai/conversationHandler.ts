@@ -31,7 +31,7 @@ interface PropertyAnalysis {
 // Get property analysis using existing route
 async function getPropertyAnalysis(address: string, city: string, state: string, zip: string): Promise<PropertyAnalysis | null> {
   try {
-    const response = await fetch(`${process.env.NEXTAUTH_URL}/api/v1/analyze-property`, {
+    const response = await fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/v1/analyze-property`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
