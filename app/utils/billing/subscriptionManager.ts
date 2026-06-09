@@ -75,6 +75,17 @@ export async function grantSubscriptionAccess(userId: string, plan: string) {
     UserPoolId: USER_POOL_ID,
   }));
 
+  // Remove FREE so group membership unambiguously reflects current tier
+  try {
+    await cognitoClient.send(new AdminRemoveUserFromGroupCommand({
+      Username: userId,
+      GroupName: 'FREE',
+      UserPoolId: USER_POOL_ID,
+    }));
+  } catch {
+    // User may not have been in FREE — not an error
+  }
+
   console.log(`✅ Granted ${groupToAdd} access for user ${userId}`);
 }
 
@@ -87,5 +98,12 @@ export async function revokeSubscriptionAccess(userId: string, plan: string) {
     UserPoolId: USER_POOL_ID,
   }));
 
-  console.log(`✅ Revoked ${groupToRemove} access for user ${userId}`);
+  // Return user to FREE — this is the hook point for downgrade logic
+  await cognitoClient.send(new AdminAddUserToGroupCommand({
+    Username: userId,
+    GroupName: 'FREE',
+    UserPoolId: USER_POOL_ID,
+  }));
+
+  console.log(`✅ Revoked ${groupToRemove} access, returned user ${userId} to FREE`);
 }
