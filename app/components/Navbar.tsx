@@ -113,18 +113,16 @@ const Navbar = () => {
 
           {isAuthenticated && (
             <>
+              <Link
+                href='/dashboard'
+                className={
+                  pathname === '/dashboard' ? activeLinkClass : baseLinkClass
+                }
+              >
+                Dashboard
+              </Link>
               {hasPaidPlan && (
                 <>
-                  <Link
-                    href='/dashboard'
-                    className={
-                      pathname === '/dashboard'
-                        ? activeLinkClass
-                        : baseLinkClass
-                    }
-                  >
-                    Dashboard
-                  </Link>
                   <Link
                     href='/upload'
                     className={
@@ -252,18 +250,18 @@ const Navbar = () => {
 
           {isAuthenticated && (
             <>
+              <Link
+                href='/dashboard'
+                className={
+                  pathname === '/dashboard'
+                    ? mobileActiveLinkClass
+                    : mobileLinkClass
+                }
+              >
+                Dashboard
+              </Link>
               {hasPaidPlan && (
                 <>
-                  <Link
-                    href='/dashboard'
-                    className={
-                      pathname === '/dashboard'
-                        ? mobileActiveLinkClass
-                        : mobileLinkClass
-                    }
-                  >
-                    Dashboard
-                  </Link>
                   <Link
                     href='/upload'
                     className={

@@ -12,7 +12,14 @@ const cognitoClient = new CognitoIdentityProviderClient({});
 export const handler: Handler = async (event) => {
   const { userId, groupName } = event.arguments;
 
-  // ONLY CHANGE: Use process.env instead of $amplify/env import
+  const callerGroups: string[] =
+    (event.identity as any)?.claims?.['cognito:groups'] ?? [];
+  const callerIsAdmin = callerGroups.includes('ADMINS');
+
+  if (!callerIsAdmin && groupName !== 'FREE') {
+    throw new Error('Only ADMINS can assign groups other than FREE');
+  }
+
   const userPoolId = process.env.AMPLIFY_AUTH_USERPOOL_ID;
 
   if (!userPoolId) {

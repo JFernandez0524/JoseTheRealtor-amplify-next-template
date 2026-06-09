@@ -381,8 +381,7 @@ const schema = a.schema({
       userId: a.string().required(),
       groupName: a.string().required(),
     })
-    // 🚧 DEV MODE: Temporarily allow any authenticated user to promote themselves
-    .authorization((allow) => [allow.group('ADMINS')])
+    .authorization((allow) => [allow.authenticated()])
     .handler(a.handler.function('addUserToGroup'))
     .returns(a.json()),
 
