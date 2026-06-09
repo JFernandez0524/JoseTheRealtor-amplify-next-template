@@ -18,7 +18,7 @@ const docClient = DynamoDBDocumentClient.from(dynamoClient);
 const cognitoClient = new CognitoIdentityProviderClient({ region: process.env.AWS_REGION || 'us-east-1' });
 
 const USER_ACCOUNT_TABLE = process.env.AMPLIFY_DATA_UserAccount_TABLE_NAME!;
-const USER_POOL_ID = process.env.AMPLIFY_AUTH_USERPOOL_ID || 'us-east-1_NR5bJQGrO';
+const USER_POOL_ID = process.env.AMPLIFY_AUTH_USERPOOL_ID || 'us-east-1_xD2qn9PAC';
 
 // Amplify stores owner as "sub::identityId" — use begins_with to match on sub alone
 async function getUserAccounts(userId: string) {
