@@ -248,15 +248,24 @@ export function ManualLeadForm() {
       return setMessage('❌ Bulk CSV Import requires a PRO membership.');
     }
 
+    // Enforce row cap before uploading — Lambda rejects oversized files but this gives faster feedback
+    const MAX_ROWS = 500;
+    if (csvPreview && !csvPreview.loading && csvPreview.rowCount > MAX_ROWS) {
+      return setMessage(`❌ File too large (${csvPreview.rowCount} rows). Maximum is ${MAX_ROWS} per upload. Split the file and upload in batches.`);
+    }
+
     setLoading(true);
     try {
       const user = await getFrontEndUser();
       if (!user) throw new Error('Session expired.');
 
+      // Unique filename prevents S3 collision if same file is re-uploaded
+      const uploadFileName = `${Date.now()}-${file.name}`;
+
       // Create job record first
       const { data: newJob, errors } = await client.models.CsvUploadJob.create({
         userId: user.userId,
-        fileName: file.name,
+        fileName: uploadFileName,
         leadType: lead.type.toUpperCase(),
         status: 'PENDING',
         totalRows: 0,
@@ -276,7 +285,7 @@ export function ManualLeadForm() {
 
       // Upload file to S3 (triggers Lambda)
       await uploadData({
-        path: `leadFiles/${user.userId}/${file.name}`,
+        path: `leadFiles/${user.userId}/${uploadFileName}`,
         data: file,
         options: {
           metadata: {
@@ -388,11 +397,15 @@ export function ManualLeadForm() {
               />
 
               {csvPreview && (
-                <div className='mt-3 text-left'>
+                <div className='mt-3 text-left space-y-2'>
                   {csvPreview.loading ? (
                     <p className='text-xs text-gray-500 flex items-center gap-2'>
                       <span className='inline-block w-3 h-3 border-2 border-blue-400 border-t-transparent rounded-full animate-spin' />
                       Checking for duplicates...
+                    </p>
+                  ) : csvPreview.rowCount > 500 ? (
+                    <p className='text-xs text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2'>
+                      ❌ <strong>{csvPreview.rowCount}</strong> rows — exceeds 500-row limit. Split into smaller files.
                     </p>
                   ) : csvPreview.duplicateCount > 0 ? (
                     <p className='text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2'>
@@ -402,6 +415,11 @@ export function ManualLeadForm() {
                   ) : (
                     <p className='text-xs text-green-700 bg-green-50 border border-green-200 rounded px-3 py-2'>
                       ✅ <strong>{csvPreview.rowCount}</strong> leads found, ready to import
+                    </p>
+                  )}
+                  {!csvPreview.loading && csvPreview.rowCount > 100 && csvPreview.rowCount <= 500 && (
+                    <p className='text-xs text-blue-700 bg-blue-50 border border-blue-100 rounded px-3 py-2'>
+                      ⏱ Large batch — estimated processing time: {Math.ceil(csvPreview.rowCount * 0.7 / 60)} – {Math.ceil(csvPreview.rowCount * 1.0 / 60)} minutes
                     </p>
                   )}
                 </div>

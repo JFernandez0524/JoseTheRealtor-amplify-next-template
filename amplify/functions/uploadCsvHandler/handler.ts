@@ -33,6 +33,9 @@ console.log('🔧 [CSV_UPLOAD] Environment:', {
 // ---------------------------------------------------------
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 const BRIDGE_API_DELAY_MS = 200; // 334/min = ~180ms, use 200ms to be safe
+const GOOGLE_API_DELAY_MS = 60;  // ~16 QPS — well under Google's 100 QPS limit
+const MAX_UPLOAD_ROWS = 500;     // hard cap: prevents Lambda timeout and API quota exhaustion
+const MAX_DUPLICATE_STORE = 100; // max duplicate entries to store in DynamoDB (400KB item limit)
 
 // ---------------------------------------------------------
 // 🛠️ FORMATTING HELPERS
@@ -151,6 +154,51 @@ const cleanCityForGeocoding = (city: string) => {
     .replace(/\b(city|town|borough|township|village)\s+of\s+/i, '')
     .trim();
 };
+
+// ---------------------------------------------------------
+// 🔍 DUPLICATE DETECTION HELPERS
+// ---------------------------------------------------------
+
+function makeAddressKey(addr: string | null | undefined, zip: string | null | undefined): string | null {
+  const cleanAddr = (addr || '').toLowerCase().trim();
+  const cleanZip = (zip || '').replace(/\D/g, '').slice(0, 5);
+  if (!cleanAddr || !cleanZip) return null;
+  return `${cleanAddr}|${cleanZip}`;
+}
+
+// Single paginated scan instead of one scan per row — dramatically reduces DynamoDB cost and time
+async function preloadExistingLeadKeys(
+  tableName: string,
+  ownerId: string
+): Promise<{ keys: Set<string>; keyToId: Map<string, string> }> {
+  const keys = new Set<string>();
+  const keyToId = new Map<string, string>();
+  let lastKey: Record<string, any> | undefined;
+  do {
+    const { Items, LastEvaluatedKey } = await docClient.send(new ScanCommand({
+      TableName: tableName,
+      FilterExpression: '#owner = :ownerId',
+      ExpressionAttributeNames: {
+        '#owner': 'owner',
+        '#oa': 'ownerAddress',
+        '#oz': 'ownerZip',
+        '#ma': 'mailingAddress',
+        '#mz': 'mailingZip',
+      },
+      ExpressionAttributeValues: { ':ownerId': ownerId },
+      ProjectionExpression: 'id, #oa, #oz, #ma, #mz',
+      ExclusiveStartKey: lastKey,
+    }));
+    for (const lead of Items || []) {
+      const prefoKey = makeAddressKey(lead.ownerAddress, lead.ownerZip);
+      if (prefoKey) { keys.add(prefoKey); keyToId.set(prefoKey, lead.id); }
+      const probateKey = makeAddressKey(lead.mailingAddress, lead.mailingZip);
+      if (probateKey && probateKey !== prefoKey) { keys.add(probateKey); keyToId.set(probateKey, lead.id); }
+    }
+    lastKey = LastEvaluatedKey;
+  } while (lastKey);
+  return { keys, keyToId };
+}
 
 // ---------------------------------------------------------
 // 🚀 MAIN S3 HANDLER
@@ -311,6 +359,30 @@ export const handler: S3Handler = async (event) => {
         }
       }));
 
+      // 🚦 Enforce row limit — prevents Lambda timeout and API quota exhaustion
+      if (totalRows > MAX_UPLOAD_ROWS) {
+        await docClient.send(new UpdateCommand({
+          TableName: csvUploadJobTableName,
+          Key: { id: jobId },
+          UpdateExpression: 'SET #status = :status, errorMessage = :error, completedAt = :completed, updatedAt = :updated',
+          ExpressionAttributeNames: { '#status': 'status' },
+          ExpressionAttributeValues: {
+            ':status': 'FAILED',
+            ':error': `File has ${totalRows} rows — the maximum is ${MAX_UPLOAD_ROWS} per upload. Please split your file into smaller batches.`,
+            ':completed': new Date().toISOString(),
+            ':updated': new Date().toISOString(),
+          }
+        }));
+        console.log(`❌ Upload rejected: ${totalRows} rows exceeds ${MAX_UPLOAD_ROWS} row limit`);
+        return;
+      }
+
+      // Pre-load all existing lead addresses for O(1) duplicate detection (replaces per-row table scan)
+      console.log('🔍 Pre-loading existing lead addresses for duplicate detection...');
+      const { keys: existingAddressKeys, keyToId: existingKeyToId } =
+        await preloadExistingLeadKeys(propertyLeadTableName!, ownerId);
+      console.log(`📋 ${existingAddressKeys.size} existing address keys loaded`);
+
       // 4. Initiate Stream Processing
       const response = await s3.send(
         new GetObjectCommand({ Bucket: autoBucketName, Key: decodedKey })
@@ -336,6 +408,7 @@ export const handler: S3Handler = async (event) => {
           const fullPropString = `${rawPropAddr}, ${cleanCity}, ${rawPropState} ${rawPropZip}`;
 
           // --- 🔍 VALIDATE PROPERTY ADDRESS WITH GOOGLE ---
+          await delay(GOOGLE_API_DELAY_MS); // respect Google Address Validation QPS limit
           const propValidation =
             await validateAddressWithGoogle(fullPropString);
 
@@ -393,6 +466,7 @@ export const handler: S3Handler = async (event) => {
             );
 
             if (rawAdminAddr) {
+              await delay(GOOGLE_API_DELAY_MS); // respect Google Address Validation QPS limit
               const adminValidation = await validateAddressWithGoogle(
                 `${rawAdminAddr}, ${sanitize(row['adminCity'])} ${rawAdminZip}`
               );
@@ -421,35 +495,18 @@ export const handler: S3Handler = async (event) => {
           const preSkiptracedPhone = formatPhoneNumber(row['phone']);
 
           // --- 💾 CHECK FOR DUPLICATES BEFORE SAVING ---
-          // For probate: Check by admin address (since that's who we contact)
-          // For preforeclosure: Check by property address
-          // ⚠️ IMPORTANT: User-scoped only - each user can have the same property
-          const duplicateCheckAddress = leadType === 'PROBATE' 
+          // O(1) lookup against the pre-loaded Set — replaces a full table scan per row
+          const dupKey = leadType === 'PROBATE'
+            ? makeAddressKey(finalMailAddr, finalMailZip)
+            : makeAddressKey(finalPropAddr, finalPropZip);
+          const duplicateCheckAddress = leadType === 'PROBATE'
             ? `${finalMailAddr || ''} ${finalMailCity || ''} ${finalMailZip || ''}`.trim()
             : `${finalPropAddr} ${finalPropCity} ${finalPropZip}`.trim();
 
-          if (duplicateCheckAddress) {
-            // 👤 User-scoped duplicate check (prevents same user uploading twice)
-            const existingLeadScan = await docClient.send(new ScanCommand({
-              TableName: propertyLeadTableName,
-              FilterExpression: leadType === 'PROBATE' 
-                ? 'contains(mailingAddress, :addr) AND mailingZip = :zip AND #owner = :owner'
-                : 'contains(ownerAddress, :addr) AND ownerZip = :zip AND #owner = :owner',
-              ExpressionAttributeNames: {
-                '#owner': 'owner'
-              },
-              ExpressionAttributeValues: {
-                ':addr': leadType === 'PROBATE' ? (finalMailAddr || '') : finalPropAddr,
-                ':zip': leadType === 'PROBATE' ? (finalMailZip || '') : finalPropZip,
-                ':owner': ownerId
-              }
-            }));
+          if (dupKey && existingAddressKeys.has(dupKey)) {
+            console.log(`⏭️ Skipping duplicate lead for user ${ownerId}: ${duplicateCheckAddress}`);
 
-            if (existingLeadScan.Items && existingLeadScan.Items.length > 0) {
-              const existingLead = existingLeadScan.Items[0];
-              console.log(`⏭️ Skipping duplicate lead for user ${ownerId}: ${duplicateCheckAddress}`);
-              
-              // Collect duplicate lead information
+            if (duplicateLeads.length < MAX_DUPLICATE_STORE) {
               duplicateLeads.push({
                 csvData: {
                   ownerName: `${ownerFirstName || ''} ${ownerLastName || ''}`.trim(),
@@ -458,34 +515,29 @@ export const handler: S3Handler = async (event) => {
                   state: finalPropState,
                   zip: finalPropZip,
                 },
-                existingLeadId: existingLead.id,
-                existingLeadData: {
-                  ownerName: `${existingLead.ownerFirstName || ''} ${existingLead.ownerLastName || ''}`.trim(),
-                  address: existingLead.ownerAddress,
-                  zestimate: existingLead.zestimate,
-                },
+                existingLeadId: existingKeyToId.get(dupKey) || null,
+                existingLeadData: null,
               });
-              
-              duplicateCount++;
-              
-              // Update progress for duplicates too
-              if (currentRow % 10 === 0) {
-                await docClient.send(new UpdateCommand({
-                  TableName: csvUploadJobTableName,
-                  Key: { id: jobId },
-                  UpdateExpression: 'SET processedRows = :processed, successCount = :success, duplicateCount = :duplicate, duplicateLeads = :duplicates, updatedAt = :updated',
-                  ExpressionAttributeValues: {
-                    ':processed': currentRow,
-                    ':success': successCount,
-                    ':duplicate': duplicateCount,
-                    ':duplicates': duplicateLeads,
-                    ':updated': new Date().toISOString(),
-                  }
-                }));
-              }
-              
-              continue; // Skip this lead
             }
+
+            duplicateCount++;
+
+            if (currentRow % 25 === 0) {
+              await docClient.send(new UpdateCommand({
+                TableName: csvUploadJobTableName,
+                Key: { id: jobId },
+                UpdateExpression: 'SET processedRows = :processed, successCount = :success, duplicateCount = :duplicate, duplicateLeads = :duplicates, updatedAt = :updated',
+                ExpressionAttributeValues: {
+                  ':processed': currentRow,
+                  ':success': successCount,
+                  ':duplicate': duplicateCount,
+                  ':duplicates': duplicateLeads,
+                  ':updated': new Date().toISOString(),
+                }
+              }));
+            }
+
+            continue; // Skip this lead
           }
           // 🏠 Fetch Zestimate data during upload
           let zillowData = null;
@@ -588,10 +640,12 @@ export const handler: S3Handler = async (event) => {
             Item: leadItem
           }));
 
+          // Register new lead in the duplicate set so intra-file duplicates are caught
+          if (dupKey) existingAddressKeys.add(dupKey);
+
           successCount++;
-          
-          // Update progress every 10 rows
-          if (currentRow % 10 === 0) {
+
+          if (currentRow % 25 === 0) {
             await docClient.send(new UpdateCommand({
               TableName: csvUploadJobTableName,
               Key: { id: jobId },
