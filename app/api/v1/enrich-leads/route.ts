@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { AuthIsUserAuthenticatedServer } from '@/app/utils/aws/auth/amplifyServerUtils.server';
+import { AuthGetCurrentUserServer } from '@/app/utils/aws/auth/amplifyServerUtils.server';
 import { enrichPreforeclosureLeads } from '@/app/utils/batchdata/enrichment';
 import { getLeadsByIds, updateLead } from '@/app/utils/aws/data/lead.server';
 
@@ -9,11 +9,12 @@ import { getLeadsByIds, updateLead } from '@/app/utils/aws/data/lead.server';
  */
 export async function POST(request: NextRequest) {
   try {
-    // Authenticate user
-    const isAuthenticated = await AuthIsUserAuthenticatedServer();
-    if (!isAuthenticated) {
+    // Authenticate user and get their ID for ownership validation
+    const user = await AuthGetCurrentUserServer();
+    if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    const userId = user.userId;
 
     // Parse request body
     const body = await request.json();
@@ -28,7 +29,14 @@ export async function POST(request: NextRequest) {
 
     // Fetch leads
     const leads = await getLeadsByIds(leadIds);
-    
+
+    // IDOR guard: every requested lead must belong to the calling user
+    const foreignLeads = leads.filter(lead => lead.owner !== userId);
+    if (foreignLeads.length > 0) {
+      console.warn(`⚠️ IDOR attempt: user ${userId} requested ${foreignLeads.length} leads they don't own`);
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
     console.log('📊 Enrich Debug:', {
       requestedIds: leadIds,
       fetchedCount: leads.length,

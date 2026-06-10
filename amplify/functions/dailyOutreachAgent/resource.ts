@@ -8,7 +8,8 @@ export const dailyOutreachAgent = defineFunction({
   environment: {
     AMPLIFY_DATA_GhlIntegration_TABLE_NAME: process.env.AMPLIFY_DATA_GhlIntegration_TABLE_NAME || '',
     API_ENDPOINT: process.env.API_ENDPOINT || 'https://leads.JoseTheRealtor.com',
-    OPENAI_API_KEY: process.env.OPENAI_API_KEY || ''
+    OPENAI_API_KEY: process.env.OPENAI_API_KEY || '',
+    INTERNAL_API_SECRET: process.env.INTERNAL_API_SECRET || '',
   }
   // SMS OUTREACH PERMANENTLY DISABLED - DO NOT RE-ENABLE WITHOUT FIXING DUPLICATE PREVENTION
 });

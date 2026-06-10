@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server';
-import { randomBytes } from 'crypto';
+import { randomBytes, createHmac } from 'crypto';
 import { AuthGetCurrentUserServer, AuthGetUserGroupsServer } from '@/app/utils/aws/auth/amplifyServerUtils.server';
 
 const GHL_CLIENT_ID = process.env.GHL_CLIENT_ID;
+const GHL_STATE_SECRET = process.env.GHL_STATE_SECRET!;
 const GHL_REDIRECT_URI = process.env.GHL_REDIRECT_URI || 
   (process.env.NODE_ENV === 'development' 
     ? 'http://localhost:3000/api/v1/oauth/callback'
@@ -36,12 +37,13 @@ export async function GET(req: Request) {
       return NextResponse.redirect('https://leads.josetherealtor.com/pricing');
     }
 
-    // Generate state with user ID encoded
-    const stateData = {
-      userId: user.userId,
-      nonce: randomBytes(16).toString('hex')
-    };
-    const state = Buffer.from(JSON.stringify(stateData)).toString('base64');
+    // Build a signed state token — prevents CSRF / account-takeover via crafted state.
+    // Signed payload: "userId|nonce|timestamp" — deterministic order avoids JSON key issues.
+    const nonce = randomBytes(16).toString('hex');
+    const timestamp = Date.now();
+    const sigPayload = `${user.userId}|${nonce}|${timestamp}`;
+    const sig = createHmac('sha256', GHL_STATE_SECRET).update(sigPayload).digest('hex');
+    const state = Buffer.from(JSON.stringify({ userId: user.userId, nonce, timestamp, sig })).toString('base64');
     
     // Build GHL authorization URL
     const authUrl = new URL('https://marketplace.leadconnectorhq.com/oauth/chooselocation');

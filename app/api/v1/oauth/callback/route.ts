@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { createHmac, timingSafeEqual } from 'crypto';
 import axios from 'axios';
 import { createGhlIntegration } from '@/app/utils/aws/data/ghlIntegration.server';
+
+const GHL_STATE_SECRET = process.env.GHL_STATE_SECRET!;
+const STATE_MAX_AGE_MS = 15 * 60 * 1000; // 15 minutes — enough time for a user to complete OAuth
 
 /**
  * GHL OAUTH CALLBACK HANDLER
@@ -66,19 +70,29 @@ export async function GET(req: Request) {
 
     let userId: string;
     try {
-      console.log('Raw state parameter:', state);
       const stateData = JSON.parse(Buffer.from(state, 'base64').toString());
-      console.log('Parsed state data:', stateData);
-      
-      if (!stateData.userId) {
-        throw new Error('No user ID in state');
+      const { userId: uid, nonce, timestamp, sig } = stateData;
+
+      if (!uid || !nonce || !timestamp || !sig) throw new Error('Incomplete state fields');
+
+      // Reject expired state tokens (user took more than 15 minutes on the OAuth screen)
+      if (Date.now() - timestamp > STATE_MAX_AGE_MS) {
+        throw new Error('State token expired');
       }
-      
-      userId = stateData.userId;
-      console.log('Extracted user ID from state:', userId);
+
+      // Verify HMAC — same canonical payload used in oauth/start
+      const sigPayload = `${uid}|${nonce}|${timestamp}`;
+      const expected = createHmac('sha256', GHL_STATE_SECRET).update(sigPayload).digest('hex');
+      const sigBuf = Buffer.from(sig.padEnd(expected.length));
+      const expBuf = Buffer.from(expected);
+      if (sigBuf.length !== expBuf.length || !timingSafeEqual(sigBuf, expBuf)) {
+        throw new Error('State HMAC verification failed');
+      }
+
+      userId = uid;
+      console.log('State verified for user:', userId);
     } catch (stateError) {
-      console.error('State parsing error:', stateError);
-      console.error('State value was:', state);
+      console.error('State verification error:', stateError);
       return NextResponse.redirect('https://leads.josetherealtor.com/oauth/error?error=invalid_state');
     }
 

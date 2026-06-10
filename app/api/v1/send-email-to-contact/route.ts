@@ -54,10 +54,18 @@ import { generateEmailAIResponse } from '@/app/utils/ai/emailConversationHandler
  * - /utils/ai/emailConversationHandler - Email content generator
  * - /api/v1/ghl-email-webhook - Handles email replies
  */
+const INTERNAL_API_SECRET = process.env.INTERNAL_API_SECRET;
+
 export async function POST(req: Request) {
   try {
+    // This endpoint is Lambda-only. Reject any request without the shared secret.
+    const callerSecret = req.headers.get('x-internal-secret');
+    if (!INTERNAL_API_SECRET || callerSecret !== INTERNAL_API_SECRET) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
     const { contactId, accessToken, fromEmail, emailSignature, toEmail } = await req.json();
-    
+
     if (!contactId || !accessToken) {
       return NextResponse.json(
         { error: 'contactId and accessToken are required' },

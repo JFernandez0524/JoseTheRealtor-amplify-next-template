@@ -367,13 +367,18 @@ async function sendFollowUpOutreach(contact: any, integration: GhlIntegration, p
   try {
     const response = await axios.post(
       `${apiUrl}/api/v1/send-message-to-contact`,
-      { 
-        contactId: contact.id, 
-        accessToken: integration.accessToken, 
+      {
+        contactId: contact.id,
+        accessToken: integration.accessToken,
         fromNumber: phoneNumber,
         touchNumber // Pass touch number to API
       },
-      { headers: { 'Content-Type': 'application/json' } }
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          'x-internal-secret': process.env.INTERNAL_API_SECRET || '',
+        }
+      }
     );
     
     console.log(`✅ Sent touch ${touchNumber} to ${contact.firstName} ${contact.lastName}`);

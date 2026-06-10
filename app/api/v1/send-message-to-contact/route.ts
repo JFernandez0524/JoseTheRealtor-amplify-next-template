@@ -39,27 +39,18 @@ import { NextResponse } from 'next/server';
 import axios from 'axios';
 import { generateAIResponse } from '@/app/utils/ai/conversationHandler';
 
-/**
- * PRODUCTION OUTBOUND MESSAGING ENDPOINT
- * 
- * Used by dailyOutreachAgent Lambda for automated outreach.
- * Does NOT require user authentication - uses provided access token.
- * 
- * WORKFLOW:
- * 1. Validate access token provided in request
- * 2. Fetch contact data from GHL API
- * 3. Extract property info from custom fields
- * 4. Generate AI message using 5-step script
- * 5. Send via GHL Conversations API
- * 
- * USAGE:
- * POST /api/v1/send-message-to-contact
- * Body: { contactId: string, accessToken: string }
- */
+const INTERNAL_API_SECRET = process.env.INTERNAL_API_SECRET;
+
 export async function POST(req: Request) {
   try {
+    // This endpoint is Lambda-only. Reject any request without the shared secret.
+    const callerSecret = req.headers.get('x-internal-secret');
+    if (!INTERNAL_API_SECRET || callerSecret !== INTERNAL_API_SECRET) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
     const { contactId, accessToken, fromNumber, touchNumber } = await req.json();
-    
+
     if (!contactId || !accessToken) {
       return NextResponse.json(
         { error: 'contactId and accessToken are required' },

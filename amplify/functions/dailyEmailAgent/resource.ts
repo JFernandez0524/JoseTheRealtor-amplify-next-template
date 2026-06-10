@@ -8,7 +8,8 @@ export const dailyEmailAgent = defineFunction({
     AMPLIFY_DATA_GhlIntegration_TABLE_NAME: process.env.AMPLIFY_DATA_GhlIntegration_TABLE_NAME || '',
     AMPLIFY_DATA_OutreachQueue_TABLE_NAME: process.env.AMPLIFY_DATA_OutreachQueue_TABLE_NAME || '',
     APP_URL: process.env.NEXT_PUBLIC_APP_URL || 'https://leads.josetherealtor.com',
-    OPENAI_API_KEY: process.env.OPENAI_API_KEY || ''
+    OPENAI_API_KEY: process.env.OPENAI_API_KEY || '',
+    INTERNAL_API_SECRET: process.env.INTERNAL_API_SECRET || '',
   },
   schedule: 'every 1h', // Run every hour, business hours check inside handler
 });
