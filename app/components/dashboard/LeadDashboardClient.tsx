@@ -50,6 +50,7 @@ export default function LeadDashboardClient({}: Props) {
   const [alreadySyncedCount, setAlreadySyncedCount] = useState(0);
   const [syncProgress, setSyncProgress] = useState<{ current: number; total: number } | null>(null);
   const [failedSyncIds, setFailedSyncIds] = useState<string[]>([]);
+  const [skippedSyncIds, setSkippedSyncIds] = useState<string[]>([]);
 
   const [isLoading, setIsLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
@@ -444,6 +445,7 @@ export default function LeadDashboardClient({}: Props) {
     setAlreadySyncedCount(alreadySynced);
     setSyncCounts({ calling: callingLeads.length, emailOnly: emailOnlyLeads.length, digitalOnly: digitalOnlyLeads.length });
     setFailedSyncIds([]);
+    setSkippedSyncIds([]);
     setShowSyncModal(true);
   };
 
@@ -454,7 +456,7 @@ export default function LeadDashboardClient({}: Props) {
     setSyncProgress({ current: 0, total: ids.length });
     setProcessingMessage('Starting GHL sync...');
     try {
-      const { successful, skipped, failed, failedIds } = await syncToGHL(ids, (current, total) => {
+      const { successful, skipped, failed, failedIds, skippedIds } = await syncToGHL(ids, (current, total) => {
         setSyncProgress({ current, total });
         setProcessingMessage(`Syncing leads to GHL... (${current}/${total})`);
       });
@@ -464,6 +466,7 @@ export default function LeadDashboardClient({}: Props) {
       setProcessingMessage('');
       setSelectedIds([]);
       setFailedSyncIds(failedIds);
+      setSkippedSyncIds(skippedIds);
 
       const parts = [`Synced: ${successful}`];
       if (skipped > 0) parts.push(`Skipped: ${skipped}`);
@@ -948,6 +951,32 @@ export default function LeadDashboardClient({}: Props) {
             <button
               onClick={() => setFailedSyncIds([])}
               className="text-xs text-red-500 hover:text-red-700 px-2 py-1.5"
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Skipped sync banner */}
+      {!isProcessing && skippedSyncIds.length > 0 && (
+        <div className="flex items-center justify-between bg-yellow-50 border border-yellow-200 rounded-lg px-4 py-3">
+          <p className="text-sm text-yellow-800">
+            <span className="font-semibold">{skippedSyncIds.length} lead{skippedSyncIds.length !== 1 ? 's' : ''}</span> skipped — skip trace not completed.
+          </p>
+          <div className="flex gap-2">
+            <button
+              onClick={() => {
+                setSelectedIds(skippedSyncIds);
+                setSkippedSyncIds([]);
+              }}
+              className="text-xs font-semibold text-yellow-700 bg-yellow-100 hover:bg-yellow-200 px-3 py-1.5 rounded-lg transition-colors"
+            >
+              Select &amp; Skip Trace
+            </button>
+            <button
+              onClick={() => setSkippedSyncIds([])}
+              className="text-xs text-yellow-600 hover:text-yellow-800 px-2 py-1.5"
             >
               Dismiss
             </button>

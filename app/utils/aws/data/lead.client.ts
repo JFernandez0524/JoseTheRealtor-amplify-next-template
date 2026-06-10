@@ -239,7 +239,7 @@ export async function skipTraceLeads(leadIds: string[]): Promise<any> {
  * - Includes property details, Zestimate, and cash offer
  * - UI should refresh after operation completes
  */
-export async function syncToGHL(leadIds: string[], onProgress?: (current: number, total: number, message: string) => void): Promise<{ successful: number; failed: number; skipped: number; failedIds: string[]; isAsync?: boolean }> {
+export async function syncToGHL(leadIds: string[], onProgress?: (current: number, total: number, message: string) => void): Promise<{ successful: number; failed: number; skipped: number; failedIds: string[]; skippedIds: string[]; isAsync?: boolean }> {
   try {
     const BATCH_SIZE = 10;
     const DELAY_MS = 250;
@@ -248,6 +248,7 @@ export async function syncToGHL(leadIds: string[], onProgress?: (current: number
     let failed = 0;
     let skipped = 0;
     const failedIds: string[] = [];
+    const skippedIds: string[] = [];
     
     console.log(`🔄 Syncing ${leadIds.length} leads in batches of ${BATCH_SIZE}...`);
     
@@ -293,6 +294,7 @@ export async function syncToGHL(leadIds: string[], onProgress?: (current: number
             console.log(`✅ Lead ${batch[index]} synced successfully`);
           } else if (status === 'SKIPPED') {
             skipped++;
+            skippedIds.push(batch[index]);
             console.log(`⏭️ Lead ${batch[index]} skipped: ${syncData?.message}`);
           } else {
             failed++;
@@ -317,7 +319,7 @@ export async function syncToGHL(leadIds: string[], onProgress?: (current: number
     }
 
     console.log(`✅ GHL Sync complete: ${successful} successful, ${skipped} skipped, ${failed} failed`);
-    return { successful, skipped, failed, failedIds };
+    return { successful, skipped, failed, failedIds, skippedIds };
   } catch (err) {
     console.error('Failed to sync to GHL:', err);
     throw err;

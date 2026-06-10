@@ -30,6 +30,7 @@ async function processGhlSync(lead: any, groups: string[] = [], ownerId: string 
   const validation = validateLeadForSync(lead);
   if (!validation.isValid) {
     console.log(`⏭️ Skipping sync - ${validation.reason}`);
+    await updateLeadSyncStatus(docClient, propertyLeadTableName!, lead.id, 'SKIPPED');
     return {
       status: 'SKIPPED',
       message: validation.reason!,
