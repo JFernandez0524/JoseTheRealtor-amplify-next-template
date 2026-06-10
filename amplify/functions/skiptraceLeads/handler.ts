@@ -312,8 +312,8 @@ export const handler: Handler = async (event) => {
     throw new Error('Unauthorized: Missing user identity or lead data.');
   }
 
-  if (leadIds.length > 100) {
-    throw new Error('Maximum 100 leads can be skip traced at once.');
+  if (leadIds.length > 25) {
+    throw new Error('Maximum 25 leads can be skip traced at once.');
   }
 
   // 🛡️ 2. Tier Authorization Check

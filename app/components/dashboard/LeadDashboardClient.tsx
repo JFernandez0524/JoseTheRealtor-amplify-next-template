@@ -482,10 +482,12 @@ export default function LeadDashboardClient({}: Props) {
     const chargeableCount = selectedIds.length - alreadyTraced.length;
 
     setAlreadyTracedCount(alreadyTraced.length);
-    setIsLargeBatch(chargeableCount > 50);
+    setIsLargeBatch(chargeableCount > 25);
     setPendingAction('skipTrace');
     setShowRouteModal(true);
   };
+
+  const SKIP_TRACE_CHUNK_SIZE = 25;
 
   const executeSkipTrace = async () => {
     if (skipTraceInFlight.current) return;
@@ -514,33 +516,36 @@ export default function LeadDashboardClient({}: Props) {
     }
 
     setIsProcessing(true);
-    setProcessingMessage(`Skip tracing ${idsToProcess.length} leads...`);
-    
+
+    // Split into chunks and process sequentially to avoid Lambda timeout
+    const chunks: string[][] = [];
+    for (let i = 0; i < idsToProcess.length; i += SKIP_TRACE_CHUNK_SIZE) {
+      chunks.push(idsToProcess.slice(i, i + SKIP_TRACE_CHUNK_SIZE));
+    }
+
+    const allResults: any[] = [];
+
     try {
-      const results = await skipTraceLeads(idsToProcess).then(r => Array.isArray(r) ? r : []);
+      for (let i = 0; i < chunks.length; i++) {
+        const chunk = chunks[i];
+        setProcessingMessage(
+          chunks.length > 1
+            ? `Skip tracing batch ${i + 1} of ${chunks.length} (${chunk.length} leads)...`
+            : `Skip tracing ${chunk.length} lead${chunk.length !== 1 ? 's' : ''}...`
+        );
+        const results = await skipTraceLeads(chunk).then(r => Array.isArray(r) ? r : []);
+        allResults.push(...results);
+      }
 
-      console.log('Skip trace complete:', results.length, 'results');
-      
-      const successful = results.filter((r: any) => r?.status === 'SUCCESS').length;
-      const failed = results.filter((r: any) => r?.status === 'FAILED' || r?.status === 'ERROR').length;
-      
-      const noMatch = results.filter(
-        (r: any) => r?.status === 'NO_MATCH'
-      ).length;
-      
-      const noQuality = results.filter(
-        (r: any) => r?.status === 'NO_QUALITY_CONTACTS'
-      ).length;
-
-      console.log('Successful count:', successful);
-      console.log('Failed count:', failed);
-      console.log('No Match count:', noMatch);
-      console.log('No Quality count:', noQuality);
+      const successful = allResults.filter((r: any) => r?.status === 'SUCCESS').length;
+      const failed = allResults.filter((r: any) => r?.status === 'FAILED' || r?.status === 'ERROR').length;
+      const noMatch = allResults.filter((r: any) => r?.status === 'NO_MATCH').length;
+      const noQuality = allResults.filter((r: any) => r?.status === 'NO_QUALITY_CONTACTS').length;
 
       addToast({ type: 'success', title: 'Skip-trace complete!', message: `Successful: ${successful} | Failed: ${failed} | No Match: ${noMatch} | No Quality: ${noQuality}`, duration: 8000 });
 
       setSelectedIds([]);
-      
+
       // Refresh page after 1 second
       setTimeout(() => window.location.reload(), 1000);
     } catch (err: any) {

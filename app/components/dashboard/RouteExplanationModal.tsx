@@ -78,7 +78,7 @@ export function RouteExplanationModal({
           {isLargeBatch && (
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
               <p className="text-sm text-blue-800">
-                <span className="font-semibold">Large batch ({chargeableCount} leads)</span> — will process in batches of 50. This may take a few minutes.
+                <span className="font-semibold">Large batch ({chargeableCount} leads)</span> — will process in batches of 25. This may take a few minutes.
               </p>
             </div>
           )}
