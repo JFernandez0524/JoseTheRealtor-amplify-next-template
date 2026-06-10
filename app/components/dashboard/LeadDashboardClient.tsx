@@ -16,6 +16,7 @@ import { LeadTable } from './LeadTable';
 import { DashboardFilters } from './DashboardFilters';
 import { GhlConnection } from './GhlConnection';
 import { RouteExplanationModal } from './RouteExplanationModal';
+import { SyncConfirmModal } from './SyncConfirmModal';
 import { getFrontEndUser } from '@/app/utils/aws/auth/amplifyFrontEndUser';
 import type { Schema } from '@/amplify/data/resource';
 
@@ -42,6 +43,8 @@ export default function LeadDashboardClient({}: Props) {
   const [isPopulatingQueue, setIsPopulatingQueue] = useState(false);
   const [alreadyTracedCount, setAlreadyTracedCount] = useState(0);
   const [isLargeBatch, setIsLargeBatch] = useState(false);
+  const [showSyncModal, setShowSyncModal] = useState(false);
+  const [syncCounts, setSyncCounts] = useState({ calling: 0, emailOnly: 0, digitalOnly: 0 });
 
   const [isLoading, setIsLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
@@ -427,20 +430,12 @@ export default function LeadDashboardClient({}: Props) {
       return value < 300000 || value > 850000;
     });
 
-    let confirmMessage = `Sync ${selectedIds.length} leads to your CRM?\n\n`;
-    
-    if (callingLeads.length > 0) {
-      confirmMessage += `📞 Cold Calling: ${callingLeads.length} leads with qualified phones\n`;
-    }
-    if (emailOnlyLeads.length > 0) {
-      confirmMessage += `📬 Direct Mail/Email: ${emailOnlyLeads.length} email-only leads ($300k-$850k)\n`;
-    }
-    if (digitalOnlyLeads.length > 0) {
-      confirmMessage += `📱 Digital Only: ${digitalOnlyLeads.length} leads outside $300k-$850k range`;
-    }
+    setSyncCounts({ calling: callingLeads.length, emailOnly: emailOnlyLeads.length, digitalOnly: digitalOnlyLeads.length });
+    setShowSyncModal(true);
+  };
 
-    if (!confirm(confirmMessage)) return;
-
+  const executeBulkGHLSync = async () => {
+    setShowSyncModal(false);
     setIsProcessing(true);
     setProcessingMessage('Starting GHL sync...');
     try {
@@ -1239,6 +1234,17 @@ export default function LeadDashboardClient({}: Props) {
           </div>
         </div>
       )}
+
+      {/* GHL Sync Confirmation Modal */}
+      <SyncConfirmModal
+        isOpen={showSyncModal}
+        onClose={() => setShowSyncModal(false)}
+        onConfirm={executeBulkGHLSync}
+        totalCount={selectedIds.length}
+        callingCount={syncCounts.calling}
+        emailOnlyCount={syncCounts.emailOnly}
+        digitalOnlyCount={syncCounts.digitalOnly}
+      />
 
       {/* Route Explanation Modal */}
       {showRouteModal && selectedLeadType && (
