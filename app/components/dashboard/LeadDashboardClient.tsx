@@ -11,6 +11,7 @@ import {
   syncToGHL
 } from '@/app/utils/aws/data/lead.client';
 import { useAccess } from '@/app/context/AccessContext';
+import { useGhl } from '@/app/context/GhlContext';
 import { useToast } from '@/app/components/leadDetails/ToastProvider';
 import { LeadTable } from './LeadTable';
 import { DashboardFilters } from './DashboardFilters';
@@ -29,6 +30,7 @@ export default function LeadDashboardClient({}: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { hasPaidPlan, isAdmin, isAI } = useAccess();
+  const { isConnected: isGhlConnected } = useGhl();
   const { addToast } = useToast();
 
   // --- State ---
@@ -45,6 +47,9 @@ export default function LeadDashboardClient({}: Props) {
   const [isLargeBatch, setIsLargeBatch] = useState(false);
   const [showSyncModal, setShowSyncModal] = useState(false);
   const [syncCounts, setSyncCounts] = useState({ calling: 0, emailOnly: 0, digitalOnly: 0 });
+  const [alreadySyncedCount, setAlreadySyncedCount] = useState(0);
+  const [syncProgress, setSyncProgress] = useState<{ current: number; total: number } | null>(null);
+  const [failedSyncIds, setFailedSyncIds] = useState<string[]>([]);
 
   const [isLoading, setIsLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
@@ -412,6 +417,11 @@ export default function LeadDashboardClient({}: Props) {
       return;
     }
 
+    if (!isGhlConnected) {
+      addToast({ type: 'warning', title: 'GHL Not Connected', message: 'Connect your GoHighLevel account before syncing leads.' });
+      return;
+    }
+
     // Categorize leads by skip trace results and property value
     const selectedLeads = leads.filter(lead => selectedIds.includes(lead.id));
     
@@ -430,31 +440,47 @@ export default function LeadDashboardClient({}: Props) {
       return value < 300000 || value > 850000;
     });
 
+    const alreadySynced = selectedLeads.filter(lead => lead.ghlSyncStatus === 'SUCCESS').length;
+    setAlreadySyncedCount(alreadySynced);
     setSyncCounts({ calling: callingLeads.length, emailOnly: emailOnlyLeads.length, digitalOnly: digitalOnlyLeads.length });
+    setFailedSyncIds([]);
     setShowSyncModal(true);
   };
 
-  const executeBulkGHLSync = async () => {
+  const executeBulkGHLSync = async (idsToSync?: string[]) => {
+    const ids = idsToSync ?? selectedIds;
     setShowSyncModal(false);
     setIsProcessing(true);
+    setSyncProgress({ current: 0, total: ids.length });
     setProcessingMessage('Starting GHL sync...');
     try {
-      const { successful, skipped, failed } = await syncToGHL(selectedIds, (current, total, message) => {
-        setProcessingMessage(`${message} (${current}/${total})`);
+      const { successful, skipped, failed, failedIds } = await syncToGHL(ids, (current, total) => {
+        setSyncProgress({ current, total });
+        setProcessingMessage(`Syncing leads to GHL... (${current}/${total})`);
       });
-      
+
       setIsProcessing(false);
+      setSyncProgress(null);
       setProcessingMessage('');
       setSelectedIds([]);
-      
-      addToast({ type: 'success', title: 'CRM Sync Complete', message: `Synced: ${successful} | Skipped: ${skipped} | Failed: ${failed}`, duration: 8000 });
-      
-      // Refresh page after alert is dismissed
-      window.location.reload();
-      
+      setFailedSyncIds(failedIds);
+
+      const parts = [`Synced: ${successful}`];
+      if (skipped > 0) parts.push(`Skipped: ${skipped}`);
+      if (failed > 0) parts.push(`Failed: ${failed}`);
+      addToast({
+        type: failed > 0 ? 'warning' : 'success',
+        title: 'CRM Sync Complete',
+        message: parts.join(' · '),
+        duration: 8000,
+      });
+
+      await refreshLeads();
+
     } catch (err) {
       console.error('Sync error:', err);
       setIsProcessing(false);
+      setSyncProgress(null);
       setProcessingMessage('');
       addToast({ type: 'error', title: 'CRM Sync Failed', message: 'Ensure leads are skip-traced first.' });
     }
@@ -885,10 +911,46 @@ export default function LeadDashboardClient({}: Props) {
     <div className='space-y-4'>
       {/* Processing Status */}
       {isProcessing && (
-        <div className="fixed top-4 right-4 bg-blue-500 text-white px-4 py-2 rounded-lg shadow-lg z-50">
-          <div className="flex items-center space-x-2">
-            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-            <span>{processingMessage || 'Processing...'}</span>
+        <div className="fixed top-4 right-4 bg-white border border-gray-200 rounded-xl shadow-xl z-50 min-w-[280px] max-w-xs p-4">
+          <div className="flex items-center gap-3 mb-2">
+            <div className="animate-spin rounded-full h-4 w-4 border-2 border-indigo-600 border-t-transparent shrink-0"></div>
+            <span className="text-sm font-medium text-gray-800 truncate">{processingMessage || 'Processing...'}</span>
+          </div>
+          {syncProgress && syncProgress.total > 0 && (
+            <div>
+              <div className="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
+                <div
+                  className="bg-indigo-500 h-1.5 rounded-full transition-all duration-300"
+                  style={{ width: `${Math.round((syncProgress.current / syncProgress.total) * 100)}%` }}
+                />
+              </div>
+              <p className="text-xs text-gray-400 mt-1 text-right">
+                {syncProgress.current} / {syncProgress.total}
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Failed sync retry banner */}
+      {!isProcessing && failedSyncIds.length > 0 && (
+        <div className="flex items-center justify-between bg-red-50 border border-red-200 rounded-lg px-4 py-3">
+          <p className="text-sm text-red-800">
+            <span className="font-semibold">{failedSyncIds.length} lead{failedSyncIds.length !== 1 ? 's' : ''}</span> failed to sync.
+          </p>
+          <div className="flex gap-2">
+            <button
+              onClick={() => executeBulkGHLSync(failedSyncIds)}
+              className="text-xs font-semibold text-red-700 bg-red-100 hover:bg-red-200 px-3 py-1.5 rounded-lg transition-colors"
+            >
+              Retry Failed
+            </button>
+            <button
+              onClick={() => setFailedSyncIds([])}
+              className="text-xs text-red-500 hover:text-red-700 px-2 py-1.5"
+            >
+              Dismiss
+            </button>
           </div>
         </div>
       )}
@@ -1239,11 +1301,12 @@ export default function LeadDashboardClient({}: Props) {
       <SyncConfirmModal
         isOpen={showSyncModal}
         onClose={() => setShowSyncModal(false)}
-        onConfirm={executeBulkGHLSync}
+        onConfirm={() => executeBulkGHLSync()}
         totalCount={selectedIds.length}
         callingCount={syncCounts.calling}
         emailOnlyCount={syncCounts.emailOnly}
         digitalOnlyCount={syncCounts.digitalOnly}
+        alreadySyncedCount={alreadySyncedCount}
       />
 
       {/* Route Explanation Modal */}

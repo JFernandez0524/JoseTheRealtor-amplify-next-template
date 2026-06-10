@@ -239,14 +239,15 @@ export async function skipTraceLeads(leadIds: string[]): Promise<any> {
  * - Includes property details, Zestimate, and cash offer
  * - UI should refresh after operation completes
  */
-export async function syncToGHL(leadIds: string[], onProgress?: (current: number, total: number, message: string) => void): Promise<{ successful: number; failed: number; skipped: number; isAsync?: boolean }> {
+export async function syncToGHL(leadIds: string[], onProgress?: (current: number, total: number, message: string) => void): Promise<{ successful: number; failed: number; skipped: number; failedIds: string[]; isAsync?: boolean }> {
   try {
     const BATCH_SIZE = 10;
-    const DELAY_MS = 2000;
-    
+    const DELAY_MS = 250;
+
     let successful = 0;
     let failed = 0;
     let skipped = 0;
+    const failedIds: string[] = [];
     
     console.log(`🔄 Syncing ${leadIds.length} leads in batches of ${BATCH_SIZE}...`);
     
@@ -295,30 +296,28 @@ export async function syncToGHL(leadIds: string[], onProgress?: (current: number
             console.log(`⏭️ Lead ${batch[index]} skipped: ${syncData?.message}`);
           } else {
             failed++;
+            failedIds.push(batch[index]);
             console.log(`❌ Lead ${batch[index]} failed - Status: ${status}, Message: ${syncData?.message}`);
           }
         } else {
           failed++;
+          failedIds.push(batch[index]);
           console.log(`❌ Lead ${batch[index]} Lambda execution failed: ${result.reason}`);
         }
       });
       
-      // Add delay between batches (except for the last batch)
+      // Short pause between batches to avoid hammering the Lambda concurrency limit
       if (i + BATCH_SIZE < leadIds.length) {
-        if (onProgress) {
-          onProgress(i + batch.length, leadIds.length, `Waiting 2 seconds before next batch...`);
-        }
-        console.log(`⏳ Waiting ${DELAY_MS}ms before next batch...`);
         await new Promise(resolve => setTimeout(resolve, DELAY_MS));
       }
     }
-    
+
     if (onProgress) {
       onProgress(leadIds.length, leadIds.length, `Complete! ${successful} successful, ${skipped} skipped, ${failed} failed`);
     }
-    
+
     console.log(`✅ GHL Sync complete: ${successful} successful, ${skipped} skipped, ${failed} failed`);
-    return { successful, skipped, failed };
+    return { successful, skipped, failed, failedIds };
   } catch (err) {
     console.error('Failed to sync to GHL:', err);
     throw err;

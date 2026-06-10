@@ -18,6 +18,7 @@ interface SyncConfirmModalProps {
   callingCount: number;
   emailOnlyCount: number;
   digitalOnlyCount: number;
+  alreadySyncedCount?: number;
 }
 
 export function SyncConfirmModal({
@@ -28,8 +29,11 @@ export function SyncConfirmModal({
   callingCount,
   emailOnlyCount,
   digitalOnlyCount,
+  alreadySyncedCount = 0,
 }: SyncConfirmModalProps) {
   if (!isOpen) return null;
+
+  const newCount = totalCount - alreadySyncedCount;
 
   const categories: SyncCategory[] = [
     {
@@ -73,9 +77,19 @@ export function SyncConfirmModal({
           </div>
           <h2 className="text-2xl font-bold text-gray-900">Sync to CRM</h2>
           <p className="text-gray-500 mt-1 text-sm">
-            {totalCount} lead{totalCount !== 1 ? 's' : ''} will be sent to GoHighLevel
+            {totalCount} lead{totalCount !== 1 ? 's' : ''} selected
           </p>
         </div>
+
+        {/* Already-synced warning */}
+        {alreadySyncedCount > 0 && (
+          <div className="mb-4 bg-yellow-50 border border-yellow-200 rounded-lg px-4 py-3">
+            <p className="text-sm text-yellow-800">
+              <span className="font-semibold">{alreadySyncedCount} lead{alreadySyncedCount !== 1 ? 's' : ''}</span> already synced — {alreadySyncedCount !== 1 ? 'they' : 'it'} will be updated in GHL.{' '}
+              Only <span className="font-semibold">{newCount}</span> {newCount !== 1 ? 'are' : 'is'} new.
+            </p>
+          </div>
+        )}
 
         {/* Breakdown */}
         <div className="space-y-3 mb-6">
