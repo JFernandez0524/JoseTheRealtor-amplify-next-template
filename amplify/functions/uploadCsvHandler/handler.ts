@@ -548,6 +548,16 @@ export const handler: S3Handler = async (event) => {
             leadLabels: labels,
             phones: preSkiptracedPhone ? [preSkiptracedPhone] : [],
             skipTraceStatus: preSkiptracedPhone ? 'COMPLETED' : 'PENDING',
+            skipTraceCompletedAt: preSkiptracedPhone ? new Date().toISOString() : null,
+            skipTraceHistory: preSkiptracedPhone ? [{
+              timestamp: new Date().toISOString(),
+              status: 'COMPLETED',
+              reason: 'Phone number provided in CSV upload — no skip trace required.',
+              phonesFound: 1,
+              emailsFound: 0,
+              batchRequestId: null,
+              responseTime: null,
+            }] : [],
             ghlSyncStatus: 'PENDING',
             listingStatus: 'off_market', // Default to off_market for new leads
             uploadSource: 'csv_upload',

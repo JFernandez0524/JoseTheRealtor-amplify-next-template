@@ -52,7 +52,15 @@ function cleanName(name: { first?: string | null; last?: string | null }) {
   return cleaned;
 }
 
-async function callBatchDataBulk(leads: any[]): Promise<Map<string, BatchDataResult>> {
+type BatchDataMeta = {
+  requestId: string | null;
+  responseTime: number | null;
+  matchCount: number;
+  noMatchCount: number;
+  errorCount: number;
+};
+
+async function callBatchDataBulk(leads: any[]): Promise<{ resultMap: Map<string, BatchDataResult>; meta: BatchDataMeta }> {
   if (!BATCH_DATA_SERVER_TOKEN) {
     console.error('❌ BATCH_DATA_SERVER_TOKEN is not set');
     throw new Error('Missing BatchData API Key');
@@ -128,13 +136,26 @@ async function callBatchDataBulk(leads: any[]): Promise<Map<string, BatchDataRes
       console.log(`Response data:`, JSON.stringify(res.data, null, 2));
       console.log(`Persons count: ${res.data?.results?.persons?.length || 0}`);
 
+      const responseMeta = res.data?.results?.meta;
+      const meta: BatchDataMeta = {
+        requestId: responseMeta?.requestId || null,
+        responseTime: responseMeta?.performance?.totalRequestTime || null,
+        matchCount: responseMeta?.results?.matchCount ?? 0,
+        noMatchCount: responseMeta?.results?.noMatchCount ?? 0,
+        errorCount: responseMeta?.results?.errorCount ?? 0,
+      };
+      console.log(`📊 BatchData meta: requestId=${meta.requestId}, responseTime=${meta.responseTime}ms, matched=${meta.matchCount}, noMatch=${meta.noMatchCount}, errors=${meta.errorCount}`);
+
       const resultMap = new Map<string, BatchDataResult>();
       const personsArray = res.data?.results?.persons || [];
 
       for (const result of personsArray) {
         const leadId = result.request?.requestId;
-        if (!leadId) continue;
-        
+        if (!leadId) {
+          console.warn('⚠️ BatchData result missing request.requestId — cannot map to lead. Raw result keys:', Object.keys(result));
+          continue;
+        }
+
         if (!result.meta?.matched) {
           resultMap.set(leadId, {
             status: 'NO_MATCH',
@@ -150,12 +171,18 @@ async function callBatchDataBulk(leads: any[]): Promise<Map<string, BatchDataRes
         const foundEmails: string[] = [];
         let mailingData = null;
 
-        if (person.mailingAddress?.street) {
+        // person.mailingAddress can be {} — fall back to property.owner.mailingAddress
+        const mailingAddressSource =
+          person.mailingAddress?.street
+            ? person.mailingAddress
+            : person.property?.owner?.mailingAddress;
+
+        if (mailingAddressSource?.street) {
           mailingData = {
-            mailingAddress: person.mailingAddress.street,
-            mailingCity: person.mailingAddress.city,
-            mailingState: person.mailingAddress.state,
-            mailingZip: person.mailingAddress.zip,
+            mailingAddress: mailingAddressSource.street,
+            mailingCity: mailingAddressSource.city,
+            mailingState: mailingAddressSource.state,
+            mailingZip: mailingAddressSource.zip,
           };
         }
 
@@ -175,10 +202,10 @@ async function callBatchDataBulk(leads: any[]): Promise<Map<string, BatchDataRes
         });
 
         const status = foundPhones.length > 0 || foundEmails.length > 0 ? 'SUCCESS' : 'NO_QUALITY_CONTACTS';
-        resultMap.set(leadId, { 
-          status, 
-          foundPhones, 
-          foundEmails, 
+        resultMap.set(leadId, {
+          status,
+          foundPhones,
+          foundEmails,
           mailingData,
           rawPersonData: person,
           firstName: person.name?.first || null,
@@ -186,29 +213,53 @@ async function callBatchDataBulk(leads: any[]): Promise<Map<string, BatchDataRes
         });
       }
 
-      return resultMap;
+      return { resultMap, meta };
     } catch (error: any) {
       console.error(`❌ BatchData API error (attempt ${attempt + 1}):`, error.message);
       console.error(`Error details:`, {
         status: error.response?.status,
         statusText: error.response?.statusText,
         data: error.response?.data,
-        headers: error.response?.headers
       });
-      
-      if (
-        isAxiosError(error) &&
-        error.response?.status === 429 &&
-        attempt < MAX_RETRIES - 1
-      ) {
-        console.log(`⏳ Rate limited, retrying in ${RETRY_DELAY_MS * Math.pow(2, attempt)}ms...`);
-        await new Promise((r) =>
-          setTimeout(r, RETRY_DELAY_MS * Math.pow(2, attempt))
-        );
-        continue;
+
+      if (isAxiosError(error)) {
+        const status = error.response?.status;
+        const apiMessage: string =
+          error.response?.data?.message ||
+          error.response?.data?.error ||
+          '';
+
+        // 403 covers account/balance/token issues — parse the message for a clear error
+        if (status === 403) {
+          const lower = apiMessage.toLowerCase();
+          if (lower.includes('insufficient balance') || lower.includes('balance')) {
+            throw new Error('BatchData account balance is depleted. Skip tracing is temporarily unavailable. Please top up your BatchData account.');
+          }
+          if (lower.includes('account is disabled') || lower.includes('disabled')) {
+            throw new Error('BatchData account is disabled. Please contact support.');
+          }
+          if (lower.includes('token is disabled') || lower.includes('token')) {
+            throw new Error('BatchData API token is invalid or disabled. Please contact support.');
+          }
+          throw new Error(`BatchData access denied: ${apiMessage || 'permission error'}`);
+        }
+
+        // 400 / 401 / 404 / 405 / 410 — non-transient, no point retrying
+        if (status === 400 || status === 401 || status === 404 || status === 405 || status === 410) {
+          throw new Error(`BatchData request error (${status}): ${apiMessage || error.message}`);
+        }
+
+        // 429 / 500 / 502 / 503 / 504 — transient, back off and retry
+        if (attempt < MAX_RETRIES - 1) {
+          const delay = status === 429
+            ? RETRY_DELAY_MS * Math.pow(2, attempt)
+            : RETRY_DELAY_MS;
+          console.log(`⏳ Transient error (${status}), retrying in ${delay}ms...`);
+          await new Promise((r) => setTimeout(r, delay));
+          continue;
+        }
       }
-      
-      // Don't catch and return empty - let it fail on last attempt
+
       if (attempt === MAX_RETRIES - 1) {
         console.error('❌ All retry attempts failed');
         throw error;
@@ -225,7 +276,10 @@ async function callBatchDataBulk(leads: any[]): Promise<Map<string, BatchDataRes
       mailingData: null,
     });
   });
-  return errorMap;
+  return {
+    resultMap: errorMap,
+    meta: { requestId: null, responseTime: null, matchCount: 0, noMatchCount: 0, errorCount: leads.length },
+  };
 }
 
 // ---------------------------------------------------------
@@ -301,27 +355,6 @@ export const handler: Handler = async (event) => {
     console.log(`👑 Is Owner: ${isOwner}`);
     console.log(`🔧 Is Admin: ${isAdmin}`);
 
-    // All users need credits for skip tracing, except OWNER
-    if (!isOwner) {
-      // Check credit expiration for FREE users only
-      if (!isPro && userAccount?.creditsExpiresAt) {
-        const expirationDate = new Date(userAccount.creditsExpiresAt);
-        const now = new Date();
-        if (now > expirationDate) {
-          console.error('❌ Credits expired');
-          throw new Error('Credits have expired. Please upgrade to PRO or purchase more credits.');
-        }
-      }
-
-      if (!userAccount || (userAccount.credits || 0) < leadIds.length) {
-        console.error(`❌ Insufficient credits: need ${leadIds.length}, have ${userAccount?.credits || 0}`);
-        throw new Error(
-          `Insufficient Credits: Need ${leadIds.length}, have ${userAccount?.credits || 0}. Purchase skip tracing credits to continue.`
-        );
-      }
-    }
-
-    console.log('✅ Credit check passed');
     console.log('📥 Fetching leads...');
 
     // 🛡️ 4. Fetch all leads upfront
@@ -382,6 +415,26 @@ export const handler: Handler = async (event) => {
       };
     }));
 
+    // 💰 Credit check against the filtered set — only leads that will actually be sent to BatchData
+    if (!isOwner && !isAdmin) {
+      if (!isPro && userAccount?.creditsExpiresAt) {
+        const expirationDate = new Date(userAccount.creditsExpiresAt);
+        if (new Date() > expirationDate) {
+          console.error('❌ Credits expired');
+          throw new Error('Credits have expired. Please upgrade to PRO or purchase more credits.');
+        }
+      }
+
+      if (!userAccount || (userAccount.credits || 0) < leadsToProcess.length) {
+        console.error(`❌ Insufficient credits: need ${leadsToProcess.length}, have ${userAccount?.credits || 0}`);
+        throw new Error(
+          `Insufficient Credits: Need ${leadsToProcess.length}, have ${userAccount?.credits || 0}. Purchase skip tracing credits to continue.`
+        );
+      }
+    }
+
+    console.log('✅ Credit check passed');
+
     if (leadsToProcess.length === 0) {
       console.log('⏭️ No leads to process, returning early');
       return results;
@@ -390,7 +443,7 @@ export const handler: Handler = async (event) => {
     console.log(`🔄 Processing ${leadsToProcess.length} leads with BatchData...`);
 
     // 5. Call BatchData once with all leads
-    const enrichmentMap = await callBatchDataBulk(leadsToProcess);
+    const { resultMap: enrichmentMap, meta: batchMeta } = await callBatchDataBulk(leadsToProcess);
 
     console.log(`✅ BatchData processing complete, updating ${leadsToProcess.length} leads...`);
 
@@ -399,15 +452,21 @@ export const handler: Handler = async (event) => {
       const enrichedData = enrichmentMap.get(lead.id);
       if (!enrichedData || (enrichedData.status !== 'SUCCESS' && enrichedData.status !== 'NO_QUALITY_CONTACTS')) {
         const finalStatus = enrichedData?.status === 'ERROR' ? 'FAILED' : 'NO_MATCH';
+        const reason = finalStatus === 'FAILED'
+          ? 'BatchData could not process this request. Try again or contact support.'
+          : 'No owner records found at this address in BatchData\'s database. The address may be incorrect or the owner may have no public records.';
         const timestamp = new Date().toISOString();
-        
+
         // Get existing history
         const existingHistory = lead.skipTraceHistory || [];
         const newHistory = [...existingHistory, {
           timestamp,
           status: finalStatus,
+          reason,
           phonesFound: 0,
-          emailsFound: 0
+          emailsFound: 0,
+          batchRequestId: batchMeta.requestId,
+          responseTime: batchMeta.responseTime,
         }];
         
         await docClient.send(new UpdateCommand({
@@ -443,8 +502,11 @@ export const handler: Handler = async (event) => {
         const newHistory = [...existingHistory, {
           timestamp,
           status: 'NO_QUALITY_CONTACTS',
+          reason: 'Owner found but no qualifying contacts — no mobile numbers scoring 90+ or verified emails. This lead has been marked for direct mail only.',
           phonesFound: enrichedData.rawPersonData?.phoneNumbers?.length || 0,
-          emailsFound: enrichedData.rawPersonData?.emails?.length || 0
+          emailsFound: enrichedData.rawPersonData?.emails?.length || 0,
+          batchRequestId: batchMeta.requestId,
+          responseTime: batchMeta.responseTime,
         }];
         
         const updateExpression = lead.type?.toUpperCase() === 'PROBATE'
@@ -482,8 +544,11 @@ export const handler: Handler = async (event) => {
       const newHistory = [...existingHistory, {
         timestamp,
         status: 'COMPLETED',
+        reason: null,
         phonesFound: enrichedData.foundPhones.length,
-        emailsFound: enrichedData.foundEmails.length
+        emailsFound: enrichedData.foundEmails.length,
+        batchRequestId: batchMeta.requestId,
+        responseTime: batchMeta.responseTime,
       }];
 
       const updateExpression = lead.type?.toUpperCase() === 'PROBATE'
@@ -529,17 +594,24 @@ export const handler: Handler = async (event) => {
     // 💰 7. Deduct Credits (all users except OWNER)
     // BatchData charges for every request regardless of match quality
     const chargeableCount = updateResults.filter(r => ['SUCCESS', 'NO_QUALITY_CONTACTS', 'NO_MATCH'].includes(r.status)).length;
-    if (chargeableCount > 0 && !isOwner && userAccount) {
+    if (chargeableCount > 0 && !isOwner && !isAdmin && userAccount) {
       console.log(`💳 Deducting ${chargeableCount} credits (all API calls are chargeable)...`);
-      await docClient.send(new UpdateCommand({
-        TableName: userAccountTableName,
-        Key: { id: userAccount.id },
-        UpdateExpression: 'SET credits = :newCredits, totalSkipsPerformed = :newTotal',
-        ExpressionAttributeValues: {
-          ':newCredits': (userAccount.credits || 0) - chargeableCount,
-          ':newTotal': (userAccount.totalSkipsPerformed || 0) + chargeableCount
+      try {
+        await docClient.send(new UpdateCommand({
+          TableName: userAccountTableName,
+          Key: { id: userAccount.id },
+          UpdateExpression: 'SET credits = credits - :chargeableCount, totalSkipsPerformed = totalSkipsPerformed + :chargeableCount',
+          ConditionExpression: 'credits >= :chargeableCount',
+          ExpressionAttributeValues: {
+            ':chargeableCount': chargeableCount,
+          }
+        }));
+      } catch (deductErr: any) {
+        if (deductErr.name === 'ConditionalCheckFailedException') {
+          throw new Error('Insufficient Credits: Your credit balance was too low to complete this batch. Please purchase more credits.');
         }
-      }));
+        throw deductErr;
+      }
     }
 
     console.log('✅ Skip trace handler completed successfully');

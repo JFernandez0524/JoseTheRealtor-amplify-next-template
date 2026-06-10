@@ -8,6 +8,7 @@ interface RouteExplanationModalProps {
   leadCount: number;
   alreadyTracedCount?: number;
   isLargeBatch?: boolean;
+  action?: 'skipTrace' | 'enrich';
 }
 
 export function RouteExplanationModal({
@@ -18,6 +19,7 @@ export function RouteExplanationModal({
   leadCount,
   alreadyTracedCount = 0,
   isLargeBatch = false,
+  action = 'skipTrace',
 }: RouteExplanationModalProps) {
   if (!isOpen) return null;
 
@@ -66,7 +68,7 @@ export function RouteExplanationModal({
           {alreadyTracedCount > 0 && (
             <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
               <p className="text-sm text-yellow-800">
-                <span className="font-semibold">{alreadyTracedCount} lead{alreadyTracedCount !== 1 ? 's' : ''}</span> already skip traced will be skipped.
+                <span className="font-semibold">{alreadyTracedCount} lead{alreadyTracedCount !== 1 ? 's' : ''}</span> already {action === 'enrich' ? 'enriched' : 'skip traced'} will be skipped.
                 Only <span className="font-semibold">{chargeableCount}</span> will be charged.
               </p>
             </div>

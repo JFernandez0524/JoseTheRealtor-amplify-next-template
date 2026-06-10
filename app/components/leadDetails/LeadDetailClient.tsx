@@ -566,123 +566,177 @@ function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
                   </div>
                 </div>
 
-                {/* Raw Skip Trace Data Section */}
-                {lead.skipTraceStatus === 'COMPLETED' && lead.rawSkipTraceData && (() => {
-                  const rawData = typeof lead.rawSkipTraceData === 'string' 
-                    ? JSON.parse(lead.rawSkipTraceData) 
-                    : lead.rawSkipTraceData;
-                  
-                  // Filter out DNC phone numbers completely
-                  const nonDncPhones = (rawData.allPhones || []).filter((p: any) => !p.dnc);
-                  const allEmails = rawData.allEmails || [];
-                  
-                  // Calculate comprehensive counts
-                  const totalPhonesFound = rawData.allPhones?.length || 0;
-                  const totalEmailsFound = allEmails.length;
-                  const qualifiedPhones = lead.phones?.length || 0;
-                  const qualifiedEmails = lead.emails?.length || 0;
-                  const dncPhonesFiltered = totalPhonesFound - nonDncPhones.length;
-                  
-                  const hasUnqualifiedData = nonDncPhones.length > 0 || allEmails.length > 0;
-                  
-                  if (!hasUnqualifiedData) return null;
-                  
+                {/* #1 — What We Searched */}
+                {['COMPLETED', 'NO_MATCH', 'FAILED', 'NO_QUALITY_CONTACTS'].includes(lead.skipTraceStatus || '') && (() => {
+                  const isProbate = lead.type === 'PROBATE';
+                  const searchedName = isProbate
+                    ? [lead.adminFirstName, lead.adminLastName].filter(Boolean).join(' ')
+                    : null;
+                  const searchedAddr = isProbate
+                    ? [lead.adminAddress || lead.mailingAddress, lead.adminCity || lead.mailingCity, lead.adminState || lead.mailingState, lead.adminZip || lead.mailingZip].filter(Boolean).join(', ')
+                    : [lead.ownerAddress, lead.ownerCity, lead.ownerState, lead.ownerZip].filter(Boolean).join(', ');
                   return (
-                  <div className='border-t pt-6'>
-                    <div className='bg-amber-50 border border-amber-200 rounded-lg p-4 mb-4'>
-                      <p className='text-xs text-amber-800 mb-2'>
-                        <strong>⚠️ Additional contacts found:</strong> {totalPhonesFound} phones, {totalEmailsFound} emails
-                      </p>
-                      <p className='text-xs text-amber-700 mb-2'>
-                        <strong>Passed filters:</strong> {qualifiedPhones} phones, {qualifiedEmails} emails
-                      </p>
-                      <p className='text-xs text-amber-700 mb-2'>
-                        <strong>Filter criteria:</strong> Mobile phones 90+ score, not DNC, verified emails only
-                      </p>
-                      {dncPhonesFiltered > 0 && (
-                        <p className='text-xs text-red-700'>
-                          <strong>Note:</strong> {dncPhonesFiltered} phone(s) hidden due to DNC status
+                    <div className='border-t pt-6'>
+                      <h4 className='text-[10px] font-black uppercase text-slate-400 mb-3'>
+                        What Was Searched
+                      </h4>
+                      <div className='p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1'>
+                        {isProbate && searchedName && (
+                          <p className='text-xs text-slate-500'>
+                            <span className='font-semibold text-slate-700'>Name:</span> {searchedName}
+                          </p>
+                        )}
+                        <p className='text-xs text-slate-500'>
+                          <span className='font-semibold text-slate-700'>Address:</span> {searchedAddr || '—'}
+                        </p>
+                        {isProbate && (
+                          <p className='text-[10px] text-slate-400 pt-1'>
+                            Probate leads are skip traced using the estate administrator's address, not the property address.
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* #2 — BatchData results with per-row filter breakdown */}
+                {['COMPLETED', 'NO_QUALITY_CONTACTS'].includes(lead.skipTraceStatus || '') && lead.rawSkipTraceData && (() => {
+                  const rawData = typeof lead.rawSkipTraceData === 'string'
+                    ? JSON.parse(lead.rawSkipTraceData)
+                    : lead.rawSkipTraceData;
+
+                  const allPhones: any[] = rawData.allPhones || [];
+                  const allEmails: any[] = rawData.allEmails || [];
+                  const dncCount = allPhones.filter((p: any) => p.dnc).length;
+                  const visiblePhones = allPhones.filter((p: any) => !p.dnc);
+
+                  const phoneResult = (p: any): { passed: boolean; reason: string } => {
+                    if (p.type !== 'Mobile') return { passed: false, reason: `Not mobile (${p.type || 'unknown type'})` };
+                    if ((parseFloat(p.score) || 0) < 90) return { passed: false, reason: `Score too low (${p.score})` };
+                    return { passed: true, reason: 'Sent to GHL' };
+                  };
+
+                  const emailResult = (e: any): { passed: boolean; reason: string } => {
+                    if (!e.tested) return { passed: false, reason: 'Not verified' };
+                    return { passed: true, reason: 'Sent to GHL' };
+                  };
+
+                  if (visiblePhones.length === 0 && allEmails.length === 0 && dncCount === 0) return null;
+
+                  return (
+                    <div className='border-t pt-6 space-y-5'>
+                      <h4 className='text-[10px] font-black uppercase text-slate-400'>
+                        BatchData Results
+                      </h4>
+
+                      {/* Phones */}
+                      <div>
+                        <p className='text-[10px] font-bold text-slate-500 uppercase mb-2'>
+                          Phones ({allPhones.length} found · filter: mobile, score ≥ 90, not DNC)
+                        </p>
+                        <div className='space-y-1.5'>
+                          {visiblePhones.map((p: any, idx: number) => {
+                            const { passed, reason } = phoneResult(p);
+                            return (
+                              <div key={idx} className={`flex items-center justify-between px-3 py-2 rounded-lg border text-xs ${passed ? 'bg-green-50 border-green-200' : 'bg-slate-50 border-slate-200'}`}>
+                                <div className='flex items-center gap-2'>
+                                  <span className={`font-bold text-sm ${passed ? 'text-green-600' : 'text-slate-400'}`}>
+                                    {passed ? '✓' : '✗'}
+                                  </span>
+                                  <span className={`font-mono ${passed ? 'text-slate-800 font-semibold' : 'text-slate-400'}`}>
+                                    {formatPhone(p.number)}
+                                  </span>
+                                </div>
+                                <div className='flex items-center gap-2 text-[9px] font-bold'>
+                                  <span className='bg-white border border-slate-200 text-slate-500 px-1.5 py-0.5 rounded uppercase'>{p.type}</span>
+                                  <span className='bg-white border border-slate-200 text-slate-500 px-1.5 py-0.5 rounded'>Score {p.score}</span>
+                                  <span className={`px-1.5 py-0.5 rounded uppercase ${passed ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-500'}`}>
+                                    {reason}
+                                  </span>
+                                </div>
+                              </div>
+                            );
+                          })}
+                          {dncCount > 0 && (
+                            <div className='flex items-center gap-2 px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-xs'>
+                              <span className='font-bold text-red-400'>✗</span>
+                              <span className='text-red-600 font-medium'>{dncCount} number{dncCount !== 1 ? 's' : ''} hidden — Do Not Call list</span>
+                            </div>
+                          )}
+                          {visiblePhones.length === 0 && dncCount === 0 && (
+                            <p className='text-xs text-slate-400 italic px-1'>No phones returned by BatchData.</p>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Emails */}
+                      <div>
+                        <p className='text-[10px] font-bold text-slate-500 uppercase mb-2'>
+                          Emails ({allEmails.length} found · filter: verified only)
+                        </p>
+                        <div className='space-y-1.5'>
+                          {allEmails.length === 0 ? (
+                            <p className='text-xs text-slate-400 italic px-1'>No emails returned by BatchData.</p>
+                          ) : allEmails.map((e: any, idx: number) => {
+                            const { passed, reason } = emailResult(e);
+                            return (
+                              <div key={idx} className={`flex items-center justify-between px-3 py-2 rounded-lg border text-xs ${passed ? 'bg-green-50 border-green-200' : 'bg-slate-50 border-slate-200'}`}>
+                                <div className='flex items-center gap-2'>
+                                  <span className={`font-bold text-sm ${passed ? 'text-green-600' : 'text-slate-400'}`}>
+                                    {passed ? '✓' : '✗'}
+                                  </span>
+                                  <span className={passed ? 'text-slate-800 font-medium' : 'text-slate-400'}>
+                                    {e.email}
+                                  </span>
+                                </div>
+                                <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase ${passed ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-500'}`}>
+                                  {reason}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* Skip Trace History */}
+                <SkipTraceHistory history={lead.skipTraceHistory} />
+
+                {/* #4 — GHL Sync Result */}
+                {lead.ghlSyncStatus === 'SUCCESS' && (
+                  <div className='border-t pt-6 mt-6'>
+                    <h4 className='text-[10px] font-black uppercase text-slate-400 mb-3'>
+                      GHL CRM Sync
+                    </h4>
+                    <div className='p-3 bg-green-50 rounded-xl border border-green-200 space-y-1.5'>
+                      <div className='flex items-center justify-between'>
+                        <span className='text-xs font-semibold text-green-800'>✓ Synced to GoHighLevel</span>
+                        {lead.ghlSyncDate && (
+                          <span className='text-[10px] text-slate-500'>
+                            {new Date(lead.ghlSyncDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                          </span>
+                        )}
+                      </div>
+                      {(lead.phones?.length || 0) > 1 && (
+                        <p className='text-[10px] text-slate-600'>
+                          {lead.phones?.length} contacts created — one per phone number.
+                        </p>
+                      )}
+                      {lead.ghlContactId && (
+                        <p className='text-[10px] text-slate-400 font-mono pt-0.5'>
+                          Contact ID: {lead.ghlContactId}
+                        </p>
+                      )}
+                      {(lead.emails?.length || 0) > 0 && (
+                        <p className='text-[10px] text-slate-500'>
+                          {lead.emails?.length} email{(lead.emails?.length || 0) !== 1 ? 's' : ''} synced — automated email outreach will be triggered by GHL workflow.
                         </p>
                       )}
                     </div>
-                    
-                    {nonDncPhones.length > 0 && (
-                      <div className='mb-4'>
-                        <h4 className='text-[10px] font-black uppercase text-slate-400 mb-3'>
-                          Additional Phone Numbers (Non-DNC)
-                        </h4>
-                        <div className='space-y-2'>
-                          {nonDncPhones.map((p: any, idx: number) => (
-                            <div
-                              key={idx}
-                              className='flex items-center justify-between p-3 bg-amber-50 rounded-xl border border-amber-100'
-                            >
-                              <span className='font-mono text-sm text-slate-700'>
-                                {formatPhone(p.number)}
-                              </span>
-                              <div className='flex gap-2 text-[9px] font-bold'>
-                                <span className='bg-slate-100 text-slate-600 px-2 py-0.5 rounded uppercase'>
-                                  {p.type}
-                                </span>
-                                <span className='bg-slate-100 text-slate-600 px-2 py-0.5 rounded'>
-                                  Score: {p.score}
-                                </span>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {allEmails.length > 0 && (
-                      <div>
-                        <h4 className='text-[10px] font-black uppercase text-slate-400 mb-3'>
-                          All Email Addresses Found
-                        </h4>
-                        <div className='space-y-2'>
-                          {allEmails.map((e: any, idx: number) => (
-                            <div
-                              key={idx}
-                              className='flex items-center justify-between p-3 bg-amber-50 rounded-xl border border-amber-100'
-                            >
-                              <span className='text-sm text-slate-600'>
-                                {e.email}
-                              </span>
-                              {!e.tested && (
-                                <span className='text-[9px] font-bold bg-slate-100 text-slate-600 px-2 py-0.5 rounded'>
-                                  Not Verified
-                                </span>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {rawData.batchDataMailingAddress && (
-                      <div className='mt-4'>
-                        <h4 className='text-[10px] font-black uppercase text-slate-400 mb-3'>
-                          BatchData Mailing Address
-                        </h4>
-                        <div className='p-3 bg-blue-50 rounded-xl border border-blue-100'>
-                          <p className='text-sm text-slate-700'>
-                            {rawData.batchDataMailingAddress.mailingAddress}
-                          </p>
-                          <p className='text-sm text-slate-700'>
-                            {rawData.batchDataMailingAddress.mailingCity}, {rawData.batchDataMailingAddress.mailingState} {rawData.batchDataMailingAddress.mailingZip}
-                          </p>
-                        </div>
-                        <p className='text-xs text-slate-500 mt-2'>
-                          This is the mailing address returned by BatchData. Your current mailing address (from CSV) is shown above.
-                        </p>
-                      </div>
-                    )}
                   </div>
-                  );
-                })()}
-                
-                {/* Skip Trace History */}
-                <SkipTraceHistory history={lead.skipTraceHistory} />
+                )}
               </div>
             </CardWrapper>
           </div>

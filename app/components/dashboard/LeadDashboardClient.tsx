@@ -623,6 +623,9 @@ export default function LeadDashboardClient({}: Props) {
     }
 
     // Show modal first
+    const alreadyEnriched = preforeclosureLeads.filter(lead => lead.batchDataEnriched);
+    setAlreadyTracedCount(alreadyEnriched.length);
+    setIsLargeBatch((preforeclosureLeads.length - alreadyEnriched.length) > 50);
     setPendingAction('enrich');
     setShowRouteModal(true);
   };
@@ -1252,6 +1255,7 @@ export default function LeadDashboardClient({}: Props) {
           leadType={selectedLeadType}
           leadCount={selectedIds.length}
           alreadyTracedCount={alreadyTracedCount}
+          action={pendingAction ?? 'skipTrace'}
           isLargeBatch={isLargeBatch}
         />
       )}
