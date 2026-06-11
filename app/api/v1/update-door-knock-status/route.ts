@@ -8,27 +8,31 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { id, status, notes } = await request.json();
+    const { id, status, notes, priority, snoozedUntil } = await request.json();
 
-    if (!id || !status) {
-      return NextResponse.json({ error: 'id and status are required' }, { status: 400 });
+    if (!id) {
+      return NextResponse.json({ error: 'id is required' }, { status: 400 });
     }
 
-    const { data, errors } = await cookiesClient.models.DoorKnockQueue.update({
-      id,
-      status,
-      notes: notes || null,
-      visitedAt: new Date().toISOString(),
-    });
+    const updateFields: Parameters<typeof cookiesClient.models.DoorKnockQueue.update>[0] = { id };
+    if (status !== undefined) {
+      updateFields.status = status;
+      updateFields.visitedAt = new Date().toISOString();
+    }
+    if (notes !== undefined) updateFields.notes = notes ?? null;
+    if (priority !== undefined) updateFields.priority = priority;
+    if (snoozedUntil !== undefined) updateFields.snoozedUntil = snoozedUntil ?? null;
+
+    const { data, errors } = await cookiesClient.models.DoorKnockQueue.update(updateFields);
 
     if (errors?.length) {
-      console.error('Error updating door knock status:', errors);
-      return NextResponse.json({ error: 'Failed to update status', details: errors }, { status: 500 });
+      console.error('Error updating door knock entry:', errors);
+      return NextResponse.json({ error: 'Failed to update', details: errors }, { status: 500 });
     }
 
     return NextResponse.json({ success: true, lead: data });
   } catch (error) {
-    console.error('Error updating door knock status:', error);
-    return NextResponse.json({ error: 'Failed to update status' }, { status: 500 });
+    console.error('Error updating door knock entry:', error);
+    return NextResponse.json({ error: 'Failed to update' }, { status: 500 });
   }
 }

@@ -146,6 +146,7 @@ const schema = a.schema({
       
       // Priority override (optional - defaults to lead's AI priority)
       priority: a.enum(['HIGH', 'MEDIUM', 'LOW']),
+      snoozedUntil: a.datetime(),
     })
     .authorization((allow) => [
       allow.owner().to(['create', 'read', 'update', 'delete']),

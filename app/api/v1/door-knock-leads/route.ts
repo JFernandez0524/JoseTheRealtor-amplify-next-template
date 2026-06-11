@@ -30,7 +30,8 @@ export async function GET(request: NextRequest) {
       estimatedValue: lead.estimatedValue,
       priority: lead.priority,
       notes: lead.notes,
-      visitedAt: lead.visitedAt
+      visitedAt: lead.visitedAt,
+      snoozedUntil: lead.snoozedUntil,
     }));
 
     return NextResponse.json({

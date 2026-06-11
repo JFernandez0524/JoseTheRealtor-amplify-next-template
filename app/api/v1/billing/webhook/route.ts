@@ -84,15 +84,11 @@ async function handleCheckoutCompleted(session: any) {
   const { metadata } = session;
   const { userId, plan, credits, type } = metadata;
 
-  try {
-    if (type === 'credits') {
-      await addCreditsToUser(userId, parseInt(credits));
-    } else if (plan === 'sync-plan' || plan === 'ai-outreach') {
-      await updateUserAccountForPlan(userId, plan);
-      await grantSubscriptionAccess(userId, plan);
-    }
-  } catch (error) {
-    console.error('Failed to handle checkout completion:', error);
+  if (type === 'credits') {
+    await addCreditsToUser(userId, parseInt(credits));
+  } else if (plan === 'sync-plan' || plan === 'ai-outreach') {
+    await updateUserAccountForPlan(userId, plan);
+    await grantSubscriptionAccess(userId, plan);
   }
 }
 
@@ -102,14 +98,10 @@ async function handleSubscriptionUpdated(subscription: any) {
 
   if (!userId) return;
 
-  try {
-    if (status === 'past_due' || status === 'unpaid') {
-      await revokeSubscriptionAccess(userId, plan);
-    } else if (status === 'active') {
-      await grantSubscriptionAccess(userId, plan);
-    }
-  } catch (error) {
-    console.error('Failed to handle subscription update:', error);
+  if (status === 'past_due' || status === 'unpaid') {
+    await revokeSubscriptionAccess(userId, plan);
+  } else if (status === 'active') {
+    await grantSubscriptionAccess(userId, plan);
   }
 }
 
@@ -119,9 +111,5 @@ async function handleSubscriptionCancelled(subscription: any) {
 
   if (!userId) return;
 
-  try {
-    await revokeSubscriptionAccess(userId, plan);
-  } catch (error) {
-    console.error('Failed to handle subscription cancellation:', error);
-  }
+  await revokeSubscriptionAccess(userId, plan);
 }
