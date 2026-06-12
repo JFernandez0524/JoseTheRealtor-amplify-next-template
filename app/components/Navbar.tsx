@@ -147,6 +147,14 @@ const Navbar = () => {
                   >
                     User Guide
                   </Link>
+                  <Link
+                    href='/reports'
+                    className={
+                      pathname === '/reports' ? activeLinkClass : baseLinkClass
+                    }
+                  >
+                    Reports
+                  </Link>
                 </>
               )}
               {isAdmin && (
@@ -291,6 +299,16 @@ const Navbar = () => {
                     }
                   >
                     User Guide
+                  </Link>
+                  <Link
+                    href='/reports'
+                    className={
+                      pathname === '/reports'
+                        ? mobileActiveLinkClass
+                        : mobileLinkClass
+                    }
+                  >
+                    Reports
                   </Link>
                 </>
               )}

@@ -155,32 +155,6 @@ export default async function ProfilePage() {
             </div>
           </div>
 
-          {/* --- BOTTOM SECTION: APP USAGE --- */}
-          <div className='bg-white border border-slate-200 rounded-[2rem] p-8 shadow-sm'>
-            <h3 className='text-lg font-black text-slate-900 mb-6 flex items-center gap-2'>
-              <HiOutlineShieldCheck className='text-indigo-500' /> Usage
-              Statistics
-            </h3>
-            <div className='grid grid-cols-2 sm:grid-cols-3 gap-6'>
-              <div className='text-center p-4 bg-slate-50 rounded-2xl'>
-                <p className='text-2xl font-black text-slate-900'>
-                  {userAccount?.totalSkipsPerformed || 0}
-                </p>
-                <p className='text-[10px] font-bold text-slate-400 uppercase tracking-widest'>
-                  Skips Performed
-                </p>
-              </div>
-              <div className='text-center p-4 bg-slate-50 rounded-2xl'>
-                <p className='text-2xl font-black text-slate-900'>
-                  {userAccount?.totalLeadsSynced || 0}
-                </p>
-                <p className='text-[10px] font-bold text-slate-400 uppercase tracking-widest'>
-                  CRM Syncs
-                </p>
-              </div>
-            </div>
-          </div>
-
           {/* GHL Integration Settings Card */}
           <GhlSettingsCard />
           
