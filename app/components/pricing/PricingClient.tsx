@@ -23,9 +23,9 @@ interface PricingClientProps {
 
 const subscriptions = [
   {
-    name: 'Sync Plan',
-    price: '$49',
-    description: 'Essential for manual CRM management.',
+    name: 'GHL Sync Beta',
+    price: '$39',
+    description: 'Beta pricing for new app users. Essential for manual CRM management.',
     features: [
       'Sync to CRM button',
       'Manual lead management',
