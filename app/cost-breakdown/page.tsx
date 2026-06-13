@@ -49,9 +49,9 @@ export default function CostBreakdownPage() {
             {/* Sync Plan */}
             <div className="bg-white rounded-xl p-8 shadow-sm border-2 border-blue-500 relative">
               <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-blue-500 text-white text-xs font-bold px-3 py-1 rounded-full">POPULAR</div>
-              <h3 className="text-lg font-bold text-gray-900 mb-1">Sync Plan</h3>
+              <h3 className="text-lg font-bold text-gray-900 mb-1">GHL Sync Beta</h3>
               <div className="flex items-baseline gap-1 mb-4">
-                <span className="text-4xl font-bold text-gray-900">$49</span>
+                <span className="text-4xl font-bold text-gray-900">$39</span>
                 <span className="text-gray-500">/month</span>
               </div>
               <ul className="space-y-2 text-sm text-gray-600">
@@ -188,9 +188,9 @@ export default function CostBreakdownPage() {
               {
                 title: 'Getting Started',
                 subtitle: 'New investor, small list',
-                total: '~$171',
+                total: '~$161',
                 items: [
-                  { label: 'Our App (Sync Plan)', cost: '$49' },
+                  { label: 'Our App (GHL Sync Beta)', cost: '$39' },
                   { label: 'GHL Starter', cost: '$97' },
                   { label: 'GHL add-ons (phone, A2P)', cost: '~$15' },
                   { label: 'Skip credits (100)', cost: '$10' },
@@ -199,9 +199,9 @@ export default function CostBreakdownPage() {
               {
                 title: 'Active Investor',
                 subtitle: '500 leads/month, regular calling',
-                total: '~$226',
+                total: '~$216',
                 items: [
-                  { label: 'Our App (Sync Plan)', cost: '$49' },
+                  { label: 'Our App (GHL Sync Beta)', cost: '$39' },
                   { label: 'GHL Starter', cost: '$97' },
                   { label: 'GHL usage (calls + SMS)', cost: '~$30' },
                   { label: 'Skip credits (500)', cost: '$50' },
@@ -210,9 +210,9 @@ export default function CostBreakdownPage() {
               {
                 title: 'High Volume + Direct Mail',
                 subtitle: '500 leads + 200 mailers/month',
-                total: '~$372',
+                total: '~$362',
                 items: [
-                  { label: 'Our App (Sync Plan)', cost: '$49' },
+                  { label: 'Our App (GHL Sync Beta)', cost: '$39' },
                   { label: 'GHL Starter', cost: '$97' },
                   { label: 'GHL usage (calls + SMS)', cost: '~$30' },
                   { label: 'Skip credits (500)', cost: '$50' },
@@ -272,8 +272,8 @@ export default function CostBreakdownPage() {
                 <h4 className="text-sm font-semibold text-gray-400 uppercase tracking-wide mb-3">Subscription Margin</h4>
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between bg-gray-800 rounded-lg px-4 py-2">
-                    <span className="text-gray-300">Sync Plan revenue</span>
-                    <span>$49/mo</span>
+                    <span className="text-gray-300">GHL Sync Beta revenue</span>
+                    <span>$39/mo</span>
                   </div>
                   <div className="flex justify-between bg-gray-800 rounded-lg px-4 py-2">
                     <span className="text-gray-300">AWS costs (Amplify, DynamoDB, Lambda, S3)</span>
@@ -281,7 +281,7 @@ export default function CostBreakdownPage() {
                   </div>
                   <div className="flex justify-between bg-gray-800 rounded-lg px-4 py-2">
                     <span className="text-gray-300">Estimated margin per subscriber</span>
-                    <span className="text-green-400 font-medium">~$34–44/mo</span>
+                    <span className="text-green-400 font-medium">~$24–34/mo</span>
                   </div>
                 </div>
               </div>

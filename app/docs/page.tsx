@@ -38,7 +38,7 @@ export default function DocsPage() {
                 <ol className="list-decimal list-inside space-y-2 text-gray-700">
                   <li>Sign up with Google OAuth (recommended) or email</li>
                   <li>Start with FREE plan (5 starter credits included)</li>
-                  <li>Upgrade to SYNC PLAN ($49/month) or AI OUTREACH PLAN (Coming Soon) as needed</li>
+                  <li>Upgrade to GHL SYNC BETA ($39/month) or AI OUTREACH PLAN (Coming Soon) as needed</li>
                 </ol>
               </div>
 
@@ -516,8 +516,8 @@ export default function DocsPage() {
               </div>
               
               <div className="border border-blue-500 p-6 rounded-lg bg-blue-50">
-                <h3 className="text-lg font-semibold text-blue-900 mb-2">SYNC PLAN</h3>
-                <p className="text-2xl font-bold text-blue-900 mb-4">$49/month</p>
+                <h3 className="text-lg font-semibold text-blue-900 mb-2">GHL SYNC BETA</h3>
+                <p className="text-2xl font-bold text-blue-900 mb-4">$39/month</p>
                 <ul className="text-sm text-blue-700 space-y-2">
                   <li>• Everything in FREE</li>
                   <li>• GoHighLevel integration</li>

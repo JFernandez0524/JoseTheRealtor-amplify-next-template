@@ -20,8 +20,8 @@ export default function PricingPage() {
       ]
     },
     {
-      title: 'SYNC PLAN',
-      price: '$49',
+      title: 'GHL SYNC BETA',
+      price: '$39',
       planId: 'sync-plan',
       popular: true,
       features: [
