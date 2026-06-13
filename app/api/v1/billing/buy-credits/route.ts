@@ -56,7 +56,7 @@ export async function POST(req: NextRequest) {
         'metadata[credits]': selectedPackage.credits.toString(),
         'metadata[type]': 'credits',
       };
-      if (userEmail) params['customer_email'] = userEmail;
+      if (userEmail && userEmail.includes('@')) params['customer_email'] = userEmail;
 
     // Create Stripe checkout session for one-time payment
     const response = await fetch('https://api.stripe.com/v1/checkout/sessions', {

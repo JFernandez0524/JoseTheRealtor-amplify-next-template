@@ -43,7 +43,7 @@ export async function POST(req: NextRequest) {
         'subscription_data[metadata][userId]': user.userId,
         'subscription_data[metadata][plan]': plan,
       };
-      if (userEmail) params['customer_email'] = userEmail;
+      if (userEmail && userEmail.includes('@')) params['customer_email'] = userEmail;
 
     // Create Stripe checkout session
     const response = await fetch('https://api.stripe.com/v1/checkout/sessions', {
