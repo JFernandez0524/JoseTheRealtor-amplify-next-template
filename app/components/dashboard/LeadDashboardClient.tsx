@@ -583,7 +583,7 @@ export default function LeadDashboardClient({}: Props) {
       skipTraceInFlight.current = false;
     }
   };
-  const handleDeleteLeads = () => {
+  const handleDeleteLeads = async () => {
     if (!isAdmin) {
       addToast({ type: 'error', title: 'Unauthorized', message: 'Only Admins can bulk delete leads.' });
       return;
