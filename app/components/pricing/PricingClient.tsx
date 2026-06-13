@@ -23,7 +23,7 @@ interface PricingClientProps {
 
 const subscriptions = [
   {
-    name: 'GHL Sync Beta',
+    name: 'Laynch AI Sync Beta',
     price: '$39',
     description: 'Beta pricing for new app users. Essential for manual CRM management.',
     features: [

@@ -62,8 +62,8 @@ export default async function ServicesPage() {
           
           <FeatureCard
             icon="🔗"
-            title="GoHighLevel Integration"
-            description="Seamlessly sync qualified leads to your GoHighLevel CRM with property values, contact information, and custom tags for workflow automation."
+            title="Laynch AI Integration"
+            description="Seamlessly sync qualified leads to your Laynch AI system with property values, contact information, and custom tags for workflow automation."
             features={[
               "One-click lead sync",
               "Custom tag management",

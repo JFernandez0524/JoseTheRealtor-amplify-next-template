@@ -27,11 +27,11 @@ export default function CostBreakdownPage() {
               { icon: '📊', title: 'Lead Dashboard', desc: 'All your leads stored securely in the cloud. Filter by status, property type, equity, and more. Real-time updates — no page reloads needed.' },
               { icon: '🔍', title: 'Skip Tracing', desc: 'Find phone numbers, emails, and mailing addresses for property owners. Pay only for successful matches at $0.10/lead.' },
               { icon: '🏦', title: 'Property Enrichment', desc: 'Get real equity percentages, mortgage balances, quality phone numbers (mobile, 90+ score, not DNC), and property flags at $0.35/lead.' },
-              { icon: '🔗', title: 'GoHighLevel Sync', desc: 'One-click sync to your GHL account. Leads arrive with tags, Zestimate values, cash offers, and proper routing for dialer or direct mail campaigns.' },
+              { icon: '🔗', title: 'Laynch AI Sync', desc: 'One-click sync to your Laynch AI account. Leads arrive with tags, Zestimate values, cash offers, and proper routing for dialer or direct mail campaigns.' },
               { icon: '📥', title: 'CSV Import & Export', desc: 'Bulk import leads from any list source. Export skip-traced data with contact info, status, and completion dates for targeted outreach.' },
               { icon: '💰', title: 'Property Valuations', desc: 'Real-time Zestimate data with refresh capability. See property values, age indicators, and click through to Zillow for details.' },
               { icon: '🎯', title: 'Smart Filtering', desc: 'Filter by manual status, owner occupied, high equity, skip trace date, property type, and more. Find your best leads instantly.' },
-              { icon: '📬', title: 'Direct Mail Automation', desc: 'Automatic Zestimate and cash offer calculation for GHL Click2Mail campaigns. Webhook tracking for delivery and QR code scans.' },
+              { icon: '📬', title: 'Direct Mail Automation', desc: 'Automatic Zestimate and cash offer calculation for Laynch AI Click2Mail campaigns. Webhook tracking for delivery and QR code scans.' },
             ].map((f) => (
               <div key={f.title} className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
                 <div className="text-3xl mb-3">{f.icon}</div>
@@ -49,14 +49,14 @@ export default function CostBreakdownPage() {
             {/* Sync Plan */}
             <div className="bg-white rounded-xl p-8 shadow-sm border-2 border-blue-500 relative">
               <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-blue-500 text-white text-xs font-bold px-3 py-1 rounded-full">POPULAR</div>
-              <h3 className="text-lg font-bold text-gray-900 mb-1">GHL Sync Beta</h3>
+              <h3 className="text-lg font-bold text-gray-900 mb-1">Laynch AI Sync Beta</h3>
               <div className="flex items-baseline gap-1 mb-4">
                 <span className="text-4xl font-bold text-gray-900">$39</span>
                 <span className="text-gray-500">/month</span>
               </div>
               <ul className="space-y-2 text-sm text-gray-600">
-                <li className="flex gap-2"><span className="text-green-500">✓</span>Connect your GHL account</li>
-                <li className="flex gap-2"><span className="text-green-500">✓</span>Automated lead sync to GHL</li>
+                <li className="flex gap-2"><span className="text-green-500">✓</span>Connect your Laynch AI system</li>
+                <li className="flex gap-2"><span className="text-green-500">✓</span>Automated lead sync to Laynch AI</li>
                 <li className="flex gap-2"><span className="text-green-500">✓</span>Advanced lead management</li>
                 <li className="flex gap-2"><span className="text-green-500">✓</span>Smart filtering &amp; export</li>
                 <li className="flex gap-2"><span className="text-green-500">✓</span>Direct mail workflow automation</li>
@@ -109,16 +109,16 @@ export default function CostBreakdownPage() {
 
         {/* GHL Companion */}
         <section>
-          <h2 className="text-2xl font-bold text-gray-900 mb-2 text-center">GoHighLevel — Your Complete CRM</h2>
+          <h2 className="text-2xl font-bold text-gray-900 mb-2 text-center">Laynch AI — Your Complete CRM</h2>
           <p className="text-gray-600 text-center mb-8 max-w-2xl mx-auto">
-            Our app + GHL = a complete lead-to-deal system. If you already have GHL, our Sync Plan integrates directly with your existing account.
+            Our app + Laynch AI = a complete lead-to-deal system. Integrate directly with your existing Laynch AI account.
           </p>
           <div className="bg-white rounded-xl p-8 shadow-sm border border-gray-200 max-w-3xl mx-auto">
             <div className="flex items-center gap-3 mb-6">
               <span className="text-2xl">📞</span>
               <div>
-                <h3 className="font-bold text-gray-900">GHL Starter Plan</h3>
-                <p className="text-sm text-gray-500">Separate subscription — you bring your own GHL account</p>
+                <h3 className="font-bold text-gray-900">Laynch AI Starter Plan</h3>
+                <p className="text-sm text-gray-500">Separate subscription — you bring your own Laynch AI account</p>
               </div>
               <span className="ml-auto text-2xl font-bold text-gray-900">$97<span className="text-sm font-normal text-gray-500">/mo</span></span>
             </div>
@@ -143,7 +143,7 @@ export default function CostBreakdownPage() {
 
             <div className="mt-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
               <p className="text-sm text-blue-800">
-                <strong>Power Dialer:</strong> Built into GHL — uses the voice call rates above. No additional software cost. Our app automatically tags and routes your leads so they&apos;re ready to dial the moment they hit your GHL pipeline.
+                <strong>Power Dialer:</strong> Built into Laynch AI — uses the voice call rates above. No additional software cost. Our app automatically tags and routes your leads so they&apos;re ready to dial the moment they hit your Laynch AI pipeline.
               </p>
             </div>
           </div>
@@ -190,9 +190,9 @@ export default function CostBreakdownPage() {
                 subtitle: 'New investor, small list',
                 total: '~$161',
                 items: [
-                  { label: 'Our App (GHL Sync Beta)', cost: '$39' },
-                  { label: 'GHL Starter', cost: '$97' },
-                  { label: 'GHL add-ons (phone, A2P)', cost: '~$15' },
+                  { label: 'Our App (Laynch AI Sync Beta)', cost: '$39' },
+                  { label: 'Laynch AI Starter', cost: '$97' },
+                  { label: 'Laynch AI add-ons (phone, A2P)', cost: '~$15' },
                   { label: 'Skip credits (100)', cost: '$10' },
                 ],
               },
@@ -201,9 +201,9 @@ export default function CostBreakdownPage() {
                 subtitle: '500 leads/month, regular calling',
                 total: '~$216',
                 items: [
-                  { label: 'Our App (GHL Sync Beta)', cost: '$39' },
-                  { label: 'GHL Starter', cost: '$97' },
-                  { label: 'GHL usage (calls + SMS)', cost: '~$30' },
+                  { label: 'Our App (Laynch AI Sync Beta)', cost: '$39' },
+                  { label: 'Laynch AI Starter', cost: '$97' },
+                  { label: 'Laynch AI usage (calls + SMS)', cost: '~$30' },
                   { label: 'Skip credits (500)', cost: '$50' },
                 ],
               },
@@ -212,9 +212,9 @@ export default function CostBreakdownPage() {
                 subtitle: '500 leads + 200 mailers/month',
                 total: '~$362',
                 items: [
-                  { label: 'Our App (GHL Sync Beta)', cost: '$39' },
-                  { label: 'GHL Starter', cost: '$97' },
-                  { label: 'GHL usage (calls + SMS)', cost: '~$30' },
+                  { label: 'Our App (Laynch AI Sync Beta)', cost: '$39' },
+                  { label: 'Laynch AI Starter', cost: '$97' },
+                  { label: 'Laynch AI usage (calls + SMS)', cost: '~$30' },
                   { label: 'Skip credits (500)', cost: '$50' },
                   { label: 'Thanks.io (200 postcards)', cost: '~$146' },
                 ],
@@ -272,7 +272,7 @@ export default function CostBreakdownPage() {
                 <h4 className="text-sm font-semibold text-gray-400 uppercase tracking-wide mb-3">Subscription Margin</h4>
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between bg-gray-800 rounded-lg px-4 py-2">
-                    <span className="text-gray-300">GHL Sync Beta revenue</span>
+                    <span className="text-gray-300">Laynch AI Sync Beta revenue</span>
                     <span>$39/mo</span>
                   </div>
                   <div className="flex justify-between bg-gray-800 rounded-lg px-4 py-2">

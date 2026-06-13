@@ -59,7 +59,7 @@ export default function TermsOfService() {
               <h3 className="text-lg font-semibold text-gray-800 mb-3">1.2 Subscription Plans</h3>
               <ul className="list-disc pl-6 mb-4 space-y-2">
                 <li><strong>FREE Plan:</strong> 5 starter credits with ability to purchase additional skip trace credits</li>
-                <li><strong>SYNC PLAN ($97/month):</strong> GoHighLevel integration with manual outreach workflows</li>
+                <li><strong>LAYNCH AI SYNC BETA ($39/month):</strong> Laynch AI integration with manual outreach workflows</li>
                 <li><strong>AI OUTREACH PLAN ($250/month):</strong> Automated AI messaging plus all SYNC features</li>
               </ul>
 
@@ -220,10 +220,10 @@ export default function TermsOfService() {
             <section id="integrations">
               <h2 className="text-2xl font-bold text-gray-900 mb-4">9. Third-Party Integrations</h2>
               
-              <h3 className="text-lg font-semibold text-gray-800 mb-3">9.1 GoHighLevel Integration</h3>
+              <h3 className="text-lg font-semibold text-gray-800 mb-3">9.1 Laynch AI Integration</h3>
               <p className="mb-4">
-                Our GoHighLevel integration allows syncing of leads and automated campaigns. You are responsible 
-                for maintaining your GHL account and complying with their terms of service.
+                Our Laynch AI integration allows syncing of leads and automated campaigns. You are responsible
+                for maintaining your Laynch AI account and complying with their terms of service.
               </p>
 
               <h3 className="text-lg font-semibold text-gray-800 mb-3">9.2 Thanks.io Direct Mail</h3>

@@ -13,7 +13,7 @@ export default function OAuthSuccessPage() {
   const { addToast } = useToast();
 
   useEffect(() => {
-    addToast({ type: 'success', title: 'GoHighLevel Connected!', message: 'Your GHL account is linked and ready to sync leads.', duration: 8000 });
+    addToast({ type: 'success', title: 'Laynch AI Connected!', message: 'Your Laynch AI system is linked and ready to sync leads.', duration: 8000 });
     checkUserGroups();
   }, []);
 
@@ -55,7 +55,7 @@ export default function OAuthSuccessPage() {
         </h1>
         
         <p className="text-gray-600 mb-6">
-          Your GoHighLevel account has been successfully connected.
+          Your Laynch AI system has been successfully connected.
         </p>
 
         {locationId && (
@@ -74,7 +74,7 @@ export default function OAuthSuccessPage() {
           </div>
         ) : (
           <p className="text-sm text-gray-500 mb-8">
-            You can now sync your qualified leads to GoHighLevel automatically.
+            You can now sync your qualified leads to Laynch AI automatically.
           </p>
         )}
 

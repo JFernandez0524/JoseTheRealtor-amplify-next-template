@@ -10,7 +10,7 @@ export default function Logout() {
 
   return (
     <button
-      className='px-2 bg-red-500 text-white rounded-md'
+      className='block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors'
       onClick={async () => {
         try {
           await signOut();
@@ -20,7 +20,7 @@ export default function Logout() {
         }
       }}
     >
-      Sign out
+      Sign Out
     </button>
   );
 }

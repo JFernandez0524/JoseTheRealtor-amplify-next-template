@@ -73,7 +73,7 @@ export default function GhlCampaignSettings() {
         <h3 className="text-lg font-black text-slate-900 mb-2 flex items-center gap-2">
           <HiOutlineCog6Tooth className="text-indigo-500" /> Campaign Settings
         </h3>
-        <p className="text-slate-500 text-sm mb-4">A Sync Plan is required to configure GHL campaign settings.</p>
+        <p className="text-slate-500 text-sm mb-4">A Sync Plan is required to configure Laynch AI campaign settings.</p>
         <Link
           href="/pricing"
           className="inline-block bg-indigo-600 text-white text-sm font-semibold px-5 py-2 rounded-xl hover:bg-indigo-700 transition-colors"
@@ -104,7 +104,7 @@ export default function GhlCampaignSettings() {
         <h3 className="text-lg font-black text-slate-900 mb-4 flex items-center gap-2">
           <HiOutlineCog6Tooth className="text-indigo-500" /> Campaign Settings
         </h3>
-        <p className="text-slate-600">Please connect your GHL account first.</p>
+        <p className="text-slate-600">Please connect your Laynch AI system first.</p>
       </div>
     );
   }

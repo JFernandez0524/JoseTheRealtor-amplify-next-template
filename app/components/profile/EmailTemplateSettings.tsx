@@ -286,7 +286,7 @@ RE/MAX Agent`;
             • You can type additional variables manually using {'{fieldName}'}{' '}
             format
           </li>
-          <li>• Preview your template by checking recent sent emails in GHL</li>
+          <li>• Preview your template by checking recent sent emails in Laynch AI</li>
         </ul>
       </div>
 

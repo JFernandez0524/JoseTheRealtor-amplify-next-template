@@ -20,14 +20,14 @@ export default function PricingPage() {
       ]
     },
     {
-      title: 'GHL SYNC BETA',
+      title: 'LAYNCH AI SYNC BETA',
       price: '$39',
       planId: 'sync-plan',
       popular: true,
       features: [
-        'Connect your GHL account',
-        'Automated lead sync to GHL',
-        'Zestimate & cash offer sent to GHL',
+        'Connect your Laynch AI system',
+        'Automated lead sync to Laynch AI',
+        'Zestimate & cash offer sent to Laynch AI',
         'Direct mail workflow automation',
         'Manual outreach workflows (call)',
         'Buy skip credits separately'

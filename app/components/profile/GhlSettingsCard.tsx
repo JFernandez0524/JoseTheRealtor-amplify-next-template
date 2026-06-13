@@ -17,7 +17,7 @@ export default function GhlSettingsCard() {
   const handleDisconnect = async () => {
     if (!integrationId) return;
 
-    if (!confirm('Are you sure you want to disconnect your GHL account?'))
+    if (!confirm('Are you sure you want to disconnect your Laynch AI system?'))
       return;
 
     setDisconnecting(true);
@@ -26,11 +26,11 @@ export default function GhlSettingsCard() {
         id: integrationId,
         isActive: false,
       });
-      alert('✅ GHL account disconnected');
+      alert('✅ Laynch AI system disconnected');
       window.location.reload(); // Refresh to update context
     } catch (error) {
       console.error('Error disconnecting GHL:', error);
-      alert('Failed to disconnect GHL account');
+      alert('Failed to disconnect Laynch AI system');
     } finally {
       setDisconnecting(false);
     }
@@ -40,7 +40,7 @@ export default function GhlSettingsCard() {
     <div className='bg-white border border-slate-200 rounded-[2rem] p-8 shadow-sm'>
       <div className='flex items-center justify-between mb-4'>
         <h3 className='text-lg font-black text-slate-900 flex items-center gap-2'>
-          ⚙️ GoHighLevel Connection
+          ⚙️ Laynch AI Connection
         </h3>
         <div
           className={`w-3 h-3 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`}
@@ -103,7 +103,7 @@ export default function GhlSettingsCard() {
       ) : (
         <>
           <p className='text-sm text-slate-600 mb-6'>
-            Connect your GoHighLevel account to enable automated email and SMS
+            Connect your Laynch AI system to enable automated email and SMS
             campaigns.
           </p>
 
@@ -124,11 +124,11 @@ export default function GhlSettingsCard() {
               onClick={handleConnect}
               className='w-full bg-blue-600 text-white py-3 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-blue-700 transition-colors'
             >
-              Connect GoHighLevel
+              Connect Laynch AI
             </button>
           ) : (
             <a href="/pricing" className='block text-center w-full bg-indigo-600 text-white py-3 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-indigo-700 transition-colors'>
-              Upgrade to Sync Plan to Connect
+              Upgrade to Connect Laynch AI
             </a>
           )}
         </>

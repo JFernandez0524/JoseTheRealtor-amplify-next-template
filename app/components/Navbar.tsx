@@ -199,7 +199,9 @@ const Navbar = () => {
                   >
                     Profile Settings
                   </Link>
-                  <Logout />
+                  <div className='border-t border-gray-100 mt-1 pt-1'>
+                    <Logout />
+                  </div>
                 </div>
               )}
             </div>

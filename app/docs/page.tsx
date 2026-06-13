@@ -20,8 +20,8 @@ export default function DocsPage() {
               <a href="#lead-import" className="text-blue-600 hover:underline">• Lead Import Process</a>
               <a href="#dashboard" className="text-blue-600 hover:underline">• Dashboard Features</a>
               <a href="#skip-tracing" className="text-blue-600 hover:underline">• Skip Tracing</a>
-              <a href="#ghl-integration" className="text-blue-600 hover:underline">• GoHighLevel Integration</a>
-              <a href="#ghl-tags" className="text-blue-600 hover:underline">• GHL Tags Reference</a>
+              <a href="#laynch-ai-integration" className="text-blue-600 hover:underline">• Laynch AI Integration</a>
+              <a href="#laynch-ai-tags" className="text-blue-600 hover:underline">• Laynch AI Tags Reference</a>
               <a href="#direct-mail" className="text-blue-600 hover:underline">• Direct Mail (Thanks.io)</a>
               <a href="#pricing" className="text-blue-600 hover:underline">• Pricing & Plans</a>
               <a href="#troubleshooting" className="text-blue-600 hover:underline">• Troubleshooting</a>
@@ -38,7 +38,7 @@ export default function DocsPage() {
                 <ol className="list-decimal list-inside space-y-2 text-gray-700">
                   <li>Sign up with Google OAuth (recommended) or email</li>
                   <li>Start with FREE plan (5 starter credits included)</li>
-                  <li>Upgrade to GHL SYNC BETA ($39/month) or AI OUTREACH PLAN (Coming Soon) as needed</li>
+                  <li>Upgrade to LAYNCH AI SYNC BETA ($39/month) or AI OUTREACH PLAN (Coming Soon) as needed</li>
                 </ol>
               </div>
 
@@ -126,7 +126,7 @@ export default function DocsPage() {
                     <li>• Filter by lead type (Probate/Preforeclosure)</li>
                     <li>• Filter by manual status (ACTIVE, SOLD, PENDING, etc.)</li>
                     <li>• Filter by skip trace status</li>
-                    <li>• Filter by GHL sync status</li>
+                    <li>• Filter by Laynch AI sync status</li>
                     <li>• Filter by phone availability</li>
                     <li>• Date range filtering for skip traced leads</li>
                   </ul>
@@ -205,7 +205,7 @@ export default function DocsPage() {
                 <ul className="list-disc list-inside space-y-1 text-blue-700 text-sm">
                   <li><strong>Set Status</strong> - Update status for all selected leads at once</li>
                   <li><strong>Skip Trace</strong> - Find contact info with cost preview ($0.10/lead)</li>
-                  <li><strong>Sync to GHL</strong> - Push to CRM (rate limited: 100/hour, 1000/day)</li>
+                  <li><strong>Sync to Laynch AI</strong> - Push to CRM (rate limited: 100/hour, 1000/day)</li>
                   <li><strong>Export CSV</strong> - Download with all data including manual status</li>
                   <li><strong>Delete</strong> - Remove selected leads (admin only)</li>
                 </ul>
@@ -276,16 +276,16 @@ export default function DocsPage() {
           </section>
 
           {/* GHL Integration */}
-          <section id="ghl-integration" className="mb-12">
-            <h2 className="text-2xl font-semibold text-gray-900 mb-6">🔗 GoHighLevel Integration</h2>
+          <section id="laynch-ai-integration" className="mb-12">
+            <h2 className="text-2xl font-semibold text-gray-900 mb-6">🔗 Laynch AI Integration</h2>
             
             <div className="space-y-6">
               <div className="border-l-4 border-indigo-500 pl-4">
                 <h3 className="text-lg font-medium text-gray-900 mb-2">Setup Process</h3>
                 <ol className="list-decimal list-inside space-y-2 text-gray-700">
                   <li>Go to Profile section in dashboard</li>
-                  <li>Click "Connect GHL" button</li>
-                  <li>Authorize with your GoHighLevel account</li>
+                  <li>Click "Connect Laynch AI" button</li>
+                  <li>Authorize with your Laynch AI system</li>
                   <li>Select your location/sub-account</li>
                   <li>Connection persists across login sessions</li>
                 </ol>
@@ -308,7 +308,7 @@ export default function DocsPage() {
                   <li>Syncs lead contact information and property details</li>
                   <li>Includes Zestimate data (full market value for listing)</li>
                   <li>Includes Cash Offer (70% of Zestimate for as-is purchase)</li>
-                  <li>Maps to your GHL custom fields automatically</li>
+                  <li>Maps to your Laynch AI custom fields automatically</li>
                   <li>Tags leads for direct mail or phone campaigns</li>
                   <li>Updates lead status to track sync progress</li>
                   <li>Bulk sync multiple leads at once</li>
@@ -319,13 +319,13 @@ export default function DocsPage() {
               <div className="bg-blue-50 p-4 rounded-lg">
                 <h4 className="font-medium text-blue-800 mb-2">📧 Email Campaign System</h4>
                 <ul className="list-disc list-inside space-y-1 text-blue-700 text-sm">
-                  <li><strong>Initial Email</strong>: Automatically sent when contact is created in GHL</li>
+                  <li><strong>Initial Email</strong>: Automatically sent when contact is created in Laynch AI</li>
                   <li><strong>Business Hours</strong>: Mon–Fri 9AM–7PM EST, Sat 9AM–12PM EST, Sunday closed</li>
                   <li>Emails sent to ALL addresses (primary + email_2 + email_3)</li>
                   <li>Personalized with property data (address, Zestimate, cash offer)</li>
                   <li>Reply detection: Automatically tags replied contacts and stops automation</li>
                   <li>Bounce protection: Stops emails to bounced addresses</li>
-                  <li>Configure email address in Profile → GHL Settings</li>
+                  <li>Configure email address in Profile → Laynch AI Settings</li>
                   <li>Rate limited: 2 seconds between emails to prevent throttling</li>
                 </ul>
               </div>
@@ -339,16 +339,16 @@ export default function DocsPage() {
                   <li>Adapts message based on lead type (preforeclosure vs probate)</li>
                   <li>Instant webhook responses to inbound replies (no polling delay)</li>
                   <li>Tags contact for human handoff when qualified</li>
-                  <li>Configure phone number in Profile → GHL Settings</li>
+                  <li>Configure phone number in Profile → Laynch AI Settings</li>
                   <li>Rate limited: 2 seconds between messages</li>
                 </ul>
               </div>
 
               <div className="bg-amber-50 p-4 rounded-lg">
-                <h4 className="font-medium text-amber-800 mb-2">⚙️ GHL Settings Configuration</h4>
+                <h4 className="font-medium text-amber-800 mb-2">⚙️ Laynch AI Settings Configuration</h4>
                 <ul className="list-disc list-inside space-y-1 text-amber-700 text-sm">
-                  <li>Go to Profile → GHL Settings card</li>
-                  <li><strong>Campaign Phone</strong>: Select which GHL phone number for SMS</li>
+                  <li>Go to Profile → Laynch AI Settings</li>
+                  <li><strong>Campaign Phone</strong>: Select which Laynch AI phone number for SMS</li>
                   <li><strong>Campaign Email</strong>: Set your verified email address</li>
                   <li>All messages sent from your selected phone/email</li>
                   <li>Replies route directly to you</li>
@@ -368,7 +368,7 @@ export default function DocsPage() {
                 <ul className="list-disc list-inside space-y-1 text-indigo-700 text-sm">
                   <li>Contacts with multiple phones/emails get 7 touches <em>per channel</em> (e.g., 2 phones + 2 emails = up to 28 total touches)</li>
                   <li>Touches stop automatically when contact replies, bounces, or opts out</li>
-                  <li>Queue is populated automatically when contact is synced to GHL with <code className="bg-indigo-100 px-1 rounded">ai outreach</code> tag</li>
+                  <li>Queue is populated automatically when contact is synced to Laynch AI with <code className="bg-indigo-100 px-1 rounded">ai outreach</code> tag</li>
                 </ul>
               </div>
 
@@ -376,7 +376,7 @@ export default function DocsPage() {
                 <h4 className="font-medium text-red-800 mb-2">🛑 Stopping the AI / Taking Over Manually</h4>
                 <p className="text-sm text-red-700 mb-2">To stop the AI from responding to a contact and take over the conversation yourself:</p>
                 <ol className="list-decimal list-inside space-y-1 text-red-700 text-sm">
-                  <li>Open the contact in GoHighLevel</li>
+                  <li>Open the contact in Laynch AI</li>
                   <li>Remove the <code className="bg-red-100 px-1 rounded">ai outreach</code> tag</li>
                   <li>The AI immediately stops all automated outreach and webhook responses for that contact</li>
                 </ol>
@@ -390,20 +390,20 @@ export default function DocsPage() {
                   <li>Go to lead details page (double-click from dashboard)</li>
                   <li>Use Tags Manager to add/remove tags</li>
                   <li>Tags are searchable from dashboard</li>
-                  <li>Use for custom GHL workflow triggers</li>
+                  <li>Use for custom Laynch AI workflow triggers</li>
                 </ul>
               </div>
             </div>
           </section>
 
-          {/* GHL Tags Reference */}
-          <section id="ghl-tags" className="mb-12">
-            <h2 className="text-2xl font-semibold text-gray-900 mb-6">🏷️ GHL Tags Reference</h2>
+          {/* Laynch AI Tags Reference */}
+          <section id="laynch-ai-tags" className="mb-12">
+            <h2 className="text-2xl font-semibold text-gray-900 mb-6">🏷️ Laynch AI Tags Reference</h2>
             <div className="space-y-6">
               <div className="bg-gray-50 p-4 rounded-lg">
                 <h4 className="font-medium text-gray-800 mb-3">System Tags (added automatically on sync)</h4>
                 <div className="space-y-2 text-sm">
-                  <div className="flex gap-3 items-start"><code className="bg-gray-200 px-2 py-0.5 rounded text-xs whitespace-nowrap">app:synced</code><span className="text-gray-700">Contact was synced from the app to GHL</span></div>
+                  <div className="flex gap-3 items-start"><code className="bg-gray-200 px-2 py-0.5 rounded text-xs whitespace-nowrap">app:synced</code><span className="text-gray-700">Contact was synced from the app to Laynch AI</span></div>
                   <div className="flex gap-3 items-start"><code className="bg-green-100 px-2 py-0.5 rounded text-xs whitespace-nowrap">ai outreach</code><span className="text-gray-700">Contact is eligible for AI email + SMS outreach. <strong>Remove this tag to stop all AI automation.</strong></span></div>
                   <div className="flex gap-3 items-start"><code className="bg-blue-100 px-2 py-0.5 rounded text-xs whitespace-nowrap">direct mail only</code><span className="text-gray-700">No qualified contact info found — direct mail only, no AI outreach</span></div>
                 </div>
@@ -432,7 +432,7 @@ export default function DocsPage() {
               </div>
 
               <div className="bg-blue-50 p-4 rounded-lg">
-                <h4 className="font-medium text-blue-800 mb-3">Recommended GHL Workflow Automations</h4>
+                <h4 className="font-medium text-blue-800 mb-3">Recommended Laynch AI Workflow Automations</h4>
                 <div className="space-y-1 text-sm text-blue-700 font-mono">
                   <div>Tag <code className="bg-blue-100 px-1 rounded">mail:touch1</code> added → Move to "Touch 1 - Delivered"</div>
                   <div>Tag <code className="bg-blue-100 px-1 rounded">mail:touch2</code> added → Move to "Touch 2 - Delivered"</div>
@@ -453,9 +453,9 @@ export default function DocsPage() {
                 <ol className="list-decimal list-inside space-y-2 text-gray-700 text-sm">
                   <li>Skip trace probate leads in the app</li>
                   <li>Leads without qualified contact info get the <code className="bg-gray-100 px-1 rounded">direct mail only</code> tag automatically</li>
-                  <li>Sync to GHL — contact enters "New Lead" pipeline stage</li>
-                  <li>Export contacts with <code className="bg-gray-100 px-1 rounded">direct mail only</code> tag from GHL</li>
-                  <li>Upload to Thanks.io — set <code className="bg-gray-100 px-1 rounded">custom_1</code> field = GHL contact ID (<code className="bg-gray-100 px-1 rounded">{`{{contact.contact_id}}`}</code>)</li>
+                  <li>Sync to Laynch AI — contact enters "New Lead" pipeline stage</li>
+                  <li>Export contacts with <code className="bg-gray-100 px-1 rounded">direct mail only</code> tag from Laynch AI</li>
+                  <li>Upload to Thanks.io — set <code className="bg-gray-100 px-1 rounded">custom_1</code> field = Laynch AI contact ID (<code className="bg-gray-100 px-1 rounded">{`{{contact.contact_id}}`}</code>)</li>
                   <li>Configure webhook in Thanks.io dashboard: <strong>dashboard.thanks.io/profile/webhooks</strong></li>
                 </ol>
               </div>
@@ -516,11 +516,11 @@ export default function DocsPage() {
               </div>
               
               <div className="border border-blue-500 p-6 rounded-lg bg-blue-50">
-                <h3 className="text-lg font-semibold text-blue-900 mb-2">GHL SYNC BETA</h3>
+                <h3 className="text-lg font-semibold text-blue-900 mb-2">LAYNCH AI SYNC BETA</h3>
                 <p className="text-2xl font-bold text-blue-900 mb-4">$39/month</p>
                 <ul className="text-sm text-blue-700 space-y-2">
                   <li>• Everything in FREE</li>
-                  <li>• GoHighLevel integration</li>
+                  <li>• Laynch AI integration</li>
                   <li>• Bulk lead sync</li>
                   <li>• Custom tags & workflows</li>
                   <li>• Priority support</li>
@@ -576,7 +576,7 @@ export default function DocsPage() {
                     <p className="text-red-600">Verify address data is complete and accurate. Some properties may not have available contact information.</p>
                   </div>
                   <div>
-                    <strong className="text-red-700">GHL Sync Errors:</strong>
+                    <strong className="text-red-700">Laynch AI Sync Errors:</strong>
                     <p className="text-red-600">Check OAuth connection in Profile settings. Reconnect if the connection shows as expired. Rate limits: 100/hour, 1000/day.</p>
                   </div>
                   <div>
@@ -599,7 +599,7 @@ export default function DocsPage() {
                   <li>Use bulk status updates to manage large lead lists efficiently</li>
                   <li>Refresh stale Zestimates (&gt;180 days) before making offers</li>
                   <li>Filter by skip trace completion date for targeted downloads</li>
-                  <li>Connect GHL early to streamline your workflow</li>
+                  <li>Connect Laynch AI early to streamline your workflow</li>
                   <li>Use double-click to navigate to avoid accidental clicks</li>
                 </ul>
               </div>

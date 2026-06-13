@@ -75,10 +75,10 @@ export default function PricingCard({
         {ghlIncluded && (
           <div className="mb-4 p-3 bg-green-100 rounded-lg">
             <div className="text-green-800 font-medium text-sm">
-              🚀 Includes Managed GoHighLevel Account
+              🚀 Includes Managed Laynch AI Account
             </div>
             <div className="text-green-600 text-xs mt-1">
-              No separate GHL subscription needed
+              No separate subscription needed
             </div>
           </div>
         )}

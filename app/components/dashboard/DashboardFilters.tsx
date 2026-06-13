@@ -159,7 +159,7 @@ export function DashboardFilters({
             onChange={(e) => setFilterType(e.target.value)}
             className='border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none w-full'
           >
-            <option value=''>All Lead Types</option>
+            <option value='' disabled>Lead Types</option>
             <option value='PREFORECLOSURE'>Pre-Foreclosure</option>
             <option value='PROBATE'>Probate</option>
           </select>
@@ -170,7 +170,7 @@ export function DashboardFilters({
             onChange={(e) => setFilterStatus(e.target.value)}
             className='border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none w-full'
           >
-            <option value=''>All Trace Statuses</option>
+            <option value='' disabled>Trace Statuses</option>
             <option value='PENDING'>Pending Trace</option>
             <option value='COMPLETED'>Completed Trace</option>
             <option value='NO_QUALITY_CONTACTS'>No Quality Contacts</option>
@@ -185,12 +185,12 @@ export function DashboardFilters({
             onChange={(e) => setFilterGhlStatus(e.target.value)}
             className='border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:ring-2 focus:ring-purple-500 outline-none w-full'
           >
-            <option value=''>All GHL Statuses</option>
-            <option value='SUCCESS'>GHL Synced</option>
-            <option value='PENDING'>GHL Pending</option>
-            <option value='FAILED'>GHL Failed</option>
-            <option value='SKIPPED'>GHL Skipped</option>
-            <option value='NULL'>Needs GHL Sync</option>
+            <option value='' disabled>Laynch AI Statuses</option>
+            <option value='SUCCESS'>Laynch AI Synced</option>
+            <option value='PENDING'>Laynch AI Pending</option>
+            <option value='FAILED'>Laynch AI Failed</option>
+            <option value='SKIPPED'>Laynch AI Skipped</option>
+            <option value='NULL'>Needs Laynch AI Sync</option>
           </select>
 
           {/* 4. PHONE STATUS FILTER */}
@@ -199,7 +199,7 @@ export function DashboardFilters({
             onChange={(e) => setFilterHasPhone(e.target.value)}
             className='border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:ring-2 focus:ring-green-500 outline-none w-full'
           >
-            <option value=''>All Phone Statuses</option>
+            <option value='' disabled>Phone Statuses</option>
             <option value='HAS_PHONE'>Has Phone Numbers</option>
             <option value='NO_PHONE'>No Phone Numbers</option>
           </select>
@@ -210,7 +210,7 @@ export function DashboardFilters({
             onChange={(e) => setFilterListingStatus(e.target.value)}
             className='border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:ring-2 focus:ring-yellow-500 outline-none w-full'
           >
-            <option value=''>All Statuses</option>
+            <option value='' disabled>Listing Status</option>
             <option value='NULL'>No Status</option>
             <option value='off_market'>Off Market</option>
             <option value='active'>Active</option>
@@ -262,7 +262,7 @@ export function DashboardFilters({
             onChange={(e) => setFilterSource(e.target.value)}
             className='border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none w-full'
           >
-            <option value=''>All Sources</option>
+            <option value='' disabled>Sources</option>
             <option value='csv_upload'>📄 CSV Upload</option>
             <option value='manual_entry'>✍️ Manual Entry</option>
             <option value='api_import'>🔗 API Import</option>
@@ -414,9 +414,9 @@ export function DashboardFilters({
                   <Loader size='small' variation='linear' /> Syncing...
                 </>
               ) : !hasPaidPlan ? (
-                '🔒 Sync GHL (PRO+)'
+                '🔒 Sync Laynch AI (PRO+)'
               ) : (
-                'Sync GHL'
+                'Sync Laynch AI'
               )}
             </button>
 

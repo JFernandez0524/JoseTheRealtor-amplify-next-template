@@ -10,7 +10,7 @@ type Tab = 'email' | 'skiptrace' | 'ghl';
 const TABS: { id: Tab; label: string }[] = [
   { id: 'email',     label: 'Email Outreach' },
   { id: 'skiptrace', label: 'Skip Trace' },
-  { id: 'ghl',       label: 'GHL Sync' },
+  { id: 'ghl',       label: 'Laynch AI Sync' },
 ];
 
 export default function ReportsTabs() {

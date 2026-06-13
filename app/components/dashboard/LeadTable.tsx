@@ -361,7 +361,7 @@ export function LeadTable({
               {renderSortableHeader('type', 'Type')}
               {renderSortableHeader('skipTraceStatus', 'Skip Status')}
               {/* NEW GHL STATUS HEADER */}
-              {renderSortableHeader('ghlSyncStatus', 'GHL Sync', 'bg-purple-50')}
+              {renderSortableHeader('ghlSyncStatus', 'Laynch AI Sync', 'bg-purple-50')}
               {renderSortableHeader('ghlSyncDate', 'Sync Date', 'bg-purple-50')}
               {renderSortableHeader(
                 'ownerLastName',

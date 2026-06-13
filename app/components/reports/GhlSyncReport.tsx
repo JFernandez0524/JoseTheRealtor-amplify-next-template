@@ -46,7 +46,7 @@ export default function GhlSyncReport() {
     fetch('/api/v1/reports/pipeline-stats')
       .then(r => r.json())
       .then(d => setData(d.ghlSync))
-      .catch(() => setError('Failed to load GHL sync data.'))
+      .catch(() => setError('Failed to load Laynch AI sync data.'))
       .finally(() => setLoading(false));
   }, []);
 
@@ -61,9 +61,9 @@ export default function GhlSyncReport() {
     <div className='space-y-6 mt-6'>
       {/* Summary Cards */}
       <div className='grid grid-cols-2 md:grid-cols-5 gap-4'>
-        <SummaryCard label='Synced to GHL' value={data.success} accent='text-purple-700' />
+        <SummaryCard label='Synced to Laynch AI' value={data.success} accent='text-purple-700' />
         <SummaryCard label='Failed' value={data.failed} accent={data.failed > 0 ? 'text-red-600' : 'text-slate-900'} />
-        <SummaryCard label='Skipped' value={data.skipped} sub='already in GHL' />
+        <SummaryCard label='Skipped' value={data.skipped} sub='already in Laynch AI' />
         <SummaryCard label='Pending' value={data.pending} sub='queued' />
         <SummaryCard label='Sync Rate' value={syncRate} sub={`% of ${total.toLocaleString()} leads`} />
       </div>
@@ -75,7 +75,7 @@ export default function GhlSyncReport() {
             Failed Syncs — {data.failed} lead{data.failed !== 1 ? 's' : ''}
           </h3>
           <p className='text-sm text-red-700 mb-4'>
-            These leads could not be pushed to GHL. Open the lead and retry the sync manually.
+            These leads could not be pushed to Laynch AI. Open the lead and retry the sync manually.
           </p>
           <div className='space-y-2 max-h-72 overflow-y-auto'>
             {data.failedSyncs.map(l => (
@@ -103,7 +103,7 @@ export default function GhlSyncReport() {
       {/* Recent Syncs */}
       <div className='bg-white rounded-xl border border-slate-200 overflow-hidden'>
         <div className='px-5 py-4 border-b border-slate-100'>
-          <h3 className='font-bold text-slate-800'>Recent GHL Syncs</h3>
+          <h3 className='font-bold text-slate-800'>Recent Laynch AI Syncs</h3>
         </div>
         {data.recentSyncs.length === 0 ? (
           <p className='text-center py-10 text-slate-400 text-sm'>No syncs yet.</p>
@@ -116,7 +116,7 @@ export default function GhlSyncReport() {
                   <th className='px-4 py-3 text-left'>Type</th>
                   <th className='px-4 py-3 text-left'>Status</th>
                   <th className='px-4 py-3 text-left'>Synced On</th>
-                  <th className='px-4 py-3 text-left'>GHL Contact</th>
+                  <th className='px-4 py-3 text-left'>Laynch AI Contact</th>
                   <th className='px-4 py-3 text-left'></th>
                 </tr>
               </thead>

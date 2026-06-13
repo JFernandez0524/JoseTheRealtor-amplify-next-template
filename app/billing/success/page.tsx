@@ -20,7 +20,7 @@ export default function BillingSuccessPage() {
         <h2 className="text-2xl font-bold text-gray-900 mb-4">Welcome to PRO!</h2>
         <p className="text-gray-600 mb-6">
           Your subscription has been activated. You now have access to all Sync Plan features
-          including GHL CRM integration.
+          including Laynch AI integration.
         </p>
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
           <p className="text-blue-800 text-sm">

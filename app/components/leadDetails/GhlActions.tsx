@@ -70,7 +70,7 @@ export function GhlActions({
   if (!hasPaidPlan) {
     return (
       <div className='bg-white shadow border rounded-lg p-6 border-l-4 border-l-purple-500'>
-        <h2 className='text-xl font-semibold mb-2'>GHL Actions & Status</h2>
+        <h2 className='text-xl font-semibold mb-2'>Laynch AI Actions & Status</h2>
         <p className='text-sm text-slate-500 mb-4'>CRM sync requires a Sync Plan or higher.</p>
         <Link
           href='/pricing'
@@ -84,7 +84,7 @@ export function GhlActions({
 
   return (
     <div className='bg-white shadow border rounded-lg p-6 border-l-4 border-l-purple-500'>
-      <h2 className='text-xl font-semibold mb-4'>GHL Actions & Status</h2>
+      <h2 className='text-xl font-semibold mb-4'>Laynch AI Actions & Status</h2>
       <div className='space-y-4'>
         <div className='flex justify-between items-center'>
           <label className='text-sm font-medium text-gray-500'>
@@ -119,15 +119,15 @@ export function GhlActions({
           ) : !isReadyToSync ? (
             'Awaiting Contact Info'
           ) : isAlreadySynced ? (
-            'Push Update to GHL' // 🎯 Visual cue that this is an update, not first sync
+            'Push Update to Laynch AI'
           ) : (
-            'Initial Sync to GHL'
+            'Initial Sync to Laynch AI'
           )}
         </button>
 
         {isAlreadySynced && !isSyncing && (
           <p className='text-[10px] text-gray-400 text-center italic'>
-            Lead already in GHL. Click above to sync recent changes.
+            Lead already in Laynch AI. Click above to sync recent changes.
           </p>
         )}
       </div>

@@ -18,6 +18,7 @@ import { DashboardFilters } from './DashboardFilters';
 import { GhlConnection } from './GhlConnection';
 import { RouteExplanationModal } from './RouteExplanationModal';
 import { SyncConfirmModal } from './SyncConfirmModal';
+import { DeleteConfirmModal } from './DeleteConfirmModal';
 import { getFrontEndUser } from '@/app/utils/aws/auth/amplifyFrontEndUser';
 import type { Schema } from '@/amplify/data/resource';
 
@@ -46,6 +47,7 @@ export default function LeadDashboardClient({}: Props) {
   const [alreadyTracedCount, setAlreadyTracedCount] = useState(0);
   const [isLargeBatch, setIsLargeBatch] = useState(false);
   const [showSyncModal, setShowSyncModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [syncCounts, setSyncCounts] = useState({ calling: 0, emailOnly: 0, digitalOnly: 0 });
   const [alreadySyncedCount, setAlreadySyncedCount] = useState(0);
   const [syncProgress, setSyncProgress] = useState<{ current: number; total: number } | null>(null);
@@ -419,7 +421,7 @@ export default function LeadDashboardClient({}: Props) {
     }
 
     if (!isGhlConnected) {
-      addToast({ type: 'warning', title: 'GHL Not Connected', message: 'Connect your GoHighLevel account before syncing leads.' });
+      addToast({ type: 'warning', title: 'Laynch AI Not Connected', message: 'Connect your Laynch AI system before syncing leads.' });
       return;
     }
 
@@ -454,11 +456,11 @@ export default function LeadDashboardClient({}: Props) {
     setShowSyncModal(false);
     setIsProcessing(true);
     setSyncProgress({ current: 0, total: ids.length });
-    setProcessingMessage('Starting GHL sync...');
+    setProcessingMessage('Starting Laynch AI sync...');
     try {
       const { successful, skipped, failed, failedIds, skippedIds } = await syncToGHL(ids, (current, total) => {
         setSyncProgress({ current, total });
-        setProcessingMessage(`Syncing leads to GHL... (${current}/${total})`);
+        setProcessingMessage(`Syncing leads to Laynch AI... (${current}/${total})`);
       });
 
       setIsProcessing(false);
@@ -581,20 +583,16 @@ export default function LeadDashboardClient({}: Props) {
       skipTraceInFlight.current = false;
     }
   };
-  const handleDeleteLeads = async () => {
-    console.log('🗑️ Delete clicked. isAdmin:', isAdmin, 'selectedIds:', selectedIds);
-    
+  const handleDeleteLeads = () => {
     if (!isAdmin) {
       addToast({ type: 'error', title: 'Unauthorized', message: 'Only Admins can bulk delete leads.' });
       return;
     }
-    if (
-      !confirm(
-        `Are you sure you want to permanently delete ${selectedIds.length} leads?`
-      )
-    )
-      return;
+    setShowDeleteModal(true);
+  };
 
+  const confirmDeleteLeads = async () => {
+    setShowDeleteModal(false);
     setIsProcessing(true);
     setProcessingMessage(`Deleting ${selectedIds.length} leads...`);
     try {
@@ -735,7 +733,7 @@ export default function LeadDashboardClient({}: Props) {
   const handlePopulateQueue = async () => {
     if (
       !confirm(
-        `Populate outreach queue from GHL?\n\nThis will fetch ALL contacts with "ai outreach" tag from GHL and add them to the outreach queue for automated messaging.`
+        `Populate outreach queue from Laynch AI?\n\nThis will fetch ALL contacts with "ai outreach" tag from Laynch AI and add them to the outreach queue for automated messaging.`
       )
     )
       return;
@@ -750,7 +748,7 @@ export default function LeadDashboardClient({}: Props) {
 
       const result = JSON.parse(data as string);
 
-      addToast({ type: 'success', title: 'Queue Population Complete!', message: `GHL contacts: ${result.totalContacts} | AI outreach: ${result.aiOutreachContacts} | Added: ${result.queueEntriesAdded}${result.errors ? ` | Errors: ${result.errors.length}` : ''}`, duration: 8000 });
+      addToast({ type: 'success', title: 'Queue Population Complete!', message: `Laynch AI contacts: ${result.totalContacts} | AI outreach: ${result.aiOutreachContacts} | Added: ${result.queueEntriesAdded}${result.errors ? ` | Errors: ${result.errors.length}` : ''}`, duration: 8000 });
     } catch (err: any) {
       console.error('Queue population error:', err);
       addToast({ type: 'error', title: 'Queue Population Failed', message: err.message });
@@ -791,10 +789,10 @@ export default function LeadDashboardClient({}: Props) {
   };
 
   const handleSyncListingStatus = async () => {
-    if (!confirm('Sync listing_status field to all existing GHL contacts?\n\nThis will update contacts that were synced before the field was created.')) return;
+    if (!confirm('Sync listing_status field to all existing Laynch AI contacts?\n\nThis will update contacts that were synced before the field was created.')) return;
 
     setIsProcessing(true);
-    setProcessingMessage('Syncing listing status to GHL...');
+    setProcessingMessage('Syncing listing status to Laynch AI...');
     try {
       const response = await fetch('/api/v1/sync-listing-status', {
         method: 'POST',
@@ -842,7 +840,7 @@ export default function LeadDashboardClient({}: Props) {
       'Type',
       'Manual Status',
       'Status',
-      'GHL Sync',
+      'Laynch AI Sync',
       'Owner Name',
       'Address',
       'Quality Phones',
@@ -998,7 +996,7 @@ export default function LeadDashboardClient({}: Props) {
       {!hasPaidPlan && (
         <div className='bg-indigo-50 border border-indigo-200 rounded-lg px-4 py-3 flex items-center justify-between'>
           <p className='text-sm text-indigo-800'>
-            You're on the <strong>Free Plan</strong> — GHL sync, lead enrichment, and automated outreach are locked.
+            You're on the <strong>Free Plan</strong> — Laynch AI sync, lead enrichment, and automated outreach are locked.
           </p>
           <a
             href='/pricing'
@@ -1336,6 +1334,13 @@ export default function LeadDashboardClient({}: Props) {
         emailOnlyCount={syncCounts.emailOnly}
         digitalOnlyCount={syncCounts.digitalOnly}
         alreadySyncedCount={alreadySyncedCount}
+      />
+
+      <DeleteConfirmModal
+        isOpen={showDeleteModal}
+        onClose={() => setShowDeleteModal(false)}
+        onConfirm={confirmDeleteLeads}
+        count={selectedIds.length}
       />
 
       {/* Route Explanation Modal */}
