@@ -60,7 +60,6 @@ export async function POST(req: Request) {
   try {
     // This endpoint is Lambda-only. Reject any request without the shared secret.
     const callerSecret = req.headers.get('x-internal-secret');
-    console.log(`[auth] env set=${!!INTERNAL_API_SECRET} envLen=${INTERNAL_API_SECRET?.length} callerLen=${callerSecret?.length} match=${callerSecret === INTERNAL_API_SECRET}`);
     if (!INTERNAL_API_SECRET || callerSecret !== INTERNAL_API_SECRET) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
