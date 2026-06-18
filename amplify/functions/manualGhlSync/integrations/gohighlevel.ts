@@ -10,6 +10,7 @@ const GHL_CUSTOM_FIELD_ID_MAP: Record<string, string> = {
   property_city: 'h4UIjKQvFu7oRW4SAY8W',
   property_state: '9r9OpQaxYPxqbA6Hvtx7',
   property_zip: 'hgbjsTVwcyID7umdhm2o',
+  property_county: 'pNEyAVG7J7pER8p3OVWb',
   lead_source_id: 'PBInTgsd2nMCD3Ngmy0a', // 🎯 Used for Sibling Suppression
   lead_type: 'oaf4wCuM3Ub9eGpiddrO',
   contact_type: 'pGfgxcdFaYAkdq0Vp53j', // Phone Contact vs Direct Mail
@@ -152,6 +153,7 @@ export async function syncToGoHighLevel(
       property_city: toTitleCase((lead.standardizedAddress as any)?.city || lead.ownerCity),
       property_state: (lead.standardizedAddress as any)?.state || lead.ownerState,
       property_zip: (lead.standardizedAddress as any)?.zip || lead.ownerZip,
+      property_county: toTitleCase(lead.ownerCounty || undefined),
       mailing_address: mailingAddr,
       mailing_city: mailingCity,
       mailing_state: mailingState,
