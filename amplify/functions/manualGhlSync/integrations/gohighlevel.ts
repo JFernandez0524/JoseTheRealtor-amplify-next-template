@@ -153,7 +153,7 @@ export async function syncToGoHighLevel(
       property_city: toTitleCase((lead.standardizedAddress as any)?.city || lead.ownerCity),
       property_state: (lead.standardizedAddress as any)?.state || lead.ownerState,
       property_zip: (lead.standardizedAddress as any)?.zip || lead.ownerZip,
-      property_county: toTitleCase(lead.ownerCounty || undefined),
+      property_county: lead.ownerCounty ? toTitleCase(lead.ownerCounty) : undefined,
       mailing_address: mailingAddr,
       mailing_city: mailingCity,
       mailing_state: mailingState,
