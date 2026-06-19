@@ -90,6 +90,11 @@ interface GhlIntegration {
  * - Metrics: Total messages sent, queue hit rate, success/failure counts
  */
 export const handler = async (event: any) => {
+  // SMS outreach disabled — TCPA compliance risk for cold outreach to public record leads.
+  // Carrier flagging from STOP replies also degrades phone number reputation.
+  console.log('⏸️ [DAILY_OUTREACH] SMS outreach is disabled. Exiting.');
+  return { statusCode: 200, body: JSON.stringify({ disabled: true, reason: 'SMS outreach disabled for TCPA compliance' }) };
+
   console.log('📤 [DAILY_OUTREACH] Starting daily outreach agent');
   console.log('📤 [DAILY_OUTREACH] Event:', JSON.stringify(event));
   
