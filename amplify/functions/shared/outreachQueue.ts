@@ -360,19 +360,22 @@ export async function updateEmailSent(id: string): Promise<void> {
 
   const currentAttempts = (result.Item?.emailAttempts as number) || 0;
   const newAttempts = currentAttempts + 1;
-  
-  // Calculate next email date (4 days from now)
+
+  // Cap at 7 touches — mark COMPLETED after final touch
+  const MAX_EMAIL_TOUCHES = 7;
+  const finalStatus = newAttempts >= MAX_EMAIL_TOUCHES ? 'COMPLETED' : 'PENDING';
+
+  // Calculate next email date (4 days from now) — only relevant if still PENDING
   const nextDate = new Date();
   nextDate.setDate(nextDate.getDate() + 4);
-  nextDate.setHours(0, 0, 0, 0); // Start of day
+  nextDate.setHours(0, 0, 0, 0);
 
-  // Update with new attempt count and next scheduled date
   await docClient.send(new UpdateCommand({
     TableName: OUTREACH_QUEUE_TABLE,
     Key: { id },
     UpdateExpression: 'SET emailStatus = :status, emailAttempts = :attempts, lastEmailSent = :timestamp, nextEmailDate = :nextDate, updatedAt = :now',
     ExpressionAttributeValues: {
-      ':status': 'PENDING', // Keep PENDING for follow-ups
+      ':status': finalStatus,
       ':attempts': newAttempts,
       ':timestamp': new Date().toISOString(),
       ':nextDate': nextDate.toISOString(),
@@ -380,7 +383,7 @@ export async function updateEmailSent(id: string): Promise<void> {
     },
   }));
 
-  console.log(`✅ Updated email for queue item ${id} - attempt ${newAttempts}, next email: ${nextDate.toDateString()}`);
+  console.log(`✅ Updated email for queue item ${id} - attempt ${newAttempts}/${MAX_EMAIL_TOUCHES}, status: ${finalStatus}, next: ${nextDate.toDateString()}`);
 }
 
 /**
