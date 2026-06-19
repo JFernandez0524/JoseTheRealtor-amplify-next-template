@@ -153,7 +153,18 @@ RE/MAX Homeland Realtors
         for (const contact of contacts) {
           try {
             console.log(`Sending email to contact ${contact.id} (${contact.email})`);
-            
+
+            // Pre-lock: set nextEmailDate = +4 days BEFORE sending so the contact is
+            // protected even if the post-send updateEmailSent call fails.
+            try {
+              const { preLockEmailSend } = await import('../shared/outreachQueue');
+              await preLockEmailSend(contact._queueId);
+            } catch (lockError: any) {
+              console.error(`❌ [QUEUE] Failed to pre-lock ${contact._queueId}, skipping:`, lockError.message);
+              await new Promise(resolve => setTimeout(resolve, 2000));
+              continue;
+            }
+
             const response = await axios.post(
               `${process.env.APP_URL}/api/v1/send-email-to-contact`,
               {
@@ -175,17 +186,17 @@ RE/MAX Homeland Realtors
             if (response.data.success) {
               console.log(`✅ Email sent successfully to ${contact.email}`);
               totalEmailsSent++;
-              
-              // Update queue status
+
+              // Update queue status (increments attempts, sets lastEmailSent, keeps +4-day nextEmailDate)
               console.log(`📋 [QUEUE] Updating queue item ${contact._queueId}`);
               try {
                 const { updateEmailSent } = await import('../shared/outreachQueue');
                 await updateEmailSent(contact._queueId);
                 console.log(`✅ [QUEUE] Updated queue item ${contact._queueId}`);
               } catch (queueError: any) {
-                console.error(`❌ [QUEUE] Failed to update queue status:`, queueError.message);
+                console.error(`❌ [QUEUE] Failed to update queue status (pre-lock still protects cadence):`, queueError.message);
               }
-              
+
               // Update email counter in GHL (increment, not set to 1)
               try {
                 const currentCounter = parseInt(contact.customFields?.find((f: any) => f.id === 'wWlrXoXeMXcM6kUexf2L')?.value || '0');
@@ -212,17 +223,25 @@ RE/MAX Homeland Realtors
               }
             } else {
               console.error(`Failed to send email to ${contact.email}:`, response.data.error);
-              
-              // Mark permanent failures in queue so they don't retry forever
+
               const errorMsg = response.data.error || '';
               const isPermanentFailure = errorMsg.includes('DND is active') || errorMsg.includes('Contact has no email');
               if (isPermanentFailure) {
+                // Mark permanently so it never retries
                 try {
                   const { updateEmailStatus } = await import('../shared/outreachQueue');
                   await updateEmailStatus(contact._queueId, 'FAILED');
                   console.log(`📋 [QUEUE] Marked ${contact._queueId} as FAILED (${errorMsg})`);
                 } catch (queueError: any) {
                   console.error(`❌ [QUEUE] Failed to update status:`, queueError.message);
+                }
+              } else {
+                // Transient failure: release the pre-lock so we retry tomorrow
+                try {
+                  const { releaseEmailLock } = await import('../shared/outreachQueue');
+                  await releaseEmailLock(contact._queueId);
+                } catch (unlockError: any) {
+                  console.error(`❌ [QUEUE] Failed to release lock for ${contact._queueId}:`, unlockError.message);
                 }
               }
             }

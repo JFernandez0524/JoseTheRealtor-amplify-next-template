@@ -230,9 +230,10 @@ export async function getPendingEmailContacts(userId: string, limit: number = 50
     lastEvaluatedKey = result.LastEvaluatedKey;
   } while (lastEvaluatedKey);
 
+  const now = new Date();
   const today = new Date();
   today.setHours(0, 0, 0, 0); // Start of today
-  
+
   // Filter by nextEmailDate and queue status
   return items.filter(item => {
     // Must have email address
@@ -240,29 +241,40 @@ export async function getPendingEmailContacts(userId: string, limit: number = 50
       console.log(`⚠️ Contact ${item.contactId} has no email - skipping`);
       return false;
     }
-    
+
     // Only send to contacts in OUTREACH status
     const status = item.queueStatus || 'OUTREACH';
     if (status !== 'OUTREACH') {
       console.log(`⏹️ Contact ${item.contactId} not in OUTREACH status (${status})`);
       return false;
     }
-    
+
     // Must have nextEmailDate set
     if (!item.nextEmailDate) {
       console.log(`⚠️ Contact ${item.contactId} missing nextEmailDate`);
       return false;
     }
-    
+
     // Check if nextEmailDate is today or earlier
     const nextDate = new Date(item.nextEmailDate);
     nextDate.setHours(0, 0, 0, 0);
-    
+
     if (nextDate > today) {
       console.log(`⏳ Contact ${item.contactId} not ready - scheduled for ${nextDate.toDateString()}`);
       return false;
     }
-    
+
+    // Safety: enforce minimum 24 hours since last email (mirrors SMS guard; protects against
+    // race conditions if two Lambda invocations overlap on the same contact)
+    if (item.lastEmailSent) {
+      const lastSent = new Date(item.lastEmailSent);
+      const hoursSince = (now.getTime() - lastSent.getTime()) / (1000 * 60 * 60);
+      if (hoursSince < 24) {
+        console.log(`⏳ Contact ${item.contactId} emailed ${hoursSince.toFixed(1)}h ago - too soon`);
+        return false;
+      }
+    }
+
     return true;
   }).slice(0, limit);
 }
@@ -346,9 +358,59 @@ export async function updateEmailStatus(
 }
 
 /**
+ * Pre-lock a contact before sending email to prevent double-sends.
+ * Sets nextEmailDate = +4 days before the email goes out, so if the post-send
+ * updateEmailSent call fails (DynamoDB error, Lambda timeout, etc.), the contact
+ * is still protected from being picked up again on the next hourly run.
+ *
+ * @param id - Queue item ID
+ */
+export async function preLockEmailSend(id: string): Promise<void> {
+  const lockDate = new Date();
+  lockDate.setDate(lockDate.getDate() + 4);
+  lockDate.setHours(0, 0, 0, 0);
+
+  await docClient.send(new UpdateCommand({
+    TableName: OUTREACH_QUEUE_TABLE,
+    Key: { id },
+    UpdateExpression: 'SET nextEmailDate = :lockDate, updatedAt = :now',
+    ExpressionAttributeValues: {
+      ':lockDate': lockDate.toISOString(),
+      ':now': new Date().toISOString(),
+    },
+  }));
+
+  console.log(`🔒 Pre-locked email send for ${id} until ${lockDate.toDateString()}`);
+}
+
+/**
+ * Release an email pre-lock after a transient send failure.
+ * Resets nextEmailDate to tomorrow so the contact is retried on the next business day.
+ *
+ * @param id - Queue item ID
+ */
+export async function releaseEmailLock(id: string): Promise<void> {
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  tomorrow.setHours(0, 0, 0, 0);
+
+  await docClient.send(new UpdateCommand({
+    TableName: OUTREACH_QUEUE_TABLE,
+    Key: { id },
+    UpdateExpression: 'SET nextEmailDate = :tomorrow, updatedAt = :now',
+    ExpressionAttributeValues: {
+      ':tomorrow': tomorrow.toISOString(),
+      ':now': new Date().toISOString(),
+    },
+  }));
+
+  console.log(`🔓 Released email lock for ${id} - retry from ${tomorrow.toDateString()}`);
+}
+
+/**
  * Update email sent - increments counter, updates timestamp, and schedules next email
  * Keeps status as PENDING for follow-up touches
- * 
+ *
  * @param id - Queue item ID (userId_contactId)
  */
 export async function updateEmailSent(id: string): Promise<void> {
