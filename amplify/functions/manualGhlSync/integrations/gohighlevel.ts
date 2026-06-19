@@ -40,6 +40,8 @@ const GHL_CUSTOM_FIELD_ID_MAP: Record<string, string> = {
   conversation_sentiment: 'vjhwCk3Ns0ekDEbMsuy5',
   // 🏠 PROPERTY TIER
   property_tier: 'lzL3NLRSgIW3SbhhLJ0O',
+  // 🔗 ZILLOW LINK
+  zillow_link: 'RJo7dFKRlZDeaXIl4JqD',
 };
 
 // Opportunity field (separate from contact fields)
@@ -132,6 +134,17 @@ export async function syncToGoHighLevel(
     const appPlan = isAdmin ? 'AI' : isAIPlan ? 'AI' : isPROPlan ? 'SYNC' : 'SYNC'; // Admins get AI plan
     const appAccountStatus = 'active'; // TODO: Add billing status check for 'past_due'/'canceled'
 
+    // 🔗 Build Zillow search URL from property address components
+    const buildZillowUrl = (address: string, city: string, state: string, zip: string): string => {
+      const parts = [address, city, state, zip]
+        .filter(Boolean)
+        .join(' ')
+        .replace(/[^a-zA-Z0-9\s]/g, '') // strip punctuation
+        .trim()
+        .replace(/\s+/g, '-');           // spaces → hyphens
+      return `https://www.zillow.com/homes/${parts}_rb/`;
+    };
+
     // 🎯 Construct Custom Field Values
     const zestimateValue = lead.zestimate || lead.estimatedValue || 0;
     const cashOfferValue = Math.round(zestimateValue * 0.70); // 70% rule for cash offer
@@ -148,12 +161,18 @@ export async function syncToGoHighLevel(
     const mailingState = (lead.adminStandardizedAddress as any)?.state?.S || lead.mailingState;
     const mailingZip = (lead.adminStandardizedAddress as any)?.zip?.S || lead.mailingZip;
 
+    const propAddress = toTitleCase((lead.standardizedAddress as any)?.street || lead.ownerAddress);
+    const propCity    = toTitleCase((lead.standardizedAddress as any)?.city  || lead.ownerCity);
+    const propState   = (lead.standardizedAddress as any)?.state || lead.ownerState;
+    const propZip     = (lead.standardizedAddress as any)?.zip   || lead.ownerZip;
+
     const customFieldValues: Record<string, any> = {
-      property_address: toTitleCase((lead.standardizedAddress as any)?.street || lead.ownerAddress),
-      property_city: toTitleCase((lead.standardizedAddress as any)?.city || lead.ownerCity),
-      property_state: (lead.standardizedAddress as any)?.state || lead.ownerState,
-      property_zip: (lead.standardizedAddress as any)?.zip || lead.ownerZip,
+      property_address: propAddress,
+      property_city:    propCity,
+      property_state:   propState,
+      property_zip:     propZip,
       property_county: lead.ownerCounty ? toTitleCase(lead.ownerCounty) : undefined,
+      zillow_link: propAddress ? buildZillowUrl(propAddress, propCity || '', propState || '', propZip || '') : undefined,
       mailing_address: mailingAddr,
       mailing_city: mailingCity,
       mailing_state: mailingState,
