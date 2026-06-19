@@ -172,7 +172,10 @@ export async function syncToGoHighLevel(
       property_state:   propState,
       property_zip:     propZip,
       property_county: lead.ownerCounty ? toTitleCase(lead.ownerCounty) : undefined,
-      zillow_link: propAddress ? buildZillowUrl(propAddress, propCity || '', propState || '', propZip || '') : undefined,
+      // Prefer the direct zpid URL from Bridge API; fall back to address-based search URL
+      zillow_link: lead.zillowUrl
+        || (lead.zillowZpid ? `https://www.zillow.com/homes/${lead.zillowZpid}_zpid/` : null)
+        || (propAddress ? buildZillowUrl(propAddress, propCity || '', propState || '', propZip || '') : undefined),
       mailing_address: mailingAddr,
       mailing_city: mailingCity,
       mailing_state: mailingState,
