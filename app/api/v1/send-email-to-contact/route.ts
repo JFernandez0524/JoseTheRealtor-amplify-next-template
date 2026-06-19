@@ -64,7 +64,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    const { contactId, accessToken, fromEmail, emailSignature, toEmail } = await req.json();
+    const { contactId, accessToken, fromEmail, emailSignature, toEmail, touchNumber } = await req.json();
 
     if (!contactId || !accessToken) {
       return NextResponse.json(
@@ -141,8 +141,9 @@ export async function POST(req: Request) {
       locationId: contact.locationId,
       contact,
       fromEmail,
-      toEmail: recipientEmail, // Use specific email from queue
-      accessToken
+      toEmail: recipientEmail,
+      accessToken,
+      touchNumber: touchNumber ?? 1,
     });
 
     return NextResponse.json({

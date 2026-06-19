@@ -51,6 +51,7 @@ interface EmailConversationContext {
   fromEmail?: string;
   toEmail?: string;
   accessToken?: string;
+  touchNumber?: number; // 1=initial, 2-7=follow-ups
 }
 
 interface PropertyAnalysis {
@@ -184,36 +185,61 @@ async function generateEmailResponse(
   const cashOffer = propertyData?.zestimate
     ? Math.round(propertyData.zestimate * 0.7)
     : null;
-  const isInitialOutreach = context.incomingMessage === 'initial_outreach';
+  const isReply = context.incomingMessage !== 'initial_outreach';
 
   const situationContext =
     context.leadType === 'Probate'
       ? 'navigate the complexity and stress of settling estates'
-      : 'facing foreclosure situations';
+      : 'avoid foreclosure and protect their equity';
 
-  const systemPrompt = isInitialOutreach
-    ? `You are Jose Fernandez from RE/MAX Homeland Realtors sending a FIRST-TIME email to ${context.contactName} about their ${context.leadType?.toLowerCase()} situation.
+  const propertyRef = hasAddress
+    ? `${context.propertyAddress} in ${context.propertyCity}`
+    : 'your property';
 
-AMMO FRAMEWORK:
-- Audience: ${context.leadType} lead ${situationContext}
-- Message: Offer clarity and control with two clear options
-- Outcome: Get them to agree to a 10-minute property walkthrough
+  const offerLines = hasPropertyData
+    ? `• AS-IS CASH OFFER: $${cashOffer?.toLocaleString()} (quick close, no repairs needed)\n• RETAIL LISTING: $${propertyData!.zestimate?.toLocaleString()} (maximum value, traditional sale)`
+    : `• AS-IS CASH OFFER: [we determine after a quick walkthrough]\n• RETAIL LISTING: [market value, traditional sale]`;
 
-GENERATE EMAIL WITH THIS STRUCTURE:
+  const touch = context.touchNumber ?? 1;
 
-SUBJECT LINE (3-6 words):
-"Clarity on ${hasAddress ? context.propertyAddress : 'your property'}"
+  const sharedRules = `RULES:
+- Start with "${context.contactName}," — NO "Hi", "Hello", or "Dear"
+- Professional but warm tone
+- DO NOT include a signature — it will be added separately
+- Return JSON with "subject" and "body" fields only`;
 
-BODY (HOOK-RELATE-BRIDGE-ASK):
+  let systemPrompt: string;
+
+  if (isReply) {
+    systemPrompt = `You are Jose Fernandez from RE/MAX Homeland Realtors responding to ${context.contactName}'s email about their ${context.leadType?.toLowerCase()} situation.
+
+CONTEXT:
+- Property: ${propertyRef}
+${hasPropertyData ? `- Cash Offer: $${cashOffer?.toLocaleString()}\n- Retail Value: $${propertyData!.zestimate?.toLocaleString()}` : '- No valuation data yet'}
+
+THEIR EMAIL: "${context.incomingMessage}"
+
+RESPONSE STRATEGY (HOOK-RELATE-BRIDGE-ASK):
+1. Acknowledge their response directly
+2. Show you understand their situation
+3. Remind them of the two options and how a 10-minute walkthrough provides clarity
+4. Move toward scheduling the property visit
+
+Keep response under 150 words. Focus on "control" and "options". Goal: get a Yes/No/Maybe on a property visit.
+
+${sharedRules}`;
+  } else if (touch === 1) {
+    systemPrompt = `You are Jose Fernandez from RE/MAX Homeland Realtors sending a FIRST-TIME email to ${context.contactName} about their ${context.leadType?.toLowerCase()} situation.
+
+Write a concise outreach email using the Hook-Relate-Bridge-Ask structure:
 
 ${context.contactName},
 
-I help NJ families ${situationContext}. I saw the public notice regarding the property at ${hasAddress ? context.propertyAddress + ' in ' + context.propertyCity : 'your property'}.
+I help NJ families ${situationContext}. I saw the public notice regarding the property at ${propertyRef}.
 
 I can provide you with two clear options:
 
-• AS-IS CASH OFFER: ${hasPropertyData ? `$${cashOffer?.toLocaleString()}` : '[Amount TBD]'} (quick close, no repairs needed)
-• RETAIL LISTING: ${hasPropertyData ? `$${propertyData.zestimate?.toLocaleString()}` : '[Amount TBD]'} (maximum value, traditional sale)
+${offerLines}
 
 Having both options gives you complete control over your next move and removes the uncertainty from this process.
 
@@ -221,38 +247,61 @@ I just need 10 minutes to see the property condition so I can give you accurate 
 
 Are you open to meeting with me to discuss your options?
 
-RULES:
-- NO "Hi" or "Hello" - use name only with comma
-- Keep professional but empathetic tone
-- Include dollar amounts if available
-- Use bullet points for options
-- End with "Are you open to meeting with me to discuss your options?"
-- DO NOT include signature - it will be added separately
+Subject: "Clarity on ${context.propertyAddress || 'Your Property'}"
 
-Generate the email body only (return as JSON with "subject" and "body" fields):`
-    : `You are Jose Fernandez from RE/MAX Homeland Realtors responding to ${context.contactName}'s email about their ${context.leadType?.toLowerCase()} situation.
+${sharedRules}`;
+  } else if (touch === 2) {
+    systemPrompt = `You are Jose Fernandez from RE/MAX Homeland Realtors sending a SHORT follow-up email (touch 2 of 7) to ${context.contactName} who did not respond to your first email about their ${context.leadType?.toLowerCase()} property at ${propertyRef}.
 
-CONTEXT:
-- Property: ${hasAddress ? `${context.propertyAddress}, ${context.propertyCity}` : 'Address unknown'}
-${hasPropertyData ? `- Cash Offer: $${cashOffer?.toLocaleString()}\n- Retail Value: $${propertyData.zestimate?.toLocaleString()}` : '- No valuation data yet'}
+Write a brief, casual 2-3 sentence follow-up. Just bump the previous email — don't repeat all the details. Acknowledge you know they're busy. Keep it under 60 words.
 
-THEIR EMAIL: "${context.incomingMessage}"
+Subject: something like "Re: ${context.propertyAddress || 'Your Property'}" or "Quick follow-up"
 
-RESPONSE STRATEGY (HOOK-RELATE-BRIDGE-ASK):
-1. Hook: Acknowledge their response directly
-2. Relate: Show you understand their situation
-3. Bridge: Remind them of the two options and how a walkthrough provides clarity
-4. Ask: Move toward scheduling the property visit
+${sharedRules}`;
+  } else if (touch === 3) {
+    systemPrompt = `You are Jose Fernandez from RE/MAX Homeland Realtors sending touch 3 of 7 to ${context.contactName} about their ${context.leadType?.toLowerCase()} property at ${propertyRef}.
 
-RULES:
-- Keep response under 150 words
-- Be empathetic and professional
-- Focus on "control" and "options"
-- Goal: Get to "Yes, No, or Maybe" on property visit
-- If they show interest, suggest meeting
-- DO NOT include signature - it will be added separately
+This email leads with the financial decision they're facing. Mention the two options with numbers if available. Ask about their timeline — are they looking to move quickly or take their time? Keep it under 100 words.
 
-Generate the email response body only (return as JSON with "subject" and "body" fields):`;
+${offerLines}
+
+Subject: something about their options or timeline (e.g. "Your options for ${context.propertyAddress || 'the property'}")
+
+${sharedRules}`;
+  } else if (touch === 4) {
+    systemPrompt = `You are Jose Fernandez from RE/MAX Homeland Realtors sending touch 4 of 7 to ${context.contactName} about their ${context.leadType?.toLowerCase()} property at ${propertyRef}.
+
+This email takes an emotional/empathy angle. Acknowledge that ${context.leadType === 'Probate' ? 'settling an estate is one of the hardest things a family goes through' : 'facing foreclosure is incredibly stressful'}. Focus on reducing stress and giving them control — not just the money. Offer to be a resource even if they're not ready to decide. Keep it under 100 words.
+
+Subject: something empathetic and low-pressure
+
+${sharedRules}`;
+  } else if (touch === 5) {
+    systemPrompt = `You are Jose Fernandez from RE/MAX Homeland Realtors sending touch 5 of 7 to ${context.contactName} about their ${context.leadType?.toLowerCase()} property at ${propertyRef}.
+
+Lead with social proof — you've helped many NJ families in the exact same ${context.leadType?.toLowerCase()} situation get clarity and move forward. Briefly mention the two options${hasPropertyData ? ` ($${cashOffer?.toLocaleString()} cash or $${propertyData!.zestimate?.toLocaleString()} retail)` : ''}. Ask if they have 10 minutes for a quick call or walkthrough. Keep it under 100 words.
+
+Subject: something referencing helping other families or experience
+
+${sharedRules}`;
+  } else if (touch === 6) {
+    systemPrompt = `You are Jose Fernandez from RE/MAX Homeland Realtors sending touch 6 of 7 to ${context.contactName} about their ${context.leadType?.toLowerCase()} property at ${propertyRef}.
+
+Create gentle urgency — ${context.leadType === 'Probate' ? 'probate estates have legal timelines and delays can reduce the estate value' : 'foreclosure timelines move fast and acting early gives far more options'}. This isn't pressure — it's giving them the full picture so they can make the best decision. Remind them the 10-minute walkthrough is no obligation. Keep it under 100 words.
+
+Subject: something around timing or "before it's too late"
+
+${sharedRules}`;
+  } else {
+    // Touch 7+ — break-up email
+    systemPrompt = `You are Jose Fernandez from RE/MAX Homeland Realtors sending a final "break-up" email (touch 7) to ${context.contactName} about their ${context.leadType?.toLowerCase()} property at ${propertyRef}.
+
+This is the last email. Keep it very short — under 60 words. Be respectful and leave the door open permanently. Say you won't reach out again but if they ever want to explore their options, you're a phone call away. No pressure, no pitch.
+
+Subject: something like "Last note from Jose" or "Stepping back"
+
+${sharedRules}`;
+  }
 
   try {
     console.log('🤖 [EMAIL_AI] Calling OpenAI with context:', {
@@ -260,7 +309,7 @@ Generate the email response body only (return as JSON with "subject" and "body" 
       propertyAddress: context.propertyAddress,
       leadType: context.leadType,
       hasZestimate: !!propertyData?.zestimate,
-      isInitialOutreach,
+      touch,
     });
 
     const response = await axios.post(
@@ -271,9 +320,9 @@ Generate the email response body only (return as JSON with "subject" and "body" 
           { role: 'system', content: systemPrompt },
           {
             role: 'user',
-            content: isInitialOutreach
-              ? 'Generate the initial outreach email.'
-              : context.incomingMessage,
+            content: isReply
+              ? context.incomingMessage
+              : 'Generate the outreach email.',
           },
         ],
         response_format: { type: 'json_object' },
