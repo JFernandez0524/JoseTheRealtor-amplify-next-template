@@ -17,6 +17,7 @@ import { syncListingStatus } from './functions/syncListingStatus/resource';
 import { ghlFieldSyncHandler } from './functions/ghlFieldSyncHandler/resource';
 import { thanksIoWebhookHandler } from './functions/thanksIoWebhookHandler/resource';
 import { facebookWebhookHandler } from './functions/facebookWebhookHandler/resource';
+import { stripeWebhookHandler } from './functions/stripeWebhookHandler/resource';
 import { addUserToGroup } from './data/add-user-to-group/resource';
 import { removeUserFromGroup } from './data/remove-user-from-group/resource';
 import { EventType } from 'aws-cdk-lib/aws-s3';
@@ -44,6 +45,7 @@ const backend = defineBackend({
   facebookWebhookHandler,
   addUserToGroup,
   removeUserFromGroup,
+  stripeWebhookHandler,
 });
 
 // 🚀 S3 Trigger - uploadCsvHandler is in storage stack (no cross-stack reference)
@@ -509,6 +511,48 @@ backend.facebookWebhookHandler.resources.lambda.addFunctionUrl({
 });
 
 backend.facebookWebhookHandler.resources.lambda.addPermission('AllowPublicFacebookWebhook', {
+  principal: new AnyPrincipal(),
+  action: 'lambda:InvokeFunctionUrl',
+  functionUrlAuthType: FunctionUrlAuthType.NONE,
+});
+
+// 💳 Configure Stripe Webhook Handler
+backend.stripeWebhookHandler.addEnvironment(
+  'AMPLIFY_DATA_UserAccount_TABLE_NAME',
+  backend.data.resources.tables['UserAccount'].tableName
+);
+backend.stripeWebhookHandler.addEnvironment(
+  'AMPLIFY_AUTH_USERPOOL_ID',
+  backend.auth.resources.userPool.userPoolId
+);
+backend.stripeWebhookHandler.addEnvironment(
+  'STRIPE_WEBHOOK_SECRET',
+  process.env.STRIPE_WEBHOOK_SECRET || ''
+);
+
+// Grant DynamoDB access to UserAccount table
+backend.data.resources.tables['UserAccount'].grantReadWriteData(
+  backend.stripeWebhookHandler.resources.lambda
+);
+
+// Grant Cognito admin permissions
+backend.auth.resources.userPool.grant(
+  backend.stripeWebhookHandler.resources.lambda,
+  'cognito-idp:AdminAddUserToGroup',
+  'cognito-idp:AdminRemoveUserFromGroup'
+);
+
+// Enable Function URL for Stripe webhook
+backend.stripeWebhookHandler.resources.lambda.addFunctionUrl({
+  authType: FunctionUrlAuthType.NONE,
+  cors: {
+    allowedOrigins: ['*'],
+    allowedMethods: [HttpMethod.POST],
+    allowedHeaders: ['*'],
+  }
+});
+
+backend.stripeWebhookHandler.resources.lambda.addPermission('AllowPublicStripeWebhook', {
   principal: new AnyPrincipal(),
   action: 'lambda:InvokeFunctionUrl',
   functionUrlAuthType: FunctionUrlAuthType.NONE,

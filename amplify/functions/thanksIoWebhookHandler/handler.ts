@@ -140,12 +140,8 @@ async function handleQRScan(contactId: string, data: any) {
 
   console.log(`📱 [THANKS.IO] QR scan for ${contactId}: ${scanCount} scans`);
 
-  // Get user ID from contact
-  const userId = await getUserIdFromContact(contactId);
-  if (!userId) return;
-
-  // Get GHL token
-  const tokenData = await getValidGhlToken(userId);
+  // Get the active GHL token directly (single-user system)
+  const tokenData = await getActiveToken();
   if (!tokenData) return;
 
   const { token } = tokenData;
@@ -171,6 +167,24 @@ async function handleQRScan(contactId: string, data: any) {
   );
 
   console.log(`✅ [THANKS.IO] Updated contact ${contactId} - QR scanned ${scanCount} times`);
+}
+
+async function getActiveToken(): Promise<{ token: string } | null> {
+  try {
+    const { ScanCommand } = await import('@aws-sdk/lib-dynamodb');
+    const result = await docClient.send(new ScanCommand({
+      TableName: process.env.AMPLIFY_DATA_GhlIntegration_TABLE_NAME!,
+      Limit: 1,
+    }));
+    if (!result.Items?.length) {
+      console.error('❌ [THANKS.IO] No GHL integration found');
+      return null;
+    }
+    return getValidGhlToken(result.Items[0].userId);
+  } catch (err: any) {
+    console.error('❌ [THANKS.IO] Error getting active token:', err.message);
+    return null;
+  }
 }
 
 async function getUserIdFromContact(contactId: string): Promise<string | null> {
