@@ -1,6 +1,5 @@
 import { redirect } from 'next/navigation';
 import SignOutButton from '@/app/components/Logout';
-import AdminTools from '@/app/components/AdminTools';
 import {
   AuthGetCurrentUserServer,
   AuthGetUserAttributesServer,
@@ -85,9 +84,6 @@ export default async function ProfilePage() {
               <HiOutlineShieldCheck />
               Admin Dashboard
             </a>
-          )}
-          {!groups.includes('ADMINS') && (
-            <AdminTools userId={user.userId} />
           )}
           <SignOutButton />
         </div>
