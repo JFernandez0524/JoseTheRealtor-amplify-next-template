@@ -143,7 +143,7 @@ RE/MAX Homeland Realtors
             fieldIds.property_city && { id: fieldIds.property_city, value: q.propertyCity },
             fieldIds.property_state && { id: fieldIds.property_state, value: q.propertyState },
             fieldIds.lead_type && { id: fieldIds.lead_type, value: q.leadType },
-          ].filter(Boolean),
+          ].filter((f): f is { id: string; value: any } => Boolean(f)),
           _queueId: q.id,
           _queueAttempts: q.emailAttempts || 0
         }));

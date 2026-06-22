@@ -396,7 +396,8 @@ async function sendInitialProspectingEmail(
   contactId: string,
   lead: DBLead,
   primaryEmail: string,
-  locationId: string
+  locationId: string,
+  fieldIds: Record<string, string> = {}
 ): Promise<void> {
   try {
     // Get user's email from location settings
