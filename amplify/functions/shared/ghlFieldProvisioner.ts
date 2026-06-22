@@ -51,22 +51,11 @@ const OPPORTUNITY_FIELDS: Array<{ key: string } & FieldDef> = [
 ];
 
 async function fetchExistingContactFields(locationId: string, token: string): Promise<Array<{ id: string; name: string }>> {
-  const fields: Array<{ id: string; name: string }> = [];
-  let skip = 0;
-  const limit = 100;
-
-  while (true) {
-    const res = await axios.get(`${GHL_API}/locations/${locationId}/customFields`, {
-      headers: { Authorization: `Bearer ${token}`, Version: '2021-07-28' },
-      params: { model: 'contact', skip, limit },
-    });
-    const batch = res.data?.customFields || [];
-    fields.push(...batch);
-    if (batch.length < limit) break;
-    skip += limit;
-  }
-
-  return fields;
+  const res = await axios.get(`${GHL_API}/locations/${locationId}/customFields`, {
+    headers: { Authorization: `Bearer ${token}`, Version: '2021-07-28' },
+    params: { model: 'contact' },
+  });
+  return res.data?.customFields || [];
 }
 
 async function fetchExistingOpportunityFields(locationId: string, token: string): Promise<Array<{ id: string; name: string }>> {
