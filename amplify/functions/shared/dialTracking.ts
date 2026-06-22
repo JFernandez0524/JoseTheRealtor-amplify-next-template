@@ -40,9 +40,11 @@ function getBusinessDaysDiff(startDate: Date, endDate: Date): number {
  * Check if contact is ready for next outreach message
  * Prevents duplicate messages on the same day
  */
-export function shouldSendNextMessage(contact: any): boolean {
-  const callAttempts = parseInt(contact.customFields?.find((f: any) => f.id === '0MD4Pp2LCyOSCbCjA5qF')?.value || '0');
-  const lastCallDate = contact.customFields?.find((f: any) => f.id === 'dWNGeSckpRoVUxXLgxMj')?.value;
+export function shouldSendNextMessage(contact: any, fieldIds: Record<string, string> = {}): boolean {
+  const callAttemptId = fieldIds.call_attempt_counter;
+  const lastCallDateId = fieldIds.last_call_date;
+  const callAttempts = parseInt(contact.customFields?.find((f: any) => callAttemptId && f.id === callAttemptId)?.value || '0');
+  const lastCallDate = contact.customFields?.find((f: any) => lastCallDateId && f.id === lastCallDateId)?.value;
   
   // Max attempts reached
   if (callAttempts >= MAX_OUTREACH_ATTEMPTS) {
@@ -68,7 +70,10 @@ export function shouldSendNextMessage(contact: any): boolean {
 /**
  * Increment dial counter and update last call date
  */
-export async function incrementDialCounter(contactId: string, ghlToken: string): Promise<void> {
+export async function incrementDialCounter(contactId: string, ghlToken: string, fieldIds: Record<string, string> = {}, opportunityFieldIds: Record<string, string> = {}): Promise<void> {
+  const callAttemptId = fieldIds.call_attempt_counter;
+  const lastCallDateId = fieldIds.last_call_date;
+
   try {
     // Get current counter value
     const contactResponse = await axios.get(
@@ -80,36 +85,37 @@ export async function incrementDialCounter(contactId: string, ghlToken: string):
         }
       }
     );
-    
+
     const contact = contactResponse.data.contact;
-    const currentCount = parseInt(contact.customFields?.find((f: any) => f.id === '0MD4Pp2LCyOSCbCjA5qF')?.value || '0');
+    const currentCount = parseInt(contact.customFields?.find((f: any) => callAttemptId && f.id === callAttemptId)?.value || '0');
     const newCount = currentCount + 1;
-    
-    // Update counter and date
-    await axios.put(
-      `https://services.leadconnectorhq.com/contacts/${contactId}`,
-      {
-        customFields: [
-          { id: '0MD4Pp2LCyOSCbCjA5qF', value: newCount.toString() },
-          { id: 'dWNGeSckpRoVUxXLgxMj', value: new Date().toISOString() }
-        ]
-      },
-      {
-        headers: {
-          'Authorization': `Bearer ${ghlToken}`,
-          'Content-Type': 'application/json',
-          'Version': '2021-07-28'
+
+    const updateFields = [
+      callAttemptId && { id: callAttemptId, value: newCount.toString() },
+      lastCallDateId && { id: lastCallDateId, value: new Date().toISOString() },
+    ].filter(Boolean);
+
+    if (updateFields.length > 0) {
+      await axios.put(
+        `https://services.leadconnectorhq.com/contacts/${contactId}`,
+        { customFields: updateFields },
+        {
+          headers: {
+            'Authorization': `Bearer ${ghlToken}`,
+            'Content-Type': 'application/json',
+            'Version': '2021-07-28'
+          }
         }
-      }
-    );
-    
+      );
+    }
+
     console.log(`📊 Updated dial counter for ${contactId}: ${newCount} attempts`);
-    
+
     // Check if terminal status reached
     if (newCount >= MAX_OUTREACH_ATTEMPTS) {
-      await markTerminalDisposition(contactId, ghlToken);
+      await markTerminalDisposition(contactId, ghlToken, opportunityFieldIds);
     }
-    
+
   } catch (error) {
     console.error(`Failed to increment dial counter for ${contactId}:`, error);
   }
@@ -118,9 +124,14 @@ export async function incrementDialCounter(contactId: string, ghlToken: string):
 /**
  * Mark contact's opportunity with terminal disposition
  */
-async function markTerminalDisposition(contactId: string, ghlToken: string): Promise<void> {
+async function markTerminalDisposition(contactId: string, ghlToken: string, opportunityFieldIds: Record<string, string> = {}): Promise<void> {
+  const dispositionId = opportunityFieldIds.disposition;
+  if (!dispositionId) {
+    console.warn(`⚠️ No disposition field ID available for contact ${contactId} — skipping terminal disposition`);
+    return;
+  }
+
   try {
-    // Get contact's opportunities
     const oppResponse = await axios.get(
       `https://services.leadconnectorhq.com/opportunities/search?contactId=${contactId}`,
       {
@@ -130,22 +141,21 @@ async function markTerminalDisposition(contactId: string, ghlToken: string): Pro
         }
       }
     );
-    
+
     const opportunities = oppResponse.data.opportunities || [];
-    
+
     if (opportunities.length === 0) {
       console.log(`⚠️ No opportunity found for contact ${contactId} - cannot set disposition`);
       return;
     }
-    
-    // Update first opportunity with terminal disposition
+
     const opportunityId = opportunities[0].id;
-    
+
     await axios.put(
       `https://services.leadconnectorhq.com/opportunities/${opportunityId}`,
       {
         customFields: [
-          { id: '5PTlyH0ahrPVzYTKicYn', value: 'Direct Mail Campaign' }
+          { id: dispositionId, value: 'Direct Mail Campaign' }
         ]
       },
       {
@@ -156,9 +166,9 @@ async function markTerminalDisposition(contactId: string, ghlToken: string): Pro
         }
       }
     );
-    
+
     console.log(`🏁 Marked opportunity ${opportunityId} as "Direct Mail Campaign" after 8 attempts`);
-    
+
   } catch (error) {
     console.error(`Failed to mark terminal disposition for ${contactId}:`, error);
   }

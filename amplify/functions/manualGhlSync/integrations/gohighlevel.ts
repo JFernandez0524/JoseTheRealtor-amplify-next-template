@@ -1,53 +1,6 @@
 import axios, { AxiosInstance, AxiosError } from 'axios';
 import { DBLead } from '../../../../app/utils/aws/data/lead.server';
 
-const GHL_CUSTOM_FIELD_ID_MAP: Record<string, string> = {
-  mailing_address: '2RCYsC2cztJ1TWTh0tLt',
-  mailing_city: '2F48dc4QEAOFHNgBNVcu',
-  mailing_state: 'WzTPYXsXyPcnFSWn2UFf',
-  mailing_zipcode: 'Vx4EIVAsIK3ej5jEv3Bm',
-  property_address: 'p3NOYiInAERYbe0VsLHB',
-  property_city: 'h4UIjKQvFu7oRW4SAY8W',
-  property_state: '9r9OpQaxYPxqbA6Hvtx7',
-  property_zip: 'hgbjsTVwcyID7umdhm2o',
-  property_county: 'pNEyAVG7J7pER8p3OVWb',
-  lead_source_id: 'PBInTgsd2nMCD3Ngmy0a', // 🎯 Used for Sibling Suppression
-  lead_type: 'oaf4wCuM3Ub9eGpiddrO',
-  contact_type: 'pGfgxcdFaYAkdq0Vp53j', // Phone Contact vs Direct Mail
-  skiptracestatus: 'HrnY1GUZ7P6d6r7J0ZRc',
-  zestimate: '7wIe1cRbZYXUnc3WOVb2', // Property value estimate (listing value)
-  cash_offer: 'sM3hEOHCJFoPyWhj1Vc8', // 70% cash offer (as-is value)
-  phone_2: 'LkmfM0Va5PylJFsJYjCu',
-  phone_3: 'Cu6zwsuWrxoVWdxySc6t',
-  phone_4: 'hxwJG0lYeV18IxxWh09H',
-  phone_5: '8fIoSV1W05ciIrn01QT0',
-  email_2: 'JY5nf3NzRwfCGvN5u00E',
-  email_3: '1oy6TLKItn5RkebjI7kD',
-  // 🆕 NEW APP CONTROL FIELDS
-  app_user_id: 'CNoGugInWOC59hAPptxY',
-  app_plan: 'YEJuROSCNnG9OXi3K8lb',
-  app_account_status: 'diShiF2bpX7VFql08MVN',
-  app_lead_id: 'aBlDP8DU3dFSHI2LFesn',
-  ai_state: '1NxQW2kKMVgozjSUuu7s',
-  listing_status: 'HjA3Xd9IMZNhpH1uXpTo',
-  // 📞 DIAL TRACKING FIELDS
-  call_attempt_counter: '0MD4Pp2LCyOSCbCjA5qF',
-  last_call_date: 'dWNGeSckpRoVUxXLgxMj',
-  // 📧 EMAIL TRACKING FIELDS
-  email_attempt_counter: 'wWlrXoXeMXcM6kUexf2L',
-  last_email_date: '3xOBr4GvgRc22kBRNYCE',
-  // 🎭 SENTIMENT TRACKING
-  conversation_sentiment: 'vjhwCk3Ns0ekDEbMsuy5',
-  // 🏠 PROPERTY TIER
-  property_tier: 'lzL3NLRSgIW3SbhhLJ0O',
-  // 🔗 ZILLOW LINK
-  zillow_link: 'RJo7dFKRlZDeaXIl4JqD',
-};
-
-// Opportunity field (separate from contact fields)
-const GHL_OPPORTUNITY_FIELD_ID_MAP: Record<string, string> = {
-  disposition: '5PTlyH0ahrPVzYTKicYn',
-};
 
 const createGhlClient = (): AxiosInstance => {
   const client = axios.create({
@@ -110,7 +63,9 @@ export async function syncToGoHighLevel(
   userGroups: string[] = [],
   userId: string = '',
   ghlToken: string,
-  ghlLocationId: string
+  ghlLocationId: string,
+  fieldIds: Record<string, string> = {},
+  opportunityFieldIds: Record<string, string> = {}
 ): Promise<string> {
   const ghl = axios.create({
     baseURL: 'https://services.leadconnectorhq.com',
@@ -206,10 +161,10 @@ export async function syncToGoHighLevel(
     };
 
     const customFields = Object.keys(customFieldValues)
-      .filter((key) => customFieldValues[key] && GHL_CUSTOM_FIELD_ID_MAP[key])
+      .filter((key) => customFieldValues[key] && fieldIds[key])
       .map((key) => ({
-        id: GHL_CUSTOM_FIELD_ID_MAP[key],
-        value: String(customFieldValues[key]), // Use 'value' not 'field_value'
+        id: fieldIds[key],
+        value: String(customFieldValues[key]),
       }));
 
     // 🎯 Define Tags based on primary status and phone eligibility
@@ -496,9 +451,9 @@ async function sendInitialProspectingEmail(
     // Update email tracking fields
     await ghl.put(`/contacts/${contactId}`, {
       customFields: [
-        { id: GHL_CUSTOM_FIELD_ID_MAP.email_attempt_counter, value: '1' },
-        { id: GHL_CUSTOM_FIELD_ID_MAP.last_email_date, value: new Date().toISOString().split('T')[0] }
-      ]
+        { id: fieldIds.email_attempt_counter, value: '1' },
+        { id: fieldIds.last_email_date, value: new Date().toISOString().split('T')[0] }
+      ].filter(f => f.id)
     });
     
   } catch (error: any) {

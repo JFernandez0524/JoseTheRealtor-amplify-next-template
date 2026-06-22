@@ -10,6 +10,7 @@
 
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, ScanCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
+import { provisionCustomFields, provisionOpportunityFields } from './ghlFieldProvisioner';
 import axios from 'axios';
 
 const dynamoClient = new DynamoDBClient({ region: process.env.AWS_REGION });
@@ -27,13 +28,23 @@ type GhlIntegration = {
   refreshToken: string;
   expiresAt: string;
   isActive: boolean;
+  customFieldIds: Record<string, string> | null;
+  opportunityFieldIds: Record<string, string> | null;
+};
+
+export type GhlTokenResult = {
+  token: string;
+  locationId: string;
+  integrationId: string;
+  customFieldIds: Record<string, string> | null;
+  opportunityFieldIds: Record<string, string> | null;
 };
 
 /**
- * Gets a valid GHL access token for a user, refreshing if expired
- * Lambda-optimized version using DynamoDB client
+ * Gets a valid GHL access token for a user, refreshing if expired.
+ * Lambda-optimized version using DynamoDB client.
  */
-export async function getValidGhlToken(userId: string): Promise<{ token: string; locationId: string } | null> {
+export async function getValidGhlToken(userId: string): Promise<GhlTokenResult | null> {
   console.log(`🔑 [TOKEN_MANAGER] Getting token for user: ${userId}`);
   console.log(`🔑 [TOKEN_MANAGER] Table name: ${GHL_INTEGRATION_TABLE}`);
   console.log(`🔑 [TOKEN_MANAGER] Region: ${process.env.AWS_REGION}`);
@@ -65,7 +76,13 @@ export async function getValidGhlToken(userId: string): Promise<{ token: string;
     // Token still valid
     if (expiresAt > now) {
       console.log(`✅ [TOKEN_MANAGER] Token valid for user ${userId}`);
-      return { token: integration.accessToken, locationId: integration.locationId };
+      return {
+        token: integration.accessToken,
+        locationId: integration.locationId,
+        integrationId: integration.id,
+        customFieldIds: integration.customFieldIds || null,
+        opportunityFieldIds: integration.opportunityFieldIds || null,
+      };
     }
 
     // Token expired - refresh it
@@ -115,7 +132,13 @@ export async function getValidGhlToken(userId: string): Promise<{ token: string;
       }));
 
       console.log(`✅ [TOKEN_MANAGER] Token refreshed and saved for user ${userId}`);
-      return { token: access_token, locationId: integration.locationId };
+      return {
+        token: access_token,
+        locationId: integration.locationId,
+        integrationId: integration.id,
+        customFieldIds: integration.customFieldIds || null,
+        opportunityFieldIds: integration.opportunityFieldIds || null,
+      };
     } catch (refreshError: any) {
       // Log the actual GHL error response
       if (refreshError.response?.data) {
@@ -154,7 +177,13 @@ export async function getValidGhlToken(userId: string): Promise<{ token: string;
           const retryExpires = new Date(updated.expiresAt);
           if (retryExpires > new Date()) {
             console.log(`✅ [TOKEN_MANAGER] Using refreshed token from other process`);
-            return { token: updated.accessToken, locationId: updated.locationId };
+            return {
+              token: updated.accessToken,
+              locationId: updated.locationId,
+              integrationId: updated.id,
+              customFieldIds: updated.customFieldIds || null,
+              opportunityFieldIds: updated.opportunityFieldIds || null,
+            };
           }
         }
       }
@@ -166,4 +195,79 @@ export async function getValidGhlToken(userId: string): Promise<{ token: string;
     console.error(`❌ [TOKEN_MANAGER] Stack:`, error.stack);
     return null;
   }
+}
+
+export type IntegrationByLocationResult = {
+  token: string;
+  userId: string;
+  locationId: string;
+  integrationId: string;
+  customFieldIds: Record<string, string> | null;
+  opportunityFieldIds: Record<string, string> | null;
+};
+
+/**
+ * Looks up an active GHL integration by locationId.
+ * Used by webhook handlers that know locationId before knowing userId.
+ */
+export async function getIntegrationByLocationId(locationId: string): Promise<IntegrationByLocationResult | null> {
+  try {
+    const { Items } = await docClient.send(new ScanCommand({
+      TableName: GHL_INTEGRATION_TABLE,
+      FilterExpression: 'locationId = :loc AND isActive = :active',
+      ExpressionAttributeValues: {
+        ':loc': locationId,
+        ':active': true
+      }
+    }));
+
+    if (!Items || Items.length === 0) {
+      console.log(`❌ [TOKEN_MANAGER] No active integration found for locationId ${locationId}`);
+      return null;
+    }
+
+    const integration = Items[0] as GhlIntegration;
+    const now = new Date();
+    const expiresAt = new Date(integration.expiresAt);
+
+    let accessToken = integration.accessToken;
+
+    if (expiresAt <= now) {
+      const refreshed = await getValidGhlToken(integration.userId);
+      if (!refreshed) return null;
+      accessToken = refreshed.token;
+    }
+
+    return {
+      token: accessToken,
+      userId: integration.userId,
+      locationId: integration.locationId,
+      integrationId: integration.id,
+      customFieldIds: integration.customFieldIds || null,
+      opportunityFieldIds: integration.opportunityFieldIds || null,
+    };
+  } catch (error: any) {
+    console.error(`❌ [TOKEN_MANAGER] Failed to get integration for locationId ${locationId}:`, error.message);
+    return null;
+  }
+}
+
+/**
+ * Writes provisioned field IDs back to the GhlIntegration DynamoDB record.
+ */
+export async function saveFieldIds(
+  integrationId: string,
+  customFieldIds: Record<string, string>,
+  opportunityFieldIds: Record<string, string>
+): Promise<void> {
+  await docClient.send(new UpdateCommand({
+    TableName: GHL_INTEGRATION_TABLE,
+    Key: { id: integrationId },
+    UpdateExpression: 'SET customFieldIds = :cfids, opportunityFieldIds = :ofids, updatedAt = :ts',
+    ExpressionAttributeValues: {
+      ':cfids': customFieldIds,
+      ':ofids': opportunityFieldIds,
+      ':ts': new Date().toISOString(),
+    }
+  }));
 }

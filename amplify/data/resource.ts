@@ -98,6 +98,8 @@ const schema = a.schema({
       lastMessageSent: a.datetime(),
       lastHourReset: a.datetime(),
       lastDayReset: a.datetime(),
+      customFieldIds: a.json(),      // Record<string, string> semantic-key → GHL contact field ID per location
+      opportunityFieldIds: a.json(), // Record<string, string> semantic-key → GHL opportunity field ID per location
     })
     .authorization((allow) => [
       allow.owner().to(['create', 'read', 'update', 'delete']),

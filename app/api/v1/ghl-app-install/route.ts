@@ -78,31 +78,31 @@ export async function POST(req: Request) {
 
 async function processAppInstall(body: any) {
   try {
-    const { 
-      appId, 
-      locationId, 
-      companyId, 
-      userId, 
+    const {
+      appId,
+      locationId,
+      companyId,
+      userId,
       installType,
       companyName,
-      isWhitelabelCompany,
-      whitelabelDetails 
     } = body;
 
-    console.log(`App installed: ${installType} - Location: ${locationId}, Company: ${companyId}`);
+    console.log(`App installed: ${installType} - Location: ${locationId}, Company: ${companyId}, User: ${userId}`);
 
-    // TODO: Store installation details in database
-    // await storeAppInstallation({
-    //   appId,
-    //   locationId,
-    //   companyId,
-    //   userId,
-    //   installType,
-    //   companyName,
-    //   isWhitelabelCompany,
-    //   whitelabelDetails,
-    //   installedAt: new Date()
-    // });
+    // The actual OAuth token exchange and field provisioning happens via the standard
+    // /api/v1/oauth/callback route when the user completes the authorization flow.
+    // This webhook is a server-side notification that the app was installed.
+    //
+    // Log for audit purposes — no action needed here since the OAuth callback handles setup.
+    console.log('App install details:', {
+      appId,
+      locationId,
+      companyId,
+      userId,
+      installType,
+      companyName,
+      installedAt: new Date().toISOString(),
+    });
 
     console.log('Successfully processed app install webhook:', body.webhookId);
   } catch (error) {

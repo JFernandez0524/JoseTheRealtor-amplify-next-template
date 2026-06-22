@@ -9,13 +9,23 @@ const GHL_REDIRECT_URI = process.env.GHL_REDIRECT_URI ||
     ? 'http://localhost:3000/api/v1/oauth/callback'
     : 'https://leads.josetherealtor.com/api/v1/oauth/callback');
 
-// Required scopes for your app
 const SCOPES = [
   'contacts.readonly',
   'contacts.write',
-  'locations/tags.write',
+  'contacts/customFields.readonly',
+  'contacts/customFields.write',
+  'conversations.readonly',
+  'conversations.write',
   'conversations/message.readonly',
-  'conversations/message.write'
+  'conversations/message.write',
+  'opportunities.readonly',
+  'opportunities.write',
+  'opportunities/customFields.readonly',
+  'opportunities/customFields.write',
+  'locations.readonly',
+  'locations/tags.readonly',
+  'locations/tags.write',
+  'users.readonly',
 ].join(' ');
 
 export async function GET(req: Request) {

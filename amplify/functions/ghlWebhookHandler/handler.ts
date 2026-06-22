@@ -81,8 +81,23 @@ export const handler = async (event: any) => {
       return result;
     }
     
+    // GHL Marketplace sends many system event types — acknowledge gracefully
+    const ACKNOWLEDGED_EVENT_TYPES = new Set([
+      'ContactCreate', 'ContactUpdate', 'ContactDelete', 'ContactTagUpdate', 'ContactDndUpdate',
+      'OutboundMessage', 'ConversationUpdate',
+      'OpportunityCreate', 'OpportunityUpdate', 'OpportunityStageUpdate',
+      'OpportunityStatusUpdate', 'OpportunityAssignedToUpdate',
+      'AssociationCreate', 'AssociationUpdate', 'AssociationDelete',
+      'LocationUpdate',
+    ]);
+    if (ACKNOWLEDGED_EVENT_TYPES.has(body.type)) {
+      console.log(`ℹ️ [WEBHOOK_LAMBDA] Marketplace event acknowledged (no action): ${body.type}`);
+      await markProcessed(webhookId, metadata);
+      return { statusCode: 200, body: JSON.stringify({ message: `Event ${body.type} acknowledged` }) };
+    }
+
     console.log('📨 [WEBHOOK_LAMBDA] Not a task event, continuing with message handling');
-    
+
     // Extract data from customData (workflow) or root level (system webhook)
     const { customData, message, contact, location } = body;
     let userId = sanitizeId(customData?.userId || body.userId || '');
@@ -227,26 +242,31 @@ export const handler = async (event: any) => {
     }
     
     const { token } = tokenResult;
+    const fieldIds: Record<string, string> = tokenResult.customFieldIds || {};
+    const opportunityFieldIds: Record<string, string> = tokenResult.opportunityFieldIds || {};
     console.log('✅ [WEBHOOK_LAMBDA] Got valid GHL token');
 
-    // Save sentiment to GHL custom field (conversation_sentiment: vjhwCk3Ns0ekDEbMsuy5)
-    try {
-      await fetch(`https://services.leadconnectorhq.com/contacts/${contactId}`, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Version': '2021-07-28',
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          customFields: [
-            { id: 'vjhwCk3Ns0ekDEbMsuy5', value: sentiment.sentiment }
-          ]
-        })
-      });
-      console.log(`✅ [SENTIMENT] Saved to GHL: ${sentiment.sentiment}`);
-    } catch (error) {
-      console.error('⚠️ [SENTIMENT] Failed to save to GHL:', error);
+    // Save sentiment to GHL custom field
+    const sentimentFieldId = fieldIds.conversation_sentiment;
+    if (sentimentFieldId) {
+      try {
+        await fetch(`https://services.leadconnectorhq.com/contacts/${contactId}`, {
+          method: 'PUT',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Version': '2021-07-28',
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            customFields: [
+              { id: sentimentFieldId, value: sentiment.sentiment }
+            ]
+          })
+        });
+        console.log(`✅ [SENTIMENT] Saved to GHL: ${sentiment.sentiment}`);
+      } catch (error) {
+        console.error('⚠️ [SENTIMENT] Failed to save to GHL:', error);
+      }
     }
 
     // If message body is empty (Instagram type 18), fetch from conversation API
@@ -342,14 +362,18 @@ export const handler = async (event: any) => {
     const contactData = await contactResponse.json();
     const fullContact = contactData.contact;
 
-    // Extract property data
-    const propertyAddress = fullContact?.customFields?.find((f: any) => f.id === 'p3NOYiInAERYbe0VsLHB')?.value;
-    const propertyCity = fullContact?.customFields?.find((f: any) => f.id === 'h4UIjKQvFu7oRW4SAY8W')?.value;
-    const propertyState = fullContact?.customFields?.find((f: any) => f.id === '9r9OpQaxYPxqbA6Hvtx7')?.value;
-    const propertyZip = fullContact?.customFields?.find((f: any) => f.id === 'hgbjsTVwcyID7umdhm2o')?.value;
-    const leadType = fullContact?.customFields?.find((f: any) => f.id === 'oaf4wCuM3Ub9eGpiddrO')?.value;
-    const zestimate = fullContact?.customFields?.find((f: any) => f.id === '7wIe1cRbZYXUnc3WOVb2')?.value;
-    const cashOffer = fullContact?.customFields?.find((f: any) => f.id === 'sM3hEOHCJFoPyWhj1Vc8')?.value;
+    // Extract property data using dynamic field IDs
+    const findField = (key: string) => {
+      const id = fieldIds[key];
+      return id ? fullContact?.customFields?.find((f: any) => f.id === id)?.value : undefined;
+    };
+    const propertyAddress = findField('property_address');
+    const propertyCity = findField('property_city');
+    const propertyState = findField('property_state');
+    const propertyZip = findField('property_zip');
+    const leadType = findField('lead_type');
+    const zestimate = findField('zestimate');
+    const cashOffer = findField('cash_offer');
 
     console.log('📋 [WEBHOOK_LAMBDA] Contact data:', {
       name: `${fullContact.firstName} ${fullContact.lastName}`,
@@ -406,7 +430,7 @@ export const handler = async (event: any) => {
       if (activity.hasRecentOutbound) {
         console.log('🚫 [WEBHOOK_LAMBDA] Detected recent manual activity - activating manual mode');
         
-        await activateManualMode(contactId, token, 'Recent manual activity detected');
+        await activateManualMode(contactId, token, 'Recent manual activity detected', fieldIds);
         await markProcessed(webhookId, metadata);
         
         return {
@@ -490,7 +514,7 @@ export const handler = async (event: any) => {
 
     await generateAIResponse({
       contactId,
-      conversationId, // Use actual conversation ID for context
+      conversationId,
       incomingMessage: messageBody,
       contactName: `${fullContact?.firstName || ''} ${fullContact?.lastName || ''}`.trim(),
       propertyAddress,
@@ -500,11 +524,13 @@ export const handler = async (event: any) => {
       leadType,
       locationId,
       contact: fullContact,
-      accessToken: token, // Pass the GHL token for sending messages
+      accessToken: token,
       messageType: messageTypeStr,
-      existingZestimate: zestimate ? parseInt(zestimate) : undefined, // Pass existing Zestimate
-      existingCashOffer: cashOffer ? parseInt(cashOffer) : undefined, // Pass existing cash offer
-      conversationHistory, // Pass conversation history for multi-turn context
+      existingZestimate: zestimate ? parseInt(zestimate) : undefined,
+      existingCashOffer: cashOffer ? parseInt(cashOffer) : undefined,
+      conversationHistory,
+      fieldIds,
+      opportunityFieldIds,
     });
 
     // PHASE 3: OUTBOUND LOGGING (We just sent AI response)
@@ -545,12 +571,12 @@ async function handleEmailReply(body: any, contactId: string, locationId: string
   console.log(`📬 [EMAIL] Reply from contact ${contactId}`);
 
   try {
-    // Get token by locationId
-    const token = await getTokenByLocation(locationId);
-    if (!token) {
+    const integration = await getIntegrationForLocation(locationId);
+    if (!integration) {
       console.error('❌ [EMAIL] No token found for location:', locationId);
       return { statusCode: 404, body: JSON.stringify({ error: 'No integration found' }) };
     }
+    const { token, fieldIds } = integration;
 
     // Fetch contact
     const axios = (await import('axios')).default;
@@ -560,10 +586,13 @@ async function handleEmailReply(body: any, contactId: string, locationId: string
     );
 
     const contact = contactResponse.data.contact;
-    
+
     // Get userId from contact if not provided
     if (!userId) {
-      userId = contact?.customFields?.find((f: any) => f.id === 'CNoGugInWOC59hAPptxY')?.value;
+      const appUserIdFieldId = fieldIds.app_user_id;
+      userId = appUserIdFieldId
+        ? contact?.customFields?.find((f: any) => f.id === appUserIdFieldId)?.value
+        : undefined;
     }
     
     // IMMEDIATE ACTION: Move to CONVERSATION status
@@ -587,13 +616,16 @@ async function handleEmailReply(body: any, contactId: string, locationId: string
       if (sentiment.intent === 'WRONG_INFO') {
         console.log('❌ [EMAIL] Wrong email - marking as WRONG_INFO');
         await updateQueueStatus(queueId, 'WRONG_INFO', 'Wrong contact information');
-        await handleWrongEmail(contactId, contact.email, token);
+        await handleWrongEmail(contactId, contact.email, token, fieldIds);
         return { statusCode: 200, body: JSON.stringify({ success: true, action: 'WRONG_INFO' }) };
       }
     }
 
     // Generate AI response if AI is active
-    const aiState = contact?.customFields?.find((f: any) => f.id === '1NxQW2kKMVgozjSUuu7s')?.value;
+    const aiStateFieldId = fieldIds.ai_state;
+    const aiState = aiStateFieldId
+      ? contact?.customFields?.find((f: any) => f.id === aiStateFieldId)?.value
+      : undefined;
     
     if (aiState === 'running' || aiState === 'not_started') {
       // TODO: Import and call email AI handler
@@ -624,10 +656,11 @@ async function handleEmailBounce(body: any) {
   console.log(`⚠️ [EMAIL] Bounce for contact ${contactId}: ${bounceReason}`);
 
   try {
-    const token = await getTokenByLocation(locationId);
-    if (!token) {
+    const integration = await getIntegrationForLocation(locationId);
+    if (!integration) {
       return { statusCode: 404, body: JSON.stringify({ error: 'No integration found' }) };
     }
+    const { token, fieldIds } = integration;
 
     // Fetch contact to get userId
     const axios = (await import('axios')).default;
@@ -637,7 +670,10 @@ async function handleEmailBounce(body: any) {
     );
 
     const contact = contactResponse.data.contact;
-    const userId = contact?.customFields?.find((f: any) => f.id === 'CNoGugInWOC59hAPptxY')?.value;
+    const appUserIdFieldId = fieldIds.app_user_id;
+    const userId = appUserIdFieldId
+      ? contact?.customFields?.find((f: any) => f.id === appUserIdFieldId)?.value
+      : undefined;
     
     // Update queue status to BOUNCED
     if (userId) {
@@ -673,12 +709,12 @@ async function handleEmailBounce(body: any) {
 /**
  * Handle wrong email address
  */
-async function handleWrongEmail(contactId: string, emailAddress: string, token: string) {
+async function handleWrongEmail(contactId: string, emailAddress: string, token: string, fieldIds: Record<string, string> = {}) {
   console.log(`🚨 [EMAIL] Processing wrong email: ${emailAddress}`);
 
   try {
     const axios = (await import('axios')).default;
-    
+
     // Fetch contact to get userId
     const contactResponse = await axios.get(
       `https://services.leadconnectorhq.com/contacts/${contactId}`,
@@ -686,7 +722,10 @@ async function handleWrongEmail(contactId: string, emailAddress: string, token: 
     );
 
     const contact = contactResponse.data.contact;
-    const userId = contact?.customFields?.find((f: any) => f.id === 'CNoGugInWOC59hAPptxY')?.value;
+    const appUserIdFieldId = fieldIds.app_user_id;
+    const userId = appUserIdFieldId
+      ? contact?.customFields?.find((f: any) => f.id === appUserIdFieldId)?.value
+      : undefined;
     
     // Update queue to BOUNCED
     if (userId) {
@@ -722,30 +761,32 @@ async function handleWrongEmail(contactId: string, emailAddress: string, token: 
 }
 
 /**
- * Get token by locationId
+ * Get token and field IDs by locationId
  */
-async function getTokenByLocation(locationId: string): Promise<string | null> {
+async function getIntegrationForLocation(locationId: string): Promise<{
+  token: string;
+  fieldIds: Record<string, string>;
+  opportunityFieldIds: Record<string, string>;
+} | null> {
   try {
-    const { Items } = await docClient.send(new ScanCommand({
-      TableName: GHL_INTEGRATION_TABLE,
-      FilterExpression: 'locationId = :locationId AND isActive = :active',
-      ExpressionAttributeValues: {
-        ':locationId': locationId,
-        ':active': true
-      }
-    }));
-
-    if (!Items || Items.length === 0) return null;
-
-    const integration = Items[0];
-    const { getValidGhlToken } = await import('../shared/ghlTokenManager');
-    const tokenData = await getValidGhlToken(integration.userId);
-    
-    return tokenData?.token || null;
+    const { getIntegrationByLocationId } = await import('../shared/ghlTokenManager');
+    const integration = await getIntegrationByLocationId(locationId);
+    if (!integration) return null;
+    return {
+      token: integration.token,
+      fieldIds: integration.customFieldIds || {},
+      opportunityFieldIds: integration.opportunityFieldIds || {},
+    };
   } catch (error: any) {
-    console.error('❌ [EMAIL] Error getting token:', error.message);
+    console.error('❌ [EMAIL] Error getting integration:', error.message);
     return null;
   }
+}
+
+/** @deprecated Use getIntegrationForLocation */
+async function getTokenByLocation(locationId: string): Promise<string | null> {
+  const result = await getIntegrationForLocation(locationId);
+  return result?.token || null;
 }
 
 /**

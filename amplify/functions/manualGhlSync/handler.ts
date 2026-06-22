@@ -1,7 +1,8 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand, UpdateCommand, ScanCommand } from '@aws-sdk/lib-dynamodb';
 import { syncToGoHighLevel } from './integrations/gohighlevel';
-import { getValidGhlToken } from '../shared/ghlTokenManager';
+import { getValidGhlToken, saveFieldIds } from '../shared/ghlTokenManager';
+import { provisionCustomFields, provisionOpportunityFields } from '../shared/ghlFieldProvisioner';
 import { validateLeadForSync, updateLeadSyncStatus, SyncResult } from '../shared/syncUtils';
 
 const dynamoClient = new DynamoDBClient({ region: process.env.AWS_REGION });
@@ -50,6 +51,27 @@ async function processGhlSync(lead: any, groups: string[] = [], ownerId: string 
 
   console.log(`✅ [GHL_SYNC] Token retrieved, locationId: ${ghlData.locationId}`);
   const { token: ghlToken, locationId: ghlLocationId } = ghlData;
+  let fieldIds: Record<string, string> = ghlData.customFieldIds || {};
+  let oppFieldIds: Record<string, string> = ghlData.opportunityFieldIds || {};
+
+  // Auto-provision fields for existing users who connected before multi-tenant migration
+  if (!ghlData.customFieldIds) {
+    console.log(`🔧 [GHL_SYNC] No customFieldIds stored — provisioning on-the-fly for location ${ghlLocationId}`);
+    try {
+      const [provisionedFields, provisionedOppFields] = await Promise.all([
+        provisionCustomFields(ghlLocationId, ghlToken),
+        provisionOpportunityFields(ghlLocationId, ghlToken),
+      ]);
+      fieldIds = provisionedFields;
+      oppFieldIds = provisionedOppFields;
+      // Persist for future syncs (fire-and-forget — don't block sync)
+      saveFieldIds(ghlData.integrationId, fieldIds, oppFieldIds).catch(err =>
+        console.error(`⚠️ [GHL_SYNC] Failed to persist field IDs:`, err)
+      );
+    } catch (err) {
+      console.error(`⚠️ [GHL_SYNC] On-the-fly provisioning failed — sync may use empty field IDs:`, err);
+    }
+  }
 
   // 🚦 Check GHL rate limits before syncing
   try {
@@ -119,7 +141,9 @@ async function processGhlSync(lead: any, groups: string[] = [], ownerId: string 
           groups,
           ownerId,
           ghlToken,
-          ghlLocationId
+          ghlLocationId,
+          fieldIds,
+          oppFieldIds
         );
         syncResults.push(ghlContactId);
         
@@ -165,7 +189,9 @@ async function processGhlSync(lead: any, groups: string[] = [], ownerId: string 
       groups,
       ownerId,
       ghlToken,
-      ghlLocationId
+      ghlLocationId,
+      fieldIds,
+      oppFieldIds
     );
 
     // 🛡️ SAVE CONTACT ID IMMEDIATELY after successful GHL sync

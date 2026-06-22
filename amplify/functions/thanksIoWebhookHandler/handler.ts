@@ -19,13 +19,6 @@ const docClient = DynamoDBDocumentClient.from(dynamoClient);
 
 const GHL_API_BASE = 'https://services.leadconnectorhq.com';
 
-// Custom field IDs in GHL
-const CUSTOM_FIELD_IDS = {
-  MAIL_SENT_COUNT: 'DTEW0PLqxp35WHOiDLWR',
-  LAST_MAIL_DATE: '4fRJXKv1A22BdMLrJfxO',
-  MAIL_DELIVERY_DATE: 'bQqrO0OicE1N7EShmoQZ',
-  QR_SCAN_COUNT: '981A5iFqndhODq2naOu4',
-};
 
 export const handler: Handler = async (event) => {
   try {
@@ -79,15 +72,16 @@ async function handleDeliveryUpdate(contactId: string, data: any) {
     return;
   }
 
-  // Get user ID from contact (need to look up in GHL or OutreachQueue)
+  // Get user ID and field IDs from contact
   const userId = await getUserIdFromContact(contactId);
   if (!userId) return;
 
-  // Get GHL token
+  // Get GHL token and dynamic field IDs
   const tokenData = await getValidGhlToken(userId);
   if (!tokenData) return;
 
   const { token } = tokenData;
+  const fieldIds: Record<string, string> = tokenData.customFieldIds || {};
 
   // Get current contact to check mail count
   const contactResponse = await axios.get(
@@ -101,36 +95,37 @@ async function handleDeliveryUpdate(contactId: string, data: any) {
   );
 
   const contact = contactResponse.data.contact;
-  const currentMailCount = parseInt(contact.customFields?.find((f: any) => f.id === CUSTOM_FIELD_IDS.MAIL_SENT_COUNT)?.value || '0');
+  const mailSentCountId = fieldIds.mail_sent_count;
+  const lastMailDateId = fieldIds.last_mail_date;
+  const mailDeliveryDateId = fieldIds.mail_delivery_date;
+
+  const currentMailCount = mailSentCountId
+    ? parseInt(contact.customFields?.find((f: any) => f.id === mailSentCountId)?.value || '0')
+    : 0;
   const newMailCount = currentMailCount + 1;
 
   // Update GHL contact
-  await axios.put(
-    `${GHL_API_BASE}/contacts/${contactId}`,
-    {
-      customFields: [
-        {
-          id: CUSTOM_FIELD_IDS.MAIL_SENT_COUNT,
-          value: newMailCount.toString()
-        },
-        {
-          id: CUSTOM_FIELD_IDS.LAST_MAIL_DATE,
-          value: deliveryDate
-        },
-        {
-          id: CUSTOM_FIELD_IDS.MAIL_DELIVERY_DATE,
-          value: deliveryDate
+  const updateFields = [
+    mailSentCountId && { id: mailSentCountId, value: newMailCount.toString() },
+    lastMailDateId && { id: lastMailDateId, value: deliveryDate },
+    mailDeliveryDateId && { id: mailDeliveryDateId, value: deliveryDate },
+  ].filter(Boolean);
+
+  if (updateFields.length > 0) {
+    await axios.put(
+      `${GHL_API_BASE}/contacts/${contactId}`,
+      {
+        customFields: updateFields,
+        tags: ['mail:delivered', `mail:touch${newMailCount}`]
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Version: '2021-07-28'
         }
-      ],
-      tags: ['mail:delivered', `mail:touch${newMailCount}`]
-    },
-    {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        Version: '2021-07-28'
       }
-    }
-  );
+    );
+  }
 
   console.log(`✅ [THANKS.IO] Updated contact ${contactId} - mail ${newMailCount} delivered`);
 }
@@ -140,22 +135,25 @@ async function handleQRScan(contactId: string, data: any) {
 
   console.log(`📱 [THANKS.IO] QR scan for ${contactId}: ${scanCount} scans`);
 
-  // Get the active GHL token directly (single-user system)
-  const tokenData = await getActiveToken();
+  // Look up the correct user for this contact (multi-tenant safe)
+  const userId = await getUserIdFromContact(contactId);
+  if (!userId) return;
+
+  const tokenData = await getValidGhlToken(userId);
   if (!tokenData) return;
 
   const { token } = tokenData;
+  const fieldIds: Record<string, string> = tokenData.customFieldIds || {};
+  const qrScanCountId = fieldIds.qr_scan_count;
 
-  // Update GHL contact with scan count and high-engagement tag
+  const updateFields = qrScanCountId
+    ? [{ id: qrScanCountId, value: scanCount.toString() }]
+    : [];
+
   await axios.put(
     `${GHL_API_BASE}/contacts/${contactId}`,
     {
-      customFields: [
-        {
-          id: CUSTOM_FIELD_IDS.QR_SCAN_COUNT,
-          value: scanCount.toString()
-        }
-      ],
+      customFields: updateFields,
       tags: ['mail:scanned', 'high-engagement']
     },
     {
@@ -167,24 +165,6 @@ async function handleQRScan(contactId: string, data: any) {
   );
 
   console.log(`✅ [THANKS.IO] Updated contact ${contactId} - QR scanned ${scanCount} times`);
-}
-
-async function getActiveToken(): Promise<{ token: string } | null> {
-  try {
-    const { ScanCommand } = await import('@aws-sdk/lib-dynamodb');
-    const result = await docClient.send(new ScanCommand({
-      TableName: process.env.AMPLIFY_DATA_GhlIntegration_TABLE_NAME!,
-      Limit: 1,
-    }));
-    if (!result.Items?.length) {
-      console.error('❌ [THANKS.IO] No GHL integration found');
-      return null;
-    }
-    return getValidGhlToken(result.Items[0].userId);
-  } catch (err: any) {
-    console.error('❌ [THANKS.IO] Error getting active token:', err.message);
-    return null;
-  }
 }
 
 async function getUserIdFromContact(contactId: string): Promise<string | null> {

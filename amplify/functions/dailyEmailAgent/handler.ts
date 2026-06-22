@@ -118,6 +118,7 @@ RE/MAX Homeland Realtors
       }
       
       const validAccessToken = tokenData.token;
+      const fieldIds: Record<string, string> = tokenData.customFieldIds || {};
       
       try {
         // Query OutreachQueue for PENDING email contacts (limit 50)
@@ -131,18 +132,18 @@ RE/MAX Homeland Realtors
           continue;
         }
 
-        // Map queue items to contact format
+        // Map queue items to contact format using dynamic field IDs
         const contacts = eligibleContacts.map((q: any) => ({
           id: q.contactId,
           firstName: q.contactName?.split(' ')[0],
           lastName: q.contactName?.split(' ').slice(1).join(' '),
           email: q.contactEmail,
           customFields: [
-            { id: 'p3NOYiInAERYbe0VsLHB', value: q.propertyAddress },
-            { id: 'h4UIjKQvFu7oRW4SAY8W', value: q.propertyCity },
-            { id: '9r9OpQaxYPxqbA6Hvtx7', value: q.propertyState },
-            { id: 'oaf4wCuM3Ub9eGpiddrO', value: q.leadType },
-          ],
+            fieldIds.property_address && { id: fieldIds.property_address, value: q.propertyAddress },
+            fieldIds.property_city && { id: fieldIds.property_city, value: q.propertyCity },
+            fieldIds.property_state && { id: fieldIds.property_state, value: q.propertyState },
+            fieldIds.lead_type && { id: fieldIds.lead_type, value: q.leadType },
+          ].filter(Boolean),
           _queueId: q.id,
           _queueAttempts: q.emailAttempts || 0
         }));
@@ -198,28 +199,31 @@ RE/MAX Homeland Realtors
               }
 
               // Update email counter in GHL (increment, not set to 1)
-              try {
-                const currentCounter = parseInt(contact.customFields?.find((f: any) => f.id === 'wWlrXoXeMXcM6kUexf2L')?.value || '0');
-                console.log(`📊 [GHL] Updating counter for ${contact.id}: ${currentCounter} → ${currentCounter + 1}`);
-                await axios.put(
-                  `https://services.leadconnectorhq.com/contacts/${contact.id}`,
-                  {
-                    customFields: [
-                      { id: 'wWlrXoXeMXcM6kUexf2L', value: (currentCounter + 1).toString() },
-                      { id: '3xOBr4GvgRc22kBRNYCE', value: new Date().toISOString() }
-                    ]
-                  },
-                  {
-                    headers: {
-                      'Authorization': `Bearer ${validAccessToken}`,
-                      'Content-Type': 'application/json',
-                      'Version': '2021-07-28'
+              const emailCounterId = fieldIds.email_attempt_counter;
+              const lastEmailDateId = fieldIds.last_email_date;
+              if (emailCounterId || lastEmailDateId) {
+                try {
+                  const currentCounter = parseInt(contact.customFields?.find((f: any) => emailCounterId && f.id === emailCounterId)?.value || '0');
+                  console.log(`📊 [GHL] Updating counter for ${contact.id}: ${currentCounter} → ${currentCounter + 1}`);
+                  const updateFields = [
+                    emailCounterId && { id: emailCounterId, value: (currentCounter + 1).toString() },
+                    lastEmailDateId && { id: lastEmailDateId, value: new Date().toISOString() },
+                  ].filter(Boolean);
+                  await axios.put(
+                    `https://services.leadconnectorhq.com/contacts/${contact.id}`,
+                    { customFields: updateFields },
+                    {
+                      headers: {
+                        'Authorization': `Bearer ${validAccessToken}`,
+                        'Content-Type': 'application/json',
+                        'Version': '2021-07-28'
+                      }
                     }
-                  }
-                );
-                console.log(`✅ [GHL] Counter updated for ${contact.id}`);
-              } catch (ghlError: any) {
-                console.error(`❌ [GHL] Failed to update counter for ${contact.id}:`, ghlError.response?.data || ghlError.message);
+                  );
+                  console.log(`✅ [GHL] Counter updated for ${contact.id}`);
+                } catch (ghlError: any) {
+                  console.error(`❌ [GHL] Failed to update counter for ${contact.id}:`, ghlError.response?.data || ghlError.message);
+                }
               }
             } else {
               console.error(`Failed to send email to ${contact.email}:`, response.data.error);

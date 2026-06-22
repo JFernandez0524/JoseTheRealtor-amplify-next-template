@@ -180,6 +180,7 @@ async function processUserContacts(integration: GhlIntegration): Promise<number>
     }
 
     const { token: accessToken, locationId } = ghlData;
+    const fieldIds: Record<string, string> = ghlData.customFieldIds || {};
 
     // 2. HARDCODED phone number (remove when GHL scope approved)
     const phoneNumber = '+17328100182';
@@ -195,7 +196,7 @@ async function processUserContacts(integration: GhlIntegration): Promise<number>
       
       if (queueContacts.length > 0) {
         console.log(`📋 [QUEUE] Found ${queueContacts.length} pending SMS contacts in queue`);
-        return await processQueueContacts(queueContacts, integrationWithToken, phoneNumber);
+        return await processQueueContacts(queueContacts, integrationWithToken, phoneNumber, fieldIds);
       }
       
       console.log(`📋 [QUEUE] No pending contacts in queue - no outreach needed`);
@@ -222,7 +223,8 @@ async function processUserContacts(integration: GhlIntegration): Promise<number>
 async function processQueueContacts(
   queueContacts: any[],
   integration: GhlIntegration,
-  phoneNumber: string
+  phoneNumber: string,
+  fieldIds: Record<string, string> = {}
 ): Promise<number> {
   const { updateSmsStatus } = await import('../shared/outreachQueue');
   let processed = 0;
@@ -245,17 +247,17 @@ async function processQueueContacts(
         lastName: queueItem.contactName?.split(' ').slice(1).join(' '),
         phone: queueItem.contactPhone,
         customFields: [
-          { id: 'p3NOYiInAERYbe0VsLHB', value: queueItem.propertyAddress },
-          { id: 'h4UIjKQvFu7oRW4SAY8W', value: queueItem.propertyCity },
-          { id: '9r9OpQaxYPxqbA6Hvtx7', value: queueItem.propertyState },
-          { id: 'oaf4wCuM3Ub9eGpiddrO', value: queueItem.leadType },
-        ]
+          fieldIds.property_address && { id: fieldIds.property_address, value: queueItem.propertyAddress },
+          fieldIds.property_city && { id: fieldIds.property_city, value: queueItem.propertyCity },
+          fieldIds.property_state && { id: fieldIds.property_state, value: queueItem.propertyState },
+          fieldIds.lead_type && { id: fieldIds.lead_type, value: queueItem.leadType },
+        ].filter(Boolean)
       };
       
       // Determine which touch this is (1-7)
       const touchNumber = (queueItem.smsAttempts || 0) + 1;
       
-      await sendFollowUpOutreach(contact, integration, phoneNumber, touchNumber);
+      await sendFollowUpOutreach(contact, integration, phoneNumber, touchNumber, fieldIds);
       
       // Update queue status to SENT
       await updateSmsStatus(queueItem.id, 'SENT', touchNumber);
@@ -349,7 +351,7 @@ async function filterNewContacts(contacts: any[], integration: GhlIntegration): 
     }
 
     // Check if contact is ready for next message based on cadence
-    if (!shouldSendNextMessage(contact)) {
+    if (!shouldSendNextMessage(contact, {})) {
       continue;
     }
 
@@ -361,7 +363,7 @@ async function filterNewContacts(contacts: any[], integration: GhlIntegration): 
   return newContacts;
 }
 
-async function sendFollowUpOutreach(contact: any, integration: GhlIntegration, phoneNumber: string, touchNumber: number): Promise<void> {
+async function sendFollowUpOutreach(contact: any, integration: GhlIntegration, phoneNumber: string, touchNumber: number, fieldIds: Record<string, string> = {}): Promise<void> {
   console.log(`Sending touch ${touchNumber} to ${contact.firstName} ${contact.lastName}`);
   
   const apiUrl = process.env.API_ENDPOINT || 'https://leads.JoseTheRealtor.com';
@@ -389,35 +391,40 @@ async function sendFollowUpOutreach(contact: any, integration: GhlIntegration, p
     console.log(`✅ Sent touch ${touchNumber} to ${contact.firstName} ${contact.lastName}`);
     
     // Increment dial counter after successful send
-    const currentCounter = parseInt(contact.customFields?.find((f: any) => f.id === '0MD4Pp2LCyOSCbCjA5qF')?.value || '0');
+    const callAttemptId = fieldIds.call_attempt_counter;
+    const lastCallDateId = fieldIds.last_call_date;
+    const callOutcomeId = fieldIds.call_outcome;
+    const currentCounter = parseInt(contact.customFields?.find((f: any) => callAttemptId && f.id === callAttemptId)?.value || '0');
     const newCounter = currentCounter + 1;
-    
+
     const customFieldUpdates: any[] = [
-      { id: '0MD4Pp2LCyOSCbCjA5qF', value: newCounter.toString() },
-      { id: 'dWNGeSckpRoVUxXLgxMj', value: new Date().toISOString() }
-    ];
-    
+      callAttemptId && { id: callAttemptId, value: newCounter.toString() },
+      lastCallDateId && { id: lastCallDateId, value: new Date().toISOString() },
+    ].filter(Boolean);
+
     // If this was the 7th touch and no reply, mark as DEAD
-    if (newCounter >= 7) {
+    if (newCounter >= 7 && callOutcomeId) {
       customFieldUpdates.push({
-        id: 'LNyfm5JDal955puZGbu3', // call_outcome field
+        id: callOutcomeId,
         value: 'DEAD / Never Responded'
       });
       console.log(`🔴 Marking contact as DEAD after ${newCounter} touches with no response`);
     }
-    
-    await axios.put(
-      `https://services.leadconnectorhq.com/contacts/${contact.id}`,
-      { customFields: customFieldUpdates },
-      {
-        headers: {
-          'Authorization': `Bearer ${integration.accessToken}`,
-          'Content-Type': 'application/json',
-          'Version': '2021-07-28'
+
+    if (customFieldUpdates.length > 0) {
+      await axios.put(
+        `https://services.leadconnectorhq.com/contacts/${contact.id}`,
+        { customFields: customFieldUpdates },
+        {
+          headers: {
+            'Authorization': `Bearer ${integration.accessToken}`,
+            'Content-Type': 'application/json',
+            'Version': '2021-07-28'
+          }
         }
-      }
-    );
-    
+      );
+    }
+
     console.log(`📊 Updated dial counter to ${newCounter} for ${contact.firstName} ${contact.lastName}`);
     
   } catch (error: any) {

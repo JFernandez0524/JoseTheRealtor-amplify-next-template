@@ -4,7 +4,8 @@ import { DynamoDBDocumentClient, GetCommand, ScanCommand, UpdateCommand } from '
 
 const docClient = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 
-const FIELD_IDS = {
+// Legacy hardcoded IDs for Jose's original GHL account (kept as fallback)
+const LEGACY_FIELD_IDS = {
   CALL_ATTEMPT_COUNTER: '0MD4Pp2LCyOSCbCjA5qF',
   EMAIL_ATTEMPT_COUNTER: 'wWlrXoXeMXcM6kUexf2L',
   LAST_CALL_DATE: 'dWNGeSckpRoVUxXLgxMj',
@@ -23,12 +24,13 @@ export const handler: Handler = async (event) => {
       return { statusCode: 400, body: JSON.stringify({ error: 'Missing contact ID' }) };
     }
 
-    const callAttempts  = payload['Call Attempt or Text Counter'] ?? payload[FIELD_IDS.CALL_ATTEMPT_COUNTER];
-    const emailAttempts = payload['email attempt counter']        ?? payload[FIELD_IDS.EMAIL_ATTEMPT_COUNTER];
-    const lastCallDate  = payload['Last Call Date']               ?? payload[FIELD_IDS.LAST_CALL_DATE];
-    const aiState       = payload['AI State']                     ?? payload[FIELD_IDS.AI_STATE];
-    const mailSentCount = payload['Mail Sent Count']              ?? payload[FIELD_IDS.MAIL_SENT_COUNT];
-    const callOutcome   = payload['Call Outcome']                 ?? payload[FIELD_IDS.CALL_OUTCOME];
+    // Check both canonical names (new provisioned users) and legacy names/IDs (Jose's account)
+    const callAttempts  = payload['Call Attempt Counter'] ?? payload['Call Attempt or Text Counter'] ?? payload[LEGACY_FIELD_IDS.CALL_ATTEMPT_COUNTER];
+    const emailAttempts = payload['Email Attempt Counter'] ?? payload['email attempt counter']       ?? payload[LEGACY_FIELD_IDS.EMAIL_ATTEMPT_COUNTER];
+    const lastCallDate  = payload['Last Call Date']                                                  ?? payload[LEGACY_FIELD_IDS.LAST_CALL_DATE];
+    const aiState       = payload['AI State']                                                        ?? payload[LEGACY_FIELD_IDS.AI_STATE];
+    const mailSentCount = payload['Mail Sent Count']                                                 ?? payload[LEGACY_FIELD_IDS.MAIL_SENT_COUNT];
+    const callOutcome   = payload['Call Outcome']                                                    ?? payload[LEGACY_FIELD_IDS.CALL_OUTCOME];
 
     console.log(`🔄 [FIELD_SYNC] contactId=${contactId}`, { callAttempts, emailAttempts, lastCallDate, aiState, mailSentCount, callOutcome });
 

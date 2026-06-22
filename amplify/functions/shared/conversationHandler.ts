@@ -60,6 +60,8 @@ interface ConversationContext {
   timeline?: string;
   location?: string;
   motivation?: string;
+  fieldIds?: Record<string, string>;         // Custom contact field IDs for this location
+  opportunityFieldIds?: Record<string, string>; // Custom opportunity field IDs for this location
 }
 
 interface PropertyAnalysis {
@@ -374,7 +376,7 @@ async function generateOpenAIResponse(context: ConversationContext, propertyData
   }
   
   // Use provided state or calculate it (only for replies, not outreach)
-  const calculatedCurrentState = currentState ?? getCurrentState(context.contact);
+  const calculatedCurrentState = currentState ?? getCurrentState(context.contact, context.fieldIds);
   const hasAddressForState = !!(context.propertyAddress && context.propertyCity && context.propertyState);
   const calculatedNextState = nextState ?? getNextState(calculatedCurrentState, context.incomingMessage, hasAddressForState, context.leadIntent);
 
@@ -988,10 +990,12 @@ Respond to their message:`;
 }
 
 // Check if contact has AI enabled and is in good standing
-function isAIEnabled(contact: any): boolean {
+function isAIEnabled(contact: any, fieldIds: Record<string, string> = {}): boolean {
   const hasPhone = contact?.phone;
-  const leadType = contact?.customFields?.find((f: any) => f.id === 'oaf4wCuM3Ub9eGpiddrO')?.value;
-  const contactType = contact?.customFields?.find((f: any) => f.id === 'pGfgxcdFaYAkdq0Vp53j')?.value;
+  const leadTypeId = fieldIds.lead_type;
+  const contactTypeId = fieldIds.contact_type;
+  const leadType = leadTypeId ? contact?.customFields?.find((f: any) => f.id === leadTypeId)?.value : undefined;
+  const contactType = contactTypeId ? contact?.customFields?.find((f: any) => f.id === contactTypeId)?.value : undefined;
   
   if (!hasPhone) {
     console.log('❌ Contact has no phone number');
@@ -1034,13 +1038,18 @@ function isAIEnabled(contact: any): boolean {
 }
 
 // Update AI state in GHL
-async function updateAIState(contactId: string, newState: string, accessToken: string) {
+async function updateAIState(contactId: string, newState: string, accessToken: string, fieldIds: Record<string, string> = {}) {
+  const aiStateId = fieldIds.ai_state;
+  if (!aiStateId) {
+    console.warn('⚠️ No ai_state field ID — skipping AI state update');
+    return;
+  }
   try {
     await axios.put(
       `https://services.leadconnectorhq.com/contacts/${contactId}`,
       {
         customFields: [
-          { id: '1NxQW2kKMVgozjSUuu7s', value: newState }
+          { id: aiStateId, value: newState }
         ]
       },
       {
@@ -1058,8 +1067,9 @@ async function updateAIState(contactId: string, newState: string, accessToken: s
 }
 
 // Get current conversation state from contact
-function getCurrentState(contact: any): ConversationState {
-  const aiStateField = contact?.customFields?.find((f: any) => f.id === '1NxQW2kKMVgozjSUuu7s');
+function getCurrentState(contact: any, fieldIds: Record<string, string> = {}): ConversationState {
+  const aiStateId = fieldIds.ai_state;
+  const aiStateField = aiStateId ? contact?.customFields?.find((f: any) => f.id === aiStateId) : undefined;
   const currentState = aiStateField?.value as string | undefined;
   
   // Map old states to new state machine
@@ -1158,7 +1168,7 @@ export async function generateAIResponse(context: ConversationContext): Promise<
     }
 
     // Calculate conversation state
-    const currentState: ConversationState = getCurrentState(context.contact);
+    const currentState: ConversationState = getCurrentState(context.contact, context.fieldIds);
     const hasAddress = !!(context.propertyAddress && context.propertyCity && context.propertyState);
     const nextState = getNextState(currentState, context.incomingMessage, hasAddress, context.leadIntent);
     
@@ -1184,7 +1194,7 @@ export async function generateAIResponse(context: ConversationContext): Promise<
         );
         
         // Update AI state to stopped
-        await updateAIState(context.contactId, 'stopped', context.accessToken);
+        await updateAIState(context.contactId, 'stopped', context.accessToken, context.fieldIds);
       }
       
       // DO NOT RESPOND - silence is professionalism
@@ -1214,7 +1224,7 @@ export async function generateAIResponse(context: ConversationContext): Promise<
               }
             }
           );
-          await updateAIState(context.contactId, 'stopped', context.accessToken);
+          await updateAIState(context.contactId, 'stopped', context.accessToken, context.fieldIds);
         }
         
         const closeMessage = "I apologize for the confusion. It looks like we have incorrect information. I'll make sure this is corrected. Have a great day!";
@@ -1238,7 +1248,7 @@ export async function generateAIResponse(context: ConversationContext): Promise<
               }
             }
           );
-          await updateAIState(context.contactId, 'stopped', context.accessToken);
+          await updateAIState(context.contactId, 'stopped', context.accessToken, context.fieldIds);
         }
         
         const askContactMessage = `My apologies for the confusion. What's the best way to reach ${firstName}?`;
@@ -1261,7 +1271,7 @@ export async function generateAIResponse(context: ConversationContext): Promise<
             }
           }
         );
-        await updateAIState(context.contactId, 'stopped', context.accessToken);
+        await updateAIState(context.contactId, 'stopped', context.accessToken, context.fieldIds);
       }
       
       const closeMessage = "I apologize for any confusion. Have a great day!";
@@ -1274,7 +1284,7 @@ export async function generateAIResponse(context: ConversationContext): Promise<
       console.log('🛑 Wrong person/property objection detected');
       
       // Get fresh state to avoid type narrowing issues
-      const freshState = getCurrentState(context.contact);
+      const freshState = getCurrentState(context.contact, context.fieldIds);
       
       // If already in IDENTITY_CONFIRMATION state, they disputed again - exit
       if (freshState === 'IDENTITY_CONFIRMATION') {
@@ -1292,7 +1302,7 @@ export async function generateAIResponse(context: ConversationContext): Promise<
               }
             }
           );
-          await updateAIState(context.contactId, 'stopped', context.accessToken);
+          await updateAIState(context.contactId, 'stopped', context.accessToken, context.fieldIds);
         }
         
         const closeMessage = "I apologize for the confusion. I'll make sure this is corrected. Have a great day!";
@@ -1304,7 +1314,7 @@ export async function generateAIResponse(context: ConversationContext): Promise<
       console.log('❓ First dispute - confirming identity');
       
       if (!context.testMode && context.accessToken) {
-        await updateAIState(context.contactId, 'IDENTITY_CONFIRMATION', context.accessToken);
+        await updateAIState(context.contactId, 'IDENTITY_CONFIRMATION', context.accessToken, context.fieldIds);
       }
       
       const firstName = context.contactName.split(' ')[0];
@@ -1330,7 +1340,7 @@ export async function generateAIResponse(context: ConversationContext): Promise<
           }
         );
         
-        await updateAIState(context.contactId, 'stopped', context.accessToken);
+        await updateAIState(context.contactId, 'stopped', context.accessToken, context.fieldIds);
       }
       
       const closeMessage = "I understand. If you ever want to explore options in the future, feel free to reach out. Best of luck!";
@@ -1362,21 +1372,24 @@ export async function generateAIResponse(context: ConversationContext): Promise<
           );
           
           // Update sentiment custom field
-          await axios.put(
-            `https://services.leadconnectorhq.com/contacts/${context.contactId}`,
-            {
-              customFields: [
-                { id: 'vjhwCk3Ns0ekDEbMsuy5', value: sentiment }
-              ]
-            },
-            {
-              headers: {
-                'Authorization': `Bearer ${context.accessToken}`,
-                'Content-Type': 'application/json',
-                'Version': '2021-07-28'
+          const sentimentFieldId = context.fieldIds?.conversation_sentiment;
+          if (sentimentFieldId) {
+            await axios.put(
+              `https://services.leadconnectorhq.com/contacts/${context.contactId}`,
+              {
+                customFields: [
+                  { id: sentimentFieldId, value: sentiment }
+                ]
+              },
+              {
+                headers: {
+                  'Authorization': `Bearer ${context.accessToken}`,
+                  'Content-Type': 'application/json',
+                  'Version': '2021-07-28'
+                }
               }
-            }
-          );
+            );
+          }
           
           console.log(`✅ Updated sentiment: ${sentimentTag} + custom field`);
         } catch (error) {
@@ -1399,7 +1412,7 @@ export async function generateAIResponse(context: ConversationContext): Promise<
     
     // Update state if changed
     if (nextState !== currentState && !context.testMode && context.accessToken) {
-      await updateAIState(context.contactId, nextState, context.accessToken);
+      await updateAIState(context.contactId, nextState, context.accessToken, context.fieldIds);
     }
 
     // 🛡️ Check if AI is enabled for this contact (skip for organic social media leads)
@@ -1408,21 +1421,21 @@ export async function generateAIResponse(context: ConversationContext): Promise<
                                  context.contact?.attributionSource?.medium === 'instagram' || 
                                  context.contact?.lastAttributionSource?.medium === 'instagram';
     
-    if (!context.testMode && !isOrganicSocialLead && !isAIEnabled(context.contact)) {
+    if (!context.testMode && !isOrganicSocialLead && !isAIEnabled(context.contact, context.fieldIds)) {
       console.log(`❌ AI disabled for contact ${context.contactId}`);
       throw new Error('AI is not enabled for this contact');
     }
 
     // Update AI state to running (skip in test mode)
     if (!context.testMode && context.accessToken) {
-      await updateAIState(context.contactId, 'running', context.accessToken);
+      await updateAIState(context.contactId, 'running', context.accessToken, context.fieldIds);
     }
 
     // Check if human handoff is needed
     if (shouldHandoffToHuman(context.incomingMessage)) {
       // Update AI state to handoff
       if (!context.testMode && context.accessToken) {
-        await updateAIState(context.contactId, 'handoff', context.accessToken);
+        await updateAIState(context.contactId, 'handoff', context.accessToken, context.fieldIds);
         
         // Tag contact for human follow-up in GHL
         await axios.post(

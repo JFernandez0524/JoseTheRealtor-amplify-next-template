@@ -114,7 +114,8 @@ export async function checkRecentActivity(
 export async function activateManualMode(
   contactId: string,
   token: string,
-  reason?: string
+  reason?: string,
+  fieldIds: Record<string, string> = {}
 ): Promise<boolean> {
   try {
     console.log(`🤚 [MANUAL_MODE] Activating for contact ${contactId}`);
@@ -180,7 +181,10 @@ export async function activateManualMode(
     console.log('✅ [MANUAL_MODE] Added note to contact');
 
     // Update OutreachQueue status if userId available
-    const userId = contact?.customFields?.find((f: any) => f.id === 'CNoGugInWOC59hAPptxY')?.value;
+    const appUserIdFieldId = fieldIds.app_user_id;
+    const userId = appUserIdFieldId
+      ? contact?.customFields?.find((f: any) => f.id === appUserIdFieldId)?.value
+      : undefined;
     
     if (userId) {
       const { updateQueueStatus } = await import('./outreachQueue');
