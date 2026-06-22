@@ -98,7 +98,7 @@ export default function ContactPage() {
                   <option value='technical'>Technical Support</option>
                   <option value='billing'>Billing & Account</option>
                   <option value='feature'>Feature Request</option>
-                  <option value='ghl'>Laynch AI Integration</option>
+                  <option value='ghl'>Launch AI Integration</option>
                   <option value='general'>General Inquiry</option>
                 </select>
               </div>
@@ -140,8 +140,8 @@ export default function ContactPage() {
           </div>
           
           <div className='bg-white p-6 rounded-lg shadow-sm border border-gray-100'>
-            <h3 className='font-semibold text-gray-900 mb-2'>Can I connect multiple Laynch AI accounts?</h3>
-            <p className='text-gray-600 text-sm'>Currently, each user account can connect to one Laynch AI location. The connection persists across login sessions and includes automatic token refresh.</p>
+            <h3 className='font-semibold text-gray-900 mb-2'>Can I connect multiple Launch AI accounts?</h3>
+            <p className='text-gray-600 text-sm'>Currently, each user account can connect to one Launch AI location. The connection persists across login sessions and includes automatic token refresh.</p>
           </div>
           
           <div className='bg-white p-6 rounded-lg shadow-sm border border-gray-100'>

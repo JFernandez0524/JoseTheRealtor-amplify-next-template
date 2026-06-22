@@ -2,7 +2,7 @@ import axios from 'axios';
 
 const GHL_API = 'https://services.leadconnectorhq.com';
 
-type FieldDef = { name: string; dataType: string };
+type FieldDef = { name: string; dataType: string; picklistOptions?: string[] };
 
 const CONTACT_FIELDS: Array<{ key: string } & FieldDef> = [
   { key: 'property_address',        name: 'Property Address',        dataType: 'TEXT' },
@@ -14,7 +14,12 @@ const CONTACT_FIELDS: Array<{ key: string } & FieldDef> = [
   { key: 'mailing_city',            name: 'Mailing City',            dataType: 'TEXT' },
   { key: 'mailing_state',           name: 'Mailing State',           dataType: 'TEXT' },
   { key: 'mailing_zipcode',         name: 'Mailing Zipcode',         dataType: 'TEXT' },
-  { key: 'lead_type',               name: 'Lead Type',               dataType: 'TEXT' },
+  {
+    key: 'lead_type',
+    name: 'Lead Type',
+    dataType: 'SINGLE_OPTIONS',
+    picklistOptions: ['PREFORECLOSURE', 'PROBATE'],
+  },
   { key: 'contact_type',            name: 'Contact Type',            dataType: 'TEXT' },
   { key: 'skiptracestatus',         name: 'SkipTrace Status',        dataType: 'TEXT' },
   { key: 'listing_status',          name: 'Listing Status',          dataType: 'TEXT' },
@@ -38,16 +43,71 @@ const CONTACT_FIELDS: Array<{ key: string } & FieldDef> = [
   { key: 'app_plan',                name: 'App Plan',                dataType: 'TEXT' },
   { key: 'app_account_status',      name: 'App Account Status',      dataType: 'TEXT' },
   { key: 'app_lead_id',             name: 'App Lead ID',             dataType: 'TEXT' },
-  { key: 'ai_state',                name: 'AI State',                dataType: 'TEXT' },
+  {
+    key: 'ai_state',
+    name: 'AI State',
+    dataType: 'SINGLE_OPTIONS',
+    picklistOptions: ['not_started', 'running', 'stopped', 'paused', 'handoff', 'IDENTITY_CONFIRMATION'],
+  },
   { key: 'lead_source_id',          name: 'Lead Source ID',          dataType: 'TEXT' },
-  { key: 'conversation_sentiment',  name: 'Conversation Sentiment',  dataType: 'TEXT' },
+  {
+    key: 'conversation_sentiment',
+    name: 'Conversation Sentiment',
+    dataType: 'SINGLE_OPTIONS',
+    picklistOptions: ['POSITIVE', 'NEUTRAL', 'FRUSTRATED', 'URGENT', 'DISENGAGING'],
+  },
   { key: 'property_tier',           name: 'Property Tier',           dataType: 'TEXT' },
   { key: 'zillow_link',             name: 'Zillow Link',             dataType: 'LARGE_TEXT' },
-  { key: 'call_outcome',            name: 'Call Outcome',            dataType: 'TEXT' },
+  {
+    key: 'call_outcome',
+    name: 'Call Outcome',
+    dataType: 'SINGLE_OPTIONS',
+    picklistOptions: [
+      'No Answer',
+      'Voicemail',
+      'Follow Up',
+      'Requested Appointment',
+      'Not Interested',
+      'Incorrect Number',
+      'Listed With Realtor',
+      'Sold Already',
+      'DNC',
+      'DEAD / Never Responded',
+    ],
+  },
 ];
 
 const OPPORTUNITY_FIELDS: Array<{ key: string } & FieldDef> = [
-  { key: 'disposition', name: 'Disposition', dataType: 'TEXT' },
+  {
+    key: 'disposition',
+    name: 'Disposition',
+    dataType: 'SINGLE_OPTIONS',
+    picklistOptions: [
+      'New Lead',
+      'Attempting Contact',
+      'Contact Made',
+      'Appointment Set',
+      'Offer Made',
+      'Under Contract',
+      'Closed',
+      'Not Interested',
+      'Wrong Number',
+      'Direct Mail Campaign',
+      'Dead',
+    ],
+  },
+];
+
+const CALL_DISPOSITIONS = [
+  'No Answer',
+  'Voicemail',
+  'Follow Up',
+  'Requested Appointment',
+  'Not Interested',
+  'Incorrect Number',
+  'Listed With Realtor',
+  'Sold Already',
+  'DNC',
 ];
 
 async function fetchExistingContactFields(locationId: string, token: string): Promise<Array<{ id: string; name: string }>> {
@@ -66,13 +126,64 @@ async function fetchExistingOpportunityFields(locationId: string, token: string)
   return res.data?.customFields || [];
 }
 
-async function createField(locationId: string, token: string, name: string, dataType: string, model: 'contact' | 'opportunity'): Promise<string> {
+async function createField(
+  locationId: string,
+  token: string,
+  name: string,
+  dataType: string,
+  model: 'contact' | 'opportunity',
+  picklistOptions?: string[]
+): Promise<string> {
+  const body: Record<string, any> = { name, dataType, model };
+  if (picklistOptions?.length) {
+    body.picklistOptions = picklistOptions;
+  }
   const res = await axios.post(
     `${GHL_API}/locations/${locationId}/customFields`,
-    { name, dataType, model },
+    body,
     { headers: { Authorization: `Bearer ${token}`, Version: '2021-07-28', 'Content-Type': 'application/json' } }
   );
   return res.data?.customField?.id || res.data?.id;
+}
+
+export async function provisionCallDispositions(locationId: string, token: string): Promise<void> {
+  console.log(`🔧 [PROVISIONER] Provisioning call dispositions for location ${locationId}`);
+
+  let existing: Array<{ id: string; name: string }> = [];
+  try {
+    const res = await axios.get(`${GHL_API}/locations/${locationId}/call-dispositions`, {
+      headers: { Authorization: `Bearer ${token}`, Version: '2021-07-28' },
+    });
+    existing = res.data?.callDispositions ?? res.data ?? [];
+    if (!Array.isArray(existing)) {
+      console.error('❌ [PROVISIONER] Unexpected call-dispositions response shape:', JSON.stringify(res.data).slice(0, 300));
+      existing = [];
+    }
+  } catch (err: any) {
+    console.error('❌ [PROVISIONER] Failed to fetch call dispositions:', err.response?.data || err.message);
+    return;
+  }
+
+  const existingNames = new Set(existing.map((d) => d.name.toLowerCase().trim()));
+
+  for (const name of CALL_DISPOSITIONS) {
+    if (existingNames.has(name.toLowerCase().trim())) {
+      console.log(`✅ [PROVISIONER] Call disposition "${name}" already exists`);
+      continue;
+    }
+    try {
+      await axios.post(
+        `${GHL_API}/locations/${locationId}/call-dispositions`,
+        { name },
+        { headers: { Authorization: `Bearer ${token}`, Version: '2021-07-28', 'Content-Type': 'application/json' } }
+      );
+      console.log(`🆕 [PROVISIONER] Created call disposition "${name}"`);
+    } catch (err: any) {
+      console.error(`❌ [PROVISIONER] Failed to create call disposition "${name}":`, err.response?.data || err.message);
+    }
+  }
+
+  console.log(`✅ [PROVISIONER] Call disposition provisioning complete`);
 }
 
 export async function provisionCustomFields(locationId: string, token: string): Promise<Record<string, string>> {
@@ -89,7 +200,7 @@ export async function provisionCustomFields(locationId: string, token: string): 
       console.log(`✅ [PROVISIONER] Field "${field.name}" already exists: ${existingId}`);
     } else {
       try {
-        const newId = await createField(locationId, token, field.name, field.dataType, 'contact');
+        const newId = await createField(locationId, token, field.name, field.dataType, 'contact', field.picklistOptions);
         result[field.key] = newId;
         console.log(`🆕 [PROVISIONER] Created field "${field.name}": ${newId}`);
       } catch (err: any) {
@@ -115,7 +226,7 @@ export async function provisionOpportunityFields(locationId: string, token: stri
       result[field.key] = existingId;
     } else {
       try {
-        const newId = await createField(locationId, token, field.name, field.dataType, 'opportunity');
+        const newId = await createField(locationId, token, field.name, field.dataType, 'opportunity', field.picklistOptions);
         result[field.key] = newId;
         console.log(`🆕 [PROVISIONER] Created opportunity field "${field.name}": ${newId}`);
       } catch (err: any) {

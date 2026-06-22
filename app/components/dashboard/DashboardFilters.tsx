@@ -185,12 +185,12 @@ export function DashboardFilters({
             onChange={(e) => setFilterGhlStatus(e.target.value)}
             className='border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:ring-2 focus:ring-purple-500 outline-none w-full'
           >
-            <option value='' disabled>Laynch AI Statuses</option>
-            <option value='SUCCESS'>Laynch AI Synced</option>
-            <option value='PENDING'>Laynch AI Pending</option>
-            <option value='FAILED'>Laynch AI Failed</option>
-            <option value='SKIPPED'>Laynch AI Skipped</option>
-            <option value='NULL'>Needs Laynch AI Sync</option>
+            <option value='' disabled>Launch AI Statuses</option>
+            <option value='SUCCESS'>Launch AI Synced</option>
+            <option value='PENDING'>Launch AI Pending</option>
+            <option value='FAILED'>Launch AI Failed</option>
+            <option value='SKIPPED'>Launch AI Skipped</option>
+            <option value='NULL'>Needs Launch AI Sync</option>
           </select>
 
           {/* 4. PHONE STATUS FILTER */}
@@ -414,9 +414,9 @@ export function DashboardFilters({
                   <Loader size='small' variation='linear' /> Syncing...
                 </>
               ) : !hasPaidPlan ? (
-                '🔒 Sync Laynch AI (PRO+)'
+                '🔒 Sync Launch AI (PRO+)'
               ) : (
-                'Sync Laynch AI'
+                'Sync Launch AI'
               )}
             </button>
 

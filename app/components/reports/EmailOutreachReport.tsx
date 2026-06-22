@@ -182,7 +182,7 @@ export default function EmailOutreachReport() {
                     <th className='px-4 py-3 text-left'>Touch</th>
                     <th className='px-4 py-3 text-left'>Status</th>
                     <th className='px-4 py-3 text-left'>Next Email</th>
-                    <th className='px-4 py-3 text-left'>Laynch AI</th>
+                    <th className='px-4 py-3 text-left'>Launch AI</th>
                   </tr>
                 </thead>
                 <tbody className='divide-y divide-slate-100'>
@@ -230,7 +230,7 @@ export default function EmailOutreachReport() {
                             rel='noopener noreferrer'
                             className='text-blue-600 hover:text-blue-800 text-xs font-semibold underline whitespace-nowrap'
                           >
-                            View in Laynch AI →
+                            View in Launch AI →
                           </a>
                         ) : '—'}
                       </td>

@@ -51,7 +51,7 @@ export default function PrivacyPolicy() {
                 <li>Platform usage patterns and feature interactions</li>
                 <li>AI conversation logs and messaging history</li>
                 <li>Search queries and filter preferences</li>
-                <li>Integration usage (Laynch AI, Thanks.io)</li>
+                <li>Integration usage (Launch AI, Thanks.io)</li>
               </ul>
 
               <h3 className="text-lg font-semibold text-gray-800 mb-3">1.4 Technical Information</h3>
@@ -101,7 +101,7 @@ export default function PrivacyPolicy() {
                 <p className="font-semibold text-blue-800 mb-2">Data Processing Partners:</p>
                 <ul className="list-disc pl-6 text-blue-700 space-y-1">
                   <li><strong>BatchData:</strong> Property data enrichment and skip tracing services</li>
-                  <li><strong>Laynch AI:</strong> CRM integration and contact management</li>
+                  <li><strong>Launch AI:</strong> CRM integration and contact management</li>
                   <li><strong>Thanks.io:</strong> Direct mail campaign services</li>
                   <li><strong>OpenAI:</strong> AI messaging and conversation processing</li>
                   <li><strong>AWS:</strong> Cloud hosting and data storage</li>

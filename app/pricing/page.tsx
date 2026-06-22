@@ -25,9 +25,9 @@ export default function PricingPage() {
       planId: 'sync-plan',
       popular: true,
       features: [
-        'Connect your Laynch AI system',
-        'Automated lead sync to Laynch AI',
-        'Zestimate & cash offer sent to Laynch AI',
+        'Connect your Launch AI system',
+        'Automated lead sync to Launch AI',
+        'Zestimate & cash offer sent to Launch AI',
         'Direct mail workflow automation',
         'Manual outreach workflows (call)',
         'Buy skip credits separately'

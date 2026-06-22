@@ -42,7 +42,7 @@ export function GhlConnection() {
     <div className="bg-white p-4 rounded-lg border border-gray-200">
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="text-sm font-semibold text-gray-900">Laynch AI Integration</h3>
+          <h3 className="text-sm font-semibold text-gray-900">Launch AI Integration</h3>
           <p className="text-xs text-gray-500 mt-1">
             {isConnected 
               ? `Connected to location: ${locationId}`
@@ -66,7 +66,7 @@ export function GhlConnection() {
               onClick={handleConnect}
               className="px-3 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600"
             >
-              Connect Laynch AI
+              Connect Launch AI
             </button>
           ) : (
             <a href="/pricing" className="px-3 py-1 text-xs bg-indigo-500 text-white rounded hover:bg-indigo-600">

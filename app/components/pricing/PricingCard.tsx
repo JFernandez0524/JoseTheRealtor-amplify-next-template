@@ -75,7 +75,7 @@ export default function PricingCard({
         {ghlIncluded && (
           <div className="mb-4 p-3 bg-green-100 rounded-lg">
             <div className="text-green-800 font-medium text-sm">
-              🚀 Includes Managed Laynch AI Account
+              🚀 Includes Managed Launch AI Account
             </div>
             <div className="text-green-600 text-xs mt-1">
               No separate subscription needed

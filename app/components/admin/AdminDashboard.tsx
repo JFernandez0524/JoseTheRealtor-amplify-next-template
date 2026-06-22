@@ -554,7 +554,7 @@ export default function AdminDashboard({
 
           <button
             onClick={async () => {
-              if (!confirm('Fix all failed Laynch AI syncs? This will search Laynch AI for existing contacts and create them if missing.')) return;
+              if (!confirm('Fix all failed Launch AI syncs? This will search Launch AI for existing contacts and create them if missing.')) return;
               
               setLoading(true);
               try {

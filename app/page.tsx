@@ -56,7 +56,7 @@ export default async function HomePage() {
             <FeatureCard
               icon="🔗"
               title="CRM Integration"
-              description="Seamlessly sync qualified leads to Laynch AI with property values and custom tags for automated workflow triggers."
+              description="Seamlessly sync qualified leads to Launch AI with property values and custom tags for automated workflow triggers."
               gradient="from-purple-500 to-purple-600"
             />
           </div>

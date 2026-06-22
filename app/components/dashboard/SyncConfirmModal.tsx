@@ -85,7 +85,7 @@ export function SyncConfirmModal({
         {alreadySyncedCount > 0 && (
           <div className="mb-4 bg-yellow-50 border border-yellow-200 rounded-lg px-4 py-3">
             <p className="text-sm text-yellow-800">
-              <span className="font-semibold">{alreadySyncedCount} lead{alreadySyncedCount !== 1 ? 's' : ''}</span> already synced — {alreadySyncedCount !== 1 ? 'they' : 'it'} will be updated in Laynch AI.{' '}
+              <span className="font-semibold">{alreadySyncedCount} lead{alreadySyncedCount !== 1 ? 's' : ''}</span> already synced — {alreadySyncedCount !== 1 ? 'they' : 'it'} will be updated in Launch AI.{' '}
               Only <span className="font-semibold">{newCount}</span> {newCount !== 1 ? 'are' : 'is'} new.
             </p>
           </div>

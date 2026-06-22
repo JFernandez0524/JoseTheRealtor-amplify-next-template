@@ -613,12 +613,12 @@ function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
                   const phoneResult = (p: any): { passed: boolean; reason: string } => {
                     if (p.type !== 'Mobile') return { passed: false, reason: `Not mobile (${p.type || 'unknown type'})` };
                     if ((parseFloat(p.score) || 0) < 90) return { passed: false, reason: `Score too low (${p.score})` };
-                    return { passed: true, reason: 'Sent to Laynch AI' };
+                    return { passed: true, reason: 'Sent to Launch AI' };
                   };
 
                   const emailResult = (e: any): { passed: boolean; reason: string } => {
                     if (!e.tested) return { passed: false, reason: 'Not verified' };
-                    return { passed: true, reason: 'Sent to Laynch AI' };
+                    return { passed: true, reason: 'Sent to Launch AI' };
                   };
 
                   if (visiblePhones.length === 0 && allEmails.length === 0 && dncCount === 0) return null;
@@ -708,11 +708,11 @@ function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
                 {lead.ghlSyncStatus === 'SUCCESS' && (
                   <div className='border-t pt-6 mt-6'>
                     <h4 className='text-[10px] font-black uppercase text-slate-400 mb-3'>
-                      Laynch AI Sync
+                      Launch AI Sync
                     </h4>
                     <div className='p-3 bg-green-50 rounded-xl border border-green-200 space-y-1.5'>
                       <div className='flex items-center justify-between'>
-                        <span className='text-xs font-semibold text-green-800'>✓ Synced to Laynch AI</span>
+                        <span className='text-xs font-semibold text-green-800'>✓ Synced to Launch AI</span>
                         {lead.ghlSyncDate && (
                           <span className='text-[10px] text-slate-500'>
                             {new Date(lead.ghlSyncDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
@@ -731,7 +731,7 @@ function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
                       )}
                       {(lead.emails?.length || 0) > 0 && (
                         <p className='text-[10px] text-slate-500'>
-                          {lead.emails?.length} email{(lead.emails?.length || 0) !== 1 ? 's' : ''} synced — automated email outreach will be triggered by Laynch AI workflow.
+                          {lead.emails?.length} email{(lead.emails?.length || 0) !== 1 ? 's' : ''} synced — automated email outreach will be triggered by Launch AI workflow.
                         </p>
                       )}
                     </div>

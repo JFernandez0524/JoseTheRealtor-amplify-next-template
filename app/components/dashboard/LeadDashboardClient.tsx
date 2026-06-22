@@ -421,7 +421,7 @@ export default function LeadDashboardClient({}: Props) {
     }
 
     if (!isGhlConnected) {
-      addToast({ type: 'warning', title: 'Laynch AI Not Connected', message: 'Connect your Laynch AI system before syncing leads.' });
+      addToast({ type: 'warning', title: 'Launch AI Not Connected', message: 'Connect your Launch AI system before syncing leads.' });
       return;
     }
 
@@ -456,11 +456,11 @@ export default function LeadDashboardClient({}: Props) {
     setShowSyncModal(false);
     setIsProcessing(true);
     setSyncProgress({ current: 0, total: ids.length });
-    setProcessingMessage('Starting Laynch AI sync...');
+    setProcessingMessage('Starting Launch AI sync...');
     try {
       const { successful, skipped, failed, failedIds, skippedIds } = await syncToGHL(ids, (current, total) => {
         setSyncProgress({ current, total });
-        setProcessingMessage(`Syncing leads to Laynch AI... (${current}/${total})`);
+        setProcessingMessage(`Syncing leads to Launch AI... (${current}/${total})`);
       });
 
       setIsProcessing(false);
@@ -733,7 +733,7 @@ export default function LeadDashboardClient({}: Props) {
   const handlePopulateQueue = async () => {
     if (
       !confirm(
-        `Populate outreach queue from Laynch AI?\n\nThis will fetch ALL contacts with "ai outreach" tag from Laynch AI and add them to the outreach queue for automated messaging.`
+        `Populate outreach queue from Launch AI?\n\nThis will fetch ALL contacts with "ai outreach" tag from Launch AI and add them to the outreach queue for automated messaging.`
       )
     )
       return;
@@ -748,7 +748,7 @@ export default function LeadDashboardClient({}: Props) {
 
       const result = JSON.parse(data as string);
 
-      addToast({ type: 'success', title: 'Queue Population Complete!', message: `Laynch AI contacts: ${result.totalContacts} | AI outreach: ${result.aiOutreachContacts} | Added: ${result.queueEntriesAdded}${result.errors ? ` | Errors: ${result.errors.length}` : ''}`, duration: 8000 });
+      addToast({ type: 'success', title: 'Queue Population Complete!', message: `Launch AI contacts: ${result.totalContacts} | AI outreach: ${result.aiOutreachContacts} | Added: ${result.queueEntriesAdded}${result.errors ? ` | Errors: ${result.errors.length}` : ''}`, duration: 8000 });
     } catch (err: any) {
       console.error('Queue population error:', err);
       addToast({ type: 'error', title: 'Queue Population Failed', message: err.message });
@@ -789,10 +789,10 @@ export default function LeadDashboardClient({}: Props) {
   };
 
   const handleSyncListingStatus = async () => {
-    if (!confirm('Sync listing_status field to all existing Laynch AI contacts?\n\nThis will update contacts that were synced before the field was created.')) return;
+    if (!confirm('Sync listing_status field to all existing Launch AI contacts?\n\nThis will update contacts that were synced before the field was created.')) return;
 
     setIsProcessing(true);
-    setProcessingMessage('Syncing listing status to Laynch AI...');
+    setProcessingMessage('Syncing listing status to Launch AI...');
     try {
       const response = await fetch('/api/v1/sync-listing-status', {
         method: 'POST',
@@ -840,7 +840,7 @@ export default function LeadDashboardClient({}: Props) {
       'Type',
       'Manual Status',
       'Status',
-      'Laynch AI Sync',
+      'Launch AI Sync',
       'Owner Name',
       'Address',
       'Quality Phones',
@@ -996,7 +996,7 @@ export default function LeadDashboardClient({}: Props) {
       {!hasPaidPlan && (
         <div className='bg-indigo-50 border border-indigo-200 rounded-lg px-4 py-3 flex items-center justify-between'>
           <p className='text-sm text-indigo-800'>
-            You're on the <strong>Free Plan</strong> — Laynch AI sync, lead enrichment, and automated outreach are locked.
+            You're on the <strong>Free Plan</strong> — Launch AI sync, lead enrichment, and automated outreach are locked.
           </p>
           <a
             href='/pricing'

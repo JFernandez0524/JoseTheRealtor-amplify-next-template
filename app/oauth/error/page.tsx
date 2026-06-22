@@ -9,28 +9,28 @@ export default function OAuthErrorPage() {
   const errorMessages: Record<string, { title: string; description: string; action: string }> = {
     token_exchange_failed: {
       title: 'Connection Failed',
-      description: 'Unable to connect to your Laynch AI account. This might be due to incorrect credentials or a temporary issue.',
+      description: 'Unable to connect to your Launch AI account. This might be due to incorrect credentials or a temporary issue.',
       action: 'Please try connecting again or contact support if the issue persists.'
     },
     no_code: {
       title: 'Authorization Failed',
-      description: 'No authorization code was received from Laynch AI.',
+      description: 'No authorization code was received from Launch AI.',
       action: 'Please try the connection process again.'
     },
     missing_credentials: {
       title: 'Configuration Error',
-      description: 'The application is not properly configured for Laynch AI integration.',
+      description: 'The application is not properly configured for Launch AI integration.',
       action: 'Please contact support to resolve this issue.'
     },
     user_not_authenticated: {
       title: 'Authentication Required',
-      description: 'You must be logged in to connect your Laynch AI account.',
+      description: 'You must be logged in to connect your Launch AI account.',
       action: 'Please log in and try again.'
     },
     access_denied: {
       title: 'Access Denied',
-      description: 'You denied access to your Laynch AI account.',
-      action: 'To use CRM features, you need to grant access to your Laynch AI system.'
+      description: 'You denied access to your Launch AI account.',
+      action: 'To use CRM features, you need to grant access to your Launch AI system.'
     },
     invalid_request: {
       title: 'Invalid Request',
@@ -39,7 +39,7 @@ export default function OAuthErrorPage() {
     },
     unauthorized: {
       title: 'Unauthorized',
-      description: 'The application is not authorized to access Laynch AI.',
+      description: 'The application is not authorized to access Launch AI.',
       action: 'Please contact support to resolve this configuration issue.'
     },
     user_error: {
@@ -54,14 +54,14 @@ export default function OAuthErrorPage() {
     },
     storage_error: {
       title: 'Storage Error',
-      description: 'Unable to save your Laynch AI connection.',
+      description: 'Unable to save your Launch AI connection.',
       action: 'Please try connecting again or contact support.'
     }
   };
 
   const errorInfo = errorMessages[error || 'unknown'] || {
     title: 'Connection Error',
-    description: 'An unexpected error occurred while connecting to Laynch AI.',
+    description: 'An unexpected error occurred while connecting to Launch AI.',
     action: 'Please try again or contact support.'
   };
 

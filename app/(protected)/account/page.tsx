@@ -58,7 +58,7 @@ export default async function AccountPage() {
             <div className='flex items-center gap-3'>
               <HiOutlineChartBar className='text-2xl text-purple-500' />
               <div>
-                <p className='text-sm text-slate-500'>Laynch AI Syncs</p>
+                <p className='text-sm text-slate-500'>Launch AI Syncs</p>
                 <p className='text-2xl font-black text-slate-900'>{totalSynced.toLocaleString()}</p>
               </div>
             </div>
@@ -72,7 +72,7 @@ export default async function AccountPage() {
         >
           <div>
             <p className='font-bold text-blue-800'>View Full Reports</p>
-            <p className='text-sm text-blue-600'>Email outreach activity, skip trace results, and Laynch AI sync details.</p>
+            <p className='text-sm text-blue-600'>Email outreach activity, skip trace results, and Launch AI sync details.</p>
           </div>
           <HiOutlineArrowRight className='text-blue-500 text-xl group-hover:translate-x-1 transition-transform' />
         </a>

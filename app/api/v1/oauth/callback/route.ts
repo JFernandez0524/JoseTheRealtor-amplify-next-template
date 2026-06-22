@@ -3,7 +3,7 @@ import { createHmac, timingSafeEqual } from 'crypto';
 import axios from 'axios';
 import { createGhlIntegration, getGhlIntegration } from '@/app/utils/aws/data/ghlIntegration.server';
 import { cookiesClient } from '@/app/utils/aws/auth/amplifyServerUtils.server';
-import { provisionCustomFields, provisionOpportunityFields } from '@/amplify/functions/shared/ghlFieldProvisioner';
+import { provisionCustomFields, provisionOpportunityFields, provisionCallDispositions } from '@/amplify/functions/shared/ghlFieldProvisioner';
 
 const GHL_STATE_SECRET = process.env.GHL_STATE_SECRET!;
 const STATE_MAX_AGE_MS = 15 * 60 * 1000; // 15 minutes — enough time for a user to complete OAuth
@@ -72,7 +72,7 @@ export async function GET(req: Request) {
 
     let userId: string;
     try {
-      const stateData = JSON.parse(Buffer.from(state, 'base64').toString());
+      const stateData = JSON.parse(Buffer.from(state, 'base64url').toString());
       const { userId: uid, nonce, timestamp, sig } = stateData;
 
       if (!uid || !nonce || !timestamp || !sig) throw new Error('Incomplete state fields');
@@ -151,6 +151,7 @@ export async function GET(req: Request) {
         const [customFieldIds, opportunityFieldIds] = await Promise.all([
           provisionCustomFields(locationId, access_token),
           provisionOpportunityFields(locationId, access_token),
+          provisionCallDispositions(locationId, access_token),
         ]);
 
         const integration = await getGhlIntegration(userId);

@@ -33,7 +33,7 @@ export function OutreachStatus({ ghlContactId, outreachData, onDataUpdate }: Out
     return (
       <CardWrapper title="📤 Outreach Status">
         <div className="text-sm text-gray-500 italic">
-          Not synced to Laynch AI yet
+          Not synced to Launch AI yet
         </div>
       </CardWrapper>
     );
@@ -200,7 +200,7 @@ export function OutreachStatus({ ghlContactId, outreachData, onDataUpdate }: Out
           <HiOutlineTag className="w-5 h-5 text-purple-600 mt-0.5" />
           <div className="flex-1">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm font-medium text-gray-700">Laynch AI Tags</span>
+              <span className="text-sm font-medium text-gray-700">Launch AI Tags</span>
               {isTagLoading && (
                 <div className="w-4 h-4 border-2 border-purple-600 border-t-transparent rounded-full animate-spin"></div>
               )}
