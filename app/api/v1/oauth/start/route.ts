@@ -12,16 +12,14 @@ const GHL_REDIRECT_URI = process.env.GHL_REDIRECT_URI ||
 const SCOPES = [
   'contacts.readonly',
   'contacts.write',
-  'contacts/customFields.readonly',
-  'contacts/customFields.write',
+  'locations/customFields.readonly',
+  'locations/customFields.write',
   'conversations.readonly',
   'conversations.write',
   'conversations/message.readonly',
   'conversations/message.write',
   'opportunities.readonly',
   'opportunities.write',
-  'opportunities/customFields.readonly',
-  'opportunities/customFields.write',
   'locations.readonly',
   'locations/tags.readonly',
   'locations/tags.write',
@@ -53,7 +51,7 @@ export async function GET(req: Request) {
     const timestamp = Date.now();
     const sigPayload = `${user.userId}|${nonce}|${timestamp}`;
     const sig = createHmac('sha256', GHL_STATE_SECRET).update(sigPayload).digest('hex');
-    const state = Buffer.from(JSON.stringify({ userId: user.userId, nonce, timestamp, sig })).toString('base64');
+    const state = Buffer.from(JSON.stringify({ userId: user.userId, nonce, timestamp, sig })).toString('base64url');
     
     // Build GHL authorization URL
     const authUrl = new URL('https://marketplace.leadconnectorhq.com/oauth/chooselocation');
