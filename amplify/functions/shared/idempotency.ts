@@ -5,7 +5,7 @@
  * Uses DynamoDB with TTL to automatically clean up old records after 24 hours.
  */
 
-import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import { DynamoDBClient, ConditionalCheckFailedException } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand, PutCommand } from '@aws-sdk/lib-dynamodb';
 
 const dynamoClient = new DynamoDBClient({ region: process.env.AWS_REGION });
@@ -63,6 +63,46 @@ export async function markProcessed(webhookId: string, metadata: IdempotencyMeta
     console.log(`✅ [IDEMPOTENCY] Marked ${webhookId} as processed`);
   } catch (error: any) {
     console.error(`❌ [IDEMPOTENCY] Mark failed:`, error.message);
+  }
+}
+
+/**
+ * Atomically claim a webhook for processing using a conditional DynamoDB write.
+ * Returns true if this invocation owns processing, false if another already claimed it.
+ * Replaces the non-atomic isProcessed() + markProcessed() pattern which has a race
+ * condition when GHL fires the same webhook ID to multiple concurrent Lambda invocations.
+ */
+export async function claimProcessing(webhookId: string, metadata: IdempotencyMetadata): Promise<boolean> {
+  if (!webhookId) return true; // no ID to deduplicate on — allow processing
+
+  const now = new Date();
+  const ttl = Math.floor(now.getTime() / 1000) + (24 * 60 * 60);
+
+  try {
+    await docClient.send(new PutCommand({
+      TableName: IDEMPOTENCY_TABLE,
+      Item: {
+        webhookId,
+        processedAt: now.toISOString(),
+        source: metadata.source,
+        eventType: metadata.eventType,
+        contactId: metadata.contactId,
+        ttl,
+        createdAt: now.toISOString(),
+        updatedAt: now.toISOString(),
+      },
+      ConditionExpression: 'attribute_not_exists(webhookId)',
+    }));
+    console.log(`✅ [IDEMPOTENCY] Claimed ${webhookId}`);
+    return true;
+  } catch (err: any) {
+    if (err instanceof ConditionalCheckFailedException || err.name === 'ConditionalCheckFailedException') {
+      console.log(`⏭️ [IDEMPOTENCY] Already claimed by another invocation: ${webhookId}`);
+      return false;
+    }
+    // Unexpected error — fail open so we don't silently drop real messages
+    console.error(`❌ [IDEMPOTENCY] Claim failed (fail open):`, err.message);
+    return true;
   }
 }
 

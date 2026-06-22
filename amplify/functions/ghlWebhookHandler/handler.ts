@@ -22,7 +22,7 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, ScanCommand } from '@aws-sdk/lib-dynamodb';
 import { validateEnv } from '../shared/config';
-import { isProcessed, markProcessed, extractWebhookId } from '../shared/idempotency';
+import { claimProcessing, extractWebhookId } from '../shared/idempotency';
 import { logError, logWarning } from '../shared/logger';
 import { sanitizeId } from '../shared/sanitize';
 
@@ -37,11 +37,14 @@ const GHL_INTEGRATION_TABLE = process.env.AMPLIFY_DATA_GhlIntegration_TABLE_NAME
 export const handler = async (event: any) => {
   console.log('📨 [WEBHOOK_LAMBDA] Received event');
   
-  // Check idempotency
+  // Atomically claim this webhook — prevents duplicate processing under concurrent Lambda invocations
   const webhookId = extractWebhookId(event);
   console.log(`🔑 [WEBHOOK_LAMBDA] Webhook ID: ${webhookId}`);
 
-  if (await isProcessed(webhookId)) {
+  // metadata is populated after body parse; use a placeholder source here,
+  // the real eventType is set inside the handler branches below
+  const claimed = await claimProcessing(webhookId, { source: 'ghl', eventType: 'unknown' });
+  if (!claimed) {
     console.log('⏭️ [WEBHOOK_LAMBDA] Already processed');
     return {
       statusCode: 200,
@@ -69,7 +72,6 @@ export const handler = async (event: any) => {
     // Check if this is an email bounce event (from GHL system webhook)
     if (body.type === 'EmailBounced') {
       const result = await handleEmailBounce(body);
-      await markProcessed(webhookId, metadata);
       return result;
     }
     
@@ -77,7 +79,6 @@ export const handler = async (event: any) => {
     if (body.type === 'TaskCreate' || body.type === 'TaskComplete' || body.type === 'TaskDelete') {
       console.log('📋 [WEBHOOK_LAMBDA] Detected task event, routing to handleTaskEvent');
       const result = await handleTaskEvent(body);
-      await markProcessed(webhookId, metadata);
       return result;
     }
     
@@ -92,7 +93,6 @@ export const handler = async (event: any) => {
     ]);
     if (ACKNOWLEDGED_EVENT_TYPES.has(body.type)) {
       console.log(`ℹ️ [WEBHOOK_LAMBDA] Marketplace event acknowledged (no action): ${body.type}`);
-      await markProcessed(webhookId, metadata);
       return { statusCode: 200, body: JSON.stringify({ message: `Event ${body.type} acknowledged` }) };
     }
 
@@ -115,7 +115,6 @@ export const handler = async (event: any) => {
     
     if (messageDirection === 'outbound') {
       console.log('🚫 [WEBHOOK_LAMBDA] Outbound message detected (from agent) - skipping AI response');
-      await markProcessed(webhookId, metadata);
       return {
         statusCode: 200,
         body: JSON.stringify({ message: 'Outbound message - no AI response needed' })
@@ -125,7 +124,6 @@ export const handler = async (event: any) => {
     // Handle email replies (type 1)
     if (messageType === 1) {
       const result = await handleEmailReply(body, contactId, locationId, messageBody, userId);
-      await markProcessed(webhookId, metadata);
       return result;
     }
 
@@ -410,7 +408,6 @@ export const handler = async (event: any) => {
     
     if (isManualHandling) {
       console.log('🚫 [WEBHOOK_LAMBDA] Contact has conversation:manual tag - skipping AI response');
-      await markProcessed(webhookId, metadata);
       return {
         statusCode: 200,
         body: JSON.stringify({ 
@@ -431,7 +428,6 @@ export const handler = async (event: any) => {
         console.log('🚫 [WEBHOOK_LAMBDA] Detected recent manual activity - activating manual mode');
         
         await activateManualMode(contactId, token, 'Recent manual activity detected', fieldIds);
-        await markProcessed(webhookId, metadata);
         
         return {
           statusCode: 200,
@@ -539,7 +535,6 @@ export const handler = async (event: any) => {
     console.log('✅ [OUTBOUND] Logged AI response - daily limit updated');
 
     // Mark webhook as processed
-    await markProcessed(webhookId, metadata);
 
     console.log('✅ [WEBHOOK_LAMBDA] Successfully processed webhook');
 
