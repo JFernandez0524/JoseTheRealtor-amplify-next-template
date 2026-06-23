@@ -175,7 +175,7 @@ export function ManualLeadForm() {
               latitude: data.latitude,
               longitude: data.longitude,
               zestimate: data.zestimate,
-              zpid: data.zpid,
+              zillowZpid: data.zpid,
               validationStatus: 'VALID',
             }));
             setMessage(`✅ Address validated. Zestimate: ${data.zestimate ? `$${data.zestimate.toLocaleString()}` : 'N/A'}`);
@@ -213,27 +213,28 @@ export function ManualLeadForm() {
 
   const handleManualSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!lead.type || !lead.ownerAddress || !lead.ownerLastName) {
+    if (!lead.type || !lead.ownerLastName || !lead.ownerAddress || !lead.ownerCity || !lead.ownerState || !lead.ownerZip) {
       return setMessage('❌ Please fill in all required fields (*)');
     }
 
     setLoading(true);
     try {
+      const { phone, ...leadFields } = lead;
       const { data: newLead, errors } = await client.models.PropertyLead.create(
         {
-          ...lead,
-          phones: lead.phone ? [lead.phone] : [],
-          skipTraceStatus: lead.phone ? 'COMPLETED' : 'PENDING',
+          ...leadFields,
+          phones: phone ? [phone] : [],
+          skipTraceStatus: phone ? 'COMPLETED' : 'PENDING',
           ghlSyncStatus: 'PENDING',
           ghlContactId: null,
-          listingStatus: 'off_market', // Default to off_market
+          listingStatus: 'off_market',
           uploadSource: 'manual_entry',
         }
       );
 
       if (errors) throw new Error(errors[0].message);
       setMessage('✅ Lead added successfully!');
-      setLead({ type: '', ownerFirstName: '', ownerLastName: '', phone: '' });
+      setLead({ type: '', ownerFirstName: '', ownerLastName: '', adminFirstName: '', adminLastName: '', phone: '', ownerAddress: '', ownerCity: '', ownerState: '', ownerZip: '' });
     } catch (err: any) {
       setMessage(`❌ Error: ${err.message}`);
     } finally {
@@ -503,12 +504,18 @@ export function ManualLeadForm() {
             <label className='text-xs font-bold text-gray-400 uppercase'>
               Property Address *
             </label>
-            <input
-              placeholder='Enter property address...'
-              className='border p-2 w-full rounded'
-              value={lead.ownerAddress || ''}
-              onChange={(e) => setLead((prev: any) => ({ ...prev, ownerAddress: e.target.value }))}
-            />
+            <gmp-place-autocomplete ref={ownerRef}>
+              <input
+                slot='input'
+                placeholder='Start typing a property address...'
+                className='border p-2 w-full rounded'
+              />
+            </gmp-place-autocomplete>
+            {lead.ownerCity && (
+              <p className='text-xs text-green-700 mt-1'>
+                {lead.ownerCity}, {lead.ownerState} {lead.ownerZip}
+              </p>
+            )}
           </div>
 
           {lead.type === 'PROBATE' && (
