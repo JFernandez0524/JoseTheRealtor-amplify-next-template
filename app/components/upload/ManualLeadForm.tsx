@@ -503,14 +503,12 @@ export function ManualLeadForm() {
             <label className='text-xs font-bold text-gray-400 uppercase'>
               Property Address *
             </label>
-            <gmp-place-autocomplete ref={ownerRef}>
-              <input
-                slot='input'
-                placeholder='Search Address...'
-                className='border p-2 w-full rounded'
-                onChange={(e) => setLead((prev: any) => ({ ...prev, ownerAddress: (e.target as HTMLInputElement).value }))}
-              />
-            </gmp-place-autocomplete>
+            <input
+              placeholder='Enter property address...'
+              className='border p-2 w-full rounded'
+              value={lead.ownerAddress || ''}
+              onChange={(e) => setLead((prev: any) => ({ ...prev, ownerAddress: e.target.value }))}
+            />
           </div>
 
           {lead.type === 'PROBATE' && (
