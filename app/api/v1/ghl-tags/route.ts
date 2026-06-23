@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { cookiesClient, AuthGetCurrentUserServer } from '@/app/utils/aws/auth/amplifyServerUtils.server';
+import { ghlAddTags, ghlGetContact, createGhlClient } from '../../../../amplify/functions/shared/ghlClient';
 
 export async function POST(request: NextRequest) {
   try {
@@ -25,42 +26,10 @@ export async function POST(request: NextRequest) {
 
     const integration = integrations[0];
 
-    // Add tag to GHL contact
-    const response = await fetch(
-      `https://services.leadconnectorhq.com/contacts/${contactId}/tags`,
-      {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${integration.accessToken}`,
-          'Version': '2021-07-28',
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ tags: [tag] })
-      }
-    );
+    await ghlAddTags(integration.accessToken, contactId, [tag]);
 
-    if (!response.ok) {
-      console.error('GHL API error:', response.status, await response.text());
-      return NextResponse.json({ error: 'Failed to add tag' }, { status: 500 });
-    }
-
-    // Fetch updated contact to return current tags
-    const contactResponse = await fetch(
-      `https://services.leadconnectorhq.com/contacts/${contactId}`,
-      {
-        headers: {
-          'Authorization': `Bearer ${integration.accessToken}`,
-          'Version': '2021-07-28'
-        }
-      }
-    );
-
-    if (contactResponse.ok) {
-      const data = await contactResponse.json();
-      return NextResponse.json({ tags: data.contact.tags || [] });
-    }
-
-    return NextResponse.json({ success: true });
+    const contact = await ghlGetContact(integration.accessToken, contactId);
+    return NextResponse.json({ tags: contact.tags || [] });
 
   } catch (error: any) {
     console.error('Error adding GHL tag:', error);
@@ -94,40 +63,11 @@ export async function DELETE(request: NextRequest) {
 
     const integration = integrations[0];
 
-    // Remove tag from GHL contact
-    const response = await fetch(
-      `https://services.leadconnectorhq.com/contacts/${contactId}/tags/${encodeURIComponent(tag)}`,
-      {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${integration.accessToken}`,
-          'Version': '2021-07-28'
-        }
-      }
-    );
+    const ghl = createGhlClient(integration.accessToken);
+    await ghl.delete(`/contacts/${contactId}/tags/${encodeURIComponent(tag)}`);
 
-    if (!response.ok) {
-      console.error('GHL API error:', response.status, await response.text());
-      return NextResponse.json({ error: 'Failed to remove tag' }, { status: 500 });
-    }
-
-    // Fetch updated contact to return current tags
-    const contactResponse = await fetch(
-      `https://services.leadconnectorhq.com/contacts/${contactId}`,
-      {
-        headers: {
-          'Authorization': `Bearer ${integration.accessToken}`,
-          'Version': '2021-07-28'
-        }
-      }
-    );
-
-    if (contactResponse.ok) {
-      const data = await contactResponse.json();
-      return NextResponse.json({ tags: data.contact.tags || [] });
-    }
-
-    return NextResponse.json({ success: true });
+    const contact = await ghlGetContact(integration.accessToken, contactId);
+    return NextResponse.json({ tags: contact.tags || [] });
 
   } catch (error: any) {
     console.error('Error removing GHL tag:', error);

@@ -36,7 +36,7 @@
  * - Manual outreach triggers
  */
 import { NextResponse } from 'next/server';
-import axios from 'axios';
+import { ghlGetContact } from '../../../../amplify/functions/shared/ghlClient';
 import { generateAIResponse } from '@/app/utils/ai/conversationHandler';
 
 const INTERNAL_API_SECRET = process.env.INTERNAL_API_SECRET;
@@ -59,17 +59,7 @@ export async function POST(req: Request) {
     }
 
     // Fetch contact from GHL
-    const contactResponse = await axios.get(
-      `https://services.leadconnectorhq.com/contacts/${contactId}`,
-      {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Version': '2021-07-28'
-        }
-      }
-    );
-
-    const contact = contactResponse.data.contact;
+    const contact = await ghlGetContact(accessToken, contactId);
 
     // Extract property data from custom fields
     const propertyAddress = contact?.customFields?.find((f: any) => f.id === 'p3NOYiInAERYbe0VsLHB')?.value;

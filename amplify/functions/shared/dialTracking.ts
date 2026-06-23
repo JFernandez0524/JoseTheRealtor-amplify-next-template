@@ -1,4 +1,4 @@
-import axios from 'axios';
+import { createGhlClient, ghlGetContact, ghlUpdateContact } from './ghlClient';
 
 /**
  * GHL DIAL TRACKING & CADENCE UTILITIES
@@ -76,17 +76,7 @@ export async function incrementDialCounter(contactId: string, ghlToken: string, 
 
   try {
     // Get current counter value
-    const contactResponse = await axios.get(
-      `https://services.leadconnectorhq.com/contacts/${contactId}`,
-      {
-        headers: {
-          'Authorization': `Bearer ${ghlToken}`,
-          'Version': '2021-07-28'
-        }
-      }
-    );
-
-    const contact = contactResponse.data.contact;
+    const contact = await ghlGetContact(ghlToken, contactId);
     const currentCount = parseInt(contact.customFields?.find((f: any) => callAttemptId && f.id === callAttemptId)?.value || '0');
     const newCount = currentCount + 1;
 
@@ -96,17 +86,7 @@ export async function incrementDialCounter(contactId: string, ghlToken: string, 
     ].filter(Boolean);
 
     if (updateFields.length > 0) {
-      await axios.put(
-        `https://services.leadconnectorhq.com/contacts/${contactId}`,
-        { customFields: updateFields },
-        {
-          headers: {
-            'Authorization': `Bearer ${ghlToken}`,
-            'Content-Type': 'application/json',
-            'Version': '2021-07-28'
-          }
-        }
-      );
+      await ghlUpdateContact(ghlToken, contactId, { customFields: updateFields });
     }
 
     console.log(`📊 Updated dial counter for ${contactId}: ${newCount} attempts`);
@@ -132,16 +112,8 @@ async function markTerminalDisposition(contactId: string, ghlToken: string, oppo
   }
 
   try {
-    const oppResponse = await axios.get(
-      `https://services.leadconnectorhq.com/opportunities/search?contactId=${contactId}`,
-      {
-        headers: {
-          'Authorization': `Bearer ${ghlToken}`,
-          'Version': '2021-07-28'
-        }
-      }
-    );
-
+    const ghl = createGhlClient(ghlToken);
+    const oppResponse = await ghl.get(`/opportunities/search?contactId=${contactId}`);
     const opportunities = oppResponse.data.opportunities || [];
 
     if (opportunities.length === 0) {
@@ -150,22 +122,9 @@ async function markTerminalDisposition(contactId: string, ghlToken: string, oppo
     }
 
     const opportunityId = opportunities[0].id;
-
-    await axios.put(
-      `https://services.leadconnectorhq.com/opportunities/${opportunityId}`,
-      {
-        customFields: [
-          { id: dispositionId, value: 'Direct Mail Campaign' }
-        ]
-      },
-      {
-        headers: {
-          'Authorization': `Bearer ${ghlToken}`,
-          'Content-Type': 'application/json',
-          'Version': '2021-07-28'
-        }
-      }
-    );
+    await ghl.put(`/opportunities/${opportunityId}`, {
+      customFields: [{ id: dispositionId, value: 'Direct Mail Campaign' }]
+    });
 
     console.log(`🏁 Marked opportunity ${opportunityId} as "Direct Mail Campaign" after 8 attempts`);
 

@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { ghlAddTags, ghlUpdateContact, createGhlClient } from './ghlClient';
 import { analyzeBridgeProperty } from '../../../app/utils/bridge.server';
 
 const GHL_API_KEY = process.env.GHL_API_KEY;
@@ -298,27 +299,16 @@ async function sendGHLMessage(conversationId: string, message: string, accessTok
       messagePayload.fromNumber = fromNumber;
     }
     
-    // Use contact-based endpoint if contactId provided (auto-creates conversation)
-    const endpoint = contactId 
-      ? `https://services.leadconnectorhq.com/conversations/messages`
-      : `https://services.leadconnectorhq.com/conversations/${conversationId}/messages`;
-    
     if (contactId) {
       messagePayload.contactId = contactId;
     }
-    
-    const response = await axios.post(
-      endpoint,
-      messagePayload,
-      {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-          'Version': '2021-07-28',
-          'Accept': 'application/json'
-        }
-      }
-    );
+
+    const ghlPath = contactId
+      ? '/conversations/messages'
+      : `/conversations/${conversationId}/messages`;
+
+    const ghl = createGhlClient(accessToken);
+    await ghl.post(ghlPath, messagePayload);
     console.log(`✅ ${messageType} message sent successfully to GHL`);
   } catch (error: any) {
     console.error(`❌ Failed to send GHL ${messageType} message:`, error.response?.data || error.message);
@@ -807,18 +797,11 @@ Respond to their message:`;
         console.log('📅 Checking availability:', args);
         
         try {
-          const response = await fetch(
-            `https://services.leadconnectorhq.com/calendars/tuC1rqAOzPTThWUC7rvS/free-slots?startDate=${args.startDate}&endDate=${args.endDate}`,
-            {
-              headers: {
-                'Accept': 'application/json',
-                'Authorization': `Bearer ${context.accessToken}`,
-                'Version': '2021-07-28'
-              }
-            }
-          );
-          
-          const data = await response.json();
+          const ghl = createGhlClient(context.accessToken);
+          const calRes = await ghl.get(`/calendars/tuC1rqAOzPTThWUC7rvS/free-slots`, {
+            params: { startDate: args.startDate, endDate: args.endDate }
+          });
+          const data = calRes.data;
           
           // Format slots for AI
           if (data.slots && data.slots.length > 0) {
@@ -850,29 +833,20 @@ Respond to their message:`;
           : 'Join us for a seller consultation where we\'ll review your property, discuss current market conditions, pricing strategy, and our comprehensive marketing plan to get you the best price for your home.';
         
         try {
-          const response = await fetch('https://services.leadconnectorhq.com/calendars/events/appointments', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${context.accessToken}`,
-              'Version': '2021-07-28'
-            },
-            body: JSON.stringify({
-              calendarId: 'tuC1rqAOzPTThWUC7rvS',
-              locationId: context.locationId,
-              contactId: context.contact?.id,
-              startTime: args.startTime,
-              endTime: new Date(new Date(args.startTime).getTime() + 60*60*1000).toISOString(),
-              title: isBuyer ? 'Buyer Consultation' : 'Seller Consultation',
-              description: description,
-              appointmentStatus: 'confirmed',
-              assignedUserId: context.contact?.ownerId || context.contact?.assignedTo,
-              meetingLocationType: 'google_conference',
-              toNotify: true
-            })
+          const ghl = createGhlClient(context.accessToken);
+          await ghl.post('/calendars/events/appointments', {
+            calendarId: 'tuC1rqAOzPTThWUC7rvS',
+            locationId: context.locationId,
+            contactId: context.contact?.id,
+            startTime: args.startTime,
+            endTime: new Date(new Date(args.startTime).getTime() + 60*60*1000).toISOString(),
+            title: isBuyer ? 'Buyer Consultation' : 'Seller Consultation',
+            description: description,
+            appointmentStatus: 'confirmed',
+            assignedUserId: context.contact?.ownerId || context.contact?.assignedTo,
+            meetingLocationType: 'google_conference',
+            toNotify: true
           });
-          
-          const appointment = await response.json();
           return `Perfect! I've scheduled your ${args.consultationType} consultation for ${new Date(args.startTime).toLocaleString()}. You'll receive a Google Meet link and reminders via text and email.`;
         } catch (error) {
           console.error('Failed to schedule appointment:', error);
@@ -938,19 +912,7 @@ Respond to their message:`;
         // Tag contact to stop follow-ups
         if (context.accessToken && context.contactId) {
           try {
-            await axios.put(
-              `https://services.leadconnectorhq.com/contacts/${context.contactId}`,
-              {
-                tags: ['conversation_ended', `ended_reason:${args.reason}`]
-              },
-              {
-                headers: {
-                  'Authorization': `Bearer ${context.accessToken}`,
-                  'Content-Type': 'application/json',
-                  'Version': '2021-07-28'
-                }
-              }
-            );
+            await ghlAddTags(context.accessToken, context.contactId, ['conversation_ended', `ended_reason:${args.reason}`]);
             console.log('✅ Tagged contact to stop follow-ups');
           } catch (error) {
             console.error('Failed to tag contact:', error);
@@ -1051,22 +1013,9 @@ async function updateAIState(contactId: string, newState: string, accessToken: s
     return;
   }
   try {
-    await axios.put(
-      `https://services.leadconnectorhq.com/contacts/${contactId}`,
-      {
-        customFields: [
-          { id: aiStateId, value: newState }
-        ]
-      },
-      {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-          'Version': '2021-07-28',
-          'Accept': 'application/json'
-        }
-      }
-    );
+    await ghlUpdateContact(accessToken, contactId, {
+      customFields: [{ id: aiStateId, value: newState }]
+    });
   } catch (error) {
     console.error('Failed to update AI state:', error);
   }
@@ -1186,19 +1135,7 @@ export async function generateAIResponse(context: ConversationContext): Promise<
       console.log('🛑 Conversation end signal detected - suppressing AI');
       
       if (!context.testMode && context.accessToken) {
-        // Tag as conversation ended
-        await axios.post(
-          `https://services.leadconnectorhq.com/contacts/${context.contactId}/tags`,
-          { tags: ['conversation_ended'] },
-          {
-            headers: {
-              'Authorization': `Bearer ${context.accessToken}`,
-              'Content-Type': 'application/json',
-              'Version': '2021-07-28'
-            }
-          }
-        );
-        
+        await ghlAddTags(context.accessToken, context.contactId, ['conversation_ended']);
         // Update AI state to stopped
         await updateAIState(context.contactId, 'stopped', context.accessToken, context.fieldIds);
       }
@@ -1219,17 +1156,7 @@ export async function generateAIResponse(context: ConversationContext): Promise<
         console.log('✅ Identity confirmed - wrong property data');
         
         if (!context.testMode && context.accessToken) {
-          await axios.post(
-            `https://services.leadconnectorhq.com/contacts/${context.contactId}/tags`,
-            { tags: ['not_for_sale', 'conversation_ended', 'data_error:wrong_property'] },
-            {
-              headers: {
-                'Authorization': `Bearer ${context.accessToken}`,
-                'Content-Type': 'application/json',
-                'Version': '2021-07-28'
-              }
-            }
-          );
+          await ghlAddTags(context.accessToken, context.contactId, ['not_for_sale', 'conversation_ended', 'data_error:wrong_property']);
           await updateAIState(context.contactId, 'stopped', context.accessToken, context.fieldIds);
         }
         
@@ -1243,17 +1170,7 @@ export async function generateAIResponse(context: ConversationContext): Promise<
         console.log('❌ Wrong person - asking for correct contact');
         
         if (!context.testMode && context.accessToken) {
-          await axios.post(
-            `https://services.leadconnectorhq.com/contacts/${context.contactId}/tags`,
-            { tags: ['wrong_contact', 'conversation_ended', 'data_error:wrong_person'] },
-            {
-              headers: {
-                'Authorization': `Bearer ${context.accessToken}`,
-                'Content-Type': 'application/json',
-                'Version': '2021-07-28'
-              }
-            }
-          );
+          await ghlAddTags(context.accessToken, context.contactId, ['wrong_contact', 'conversation_ended', 'data_error:wrong_person']);
           await updateAIState(context.contactId, 'stopped', context.accessToken, context.fieldIds);
         }
         
@@ -1266,17 +1183,7 @@ export async function generateAIResponse(context: ConversationContext): Promise<
       console.log('❓ Unclear identity confirmation - exiting');
       
       if (!context.testMode && context.accessToken) {
-        await axios.post(
-          `https://services.leadconnectorhq.com/contacts/${context.contactId}/tags`,
-          { tags: ['conversation_ended', 'data_error:unclear'] },
-          {
-            headers: {
-              'Authorization': `Bearer ${context.accessToken}`,
-              'Content-Type': 'application/json',
-              'Version': '2021-07-28'
-            }
-          }
-        );
+        await ghlAddTags(context.accessToken, context.contactId, ['conversation_ended', 'data_error:unclear']);
         await updateAIState(context.contactId, 'stopped', context.accessToken, context.fieldIds);
       }
       
@@ -1297,17 +1204,7 @@ export async function generateAIResponse(context: ConversationContext): Promise<
         console.log('🛑 Second dispute - exiting conversation');
         
         if (!context.testMode && context.accessToken) {
-          await axios.post(
-            `https://services.leadconnectorhq.com/contacts/${context.contactId}/tags`,
-            { tags: ['not_for_sale', 'conversation_ended', 'data_error:persistent_dispute'] },
-            {
-              headers: {
-                'Authorization': `Bearer ${context.accessToken}`,
-                'Content-Type': 'application/json',
-                'Version': '2021-07-28'
-              }
-            }
-          );
+          await ghlAddTags(context.accessToken, context.contactId, ['not_for_sale', 'conversation_ended', 'data_error:persistent_dispute']);
           await updateAIState(context.contactId, 'stopped', context.accessToken, context.fieldIds);
         }
         
@@ -1334,18 +1231,7 @@ export async function generateAIResponse(context: ConversationContext): Promise<
       console.log('🛑 Hard objection detected - ending conversation gracefully');
       
       if (!context.testMode && context.accessToken) {
-        await axios.post(
-          `https://services.leadconnectorhq.com/contacts/${context.contactId}/tags`,
-          { tags: ['not_for_sale', 'conversation_ended'] },
-          {
-            headers: {
-              'Authorization': `Bearer ${context.accessToken}`,
-              'Content-Type': 'application/json',
-              'Version': '2021-07-28'
-            }
-          }
-        );
-        
+        await ghlAddTags(context.accessToken, context.contactId, ['not_for_sale', 'conversation_ended']);
         await updateAIState(context.contactId, 'stopped', context.accessToken, context.fieldIds);
       }
       
@@ -1363,38 +1249,13 @@ export async function generateAIResponse(context: ConversationContext): Promise<
       if (!context.testMode && context.accessToken) {
         try {
           const sentimentTag = `sentiment:${sentiment.toLowerCase()}`;
-          
-          // Add sentiment tag
-          await axios.post(
-            `https://services.leadconnectorhq.com/contacts/${context.contactId}/tags`,
-            { tags: [sentimentTag] },
-            {
-              headers: {
-                'Authorization': `Bearer ${context.accessToken}`,
-                'Content-Type': 'application/json',
-                'Version': '2021-07-28'
-              }
-            }
-          );
-          
-          // Update sentiment custom field
+          await ghlAddTags(context.accessToken, context.contactId, [sentimentTag]);
+
           const sentimentFieldId = context.fieldIds?.conversation_sentiment;
           if (sentimentFieldId) {
-            await axios.put(
-              `https://services.leadconnectorhq.com/contacts/${context.contactId}`,
-              {
-                customFields: [
-                  { id: sentimentFieldId, value: sentiment }
-                ]
-              },
-              {
-                headers: {
-                  'Authorization': `Bearer ${context.accessToken}`,
-                  'Content-Type': 'application/json',
-                  'Version': '2021-07-28'
-                }
-              }
-            );
+            await ghlUpdateContact(context.accessToken, context.contactId, {
+              customFields: [{ id: sentimentFieldId, value: sentiment }]
+            });
           }
           
           console.log(`✅ Updated sentiment: ${sentimentTag} + custom field`);
@@ -1444,17 +1305,7 @@ export async function generateAIResponse(context: ConversationContext): Promise<
         await updateAIState(context.contactId, 'handoff', context.accessToken, context.fieldIds);
         
         // Tag contact for human follow-up in GHL
-        await axios.post(
-          `https://services.leadconnectorhq.com/contacts/${context.contactId}/tags`,
-          { tags: ['Ready-For-Human-Contact'] },
-          {
-            headers: {
-              'Authorization': `Bearer ${context.accessToken}`,
-              'Content-Type': 'application/json',
-              'Version': '2021-07-28'
-            }
-          }
-        );
+        await ghlAddTags(context.accessToken, context.contactId, ['Ready-For-Human-Contact']);
       }
 
       const handoffMessage = "Great! I'll have one of our property specialists reach out to you within the next few hours to discuss your options. Thanks for your interest!";

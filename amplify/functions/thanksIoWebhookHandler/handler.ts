@@ -12,12 +12,10 @@ import type { Handler } from 'aws-lambda';
 import { getValidGhlToken } from '../shared/ghlTokenManager';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
-import axios from 'axios';
+import { ghlGetContact, ghlUpdateContact } from '../shared/ghlClient';
 
 const dynamoClient = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
-
-const GHL_API_BASE = 'https://services.leadconnectorhq.com';
 
 
 export const handler: Handler = async (event) => {
@@ -83,18 +81,7 @@ async function handleDeliveryUpdate(contactId: string, data: any) {
   const { token } = tokenData;
   const fieldIds: Record<string, string> = tokenData.customFieldIds || {};
 
-  // Get current contact to check mail count
-  const contactResponse = await axios.get(
-    `${GHL_API_BASE}/contacts/${contactId}`,
-    {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        Version: '2021-07-28'
-      }
-    }
-  );
-
-  const contact = contactResponse.data.contact;
+  const contact = await ghlGetContact(token, contactId);
   const mailSentCountId = fieldIds.mail_sent_count;
   const lastMailDateId = fieldIds.last_mail_date;
   const mailDeliveryDateId = fieldIds.mail_delivery_date;
@@ -112,19 +99,10 @@ async function handleDeliveryUpdate(contactId: string, data: any) {
   ].filter(Boolean);
 
   if (updateFields.length > 0) {
-    await axios.put(
-      `${GHL_API_BASE}/contacts/${contactId}`,
-      {
-        customFields: updateFields,
-        tags: ['mail:delivered', `mail:touch${newMailCount}`]
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          Version: '2021-07-28'
-        }
-      }
-    );
+    await ghlUpdateContact(token, contactId, {
+      customFields: updateFields,
+      tags: ['mail:delivered', `mail:touch${newMailCount}`]
+    });
   }
 
   console.log(`✅ [THANKS.IO] Updated contact ${contactId} - mail ${newMailCount} delivered`);
@@ -150,19 +128,10 @@ async function handleQRScan(contactId: string, data: any) {
     ? [{ id: qrScanCountId, value: scanCount.toString() }]
     : [];
 
-  await axios.put(
-    `${GHL_API_BASE}/contacts/${contactId}`,
-    {
-      customFields: updateFields,
-      tags: ['mail:scanned', 'high-engagement']
-    },
-    {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        Version: '2021-07-28'
-      }
-    }
-  );
+  await ghlUpdateContact(token, contactId, {
+    customFields: updateFields,
+    tags: ['mail:scanned', 'high-engagement']
+  });
 
   console.log(`✅ [THANKS.IO] Updated contact ${contactId} - QR scanned ${scanCount} times`);
 }
@@ -185,13 +154,8 @@ async function getUserIdFromContact(contactId: string): Promise<string | null> {
     const tokenData = await getValidGhlToken(integrationResult.Items[0].userId);
     if (!tokenData) return null;
 
-    // Get contact's locationId from GHL
-    const contactResponse = await axios.get(
-      `${GHL_API_BASE}/contacts/${contactId}`,
-      { headers: { Authorization: `Bearer ${tokenData.token}`, Version: '2021-07-28' } }
-    );
-
-    const locationId = contactResponse.data.contact.locationId;
+    const contact = await ghlGetContact(tokenData.token, contactId);
+    const locationId = contact.locationId;
     
     // Find userId for this locationId
     const userResult = await docClient.send(new ScanCommand({

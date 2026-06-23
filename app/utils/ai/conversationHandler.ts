@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { ghlGetContact, ghlUpdateContact, ghlAddTags, createGhlClient } from '../../../amplify/functions/shared/ghlClient';
 
 const GHL_API_KEY = process.env.GHL_API_KEY;
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
@@ -81,71 +82,38 @@ async function sendGHLMessage(conversationId: string, message: string, accessTok
       messagePayload.fromNumber = fromNumber;
     }
     
-    // Use contact-based endpoint if contactId provided (auto-creates conversation)
-    const endpoint = contactId 
-      ? `https://services.leadconnectorhq.com/conversations/messages`
-      : `https://services.leadconnectorhq.com/conversations/${conversationId}/messages`;
-    
     if (contactId) {
       messagePayload.contactId = contactId;
     }
-    
-    const response = await axios.post(
-      endpoint,
-      messagePayload,
-      {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-          'Version': '2021-07-28',
-          'Accept': 'application/json'
-        }
-      }
-    );
+
+    const ghlPath = contactId
+      ? '/conversations/messages'
+      : `/conversations/${conversationId}/messages`;
+
+    const ghl = createGhlClient(accessToken);
+    await ghl.post(ghlPath, messagePayload);
     console.log('✅ Message sent successfully to GHL');
     
     // Increment call counter ONLY for initial outreach (not replies)
     // Once lead responds, conversation is active - no need to count AI replies
     if (contactId && conversationId === 'auto') {
       try {
-        const contactRes = await axios.get(
-          `https://services.leadconnectorhq.com/contacts/${contactId}`,
-          {
-            headers: {
-              'Authorization': `Bearer ${accessToken}`,
-              'Version': '2021-07-28'
-            }
-          }
-        );
-        
-        const currentCounter = parseInt(contactRes.data.contact.customFields?.find((f: any) => f.id === '0MD4Pp2LCyOSCbCjA5qF')?.value || '0');
+        const contact = await ghlGetContact(accessToken, contactId);
+        const currentCounter = parseInt(contact.customFields?.find((f: any) => f.id === '0MD4Pp2LCyOSCbCjA5qF')?.value || '0');
         const newCounter = currentCounter + 1;
-        
+
         const customFieldUpdates: any[] = [
           { id: '0MD4Pp2LCyOSCbCjA5qF', value: newCounter.toString() },
           { id: 'dWNGeSckpRoVUxXLgxMj', value: new Date().toISOString() }
         ];
-        
+
         // If this was the 7th touch and no reply, mark as DEAD
         if (newCounter >= 7) {
-          customFieldUpdates.push({
-            id: 'LNyfm5JDal955puZGbu3', // call_outcome field
-            value: 'DEAD / Never Responded'
-          });
+          customFieldUpdates.push({ id: 'LNyfm5JDal955puZGbu3', value: 'DEAD / Never Responded' });
           console.log(`🔴 Marking contact as DEAD after ${newCounter} touches with no response`);
         }
-        
-        await axios.put(
-          `https://services.leadconnectorhq.com/contacts/${contactId}`,
-          { customFields: customFieldUpdates },
-          {
-            headers: {
-              'Authorization': `Bearer ${accessToken}`,
-              'Content-Type': 'application/json',
-              'Version': '2021-07-28'
-            }
-          }
-        );
+
+        await ghlUpdateContact(accessToken, contactId, { customFields: customFieldUpdates });
         
         console.log(`📊 Updated call counter to ${newCounter} for contact ${contactId}`);
       } catch (counterError: any) {
@@ -310,22 +278,9 @@ function isAIEnabled(contact: any): boolean {
 // Update AI state in GHL
 async function updateAIState(contactId: string, newState: string, accessToken: string) {
   try {
-    await axios.put(
-      `https://services.leadconnectorhq.com/contacts/${contactId}`,
-      {
-        customFields: [
-          { id: '1NxQW2kKMVgozjSUuu7s', value: newState }
-        ]
-      },
-      {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-          'Version': '2021-07-28',
-          'Accept': 'application/json'
-        }
-      }
-    );
+    await ghlUpdateContact(accessToken, contactId, {
+      customFields: [{ id: '1NxQW2kKMVgozjSUuu7s', value: newState }]
+    });
   } catch (error) {
     console.error('Failed to update AI state:', error);
   }
@@ -377,16 +332,7 @@ export async function generateAIResponse(context: ConversationContext): Promise<
         await updateAIState(context.contactId, 'handoff', context.accessToken);
         
         // Tag contact for human follow-up in GHL
-        await axios.post(
-          `https://services.leadconnectorhq.com/contacts/${context.contactId}/tags`,
-          { tags: ['Ready-For-Human-Contact'] },
-          {
-            headers: {
-              'Authorization': `Bearer ${context.accessToken}`,
-              'Content-Type': 'application/json'
-            }
-          }
-        );
+        await ghlAddTags(context.accessToken, context.contactId, ['Ready-For-Human-Contact']);
       }
 
       const handoffMessage = "Great! I'll have one of our property specialists reach out to you within the next few hours to discuss your options. Thanks for your interest!";

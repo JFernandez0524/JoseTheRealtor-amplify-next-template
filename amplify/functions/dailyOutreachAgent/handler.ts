@@ -1,6 +1,7 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, ScanCommand } from '@aws-sdk/lib-dynamodb';
-import axios from 'axios';
+import axios from 'axios'; // kept for internal APP_URL call only
+import { ghlUpdateContact, createGhlClient } from '../shared/ghlClient';
 import { getValidGhlToken } from '../shared/ghlTokenManager';
 import { shouldSendNextMessage } from '../shared/dialTracking';
 import { isWithinBusinessHours, getNextBusinessHourMessage } from '../shared/businessHours';
@@ -281,28 +282,13 @@ async function processQueueContacts(
 }
 
 async function fetchGHLContacts(integration: GhlIntegration): Promise<any[]> {
-  const response = await axios.post(
-    `https://services.leadconnectorhq.com/contacts/search`,
-    {
-      locationId: integration.locationId,
-      pageLimit: 100,
-      filters: [
-        {
-          field: 'tags',
-          operator: 'contains',
-          value: 'ai outreach'
-        }
-      ]
-    },
-    {
-      headers: {
-        'Authorization': `Bearer ${integration.accessToken}`,
-        'Version': '2021-07-28',
-        'Content-Type': 'application/json'
-      }
-    }
-  );
-  
+  const ghl = createGhlClient(integration.accessToken);
+  const response = await ghl.post('/contacts/search', {
+    locationId: integration.locationId,
+    pageLimit: 100,
+    filters: [{ field: 'tags', operator: 'contains', value: 'ai outreach' }]
+  });
+
   const contacts = response.data.contacts || [];
   console.log(`📋 [DAILY_OUTREACH] Found ${contacts.length} contacts with "ai outreach" tag`);
   
@@ -412,17 +398,7 @@ async function sendFollowUpOutreach(contact: any, integration: GhlIntegration, p
     }
 
     if (customFieldUpdates.length > 0) {
-      await axios.put(
-        `https://services.leadconnectorhq.com/contacts/${contact.id}`,
-        { customFields: customFieldUpdates },
-        {
-          headers: {
-            'Authorization': `Bearer ${integration.accessToken}`,
-            'Content-Type': 'application/json',
-            'Version': '2021-07-28'
-          }
-        }
-      );
+      await ghlUpdateContact(integration.accessToken, contact.id, { customFields: customFieldUpdates });
     }
 
     console.log(`📊 Updated dial counter to ${newCounter} for ${contact.firstName} ${contact.lastName}`);
@@ -450,16 +426,8 @@ async function getGhlPhoneNumber(accessToken: string, locationId: string, select
     }
 
     // Fetch all phone numbers for the location
-    const response = await axios.get(
-      `https://services.leadconnectorhq.com/phone-system/numbers/location/${locationId}`,
-      {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Version': '2021-07-28'
-        }
-      }
-    );
-    
+    const ghl = createGhlClient(accessToken);
+    const response = await ghl.get(`/phone-system/numbers/location/${locationId}`);
     const phoneNumbers = response.data.numbers || [];
     
     if (phoneNumbers.length === 0) {

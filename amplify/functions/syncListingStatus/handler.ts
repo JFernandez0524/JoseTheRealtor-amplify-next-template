@@ -1,6 +1,7 @@
 import type { Handler } from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, ScanCommand } from '@aws-sdk/lib-dynamodb';
+import { ghlUpdateContact } from '../shared/ghlClient';
 
 const dynamodb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 
@@ -51,29 +52,9 @@ export const handler: Handler = async (event) => {
     if (!lead.ghlContactId) continue;
 
     try {
-      const response = await fetch(
-        `https://services.leadconnectorhq.com/contacts/${lead.ghlContactId}`,
-        {
-          method: 'PUT',
-          headers: {
-            Authorization: `Bearer ${ghlToken}`,
-            'Content-Type': 'application/json',
-            Version: '2021-07-28',
-          },
-          body: JSON.stringify({
-            customFields: [
-              {
-                key: 'listing_status',
-                field_value: lead.listingStatus || 'OFF_MARKET',
-              },
-            ],
-          }),
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error(`GHL API error: ${response.status}`);
-      }
+      await ghlUpdateContact(ghlToken, lead.ghlContactId, {
+        customFields: [{ key: 'listing_status', field_value: lead.listingStatus || 'OFF_MARKET' }]
+      });
 
       console.log(`✅ Updated ${lead.ghlContactId}: ${lead.listingStatus || 'OFF_MARKET'}`);
       updated++;

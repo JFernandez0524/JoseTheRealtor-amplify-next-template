@@ -25,6 +25,7 @@ import { validateEnv } from '../shared/config';
 import { claimProcessing, extractWebhookId } from '../shared/idempotency';
 import { logError, logWarning } from '../shared/logger';
 import { sanitizeId } from '../shared/sanitize';
+import { ghlGetContact, ghlUpdateContact, createGhlClient } from '../shared/ghlClient';
 
 // Validate environment at module load time
 validateEnv('ghlWebhookHandler');
@@ -260,18 +261,8 @@ export const handler = async (event: any) => {
     const sentimentFieldId = fieldIds.conversation_sentiment;
     if (sentimentFieldId) {
       try {
-        await fetch(`https://services.leadconnectorhq.com/contacts/${contactId}`, {
-          method: 'PUT',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Version': '2021-07-28',
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            customFields: [
-              { id: sentimentFieldId, value: sentiment.sentiment }
-            ]
-          })
+        await ghlUpdateContact(token, contactId, {
+          customFields: [{ id: sentimentFieldId, value: sentiment.sentiment }]
         });
         console.log(`✅ [SENTIMENT] Saved to GHL: ${sentiment.sentiment}`);
       } catch (error) {
@@ -279,28 +270,17 @@ export const handler = async (event: any) => {
       }
     }
 
+    const ghl = createGhlClient(token);
+
     // If message body is empty (Instagram type 18), fetch from conversation API
     if (!messageBody && conversationId) {
       console.log('🔍 [WEBHOOK_LAMBDA] Fetching latest message from conversation API...');
       try {
-        const messagesResponse = await fetch(
-          `https://services.leadconnectorhq.com/conversations/${conversationId}/messages?limit=1`,
-          {
-            headers: {
-              'Authorization': `Bearer ${token}`,
-              'Version': '2021-07-28'
-            }
-          }
-        );
-        
-        if (messagesResponse.ok) {
-          const messagesData = await messagesResponse.json();
-          const latestMessage = messagesData.messages?.[0];
-          
-          if (latestMessage?.body) {
-            messageBody = latestMessage.body;
-            console.log('✅ [WEBHOOK_LAMBDA] Fetched message body from conversation:', messageBody);
-          }
+        const messagesRes = await ghl.get(`/conversations/${conversationId}/messages`, { params: { limit: 1 } });
+        const latestMessage = messagesRes.data?.messages?.[0];
+        if (latestMessage?.body) {
+          messageBody = latestMessage.body;
+          console.log('✅ [WEBHOOK_LAMBDA] Fetched message body from conversation:', messageBody);
         }
       } catch (error) {
         console.error('⚠️ [WEBHOOK_LAMBDA] Failed to fetch message from conversation:', error);
@@ -310,27 +290,14 @@ export const handler = async (event: any) => {
     // Check if message is media (image, video, audio) - skip AI response for ALL message types
     if (conversationId) {
       try {
-        const messagesResponse = await fetch(
-          `https://services.leadconnectorhq.com/conversations/${conversationId}/messages?limit=1`,
-          {
-            headers: {
-              'Authorization': `Bearer ${token}`,
-              'Version': '2021-07-28'
-            }
-          }
-        );
-        
-        if (messagesResponse.ok) {
-          const messagesData = await messagesResponse.json();
-          const latestMessage = messagesData.messages?.[0];
-          
-          if (latestMessage?.contentType && latestMessage.contentType !== 'text/plain') {
-            console.log('⏭️ [WEBHOOK_LAMBDA] Skipping media message:', latestMessage.contentType);
-            return {
-              statusCode: 200,
-              body: JSON.stringify({ message: 'Media message - no AI response needed' })
-            };
-          }
+        const messagesRes = await ghl.get(`/conversations/${conversationId}/messages`, { params: { limit: 1 } });
+        const latestMessage = messagesRes.data?.messages?.[0];
+        if (latestMessage?.contentType && latestMessage.contentType !== 'text/plain') {
+          console.log('⏭️ [WEBHOOK_LAMBDA] Skipping media message:', latestMessage.contentType);
+          return {
+            statusCode: 200,
+            body: JSON.stringify({ message: 'Media message - no AI response needed' })
+          };
         }
       } catch (error) {
         console.error('⚠️ [WEBHOOK_LAMBDA] Failed to check message type:', error);
@@ -348,29 +315,7 @@ export const handler = async (event: any) => {
 
     // Fetch contact data from GHL
     console.log('🔍 [WEBHOOK_LAMBDA] Fetching contact from GHL...');
-    const contactResponse = await fetch(
-      `https://services.leadconnectorhq.com/contacts/${contactId}`,
-      {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Version': '2021-07-28'
-        }
-      }
-    );
-
-    console.log('📡 [WEBHOOK_LAMBDA] Contact response status:', contactResponse.status);
-
-    if (!contactResponse.ok) {
-      const errorText = await contactResponse.text();
-      console.error('❌ [WEBHOOK_LAMBDA] Failed to fetch contact:', contactResponse.status, errorText);
-      return {
-        statusCode: 500,
-        body: JSON.stringify({ error: 'Failed to fetch contact', details: errorText })
-      };
-    }
-
-    const contactData = await contactResponse.json();
-    const fullContact = contactData.contact;
+    const fullContact = await ghlGetContact(token, contactId);
 
     // Extract property data using dynamic field IDs
     const findField = (key: string) => {
@@ -456,17 +401,8 @@ export const handler = async (event: any) => {
     console.log('🔍 [WEBHOOK_LAMBDA] Fetching conversations for contact...');
     if (!conversationId) {
       try {
-        const conversationsResponse = await fetch(
-          `https://services.leadconnectorhq.com/conversations/search?contactId=${contactId}&limit=1`,
-          {
-            headers: {
-              'Authorization': `Bearer ${token}`,
-              'Version': '2021-04-15'
-            }
-          }
-        );
-        const conversationsData = await conversationsResponse.json();
-        conversationId = conversationsData?.conversations?.[0]?.id || '';
+        const convRes = await ghl.get('/conversations/search', { params: { contactId, limit: 1 } });
+        conversationId = convRes.data?.conversations?.[0]?.id || '';
         console.log('✅ [WEBHOOK_LAMBDA] Found conversation:', conversationId);
       } catch (error) {
         console.error('⚠️ [WEBHOOK_LAMBDA] Failed to fetch conversation ID:', error);
@@ -481,17 +417,9 @@ export const handler = async (event: any) => {
     if (conversationId) {
       try {
         console.log('📜 [WEBHOOK_LAMBDA] Fetching conversation history...');
-        const historyResponse = await fetch(
-          `https://services.leadconnectorhq.com/conversations/${conversationId}/messages?limit=20`,
-          {
-            headers: {
-              'Authorization': `Bearer ${token}`,
-              'Version': '2021-04-15'
-            }
-          }
-        );
-        const historyData = await historyResponse.json();
-        
+        const historyRes = await ghl.get(`/conversations/${conversationId}/messages`, { params: { limit: 20 } });
+        const historyData = historyRes.data;
+
         if (historyData?.messages && Array.isArray(historyData.messages)) {
           // Filter out system messages and map to OpenAI format
           // GHL returns newest first, so reverse for chronological order
@@ -587,13 +515,7 @@ async function handleEmailReply(body: any, contactId: string, locationId: string
     const { token, fieldIds } = integration;
 
     // Fetch contact
-    const axios = (await import('axios')).default;
-    const contactResponse = await axios.get(
-      `https://services.leadconnectorhq.com/contacts/${contactId}`,
-      { headers: { 'Authorization': `Bearer ${token}`, 'Version': '2021-07-28' } }
-    );
-
-    const contact = contactResponse.data.contact;
+    const contact = await ghlGetContact(token, contactId);
 
     // Get userId from contact if not provided
     if (!userId) {
@@ -640,11 +562,7 @@ async function handleEmailReply(body: any, contactId: string, locationId: string
       console.log(`✅ [EMAIL] AI response sent`);
     } else {
       // Just tag as replied
-      await axios.put(
-        `https://services.leadconnectorhq.com/contacts/${contactId}`,
-        { tags: ['email:replied'] },
-        { headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json', 'Version': '2021-07-28' } }
-      );
+      await ghlUpdateContact(token, contactId, { tags: ['email:replied'] });
       console.log(`✅ [EMAIL] Tagged as replied (AI not active)`);
     }
 
@@ -670,19 +588,12 @@ async function handleEmailBounce(body: any) {
     }
     const { token, fieldIds } = integration;
 
-    // Fetch contact to get userId
-    const axios = (await import('axios')).default;
-    const contactResponse = await axios.get(
-      `https://services.leadconnectorhq.com/contacts/${contactId}`,
-      { headers: { 'Authorization': `Bearer ${token}`, 'Version': '2021-07-28' } }
-    );
-
-    const contact = contactResponse.data.contact;
+    const contact = await ghlGetContact(token, contactId);
     const appUserIdFieldId = fieldIds.app_user_id;
     const userId = appUserIdFieldId
       ? contact?.customFields?.find((f: any) => f.id === appUserIdFieldId)?.value
       : undefined;
-    
+
     // Update queue status to BOUNCED
     if (userId) {
       const { UpdateCommand } = await import('@aws-sdk/lib-dynamodb');
@@ -699,11 +610,7 @@ async function handleEmailBounce(body: any) {
     }
 
     // Tag contact
-    await axios.put(
-      `https://services.leadconnectorhq.com/contacts/${contactId}`,
-      { tags: ['email:bounced'] },
-      { headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json', 'Version': '2021-07-28' } }
-    );
+    await ghlUpdateContact(token, contactId, { tags: ['email:bounced'] });
 
     console.log(`✅ [EMAIL] Contact tagged as bounced`);
     return { statusCode: 200, body: JSON.stringify({ success: true }) };
@@ -721,20 +628,12 @@ async function handleWrongEmail(contactId: string, emailAddress: string, token: 
   console.log(`🚨 [EMAIL] Processing wrong email: ${emailAddress}`);
 
   try {
-    const axios = (await import('axios')).default;
-
-    // Fetch contact to get userId
-    const contactResponse = await axios.get(
-      `https://services.leadconnectorhq.com/contacts/${contactId}`,
-      { headers: { 'Authorization': `Bearer ${token}`, 'Version': '2021-07-28' } }
-    );
-
-    const contact = contactResponse.data.contact;
+    const contact = await ghlGetContact(token, contactId);
     const appUserIdFieldId = fieldIds.app_user_id;
     const userId = appUserIdFieldId
       ? contact?.customFields?.find((f: any) => f.id === appUserIdFieldId)?.value
       : undefined;
-    
+
     // Update queue to BOUNCED
     if (userId) {
       const { UpdateCommand } = await import('@aws-sdk/lib-dynamodb');
@@ -750,17 +649,12 @@ async function handleWrongEmail(contactId: string, emailAddress: string, token: 
     }
 
     // Tag and add note
-    await axios.put(
-      `https://services.leadconnectorhq.com/contacts/${contactId}`,
-      { tags: ['email:wrong_address', 'needs_review'] },
-      { headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json', 'Version': '2021-07-28' } }
-    );
+    await ghlUpdateContact(token, contactId, { tags: ['email:wrong_address', 'needs_review'] });
 
-    await axios.post(
-      `https://services.leadconnectorhq.com/contacts/${contactId}/notes`,
-      { body: `⚠️ WRONG EMAIL ADDRESS: Recipient reported that ${emailAddress} is incorrect. Please verify and update contact information.` },
-      { headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json', 'Version': '2021-07-28' } }
-    );
+    const ghl = createGhlClient(token);
+    await ghl.post(`/contacts/${contactId}/notes`, {
+      body: `⚠️ WRONG EMAIL ADDRESS: Recipient reported that ${emailAddress} is incorrect. Please verify and update contact information.`
+    });
 
     console.log(`✅ [EMAIL] Wrong email processed`);
   } catch (error: any) {

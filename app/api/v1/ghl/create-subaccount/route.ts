@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { AuthGetCurrentUserServer } from '@/app/utils/aws/auth/amplifyServerUtils.server';
+import { createGhlClient } from '../../../../../amplify/functions/shared/ghlClient';
 
 const GHL_AGENCY_TOKEN = process.env.GHL_AGENCY_TOKEN; // Your agency access token
 
@@ -16,39 +17,27 @@ export async function POST(req: NextRequest) {
     const { businessName, phone } = await req.json();
 
     // Create GHL Sub-Account
-    const subAccountResponse = await fetch('https://services.leadconnectorhq.com/locations/', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${GHL_AGENCY_TOKEN}`,
-        'Content-Type': 'application/json',
-        'Version': '2021-07-28'
-      },
-      body: JSON.stringify({
-        name: businessName,
-        email: userEmail,
-        phone: phone,
-        address: '',
-        city: '',
-        state: '',
-        postalCode: '',
-        website: '',
-        timezone: 'America/New_York',
-        country: 'US',
-        // Pre-configure for real estate
-        settings: {
-          allowDuplicateContact: false,
-          allowDuplicateOpportunity: false,
-          allowFacebookNameMerge: true,
-          disableContactTimezone: false
-        }
-      })
+    const ghl = createGhlClient(GHL_AGENCY_TOKEN!);
+    const subAccountRes = await ghl.post('/locations/', {
+      name: businessName,
+      email: userEmail,
+      phone: phone,
+      address: '',
+      city: '',
+      state: '',
+      postalCode: '',
+      website: '',
+      timezone: 'America/New_York',
+      country: 'US',
+      settings: {
+        allowDuplicateContact: false,
+        allowDuplicateOpportunity: false,
+        allowFacebookNameMerge: true,
+        disableContactTimezone: false
+      }
     });
 
-    if (!subAccountResponse.ok) {
-      throw new Error('Failed to create GHL sub-account');
-    }
-
-    const subAccount = await subAccountResponse.json();
+    const subAccount = subAccountRes.data;
 
     // TODO: Update UserAccount in DynamoDB with sub-account info
     // TODO: Set up billing subscription

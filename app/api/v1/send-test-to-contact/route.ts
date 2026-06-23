@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import axios from 'axios';
+import { ghlGetContact, createGhlClient } from '../../../../amplify/functions/shared/ghlClient';
 import { generateAIResponse } from '@/app/utils/ai/conversationHandler';
 import { AuthGetCurrentUserServer } from '@/app/utils/aws/auth/amplifyServerUtils.server';
 import { getValidGhlToken } from '@/app/utils/aws/data/ghlIntegration.server';
@@ -65,17 +65,7 @@ export async function POST(req: Request) {
     }
 
     // 1. Fetch contact from GHL
-    const contactResponse = await axios.get(
-      `https://services.leadconnectorhq.com/contacts/${contactId}`,
-      {
-        headers: {
-          'Authorization': `Bearer ${GHL_ACCESS_TOKEN}`,
-          'Version': '2021-07-28'
-        }
-      }
-    );
-
-    const contact = contactResponse.data.contact;
+    const contact = await ghlGetContact(GHL_ACCESS_TOKEN, contactId);
 
     // 2. Extract property data from custom fields
     const propertyAddress = contact?.customFields?.find((f: any) => f.id === 'p3NOYiInAERYbe0VsLHB')?.value;
@@ -87,21 +77,8 @@ export async function POST(req: Request) {
     // 3. Get or create conversation
     let conversationId = contact.conversationId;
     if (!conversationId) {
-      // Create conversation if it doesn't exist
-      const convResponse = await axios.post(
-        'https://services.leadconnectorhq.com/conversations',
-        {
-          locationId: contact.locationId,
-          contactId: contactId
-        },
-        {
-          headers: {
-            'Authorization': `Bearer ${GHL_ACCESS_TOKEN}`,
-            'Content-Type': 'application/json',
-            'Version': '2021-07-28'
-          }
-        }
-      );
+      const ghl = createGhlClient(GHL_ACCESS_TOKEN);
+      const convResponse = await ghl.post('/conversations', { locationId: contact.locationId, contactId });
       conversationId = convResponse.data.conversation.id;
     }
 

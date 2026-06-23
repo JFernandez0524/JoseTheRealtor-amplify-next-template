@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { ghlUpdateContact, ghlAddTags, createGhlClient } from '../../../amplify/functions/shared/ghlClient';
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
@@ -146,23 +147,16 @@ async function sendGHLEmail(
       messagePayload.emailTo = toEmail;
     }
 
-    // Use contact-based endpoint if contactId provided
-    const endpoint = contactId
-      ? `https://services.leadconnectorhq.com/conversations/messages`
-      : `https://services.leadconnectorhq.com/conversations/${conversationId}/messages`;
-
     if (contactId) {
       messagePayload.contactId = contactId;
     }
 
-    await axios.post(endpoint, messagePayload, {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
-        Version: '2021-07-28',
-        Accept: 'application/json',
-      },
-    });
+    const ghlPath = contactId
+      ? '/conversations/messages'
+      : `/conversations/${conversationId}/messages`;
+
+    const ghl = createGhlClient(accessToken);
+    await ghl.post(ghlPath, messagePayload);
     console.log('✅ Email sent successfully to GHL');
   } catch (error: any) {
     console.error(
@@ -437,26 +431,11 @@ function isAIEnabled(contact: any): boolean {
 }
 
 // Update AI state in GHL
-async function updateAIState(
-  contactId: string,
-  newState: string,
-  accessToken: string,
-) {
+async function updateAIState(contactId: string, newState: string, accessToken: string) {
   try {
-    await axios.put(
-      `https://services.leadconnectorhq.com/contacts/${contactId}`,
-      {
-        customFields: [{ id: '1NxQW2kKMVgozjSUuu7s', value: newState }],
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-          Version: '2021-07-28',
-          Accept: 'application/json',
-        },
-      },
-    );
+    await ghlUpdateContact(accessToken, contactId, {
+      customFields: [{ id: '1NxQW2kKMVgozjSUuu7s', value: newState }]
+    });
   } catch (error) {
     console.error('Failed to update AI state:', error);
   }
@@ -510,16 +489,7 @@ export async function generateEmailAIResponse(
         await updateAIState(context.contactId, 'handoff', context.accessToken);
 
         // Tag contact for human follow-up
-        await axios.post(
-          `https://services.leadconnectorhq.com/contacts/${context.contactId}/tags`,
-          { tags: ['Ready-For-Human-Contact'] },
-          {
-            headers: {
-              Authorization: `Bearer ${context.accessToken}`,
-              'Content-Type': 'application/json',
-            },
-          },
-        );
+        await ghlAddTags(context.accessToken, context.contactId, ['Ready-For-Human-Contact']);
       }
 
       const handoffEmail = {

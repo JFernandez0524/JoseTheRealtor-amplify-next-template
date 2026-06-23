@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { cookiesClient, AuthGetCurrentUserServer } from '@/app/utils/aws/auth/amplifyServerUtils.server';
+import { ghlGetContact } from '../../../../amplify/functions/shared/ghlClient';
 
 const GHL_CUSTOM_FIELDS = {
   call_attempt_counter: '0MD4Pp2LCyOSCbCjA5qF',
@@ -40,15 +41,9 @@ export async function GET(request: NextRequest) {
 
     if (integrations && integrations.length > 0) {
       const integration = integrations[0];
-      const ghlResponse = await fetch(
-        `https://services.leadconnectorhq.com/contacts/${contactId}`,
-        { headers: { 'Authorization': `Bearer ${integration.accessToken}`, 'Version': '2021-07-28' } }
-      );
-      if (ghlResponse.ok) {
-        const ghlData = await ghlResponse.json();
-        liveTags = ghlData.contact?.tags || [];
-        liveCustomFields = ghlData.contact?.customFields || [];
-      }
+      const contact = await ghlGetContact(integration.accessToken, contactId);
+      liveTags = contact?.tags || [];
+      liveCustomFields = contact?.customFields || [];
     }
 
     if (leads && leads.length > 0 && leads[0].ghlOutreachData) {

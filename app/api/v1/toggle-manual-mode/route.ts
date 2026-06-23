@@ -14,6 +14,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { AuthGetCurrentUserServer } from '@/app/utils/aws/auth/amplifyServerUtils.server';
+import { ghlGetContact, ghlUpdateContact } from '../../../../amplify/functions/shared/ghlClient';
 
 export async function POST(request: NextRequest) {
   try {
@@ -40,22 +41,8 @@ export async function POST(request: NextRequest) {
     const { token } = tokenResult;
 
     // Get current contact tags
-    const contactResponse = await fetch(
-      `https://services.leadconnectorhq.com/contacts/${contactId}`,
-      {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Version': '2021-07-28'
-        }
-      }
-    );
-
-    if (!contactResponse.ok) {
-      return NextResponse.json({ error: 'Failed to fetch contact' }, { status: 500 });
-    }
-
-    const contactData = await contactResponse.json();
-    const currentTags = contactData.contact?.tags || [];
+    const contactData = await ghlGetContact(token, contactId);
+    const currentTags = contactData?.tags || [];
 
     // Add or remove manual tag
     let newTags = [...currentTags];
@@ -69,24 +56,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Update contact tags
-    const updateResponse = await fetch(
-      `https://services.leadconnectorhq.com/contacts/${contactId}`,
-      {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Version': '2021-07-28',
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          tags: newTags
-        })
-      }
-    );
-
-    if (!updateResponse.ok) {
-      return NextResponse.json({ error: 'Failed to update contact tags' }, { status: 500 });
-    }
+    await ghlUpdateContact(token, contactId, { tags: newTags });
 
     return NextResponse.json({
       success: true,

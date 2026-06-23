@@ -1,6 +1,4 @@
-import axios from 'axios';
-
-const GHL_API = 'https://services.leadconnectorhq.com';
+import { createGhlClient } from './ghlClient';
 
 type FieldDef = { name: string; dataType: string; picklistOptions?: string[] };
 
@@ -111,18 +109,14 @@ const CALL_DISPOSITIONS = [
 ];
 
 async function fetchExistingContactFields(locationId: string, token: string): Promise<Array<{ id: string; name: string }>> {
-  const res = await axios.get(`${GHL_API}/locations/${locationId}/customFields`, {
-    headers: { Authorization: `Bearer ${token}`, Version: '2021-07-28' },
-    params: { model: 'contact' },
-  });
+  const ghl = createGhlClient(token);
+  const res = await ghl.get(`/locations/${locationId}/customFields`, { params: { model: 'contact' } });
   return res.data?.customFields || [];
 }
 
 async function fetchExistingOpportunityFields(locationId: string, token: string): Promise<Array<{ id: string; name: string }>> {
-  const res = await axios.get(`${GHL_API}/locations/${locationId}/customFields`, {
-    headers: { Authorization: `Bearer ${token}`, Version: '2021-07-28' },
-    params: { model: 'opportunity' },
-  });
+  const ghl = createGhlClient(token);
+  const res = await ghl.get(`/locations/${locationId}/customFields`, { params: { model: 'opportunity' } });
   return res.data?.customFields || [];
 }
 
@@ -138,11 +132,8 @@ async function createField(
   if (picklistOptions?.length) {
     body.picklistOptions = picklistOptions;
   }
-  const res = await axios.post(
-    `${GHL_API}/locations/${locationId}/customFields`,
-    body,
-    { headers: { Authorization: `Bearer ${token}`, Version: '2021-07-28', 'Content-Type': 'application/json' } }
-  );
+  const ghl = createGhlClient(token);
+  const res = await ghl.post(`/locations/${locationId}/customFields`, body);
   return res.data?.customField?.id || res.data?.id;
 }
 
@@ -151,9 +142,8 @@ export async function provisionCallDispositions(locationId: string, token: strin
 
   let existing: Array<{ id: string; name: string }> = [];
   try {
-    const res = await axios.get(`${GHL_API}/locations/${locationId}/call-dispositions`, {
-      headers: { Authorization: `Bearer ${token}`, Version: '2021-07-28' },
-    });
+    const ghl = createGhlClient(token);
+    const res = await ghl.get(`/locations/${locationId}/call-dispositions`);
     existing = res.data?.callDispositions ?? res.data ?? [];
     if (!Array.isArray(existing)) {
       console.error('❌ [PROVISIONER] Unexpected call-dispositions response shape:', JSON.stringify(res.data).slice(0, 300));
@@ -172,11 +162,8 @@ export async function provisionCallDispositions(locationId: string, token: strin
       continue;
     }
     try {
-      await axios.post(
-        `${GHL_API}/locations/${locationId}/call-dispositions`,
-        { name },
-        { headers: { Authorization: `Bearer ${token}`, Version: '2021-07-28', 'Content-Type': 'application/json' } }
-      );
+      const ghl = createGhlClient(token);
+      await ghl.post(`/locations/${locationId}/call-dispositions`, { name });
       console.log(`🆕 [PROVISIONER] Created call disposition "${name}"`);
     } catch (err: any) {
       console.error(`❌ [PROVISIONER] Failed to create call disposition "${name}":`, err.response?.data || err.message);

@@ -1,58 +1,5 @@
-import axios, { AxiosInstance, AxiosError } from 'axios';
+import { createGhlClient } from '../../shared/ghlClient';
 import { DBLead } from '../../../../app/utils/aws/data/lead.server';
-
-
-const createGhlClient = (): AxiosInstance => {
-  const client = axios.create({
-    baseURL: 'https://services.leadconnectorhq.com',
-    timeout: 10000,
-    headers: {
-      'Content-Type': 'application/json',
-      Accept: 'application/json',
-      Version: '2021-07-28',
-    },
-  });
-
-  client.interceptors.request.use((config) => {
-    console.info(`📡 [GHL REQ] ${config.method?.toUpperCase()} ${config.url}`);
-    return config;
-  });
-
-  client.interceptors.response.use(
-    (response) => {
-      console.info(
-        `✅ [GHL RES] ${response.status} from ${response.config.url}`
-      );
-      return response;
-    },
-    async (error: AxiosError) => {
-      const config = error.config as any;
-      console.error(
-        `❌ [GHL ERR] ${error.response?.status || 'TIMEOUT'} on ${config?.url}`
-      );
-      if (error.response?.data)
-        console.error(`📄 [GHL ERR DATA]`, JSON.stringify(error.response.data));
-
-      if (!config || !config.retryCount) config.retryCount = 0;
-      const shouldRetry =
-        config.retryCount < 3 &&
-        (error.code === 'ECONNABORTED' ||
-          (error.response?.status && error.response.status >= 500));
-
-      if (shouldRetry) {
-        config.retryCount += 1;
-        const delay = config.retryCount * 1000;
-        console.warn(
-          `⚠️ [RETRY] Attempt ${config.retryCount}/3 in ${delay}ms...`
-        );
-        await new Promise((resolve) => setTimeout(resolve, delay));
-        return client(config);
-      }
-      return Promise.reject(error);
-    }
-  );
-  return client;
-};
 
 // 🎯 Updated parameters for "1 Phone = 1 Contact" strategy
 export async function syncToGoHighLevel(
@@ -67,16 +14,7 @@ export async function syncToGoHighLevel(
   fieldIds: Record<string, string> = {},
   opportunityFieldIds: Record<string, string> = {}
 ): Promise<string> {
-  const ghl = axios.create({
-    baseURL: 'https://services.leadconnectorhq.com',
-    timeout: 10000,
-    headers: {
-      Authorization: `Bearer ${ghlToken}`,
-      'Content-Type': 'application/json',
-      Accept: 'application/json',
-      Version: '2021-07-28',
-    },
-  });
+  const ghl = createGhlClient(ghlToken);
 
   try {
     const primaryEmail = lead.emails?.[0]?.toLowerCase() || null;

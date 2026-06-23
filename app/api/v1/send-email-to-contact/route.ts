@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import axios from 'axios';
+import { ghlGetContact } from '../../../../amplify/functions/shared/ghlClient';
 import { generateEmailAIResponse } from '@/app/utils/ai/emailConversationHandler';
 
 /**
@@ -74,17 +74,7 @@ export async function POST(req: Request) {
     }
 
     // Fetch contact from GHL
-    const contactResponse = await axios.get(
-      `https://services.leadconnectorhq.com/contacts/${contactId}`,
-      {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Version': '2021-07-28'
-        }
-      }
-    );
-
-    const contact = contactResponse.data.contact;
+    const contact = await ghlGetContact(accessToken, contactId);
     
     // Validate toEmail against contact's known emails in GHL
     // GHL rejects emailTo if it's not the primary or an additional email

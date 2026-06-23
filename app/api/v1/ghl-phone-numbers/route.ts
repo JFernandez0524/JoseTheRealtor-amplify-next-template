@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import axios from 'axios';
+import { createGhlClient } from '../../../../amplify/functions/shared/ghlClient';
 import { AuthGetCurrentUserServer, cookiesClient } from '@/app/utils/aws/auth/amplifyServerUtils.server';
 import { getValidGhlToken } from '@/app/utils/aws/data/ghlIntegration.server';
 
@@ -47,16 +47,8 @@ export async function GET(req: Request) {
     console.log('✅ [GHL_PHONE_NUMBERS] Token retrieved, fetching phone numbers...');
 
     // Fetch phone numbers from GHL
-    const response = await axios.get(
-      `https://services.leadconnectorhq.com/phone-system/numbers/location/${integration.locationId}`,
-      {
-        headers: {
-          'Authorization': `Bearer ${ghlData}`,
-          'Version': '2021-07-28'
-        }
-      }
-    );
-
+    const ghl = createGhlClient(ghlData);
+    const response = await ghl.get(`/phone-system/numbers/location/${integration.locationId}`);
     const phoneNumbers = response.data.numbers || [];
     console.log(`✅ [GHL_PHONE_NUMBERS] Found ${phoneNumbers.length} phone numbers`);
 

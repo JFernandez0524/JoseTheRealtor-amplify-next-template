@@ -1,9 +1,11 @@
 /**
  * Conversation Activity Checker
- * 
+ *
  * Detects recent manual (human) activity in GHL conversations to prevent AI from
  * interrupting active conversations.
  */
+
+import { ghlGetContact, ghlUpdateContact, createGhlClient } from './ghlClient';
 
 export interface ActivityResult {
   hasRecentOutbound: boolean;
@@ -29,28 +31,9 @@ export async function checkRecentActivity(
     console.log(`🔍 [ACTIVITY] Checking last ${windowMinutes} minutes of conversation ${conversationId}`);
     
     // Fetch recent messages
-    const response = await fetch(
-      `https://services.leadconnectorhq.com/conversations/${conversationId}/messages?limit=20`,
-      {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Version': '2021-07-28'
-        }
-      }
-    );
-
-    if (!response.ok) {
-      console.error('❌ [ACTIVITY] Failed to fetch messages:', response.status);
-      return {
-        hasRecentOutbound: false,
-        lastActivityTime: null,
-        lastOutboundTime: null,
-        messageCount: 0
-      };
-    }
-
-    const data = await response.json();
-    const messages = data.messages || [];
+    const ghl = createGhlClient(token);
+    const messagesRes = await ghl.get(`/conversations/${conversationId}/messages`, { params: { limit: 20 } });
+    const messages = messagesRes.data?.messages || [];
     
     console.log(`📊 [ACTIVITY] Found ${messages.length} messages`);
 
@@ -121,62 +104,33 @@ export async function activateManualMode(
     console.log(`🤚 [MANUAL_MODE] Activating for contact ${contactId}`);
     
     // Fetch current contact to get existing tags
-    const contactResponse = await fetch(
-      `https://services.leadconnectorhq.com/contacts/${contactId}`,
-      {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Version': '2021-07-28'
-        }
-      }
-    );
-
-    if (!contactResponse.ok) {
+    const contact = await ghlGetContact(token, contactId);
+    if (!contact) {
       console.error('❌ [MANUAL_MODE] Failed to fetch contact');
       return false;
     }
 
-    const contactData = await contactResponse.json();
-    const contact = contactData.contact;
     const currentTags = contact?.tags || [];
 
     // Add conversation:manual tag if not already present
     if (!currentTags.includes('conversation:manual')) {
-      const newTags = [...currentTags, 'conversation:manual'];
-      
-      await fetch(`https://services.leadconnectorhq.com/contacts/${contactId}`, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Version': '2021-07-28',
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ tags: newTags })
-      });
-      
+      await ghlUpdateContact(token, contactId, { tags: [...currentTags, 'conversation:manual'] });
       console.log('✅ [MANUAL_MODE] Added conversation:manual tag');
     }
 
     // Add note with timestamp
-    const timestamp = new Date().toLocaleString('en-US', { 
+    const timestamp = new Date().toLocaleString('en-US', {
       timeZone: 'America/New_York',
       dateStyle: 'short',
       timeStyle: 'short'
     });
-    
-    const noteBody = reason 
+
+    const noteBody = reason
       ? `🤖 AI paused - ${reason} (${timestamp})`
       : `🤖 AI paused - manual conversation detected at ${timestamp}`;
 
-    await fetch(`https://services.leadconnectorhq.com/contacts/${contactId}/notes`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Version': '2021-07-28',
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ body: noteBody })
-    });
+    const ghl = createGhlClient(token);
+    await ghl.post(`/contacts/${contactId}/notes`, { body: noteBody });
 
     console.log('✅ [MANUAL_MODE] Added note to contact');
 

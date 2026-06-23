@@ -3,7 +3,7 @@ import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, ScanCommand } from '@aws-sdk/lib-dynamodb';
 import { getValidGhlToken } from '../shared/ghlTokenManager';
 import { addToOutreachQueue } from '../shared/outreachQueue';
-import axios from 'axios';
+import { createGhlClient } from '../shared/ghlClient';
 
 const dynamodb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 
@@ -53,18 +53,14 @@ export const handler: Handler = async () => {
     let page = 1;
 
     while (true) {
-      let url = `https://services.leadconnectorhq.com/contacts/?locationId=${tokenData.locationId}&limit=100`;
+      const ghl = createGhlClient(tokenData.token);
+      let contactsUrl = `/contacts/?locationId=${tokenData.locationId}&limit=100`;
       if (startAfter && startAfterId) {
-        url += `&startAfter=${startAfter}&startAfterId=${startAfterId}`;
+        contactsUrl += `&startAfter=${startAfter}&startAfterId=${startAfterId}`;
       }
 
       try {
-        const response = await axios.get(url, {
-          headers: {
-            'Authorization': `Bearer ${tokenData.token}`,
-            'Version': '2021-07-28'
-          }
-        });
+        const response = await ghl.get(contactsUrl);
 
         const contacts = response.data.contacts || [];
         console.log(`📄 Page ${page}: ${contacts.length} contacts`);

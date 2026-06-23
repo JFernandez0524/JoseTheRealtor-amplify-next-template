@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import axios from 'axios';
+import { ghlAddTags, ghlUpdateContact } from '../../../../amplify/functions/shared/ghlClient';
 import { getValidGhlToken } from '@/app/utils/aws/data/ghlIntegration.server';
 
 /**
@@ -52,38 +52,17 @@ export async function POST(req: Request) {
     const integration = integrations[0];
     const accessToken = await getValidGhlToken(integration.userId);
 
+    if (!accessToken) {
+      return NextResponse.json({ success: false, error: 'Failed to retrieve GHL token' }, { status: 500 });
+    }
+
     // 1. Tag contact as unsubscribed
-    await axios.post(
-      `https://services.leadconnectorhq.com/contacts/${contactId}/tags`,
-      { tags: ['unsubscribed', 'email:opted-out'] },
-      {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-          Version: '2021-07-28',
-        },
-      },
-    );
+    await ghlAddTags(accessToken, contactId, ['unsubscribed', 'email:opted-out']);
 
     // 2. Update DND settings to block emails
-    await axios.put(
-      `https://services.leadconnectorhq.com/contacts/${contactId}`,
-      {
-        dndSettings: {
-          Email: {
-            status: 'active',
-            message: 'Contact unsubscribed from emails',
-          },
-        },
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-          Version: '2021-07-28',
-        },
-      },
-    );
+    await ghlUpdateContact(accessToken, contactId, {
+      dndSettings: { Email: { status: 'active', message: 'Contact unsubscribed from emails' } }
+    });
 
     // 3. Update OutreachQueue status to OPTED_OUT
     const { data: queueItems } = await cookiesClient.models.OutreachQueue.list({

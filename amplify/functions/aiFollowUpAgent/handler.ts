@@ -1,7 +1,7 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, ScanCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { BedrockRuntimeClient, InvokeModelCommand } from '@aws-sdk/client-bedrock-runtime';
-import axios from 'axios';
+import { createGhlClient } from '../shared/ghlClient';
 
 const dynamoClient = new DynamoDBClient({ region: process.env.AWS_REGION });
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
@@ -119,21 +119,10 @@ async function getDueTasksFromGHL(integration: GhlIntegration) {
     const now = new Date().toISOString();
     
     // Get tasks from GHL API
-    const response = await axios.get(
-      'https://services.leadconnectorhq.com/contacts/tasks',
-      {
-        headers: {
-          'Authorization': `Bearer ${integration.accessToken}`,
-          'Content-Type': 'application/json',
-          'Version': '2021-07-28'
-        },
-        params: {
-          completed: false,
-          dueBefore: now,
-          limit: 50
-        }
-      }
-    );
+    const ghl = createGhlClient(integration.accessToken);
+    const response = await ghl.get('/contacts/tasks', {
+      params: { completed: false, dueBefore: now, limit: 50 }
+    });
 
     // Filter for AI-created follow-up tasks
     return response.data.tasks?.filter((task: any) => 
@@ -211,19 +200,9 @@ async function processLeadFollowUp(lead: Lead) {
   const { token: accessToken, integration } = tokenResult;
   
   // 2. Get tasks from GHL for this contact
-  const tasksResponse = await fetch(`https://services.leadconnectorhq.com/contacts/${lead.ghlContactId}/tasks`, {
-    headers: {
-      'Authorization': `Bearer ${accessToken}`,
-      'Version': '2021-07-28'
-    }
-  });
-
-  if (!tasksResponse.ok) {
-    console.error(`❌ Failed to fetch tasks for contact ${lead.ghlContactId}`);
-    return;
-  }
-
-  const { tasks } = await tasksResponse.json();
+  const ghl = createGhlClient(accessToken);
+  const tasksResponse = await ghl.get(`/contacts/${lead.ghlContactId}/tasks`);
+  const tasks = tasksResponse.data?.tasks || [];
   
   // 3. Find due follow-up tasks
   const dueTasks = tasks.filter((task: any) => 
@@ -435,18 +414,8 @@ async function updateGHLTaskWithAI(taskId: string, aiSuggestions: string, access
     body: `${aiSuggestions}\n\n--- Original Task ---\n[Task content preserved by AI agent]`
   };
   
-  const ghlResponse = await axios.put(
-    `https://services.leadconnectorhq.com/tasks/${taskId}`,
-    updateData,
-    {
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
-        'Version': '2021-07-28'
-      }
-    }
-  );
-  
+  const ghl = createGhlClient(accessToken);
+  const ghlResponse = await ghl.put(`/tasks/${taskId}`, updateData);
   console.log(`🤖 Updated task ${taskId} with AI suggestions`);
   return ghlResponse.data;
 }

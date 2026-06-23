@@ -1,6 +1,7 @@
 // v2 - force redeploy with updated shared outreachQueue index names
 import { DynamoDBClient, ScanCommand } from "@aws-sdk/client-dynamodb";
-import axios from "axios";
+import axios from "axios"; // used for internal APP_URL call only
+import { ghlUpdateContact } from '../shared/ghlClient';
 import { isWithinBusinessHours, getNextBusinessHourMessage } from '../shared/businessHours';
 import { getValidGhlToken } from '../shared/ghlTokenManager';
 
@@ -205,17 +206,7 @@ export const handler = async (event: any) => {
                     emailCounterId && { id: emailCounterId, value: (currentCounter + 1).toString() },
                     lastEmailDateId && { id: lastEmailDateId, value: new Date().toISOString() },
                   ].filter(Boolean);
-                  await axios.put(
-                    `https://services.leadconnectorhq.com/contacts/${contact.id}`,
-                    { customFields: updateFields },
-                    {
-                      headers: {
-                        'Authorization': `Bearer ${validAccessToken}`,
-                        'Content-Type': 'application/json',
-                        'Version': '2021-07-28'
-                      }
-                    }
-                  );
+                  await ghlUpdateContact(validAccessToken, contact.id, { customFields: updateFields });
                   console.log(`✅ [GHL] Counter updated for ${contact.id}`);
                 } catch (ghlError: any) {
                   console.error(`❌ [GHL] Failed to update counter for ${contact.id}:`, ghlError.response?.data || ghlError.message);

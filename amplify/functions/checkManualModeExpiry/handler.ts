@@ -18,6 +18,7 @@
  */
 
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import { ghlUpdateContact, createGhlClient } from '../shared/ghlClient';
 import { DynamoDBDocumentClient, ScanCommand } from '@aws-sdk/lib-dynamodb';
 import { validateEnv } from '../shared/config';
 import { logError } from '../shared/logger';
@@ -68,23 +69,11 @@ export const handler = async () => {
       const { token } = tokenResult;
 
       // Search for contacts with conversation:manual tag
-      const contactsResponse = await fetch(
-        `https://services.leadconnectorhq.com/contacts/?locationId=${locationId}&query=conversation:manual`,
-        {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Version': '2021-07-28'
-          }
-        }
-      );
-
-      if (!contactsResponse.ok) {
-        console.error(`❌ [EXPIRY_CHECK] Failed to fetch contacts for location ${locationId}`);
-        continue;
-      }
-
-      const contactsData = await contactsResponse.json();
-      const contacts = contactsData.contacts || [];
+      const ghl = createGhlClient(token);
+      const contactsRes = await ghl.get(`/contacts/`, {
+        params: { locationId, query: 'conversation:manual' }
+      });
+      const contacts = contactsRes.data?.contacts || [];
 
       console.log(`📋 [EXPIRY_CHECK] Found ${contacts.length} contacts in manual mode for location ${locationId}`);
 
@@ -103,17 +92,8 @@ export const handler = async () => {
         // Get conversation ID
         let conversationId = '';
         try {
-          const conversationsResponse = await fetch(
-            `https://services.leadconnectorhq.com/conversations/search?contactId=${contactId}&limit=1`,
-            {
-              headers: {
-                'Authorization': `Bearer ${token}`,
-                'Version': '2021-04-15'
-              }
-            }
-          );
-          const conversationsData = await conversationsResponse.json();
-          conversationId = conversationsData?.conversations?.[0]?.id || '';
+          const convRes = await ghl.get('/conversations/search', { params: { contactId, limit: 1 } });
+          conversationId = convRes.data?.conversations?.[0]?.id || '';
         } catch (error) {
           console.error(`⚠️ [EXPIRY_CHECK] Failed to get conversation for ${contactId}`);
           continue;
@@ -138,35 +118,19 @@ export const handler = async () => {
             
             // Remove conversation:manual tag
             const currentTags = contact.tags || [];
-            const newTags = currentTags.filter((tag: string) => tag !== 'conversation:manual');
-            
-            await fetch(`https://services.leadconnectorhq.com/contacts/${contactId}`, {
-              method: 'PUT',
-              headers: {
-                'Authorization': `Bearer ${token}`,
-                'Version': '2021-07-28',
-                'Content-Type': 'application/json'
-              },
-              body: JSON.stringify({ tags: newTags })
+            await ghlUpdateContact(token, contactId, {
+              tags: currentTags.filter((tag: string) => tag !== 'conversation:manual')
             });
 
             // Add note
-            const timestamp = new Date().toLocaleString('en-US', { 
+            const timestamp = new Date().toLocaleString('en-US', {
               timeZone: 'America/New_York',
               dateStyle: 'short',
               timeStyle: 'short'
             });
-            
-            await fetch(`https://services.leadconnectorhq.com/contacts/${contactId}/notes`, {
-              method: 'POST',
-              headers: {
-                'Authorization': `Bearer ${token}`,
-                'Version': '2021-07-28',
-                'Content-Type': 'application/json'
-              },
-              body: JSON.stringify({ 
-                body: `🤖 AI resumed - no activity for 24 hours (${timestamp})` 
-              })
+
+            await ghl.post(`/contacts/${contactId}/notes`, {
+              body: `🤖 AI resumed - no activity for 24 hours (${timestamp})`
             });
 
             // Reset OutreachQueue status

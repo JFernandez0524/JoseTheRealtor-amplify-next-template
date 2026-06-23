@@ -1,34 +1,26 @@
 import { NextResponse } from 'next/server';
+import { ghlGetContact } from '../../../../amplify/functions/shared/ghlClient';
 
 export async function POST(req: Request) {
   try {
     const { contactId } = await req.json();
-    
+
     if (!contactId) {
       return NextResponse.json({ error: 'contactId required' }, { status: 400 });
     }
 
-    // Get contact details
-    const response = await fetch(`https://services.leadconnectorhq.com/contacts/${contactId}`, {
-      headers: {
-        'Authorization': `Bearer ${process.env.GHL_API_KEY}`,
-        'Version': '2021-07-28'
-      }
-    });
-
-    if (!response.ok) {
+    const contact = await ghlGetContact(process.env.GHL_API_KEY!, contactId);
+    if (!contact) {
       return NextResponse.json({ error: 'Contact not found' }, { status: 404 });
     }
 
-    const contact = await response.json();
-    
     // Analyze workflow state
-    const analysis = analyzeContactWorkflow(contact.contact);
+    const analysis = analyzeContactWorkflow(contact);
     
     return NextResponse.json({
       success: true,
       contactId,
-      contactName: contact.contact.contactName,
+      contactName: contact.contactName,
       analysis
     });
   } catch (error: any) {
