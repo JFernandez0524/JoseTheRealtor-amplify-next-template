@@ -511,11 +511,37 @@ export function ManualLeadForm() {
                 className='border p-2 w-full rounded'
               />
             </gmp-place-autocomplete>
-            {lead.ownerCity && (
-              <p className='text-xs text-green-700 mt-1'>
-                {lead.ownerCity}, {lead.ownerState} {lead.ownerZip}
-              </p>
-            )}
+          </div>
+
+          <div className='grid grid-cols-3 gap-2'>
+            <div className='col-span-1 space-y-1'>
+              <label className='text-xs font-bold text-gray-400 uppercase'>City *</label>
+              <input
+                placeholder='Auto-filled or type...'
+                className='border p-2 w-full rounded text-sm'
+                value={lead.ownerCity || ''}
+                onChange={(e) => setLead((prev: any) => ({ ...prev, ownerCity: e.target.value }))}
+              />
+            </div>
+            <div className='space-y-1'>
+              <label className='text-xs font-bold text-gray-400 uppercase'>State *</label>
+              <input
+                placeholder='NJ'
+                maxLength={2}
+                className='border p-2 w-full rounded text-sm'
+                value={lead.ownerState || ''}
+                onChange={(e) => setLead((prev: any) => ({ ...prev, ownerState: e.target.value.toUpperCase() }))}
+              />
+            </div>
+            <div className='space-y-1'>
+              <label className='text-xs font-bold text-gray-400 uppercase'>Zip *</label>
+              <input
+                placeholder='08601'
+                className='border p-2 w-full rounded text-sm'
+                value={lead.ownerZip || ''}
+                onChange={(e) => setLead((prev: any) => ({ ...prev, ownerZip: e.target.value }))}
+              />
+            </div>
           </div>
 
           {lead.type === 'PROBATE' && (
