@@ -508,6 +508,7 @@ export function ManualLeadForm() {
                 slot='input'
                 placeholder='Search Address...'
                 className='border p-2 w-full rounded'
+                onChange={(e) => setLead((prev: any) => ({ ...prev, ownerAddress: (e.target as HTMLInputElement).value }))}
               />
             </gmp-place-autocomplete>
           </div>
