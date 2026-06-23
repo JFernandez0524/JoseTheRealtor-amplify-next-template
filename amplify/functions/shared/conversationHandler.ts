@@ -795,9 +795,9 @@ Respond to their message:`;
       
       if (toolName === 'check_availability') {
         console.log('📅 Checking availability:', args);
-        
+
         try {
-          const ghl = createGhlClient(context.accessToken);
+          const ghl = createGhlClient(context.accessToken!);
           const calRes = await ghl.get(`/calendars/tuC1rqAOzPTThWUC7rvS/free-slots`, {
             params: { startDate: args.startDate, endDate: args.endDate }
           });
@@ -833,7 +833,7 @@ Respond to their message:`;
           : 'Join us for a seller consultation where we\'ll review your property, discuss current market conditions, pricing strategy, and our comprehensive marketing plan to get you the best price for your home.';
         
         try {
-          const ghl = createGhlClient(context.accessToken);
+          const ghl = createGhlClient(context.accessToken!);
           await ghl.post('/calendars/events/appointments', {
             calendarId: 'tuC1rqAOzPTThWUC7rvS',
             locationId: context.locationId,

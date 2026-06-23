@@ -1,3 +1,4 @@
+import { type AxiosInstance } from 'axios';
 import { createGhlClient } from '../../shared/ghlClient';
 import { DBLead } from '../../../../app/utils/aws/data/lead.server';
 
