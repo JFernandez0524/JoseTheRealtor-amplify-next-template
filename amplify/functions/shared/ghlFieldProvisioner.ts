@@ -130,7 +130,7 @@ async function createField(
 ): Promise<string> {
   const body: Record<string, any> = { name, dataType, model };
   if (picklistOptions?.length) {
-    body.picklistOptions = picklistOptions;
+    body.options = picklistOptions;
   }
   const ghl = createGhlClient(token);
   const res = await ghl.post(`/locations/${locationId}/customFields`, body);

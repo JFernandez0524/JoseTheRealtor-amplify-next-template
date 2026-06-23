@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createHmac, timingSafeEqual } from 'crypto';
 import axios from 'axios';
-import { createGhlIntegration, getGhlIntegration } from '@/app/utils/aws/data/ghlIntegration.server';
-import { cookiesClient } from '@/app/utils/aws/auth/amplifyServerUtils.server';
-import { provisionCustomFields, provisionOpportunityFields, provisionCallDispositions } from '@/amplify/functions/shared/ghlFieldProvisioner';
+import { createGhlIntegration } from '@/app/utils/aws/data/ghlIntegration.server';
 
 const GHL_STATE_SECRET = process.env.GHL_STATE_SECRET!;
 const STATE_MAX_AGE_MS = 15 * 60 * 1000; // 15 minutes — enough time for a user to complete OAuth
@@ -144,29 +142,7 @@ export async function GET(req: Request) {
       });
 
       console.log('✅ Tokens stored successfully for user:', userId);
-
-      // Provision custom fields for the new location and store the IDs
-      try {
-        console.log('🔧 Provisioning custom fields for location:', locationId);
-        const [customFieldIds, opportunityFieldIds] = await Promise.all([
-          provisionCustomFields(locationId, access_token),
-          provisionOpportunityFields(locationId, access_token),
-          provisionCallDispositions(locationId, access_token),
-        ]);
-
-        const integration = await getGhlIntegration(userId);
-        if (integration) {
-          await cookiesClient.models.GhlIntegration.update({
-            id: integration.id,
-            customFieldIds: customFieldIds as any,
-            opportunityFieldIds: opportunityFieldIds as any,
-          });
-          console.log('✅ Custom field IDs stored for integration:', integration.id);
-        }
-      } catch (provisionError: any) {
-        // Non-fatal: sync will fall back to auto-provision on first run
-        console.error('⚠️ Field provisioning failed (non-fatal):', provisionError.message);
-      }
+      // Field provisioning happens lazily on first sync via manualGhlSync Lambda
     } catch (storageError) {
       console.error('Error storing tokens:', storageError);
       return NextResponse.redirect('https://leads.josetherealtor.com/oauth/error?error=storage_error');
