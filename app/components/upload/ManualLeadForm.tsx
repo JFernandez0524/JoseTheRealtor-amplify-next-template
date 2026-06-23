@@ -213,28 +213,33 @@ export function ManualLeadForm() {
 
   const handleManualSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!lead.type || !lead.ownerLastName || !lead.ownerAddress || !lead.ownerCity || !lead.ownerState || !lead.ownerZip) {
+    const probateRequired = lead.type === 'PROBATE' && (!lead.adminFirstName || !lead.adminLastName || !lead.adminAddress);
+    if (!lead.type || !lead.ownerLastName || !lead.ownerAddress || probateRequired) {
       return setMessage('❌ Please fill in all required fields (*)');
     }
 
     setLoading(true);
     try {
-      const { phone, ...leadFields } = lead;
-      const { data: newLead, errors } = await client.models.PropertyLead.create(
-        {
-          ...leadFields,
-          phones: phone ? [phone] : [],
-          skipTraceStatus: phone ? 'COMPLETED' : 'PENDING',
-          ghlSyncStatus: 'PENDING',
-          ghlContactId: null,
-          listingStatus: 'off_market',
-          uploadSource: 'manual_entry',
-        }
-      );
+      const res = await fetch('/api/v1/create-manual-lead', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: lead.type,
+          ownerFirstName: lead.ownerFirstName || null,
+          ownerLastName: lead.ownerLastName,
+          phone: lead.phone || null,
+          rawAddress: lead.ownerAddress,
+          adminFirstName: lead.adminFirstName || null,
+          adminLastName: lead.adminLastName || null,
+          rawAdminAddress: lead.adminAddress || null,
+        }),
+      });
 
-      if (errors) throw new Error(errors[0].message);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to create lead');
+
       setMessage('✅ Lead added successfully!');
-      setLead({ type: '', ownerFirstName: '', ownerLastName: '', adminFirstName: '', adminLastName: '', phone: '', ownerAddress: '', ownerCity: '', ownerState: '', ownerZip: '' });
+      setLead({ type: '', ownerFirstName: '', ownerLastName: '', adminFirstName: '', adminLastName: '', phone: '', ownerAddress: '', adminAddress: '' });
     } catch (err: any) {
       setMessage(`❌ Error: ${err.message}`);
     } finally {
@@ -509,39 +514,9 @@ export function ManualLeadForm() {
                 slot='input'
                 placeholder='Start typing a property address...'
                 className='border p-2 w-full rounded'
+                onInput={(e: any) => setLead((prev: any) => ({ ...prev, ownerAddress: e.target.value }))}
               />
             </gmp-place-autocomplete>
-          </div>
-
-          <div className='grid grid-cols-3 gap-2'>
-            <div className='col-span-1 space-y-1'>
-              <label className='text-xs font-bold text-gray-400 uppercase'>City *</label>
-              <input
-                placeholder='Auto-filled or type...'
-                className='border p-2 w-full rounded text-sm'
-                value={lead.ownerCity || ''}
-                onChange={(e) => setLead((prev: any) => ({ ...prev, ownerCity: e.target.value }))}
-              />
-            </div>
-            <div className='space-y-1'>
-              <label className='text-xs font-bold text-gray-400 uppercase'>State *</label>
-              <input
-                placeholder='NJ'
-                maxLength={2}
-                className='border p-2 w-full rounded text-sm'
-                value={lead.ownerState || ''}
-                onChange={(e) => setLead((prev: any) => ({ ...prev, ownerState: e.target.value.toUpperCase() }))}
-              />
-            </div>
-            <div className='space-y-1'>
-              <label className='text-xs font-bold text-gray-400 uppercase'>Zip *</label>
-              <input
-                placeholder='08601'
-                className='border p-2 w-full rounded text-sm'
-                value={lead.ownerZip || ''}
-                onChange={(e) => setLead((prev: any) => ({ ...prev, ownerZip: e.target.value }))}
-              />
-            </div>
           </div>
 
           {lead.type === 'PROBATE' && (
@@ -572,6 +547,7 @@ export function ManualLeadForm() {
                   slot='input'
                   placeholder='Admin Mailing Address'
                   className='border p-2 w-full rounded bg-white'
+                  onInput={(e: any) => setLead((prev: any) => ({ ...prev, adminAddress: e.target.value }))}
                 />
               </gmp-place-autocomplete>
             </div>
