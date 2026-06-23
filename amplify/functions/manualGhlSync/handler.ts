@@ -4,6 +4,7 @@ import { syncToGoHighLevel } from './integrations/gohighlevel';
 import { getValidGhlToken, saveFieldIds } from '../shared/ghlTokenManager';
 import { provisionCustomFields, provisionOpportunityFields } from '../shared/ghlFieldProvisioner';
 import { validateLeadForSync, updateLeadSyncStatus, SyncResult } from '../shared/syncUtils';
+import { filterValidEmails } from '../shared/emailValidator';
 
 const dynamoClient = new DynamoDBClient({ region: process.env.AWS_REGION });
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
@@ -121,8 +122,13 @@ async function processGhlSync(lead: any, groups: string[] = [], ownerId: string 
   }
 
   const phones = lead.phones || [];
-  const emails = lead.emails || [];
-  
+  let emails = lead.emails || [];
+
+  const debounceKey = process.env.DEBOUNCE_API_KEY;
+  if (emails.length && debounceKey) {
+    emails = await filterValidEmails(emails, debounceKey);
+  }
+
   console.log(`📞 Found ${phones.length} phones, ${emails.length} emails:`, { phones, emails });
   
   // ✅ SYNC LEADS WITH PHONES (multiple contacts for multiple phones)

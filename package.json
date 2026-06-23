@@ -8,6 +8,8 @@
     "start": "next start",
     "lint": "next lint",
     "fix-syncs": "tsx scripts/fix-failed-syncs.ts",
+    "validate-emails": "tsx scripts/validate-existing-emails.ts",
+    "validate-ghl-emails": "tsx scripts/validate-ghl-emails.ts",
     "backfill-county": "tsx scripts/backfill-county.ts"
   },
   "dependencies": {

@@ -1,4 +1,4 @@
-import { defineFunction } from '@aws-amplify/backend';
+import { defineFunction, secret } from '@aws-amplify/backend';
 
 // Define the name of the Lambda function resource.
 export const manualGhlSync = defineFunction({
@@ -12,8 +12,7 @@ export const manualGhlSync = defineFunction({
   resourceGroupName: 'data',
   // 2. OAuth tokens are now managed via DynamoDB - no hardcoded secrets needed
   environment: {
-    // OAuth tokens and location IDs are retrieved from GhlIntegration table
-    // No hardcoded secrets required
+    DEBOUNCE_API_KEY: secret('DEBOUNCE_API_KEY'),
   },
 
   // 3. (Optional but Recommended) Increase memory if the GHL sync involves heavy data processing

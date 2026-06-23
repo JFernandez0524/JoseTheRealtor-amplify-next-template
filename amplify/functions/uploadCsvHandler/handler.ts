@@ -41,13 +41,25 @@ const MAX_DUPLICATE_STORE = 100; // max duplicate entries to store in DynamoDB (
 // 🛠️ FORMATTING HELPERS
 // ---------------------------------------------------------
 
+const EMAIL_PATTERN = /\S+@\S+\.\S+/;
+
 const sanitize = (val: any, maxLen = 255): string => {
   if (typeof val !== 'string') return '';
   return val
     .trim()
-    .replace(/<[^>]*>?/gm, '')
+    .replace(/<[^>]*>?/gm, '') // strip HTML/script tags
+    .replace(/\0/g, '')         // strip null bytes
     .substring(0, maxLen);
 };
+
+function detectEmailsInRow(row: Record<string, any>, rowNum: number): { rowNum: number; field: string; value: string } | null {
+  for (const [field, raw] of Object.entries(row)) {
+    if (typeof raw === 'string' && EMAIL_PATTERN.test(raw.trim())) {
+      return { rowNum, field, value: raw.trim().substring(0, 80) };
+    }
+  }
+  return null;
+}
 
 const formatPhoneNumber = (val: any): string | null => {
   const s = sanitize(val, 20).replace(/\D/g, '');
@@ -342,11 +354,37 @@ export const handler: S3Handler = async (event) => {
       );
       
       let totalRows = 0;
-      for await (const _ of countParser) {
+      const emailViolations: { rowNum: number; field: string; value: string }[] = [];
+      for await (const row of countParser) {
         totalRows++;
+        const violation = detectEmailsInRow(row as Record<string, any>, totalRows);
+        if (violation) emailViolations.push(violation);
       }
-      
+
       console.log(`📊 Total rows to process: ${totalRows}`);
+
+      if (emailViolations.length > 0) {
+        const lines = emailViolations.slice(0, 5).map(v => `Row ${v.rowNum} (${v.field}): "${v.value}"`);
+        const extra = emailViolations.length > 5 ? ` …and ${emailViolations.length - 5} more row(s)` : '';
+        const errorMessage =
+          `Upload blocked: email addresses are not allowed in CSV field values. ` +
+          `Please remove all emails from the file and re-upload.\n\n` +
+          `Found in:\n${lines.join('\n')}${extra}`;
+        await docClient.send(new UpdateCommand({
+          TableName: csvUploadJobTableName,
+          Key: { id: jobId },
+          UpdateExpression: 'SET #status = :status, errorMessage = :error, completedAt = :completed, updatedAt = :updated',
+          ExpressionAttributeNames: { '#status': 'status' },
+          ExpressionAttributeValues: {
+            ':status': 'FAILED',
+            ':error': errorMessage,
+            ':completed': new Date().toISOString(),
+            ':updated': new Date().toISOString(),
+          },
+        }));
+        console.log(`❌ Upload rejected: email addresses found in ${emailViolations.length} row(s)`);
+        return;
+      }
       
       // Update job with total rows
       await docClient.send(new UpdateCommand({

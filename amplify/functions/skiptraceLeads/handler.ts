@@ -1,6 +1,7 @@
 import axios, { isAxiosError } from 'axios';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand, UpdateCommand, ScanCommand } from '@aws-sdk/lib-dynamodb';
+import { filterValidEmails } from '../shared/emailValidator';
 
 const dynamoClient = new DynamoDBClient({ region: process.env.AWS_REGION });
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
@@ -8,6 +9,7 @@ const docClient = DynamoDBDocumentClient.from(dynamoClient);
 const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 1000;
 const BATCH_DATA_SERVER_TOKEN = process.env.BATCH_DATA_SERVER_TOKEN;
+const DEBOUNCE_API_KEY = process.env.DEBOUNCE_API_KEY;
 const propertyLeadTableName = process.env.AMPLIFY_DATA_PropertyLead_TABLE_NAME;
 const userAccountTableName = process.env.AMPLIFY_DATA_UserAccount_TABLE_NAME;
 
@@ -537,7 +539,10 @@ export const handler: Handler = async (event) => {
       }
 
       const newPhones = [...new Set([...(lead.phones || []), ...enrichedData.foundPhones])];
-      const newEmails = [...new Set([...(lead.emails || []), ...enrichedData.foundEmails])];
+      const validatedFoundEmails = DEBOUNCE_API_KEY
+        ? await filterValidEmails(enrichedData.foundEmails, DEBOUNCE_API_KEY)
+        : enrichedData.foundEmails;
+      const newEmails = [...new Set([...(lead.emails || []), ...validatedFoundEmails])];
 
       // Get existing history
       const existingHistory = lead.skipTraceHistory || [];
