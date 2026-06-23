@@ -127,10 +127,19 @@ export const handler = async (event: any) => {
       return result;
     }
 
-    // Default to Jose's account for organic leads (no app_user_id)
+    // If no userId in payload, try resolving by locationId
+    if (!userId && locationId) {
+      console.log('⚠️ [WEBHOOK_LAMBDA] No userId — attempting locationId lookup');
+      const { getIntegrationByLocationId } = await import('../shared/ghlTokenManager');
+      const locIntegration = await getIntegrationByLocationId(locationId);
+      if (locIntegration) {
+        userId = locIntegration.userId;
+        console.log(`✅ [WEBHOOK_LAMBDA] Resolved userId ${userId} from locationId`);
+      }
+    }
     if (!userId) {
-      console.log('⚠️ [WEBHOOK_LAMBDA] No userId found - defaulting to Jose\'s account (organic lead)');
-      userId = '44d8f4c8-10c1-7038-744b-271103170819';
+      console.warn('⚠️ [WEBHOOK_LAMBDA] Could not resolve userId — dropping webhook (no tenant match)');
+      return { statusCode: 200, body: JSON.stringify({ message: 'No tenant match found' }) };
     }
 
     // Only require contactId for message handling (not task events)
@@ -242,6 +251,9 @@ export const handler = async (event: any) => {
     const { token } = tokenResult;
     const fieldIds: Record<string, string> = tokenResult.customFieldIds || {};
     const opportunityFieldIds: Record<string, string> = tokenResult.opportunityFieldIds || {};
+    const agentProfile = tokenResult.agentName && tokenResult.agentBrokerage
+      ? { name: tokenResult.agentName, brokerage: tokenResult.agentBrokerage }
+      : undefined;
     console.log('✅ [WEBHOOK_LAMBDA] Got valid GHL token');
 
     // Save sentiment to GHL custom field
@@ -527,6 +539,7 @@ export const handler = async (event: any) => {
       conversationHistory,
       fieldIds,
       opportunityFieldIds,
+      agentProfile,
     });
 
     // PHASE 3: OUTBOUND LOGGING (We just sent AI response)
@@ -793,20 +806,16 @@ async function handleTaskEvent(body: any) {
   
   try {
     const { type, id, assignedToEmail, title, body: taskBody, dueDate, locationId } = body;
-    
-    // Filter: Only sync tasks assigned to the configured user email
-    const targetUserEmail = process.env.GHL_USER_EMAIL;
-    if (!targetUserEmail) {
-      console.log('⚠️ [TASK] GHL_USER_EMAIL not configured - skipping sync');
-      return { statusCode: 200, body: JSON.stringify({ message: 'User email not configured' }) };
+
+    // Resolve tenant by locationId to get per-user calendar settings
+    const { getIntegrationByLocationId } = await import('../shared/ghlTokenManager');
+    const taskIntegration = locationId ? await getIntegrationByLocationId(locationId) : null;
+    if (!taskIntegration) {
+      console.warn('⚠️ [TASK] No integration found for locationId — skipping task sync');
+      return { statusCode: 200, body: JSON.stringify({ message: 'No tenant match for task' }) };
     }
-    
-    if (assignedToEmail !== targetUserEmail) {
-      console.log(`⏭️ [TASK] Task not assigned to target user (${assignedToEmail} !== ${targetUserEmail}) - skipping`);
-      return { statusCode: 200, body: JSON.stringify({ message: 'Task not assigned to target user' }) };
-    }
-    
-    console.log(`✅ [TASK] Task assigned to target user - processing ${type}`);
+
+    console.log(`✅ [TASK] Resolved tenant for locationId ${locationId} - processing ${type}`);
     
     // Import utilities
     const { createCalendarEvent, markEventCompleted } = await import('../shared/googleCalendar');
@@ -816,7 +825,11 @@ async function handleTaskEvent(body: any) {
     const dynamoClient = new DynamoDBClient({ region: process.env.AWS_REGION });
     const docClient = DynamoDBDocumentClient.from(dynamoClient);
     const TASK_SYNC_TABLE = process.env.AMPLIFY_DATA_TaskCalendarSync_TABLE_NAME;
-    const CALENDAR_ID = process.env.GOOGLE_CALENDAR_ID || 'jose.fernandez@josetherealtor.com';
+    const CALENDAR_ID = process.env.GOOGLE_CALENDAR_ID || taskIntegration.agentCalendarEmail || null;
+    if (!CALENDAR_ID) {
+      console.warn('⚠️ [TASK] No GOOGLE_CALENDAR_ID or agentCalendarEmail configured for this tenant — skipping calendar sync');
+      return { statusCode: 200, body: JSON.stringify({ message: 'Calendar not configured for this tenant' }) };
+    }
     
     if (!TASK_SYNC_TABLE) {
       throw new Error('TaskCalendarSync table name not configured');
@@ -831,7 +844,7 @@ async function handleTaskEvent(body: any) {
           title, 
           body: taskBody, 
           dueDate,
-          assignedToEmail: assignedToEmail || 'jose.fernandez@josetherealtor.com'
+          assignedToEmail: assignedToEmail || undefined
         },
         CALENDAR_ID
       );

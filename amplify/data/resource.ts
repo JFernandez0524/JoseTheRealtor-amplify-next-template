@@ -100,6 +100,10 @@ const schema = a.schema({
       lastDayReset: a.datetime(),
       customFieldIds: a.json(),      // Record<string, string> semantic-key → GHL contact field ID per location
       opportunityFieldIds: a.json(), // Record<string, string> semantic-key → GHL opportunity field ID per location
+      // 🧑 AGENT PROFILE (for multi-tenant identity in outreach messages)
+      agentName: a.string(),         // Full name shown in SMS/email, e.g. "Jane Smith"
+      agentBrokerage: a.string(),    // Brokerage shown in SMS/email, e.g. "Keller Williams"
+      agentCalendarEmail: a.string(), // Google Calendar email for AI-booked appointments (optional)
     })
     .authorization((allow) => [
       allow.owner().to(['create', 'read', 'update', 'delete']),

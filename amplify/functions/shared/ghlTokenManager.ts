@@ -30,6 +30,9 @@ type GhlIntegration = {
   isActive: boolean;
   customFieldIds: Record<string, string> | null;
   opportunityFieldIds: Record<string, string> | null;
+  agentName?: string;
+  agentBrokerage?: string;
+  agentCalendarEmail?: string;
 };
 
 export type GhlTokenResult = {
@@ -38,6 +41,9 @@ export type GhlTokenResult = {
   integrationId: string;
   customFieldIds: Record<string, string> | null;
   opportunityFieldIds: Record<string, string> | null;
+  agentName: string | null;
+  agentBrokerage: string | null;
+  agentCalendarEmail: string | null;
 };
 
 /**
@@ -82,6 +88,9 @@ export async function getValidGhlToken(userId: string): Promise<GhlTokenResult |
         integrationId: integration.id,
         customFieldIds: integration.customFieldIds || null,
         opportunityFieldIds: integration.opportunityFieldIds || null,
+        agentName: integration.agentName || null,
+        agentBrokerage: integration.agentBrokerage || null,
+        agentCalendarEmail: integration.agentCalendarEmail || null,
       };
     }
 
@@ -138,6 +147,9 @@ export async function getValidGhlToken(userId: string): Promise<GhlTokenResult |
         integrationId: integration.id,
         customFieldIds: integration.customFieldIds || null,
         opportunityFieldIds: integration.opportunityFieldIds || null,
+        agentName: integration.agentName || null,
+        agentBrokerage: integration.agentBrokerage || null,
+        agentCalendarEmail: integration.agentCalendarEmail || null,
       };
     } catch (refreshError: any) {
       // Log the actual GHL error response
@@ -183,6 +195,9 @@ export async function getValidGhlToken(userId: string): Promise<GhlTokenResult |
               integrationId: updated.id,
               customFieldIds: updated.customFieldIds || null,
               opportunityFieldIds: updated.opportunityFieldIds || null,
+              agentName: updated.agentName || null,
+              agentBrokerage: updated.agentBrokerage || null,
+              agentCalendarEmail: updated.agentCalendarEmail || null,
             };
           }
         }
@@ -204,6 +219,9 @@ export type IntegrationByLocationResult = {
   integrationId: string;
   customFieldIds: Record<string, string> | null;
   opportunityFieldIds: Record<string, string> | null;
+  agentName: string | null;
+  agentBrokerage: string | null;
+  agentCalendarEmail: string | null;
 };
 
 /**
@@ -245,6 +263,9 @@ export async function getIntegrationByLocationId(locationId: string): Promise<In
       integrationId: integration.id,
       customFieldIds: integration.customFieldIds || null,
       opportunityFieldIds: integration.opportunityFieldIds || null,
+      agentName: integration.agentName || null,
+      agentBrokerage: integration.agentBrokerage || null,
+      agentCalendarEmail: integration.agentCalendarEmail || null,
     };
   } catch (error: any) {
     console.error(`❌ [TOKEN_MANAGER] Failed to get integration for locationId ${locationId}:`, error.message);

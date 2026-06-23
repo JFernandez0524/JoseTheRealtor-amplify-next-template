@@ -89,12 +89,8 @@ export const handler = async (event: any) => {
       userId: item.userId.S!,
       locationId: item.locationId.S!,
       accessToken: item.accessToken.S!,
-      campaignEmail: 'jose.fernandez@contact.josetherealtor.com', // GHL verified domain
-      emailSignature: item.emailSignature?.S || `
-Jose Fernandez
-RE/MAX Homeland Realtors
-(732) 810-0182
-`, // Get email signature from DynamoDB or use default
+      campaignEmail: item.campaignEmail?.S || undefined,
+      emailSignature: item.emailSignature?.S || undefined,
     }));
 
     console.log(`Found ${integrations.length} active integrations`);

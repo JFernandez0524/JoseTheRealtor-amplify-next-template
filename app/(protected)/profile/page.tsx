@@ -8,6 +8,7 @@ import {
 } from '@/app/utils/aws/auth/amplifyServerUtils.server';
 import GhlSettingsCard from '@/app/components/profile/GhlSettingsCard';
 import GhlCampaignSettings from '@/app/components/profile/GhlCampaignSettings';
+import AgentProfileSettings from '@/app/components/profile/AgentProfileSettings';
 import EmailTemplateSettings from '@/app/components/profile/EmailTemplateSettings';
 
 import {
@@ -156,7 +157,10 @@ export default async function ProfilePage() {
           
           {/* GHL Campaign Settings (Phone, Email, Signature) */}
           <GhlCampaignSettings />
-          
+
+          {/* Agent Profile (name/brokerage for outreach messages) */}
+          <AgentProfileSettings />
+
           {/* Email Template Settings Card */}
           {ghlIntegration && (
             <EmailTemplateSettings 

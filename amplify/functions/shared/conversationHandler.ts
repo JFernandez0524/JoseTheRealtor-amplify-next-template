@@ -62,6 +62,7 @@ interface ConversationContext {
   motivation?: string;
   fieldIds?: Record<string, string>;         // Custom contact field IDs for this location
   opportunityFieldIds?: Record<string, string>; // Custom opportunity field IDs for this location
+  agentProfile?: { name: string; brokerage: string }; // Per-user identity for outreach messages
 }
 
 interface PropertyAnalysis {
@@ -352,22 +353,27 @@ async function generateOpenAIResponse(context: ConversationContext, propertyData
   const isFollowUp = context.incomingMessage?.startsWith('follow_up_touch_');
   const touchNumber = isFollowUp ? parseInt(context.incomingMessage.split('_')[3]) : 1;
   
+  // Resolve per-user agent identity with safe fallbacks
+  const agentFullName = context.agentProfile?.name || 'your agent';
+  const agentFirstName = agentFullName.split(' ')[0];
+  const agentBrokerage = context.agentProfile?.brokerage || 'our brokerage';
+
   // 🛑 HARD-CODED TEMPLATES: Do not let AI generate these
   // Return exact compliance-approved messages for all touches
   if (isInitialOutreach || isFollowUp) {
     const firstName = context.contactName.split(' ')[0];
-    const streetName = context.propertyAddress 
-      ? context.propertyAddress.split(',')[0].replace(/^\d+\s+/, '') 
+    const streetName = context.propertyAddress
+      ? context.propertyAddress.split(',')[0].replace(/^\d+\s+/, '')
       : 'your street';
 
     const templates: Record<number, string> = {
-      1: `Hi ${firstName}, this is Jose with RE/MAX. I'm reaching out based on public information about a property on ${streetName} — just wanted to confirm whether it's something you're planning to sell or keep. Reply STOP to opt out.`,
-      2: `Hi ${firstName}, Jose from RE/MAX here. Just wanted to see if you got my last text about the property. Still a good time to talk?`,
-      3: `Hi ${firstName}, Jose again. I've been working with a few families in your area lately. Would love to share what I'm seeing in the market if you're curious. Reply STOP to opt out.`,
+      1: `Hi ${firstName}, this is ${agentFirstName} with ${agentBrokerage}. I'm reaching out based on public information about a property on ${streetName} — just wanted to confirm whether it's something you're planning to sell or keep. Reply STOP to opt out.`,
+      2: `Hi ${firstName}, ${agentFirstName} from ${agentBrokerage} here. Just wanted to see if you got my last text about the property. Still a good time to talk?`,
+      3: `Hi ${firstName}, ${agentFirstName} again. I've been working with a few families in your area lately. Would love to share what I'm seeing in the market if you're curious. Reply STOP to opt out.`,
       4: `${firstName}, quick question — if you were to move forward, would you prefer a fast cash offer or taking time to list for top dollar? Just want to know which direction makes sense for you.`,
       5: `${firstName}, I'm looking for one more property in your area this month. If you're open to discussing options, let me know soon. Otherwise, no worries!`,
       6: `${firstName}, I haven't heard back so I'll assume you aren't interested right now. I'll take you off my list. Best of luck with everything!`,
-      7: `Last try, ${firstName}! Keeping your info on file in case things change down the road. Feel free to reach out anytime. - Jose`
+      7: `Last try, ${firstName}! Keeping your info on file in case things change down the road. Feel free to reach out anytime. - ${agentFirstName}`
     };
 
     const message = templates[touchNumber] || templates[1];
@@ -380,7 +386,7 @@ async function generateOpenAIResponse(context: ConversationContext, propertyData
   const hasAddressForState = !!(context.propertyAddress && context.propertyCity && context.propertyState);
   const calculatedNextState = nextState ?? getNextState(calculatedCurrentState, context.incomingMessage, hasAddressForState, context.leadIntent);
 
-  const systemPrompt = `You are an AI assistant helping Jose Fernandez, a licensed real estate agent at RE/MAX Homeland Realtors.
+  const systemPrompt = `You are an AI assistant helping ${agentFullName}, a licensed real estate agent at ${agentBrokerage}.
 
 📱 COMMUNICATION PREFERENCE OVERRIDE (HIGHEST PRIORITY):
 
@@ -417,9 +423,9 @@ DO NOT:
 Just answer directly and stop. Trust must be restored before continuing.
 
 COMPLIANCE RULES (CRITICAL):
-1. IDENTIFY AS AI: Only if asked directly ("Are you a bot?", "Is this automated?"). Otherwise, represent Jose naturally.
+1. IDENTIFY AS AI: Only if asked directly ("Are you a bot?", "Is this automated?"). Otherwise, represent ${agentFirstName} naturally.
 2. NO LEGAL/FINANCIAL ADVICE: Never give tax, legal, or financial advice
-3. HUMAN HANDOFF: Complex questions → "Let me connect you with Jose directly"
+3. HUMAN HANDOFF: Complex questions → "Let me connect you with ${agentFirstName} directly"
 4. DISCLAIMERS: Property values are estimates only, not appraisals
 5. ALREADY LISTED PROPERTIES: If they mention working with another realtor or property being listed, IMMEDIATELY exit gracefully
 6. NEVER REPEAT FULL ADDRESS: After initial outreach, do not repeat the full property address unless the user mentions it first

@@ -178,9 +178,8 @@ export async function syncToGoHighLevel(
     if (lead.skipTraceStatus === 'COMPLETED') {
       tags.push('Data:SkipTraced'); // Phone/email from skip trace
       
-      // 🤖 AI OUTREACH - Only skip traced leads with EMAIL addresses (AI plan users + specific admin)
-      const allowedAdminId = '44d8f4c8-10c1-7038-744b-271103170819';
-      const isAllowedUser = isAIPlan || (isAdmin && userId === allowedAdminId);
+      // 🤖 AI OUTREACH - Only skip traced leads with EMAIL addresses (AI plan users or admins)
+      const isAllowedUser = isAIPlan || isAdmin;
       if (isAllowedUser && primaryEmail) {
         tags.push('ai outreach'); // Enable AI email outreach (EMAIL ONLY - requires email address)
       }
@@ -402,7 +401,11 @@ async function sendInitialProspectingEmail(
   try {
     // Get user's email from location settings
     const locationResponse = await ghl.get(`/locations/${locationId}`);
-    const fromEmail = locationResponse.data.location?.email || 'jose.fernandez@josetherealtor.com';
+    const fromEmail = locationResponse.data.location?.email;
+    if (!fromEmail) {
+      console.warn('[GHL_SYNC] No location email found — skipping prospecting email send');
+      return;
+    }
     
     const propertyAddress = `${lead.ownerAddress}, ${lead.ownerCity}, ${lead.ownerState} ${lead.ownerZip}`;
     const zestimate = lead.zestimate || lead.estimatedValue || 0;
@@ -433,8 +436,7 @@ async function sendInitialProspectingEmail(
       <p>Would you be open to a quick conversation about your options?</p>
       
       <p>Best regards,<br>
-      Jose Fernandez<br>
-      RE/MAX Agent</p>
+      Your Agent</p>
     `;
     
     // Send to all email addresses
