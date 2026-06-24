@@ -125,7 +125,7 @@ export function ManualLeadForm() {
 
       if (ownerContainerRef.current && !ownerContainerRef.current.hasChildNodes()) {
         const el = new G.PlaceAutocompleteElement({
-          includedPrimaryTypes: ['address'],
+          includedPrimaryTypes: ['street_address'],
           includedRegionCodes: ['us'],
         });
         ownerContainerRef.current.appendChild(el);
@@ -154,7 +154,7 @@ export function ManualLeadForm() {
 
       if (adminContainerRef.current && !adminContainerRef.current.hasChildNodes()) {
         const el = new G.PlaceAutocompleteElement({
-          includedPrimaryTypes: ['address'],
+          includedPrimaryTypes: ['street_address'],
           includedRegionCodes: ['us'],
         });
         adminContainerRef.current.appendChild(el);
