@@ -43,8 +43,10 @@ export function ManualLeadForm() {
     phone: '',
   });
 
-  const ownerInputRef = useRef<HTMLInputElement>(null);
-  const adminInputRef = useRef<HTMLInputElement>(null);
+  const ownerContainerRef = useRef<HTMLDivElement>(null);
+  const adminContainerRef = useRef<HTMLDivElement>(null);
+  const ownerAddressRef = useRef<string>('');
+  const adminAddressRef = useRef<string>('');
 
   const parseFilePreview = async (selectedFile: File) => {
     setCsvPreview({ rowCount: 0, duplicateCount: 0, loading: true });
@@ -105,80 +107,69 @@ export function ManualLeadForm() {
     window.URL.revokeObjectURL(url);
   };
 
-  const parseGoogleAddress = (place: google.maps.places.PlaceResult) => {
-    const components: { [key: string]: string } = {};
-    place.address_components?.forEach((comp) => {
-      const type = comp.types[0];
-      components[type] = comp.long_name;
-    });
-    return {
-      street:
-        `${components.street_number || ''} ${components.route || ''}`.trim(),
-      city:
-        components.locality ||
-        components.sublocality ||
-        components.administrative_area_level_2 ||
-        '',
-      state: components.administrative_area_level_1 || '',
-      zip: components.postal_code || '',
-    };
-  };
-
-  // Initialize Google Places Autocomplete on the plain input refs once Maps API is loaded.
-  // Retries every 200ms until window.google.maps.places is available (script loads async).
+  // Initialize PlaceAutocompleteElement (new Places API) once Maps loads.
+  // Retries every 200ms — PlaceAutocompleteElement requires Places API (New) enabled in GCP.
   useEffect(() => {
     if (mode !== 'manual') return;
 
     let cancelled = false;
     let retries = 0;
 
-    const init = () => {
+    const init = async () => {
       if (cancelled) return;
-      if (!(window as any).google?.maps?.places?.Autocomplete) {
+      const G = (window as any).google?.maps?.places;
+      if (!G?.PlaceAutocompleteElement) {
         if (retries++ < 50) setTimeout(init, 200);
         return;
       }
 
-      const G = (window as any).google.maps.places;
-
-      if (ownerInputRef.current && !(ownerInputRef.current as any).__acInit) {
-        (ownerInputRef.current as any).__acInit = true;
-        const ac = new G.Autocomplete(ownerInputRef.current, {
-          types: ['address'],
-          componentRestrictions: { country: 'us' },
+      if (ownerContainerRef.current && !ownerContainerRef.current.hasChildNodes()) {
+        const el = new G.PlaceAutocompleteElement({
+          includedPrimaryTypes: ['address'],
+          includedRegionCodes: ['us'],
         });
-        ac.addListener('place_changed', async () => {
-          const place = ac.getPlace();
-          if (!place?.address_components) return;
-          const parsed = parseGoogleAddress(place);
+        ownerContainerRef.current.appendChild(el);
+        el.addEventListener('gmp-select', async (event: any) => {
+          const place = event.placePrediction.toPlace();
+          await place.fetchFields({ fields: ['formattedAddress', 'addressComponents', 'location'] });
+          ownerAddressRef.current = place.formattedAddress ?? '';
           try {
+            const comps: Record<string, string> = {};
+            place.addressComponents?.forEach((c: any) => { comps[c.types[0]] = c.longText; });
             const res = await fetch('/api/v1/enrich-manual-lead', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ address: parsed.street, city: parsed.city, state: parsed.state, zip: parsed.zip }),
+              body: JSON.stringify({
+                address: `${comps.street_number ?? ''} ${comps.route ?? ''}`.trim(),
+                city: comps.locality || comps.administrative_area_level_2 || '',
+                state: comps.administrative_area_level_1 || '',
+                zip: comps.postal_code || '',
+              }),
             });
             const data = await res.json();
-            if (data.success) {
-              setMessage(`✅ Address validated. Zestimate: ${data.zestimate ? `$${data.zestimate.toLocaleString()}` : 'N/A'}`);
-            }
+            if (data.success) setMessage(`✅ Address validated. Zestimate: ${data.zestimate ? `$${data.zestimate.toLocaleString()}` : 'N/A'}`);
           } catch {}
         });
       }
 
-      if (adminInputRef.current && !(adminInputRef.current as any).__acInit) {
-        (adminInputRef.current as any).__acInit = true;
-        new G.Autocomplete(adminInputRef.current, {
-          types: ['address'],
-          componentRestrictions: { country: 'us' },
+      if (adminContainerRef.current && !adminContainerRef.current.hasChildNodes()) {
+        const el = new G.PlaceAutocompleteElement({
+          includedPrimaryTypes: ['address'],
+          includedRegionCodes: ['us'],
+        });
+        adminContainerRef.current.appendChild(el);
+        el.addEventListener('gmp-select', async (event: any) => {
+          const place = event.placePrediction.toPlace();
+          await place.fetchFields({ fields: ['formattedAddress'] });
+          adminAddressRef.current = place.formattedAddress ?? '';
         });
       }
     };
 
-    // Load Maps script if not already present
     if (!(window as any).google?.maps) {
       if (!document.querySelector('script[src*="maps.googleapis.com"]')) {
         const script = document.createElement('script');
-        script.src = `https://maps.googleapis.com/maps/api/js?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}&libraries=places`;
+        script.src = `https://maps.googleapis.com/maps/api/js?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}&libraries=places&loading=async`;
         script.async = true;
         document.head.appendChild(script);
       }
@@ -191,8 +182,8 @@ export function ManualLeadForm() {
   const handleManualSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    const rawAddress = ownerInputRef.current?.value?.trim() || '';
-    const rawAdminAddress = adminInputRef.current?.value?.trim() || '';
+    const rawAddress = ownerAddressRef.current.trim();
+    const rawAdminAddress = adminAddressRef.current.trim();
 
     const probateRequired = lead.type === 'PROBATE' && (!lead.adminFirstName || !lead.adminLastName || !rawAdminAddress);
     if (!lead.type || !lead.ownerLastName || !rawAddress || probateRequired) {
@@ -220,7 +211,9 @@ export function ManualLeadForm() {
       if (!res.ok) throw new Error(data.error || 'Failed to create lead');
 
       setMessage('✅ Lead added successfully!');
-      setLead({ type: '', ownerFirstName: '', ownerLastName: '', adminFirstName: '', adminLastName: '', phone: '', ownerAddress: '', adminAddress: '' });
+      ownerAddressRef.current = '';
+      adminAddressRef.current = '';
+      setLead({ type: '', ownerFirstName: '', ownerLastName: '', adminFirstName: '', adminLastName: '', phone: '' });
     } catch (err: any) {
       setMessage(`❌ Error: ${err.message}`);
     } finally {
@@ -490,12 +483,7 @@ export function ManualLeadForm() {
             <label className='text-xs font-bold text-gray-400 uppercase'>
               Property Address *
             </label>
-            <input
-              ref={ownerInputRef}
-              placeholder='Start typing a property address...'
-              className='border p-2 w-full rounded'
-              autoComplete='off'
-            />
+            <div ref={ownerContainerRef} className='border rounded overflow-hidden' />
           </div>
 
           {lead.type === 'PROBATE' && (
@@ -521,12 +509,7 @@ export function ManualLeadForm() {
                   }
                 />
               </div>
-              <input
-                ref={adminInputRef}
-                placeholder='Admin Mailing Address'
-                className='border p-2 w-full rounded bg-white'
-                autoComplete='off'
-              />
+              <div ref={adminContainerRef} className='border rounded overflow-hidden' />
             </div>
           )}
 
