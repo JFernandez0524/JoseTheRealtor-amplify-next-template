@@ -43,18 +43,8 @@ export function ManualLeadForm() {
     phone: '',
   });
 
-  const ownerRef = useRef<any>(null);
-  const adminRef = useRef<any>(null);
-
-  useEffect(() => {
-    // Load Google Maps API if not already loaded
-    if (!window.google && !document.querySelector('script[src*="maps.googleapis.com"]')) {
-      const script = document.createElement('script');
-      script.src = `https://maps.googleapis.com/maps/api/js?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}&libraries=places&loading=async`;
-      script.async = true;
-      document.head.appendChild(script);
-    }
-  }, []);
+  const ownerInputRef = useRef<HTMLInputElement>(null);
+  const adminInputRef = useRef<HTMLInputElement>(null);
 
   const parseFilePreview = async (selectedFile: File) => {
     setCsvPreview({ rowCount: 0, duplicateCount: 0, loading: true });
@@ -134,90 +124,75 @@ export function ManualLeadForm() {
     };
   };
 
+  // Initialize Google Places Autocomplete on the plain input refs once Maps API is loaded.
+  // Retries every 200ms until window.google.maps.places is available (script loads async).
   useEffect(() => {
     if (mode !== 'manual') return;
 
-    const handleOwnerSelect = async (e: any) => {
-      const place = e.detail.place;
-      if (place?.address_components) {
-        const parsed = parseGoogleAddress(place);
-        const address = place.formatted_address || parsed.street;
-        
-        setLead((prev: any) => ({
-          ...prev,
-          ownerAddress: address,
-          ownerCity: parsed.city,
-          ownerState: parsed.state,
-          ownerZip: parsed.zip,
-          latitude: place.geometry?.location?.lat(),
-          longitude: place.geometry?.location?.lng(),
-        }));
+    let cancelled = false;
+    let retries = 0;
 
-        // Enrich with validation and Zestimate
-        try {
-          const response = await fetch('/api/v1/enrich-manual-lead', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              address: parsed.street,
-              city: parsed.city,
-              state: parsed.state,
-              zip: parsed.zip,
-            }),
-          });
+    const init = () => {
+      if (cancelled) return;
+      if (!(window as any).google?.maps?.places?.Autocomplete) {
+        if (retries++ < 50) setTimeout(init, 200);
+        return;
+      }
 
-          const data = await response.json();
-          
-          if (data.success) {
-            setLead((prev: any) => ({
-              ...prev,
-              standardizedAddress: data.standardizedAddress,
-              latitude: data.latitude,
-              longitude: data.longitude,
-              zestimate: data.zestimate,
-              zillowZpid: data.zpid,
-              validationStatus: 'VALID',
-            }));
-            setMessage(`✅ Address validated. Zestimate: ${data.zestimate ? `$${data.zestimate.toLocaleString()}` : 'N/A'}`);
-          }
-        } catch (error) {
-          console.error('Enrichment failed:', error);
-        }
+      const G = (window as any).google.maps.places;
+
+      if (ownerInputRef.current && !(ownerInputRef.current as any).__acInit) {
+        (ownerInputRef.current as any).__acInit = true;
+        const ac = new G.Autocomplete(ownerInputRef.current, {
+          types: ['address'],
+          componentRestrictions: { country: 'us' },
+        });
+        ac.addListener('place_changed', async () => {
+          const place = ac.getPlace();
+          if (!place?.address_components) return;
+          const parsed = parseGoogleAddress(place);
+          try {
+            const res = await fetch('/api/v1/enrich-manual-lead', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ address: parsed.street, city: parsed.city, state: parsed.state, zip: parsed.zip }),
+            });
+            const data = await res.json();
+            if (data.success) {
+              setMessage(`✅ Address validated. Zestimate: ${data.zestimate ? `$${data.zestimate.toLocaleString()}` : 'N/A'}`);
+            }
+          } catch {}
+        });
+      }
+
+      if (adminInputRef.current && !(adminInputRef.current as any).__acInit) {
+        (adminInputRef.current as any).__acInit = true;
+        new G.Autocomplete(adminInputRef.current, {
+          types: ['address'],
+          componentRestrictions: { country: 'us' },
+        });
       }
     };
 
-    const handleAdminSelect = (e: any) => {
-      const place = e.detail.place;
-      if (place?.address_components) {
-        const parsed = parseGoogleAddress(place);
-        setLead((prev: any) => ({
-          ...prev,
-          adminAddress: place.formatted_address || parsed.street,
-          adminCity: parsed.city,
-          adminState: parsed.state,
-          adminZip: parsed.zip,
-        }));
+    // Load Maps script if not already present
+    if (!(window as any).google?.maps) {
+      if (!document.querySelector('script[src*="maps.googleapis.com"]')) {
+        const script = document.createElement('script');
+        script.src = `https://maps.googleapis.com/maps/api/js?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}&libraries=places`;
+        script.async = true;
+        document.head.appendChild(script);
       }
-    };
+    }
 
-    const ownerEl = ownerRef.current;
-    const adminEl = adminRef.current;
-    ownerEl?.addEventListener('gmp-places-select', handleOwnerSelect);
-    adminEl?.addEventListener('gmp-places-select', handleAdminSelect);
-
-    return () => {
-      ownerEl?.removeEventListener('gmp-places-select', handleOwnerSelect);
-      adminEl?.removeEventListener('gmp-places-select', handleAdminSelect);
-    };
+    init();
+    return () => { cancelled = true; };
   }, [mode]);
 
   const handleManualSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Read address values directly from the DOM at submit time — onInput on slotted Web Component
-    // inputs doesn't fire when the picker sets the value programmatically after a selection.
-    const rawAddress = ownerRef.current?.querySelector('input')?.value || lead.ownerAddress || '';
-    const rawAdminAddress = adminRef.current?.querySelector('input')?.value || lead.adminAddress || '';
+    const rawAddress = ownerInputRef.current?.value?.trim() || '';
+    const rawAdminAddress = adminInputRef.current?.value?.trim() || '';
 
     const probateRequired = lead.type === 'PROBATE' && (!lead.adminFirstName || !lead.adminLastName || !rawAdminAddress);
     if (!lead.type || !lead.ownerLastName || !rawAddress || probateRequired) {
@@ -515,14 +490,12 @@ export function ManualLeadForm() {
             <label className='text-xs font-bold text-gray-400 uppercase'>
               Property Address *
             </label>
-            <gmp-place-autocomplete ref={ownerRef}>
-              <input
-                slot='input'
-                placeholder='Start typing a property address...'
-                className='border p-2 w-full rounded'
-                onInput={(e: any) => setLead((prev: any) => ({ ...prev, ownerAddress: e.target.value }))}
-              />
-            </gmp-place-autocomplete>
+            <input
+              ref={ownerInputRef}
+              placeholder='Start typing a property address...'
+              className='border p-2 w-full rounded'
+              autoComplete='off'
+            />
           </div>
 
           {lead.type === 'PROBATE' && (
@@ -548,14 +521,12 @@ export function ManualLeadForm() {
                   }
                 />
               </div>
-              <gmp-place-autocomplete ref={adminRef}>
-                <input
-                  slot='input'
-                  placeholder='Admin Mailing Address'
-                  className='border p-2 w-full rounded bg-white'
-                  onInput={(e: any) => setLead((prev: any) => ({ ...prev, adminAddress: e.target.value }))}
-                />
-              </gmp-place-autocomplete>
+              <input
+                ref={adminInputRef}
+                placeholder='Admin Mailing Address'
+                className='border p-2 w-full rounded bg-white'
+                autoComplete='off'
+              />
             </div>
           )}
 
