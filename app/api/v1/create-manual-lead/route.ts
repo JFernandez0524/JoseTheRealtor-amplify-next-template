@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { AuthGetCurrentUserServer } from '@/app/utils/aws/auth/amplifyServerUtils.server';
-import { validateAddressWithGoogle } from '@/app/utils/google.server';
 import { analyzeBridgeProperty } from '@/app/utils/bridge.server';
 import { createLead } from '@/app/utils/aws/data/lead.server';
 
@@ -11,47 +10,30 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { type, ownerFirstName, ownerLastName, phone, rawAddress, adminFirstName, adminLastName, rawAdminAddress } = await request.json();
+    const { type, ownerFirstName, ownerLastName, phone, ownerAddr, adminFirstName, adminLastName, adminAddr } = await request.json();
 
-    if (!type || !rawAddress || !ownerLastName) {
-      return NextResponse.json({ error: 'type, ownerLastName, and rawAddress are required' }, { status: 400 });
+    if (!type || !ownerAddr || !ownerLastName) {
+      return NextResponse.json({ error: 'type, ownerLastName, and ownerAddr are required' }, { status: 400 });
     }
 
-    if (type === 'PROBATE' && (!adminFirstName || !adminLastName || !rawAdminAddress)) {
-      return NextResponse.json({ error: 'adminFirstName, adminLastName, and rawAdminAddress are required for Probate leads' }, { status: 400 });
+    if (type === 'PROBATE' && (!adminFirstName || !adminLastName || !adminAddr)) {
+      return NextResponse.json({ error: 'adminFirstName, adminLastName, and adminAddr are required for Probate leads' }, { status: 400 });
     }
 
-    // Parse and validate the owner address
-    const ownerValidation = await validateAddressWithGoogle(rawAddress);
-    if (!ownerValidation.success) {
-      return NextResponse.json({ error: 'Could not validate property address. Please try a more specific address.' }, { status: 400 });
-    }
-
-    const { components, location, formattedAddress } = ownerValidation;
-
-    // Parse admin address for Probate leads
-    let adminComponents: typeof components | null = null;
-    if (type === 'PROBATE' && rawAdminAddress) {
-      const adminValidation = await validateAddressWithGoogle(rawAdminAddress);
-      if (adminValidation.success) {
-        adminComponents = adminValidation.components;
-      }
-    }
-
-    // Fetch Zestimate — fail open (don't block lead creation if Bridge API is down)
+    // Address components come pre-parsed from Places API on the client — no server re-validation needed
     let zestimate: number | null = null;
     let zillowZpid: string | null = null;
-    let latitude: number | null = location?.lat ?? null;
-    let longitude: number | null = location?.lng ?? null;
+    const latitude: number | null = ownerAddr.lat ?? null;
+    const longitude: number | null = ownerAddr.lng ?? null;
 
     try {
       const propertyData = await analyzeBridgeProperty({
-        street: components.street,
-        city: components.city,
-        state: components.state,
-        zip: components.zip,
-        lat: location?.lat,
-        lng: location?.lng,
+        street: ownerAddr.street,
+        city: ownerAddr.city,
+        state: ownerAddr.state,
+        zip: ownerAddr.zip,
+        lat: ownerAddr.lat,
+        lng: ownerAddr.lng,
       });
 
       if (propertyData.success && propertyData.valuation) {
@@ -62,19 +44,16 @@ export async function POST(request: NextRequest) {
       console.error('Zestimate fetch failed (non-fatal):', error);
     }
 
-    // CreateLeadInput inherits doorKnockQueue from the Amplify schema type (hasMany connection)
-    // but it's not a field we can set at create time — cast to satisfy the type
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const lead = await createLead({
       type,
       ownerFirstName: ownerFirstName || null,
       ownerLastName,
-      ownerAddress: components.street || formattedAddress,
-      ownerCity: components.city,
-      ownerState: components.state,
-      ownerZip: components.zip,
-      ownerCounty: components.county || null,
-      standardizedAddress: formattedAddress as any,
+      ownerAddress: ownerAddr.street || ownerAddr.formattedAddress,
+      ownerCity: ownerAddr.city,
+      ownerState: ownerAddr.state,
+      ownerZip: ownerAddr.zip,
+      ownerCounty: ownerAddr.county || null,
+      standardizedAddress: ownerAddr.formattedAddress as any,
       latitude: latitude ?? undefined,
       longitude: longitude ?? undefined,
       zestimate: zestimate ?? undefined,
@@ -86,13 +65,13 @@ export async function POST(request: NextRequest) {
       listingStatus: 'off_market',
       uploadSource: 'manual_entry',
       validationStatus: 'VALID',
-      ...(adminComponents && {
+      ...(adminAddr && {
         adminFirstName: adminFirstName || null,
         adminLastName: adminLastName || null,
-        adminAddress: adminComponents.street,
-        adminCity: adminComponents.city,
-        adminState: adminComponents.state,
-        adminZip: adminComponents.zip,
+        adminAddress: adminAddr.street,
+        adminCity: adminAddr.city,
+        adminState: adminAddr.state,
+        adminZip: adminAddr.zip,
       }),
     } as any);
 

@@ -48,8 +48,14 @@ export function ManualLeadForm() {
 
   const ownerContainerRef = useRef<HTMLDivElement>(null);
   const adminContainerRef = useRef<HTMLDivElement>(null);
-  const ownerAddressRef = useRef<string>('');
-  const adminAddressRef = useRef<string>('');
+  const ownerAddressRef = useRef<{
+    formattedAddress: string; street: string; city: string;
+    state: string; zip: string; county: string;
+    lat: number | null; lng: number | null;
+  } | null>(null);
+  const adminAddressRef = useRef<{
+    formattedAddress: string; street: string; city: string; state: string; zip: string;
+  } | null>(null);
 
   const parseFilePreview = async (selectedFile: File) => {
     setCsvPreview({ rowCount: 0, duplicateCount: 0, loading: true });
@@ -124,19 +130,24 @@ export function ManualLeadForm() {
       el.addEventListener('gmp-select', async (event: any) => {
         const place = event.placePrediction.toPlace();
         await place.fetchFields({ fields: ['formattedAddress', 'addressComponents', 'location'] });
-        ownerAddressRef.current = place.formattedAddress ?? '';
+        const comps: Record<string, string> = {};
+        place.addressComponents?.forEach((c: any) => { comps[c.types[0]] = c.longText; });
+        const street = `${comps.street_number ?? ''} ${comps.route ?? ''}`.trim();
+        const city = comps.locality || comps.administrative_area_level_3 || '';
+        const state = comps.administrative_area_level_1 || '';
+        const zip = comps.postal_code || '';
+        const county = comps.administrative_area_level_2 || '';
+        ownerAddressRef.current = {
+          formattedAddress: place.formattedAddress ?? '',
+          street, city, state, zip, county,
+          lat: place.location?.lat() ?? null,
+          lng: place.location?.lng() ?? null,
+        };
         try {
-          const comps: Record<string, string> = {};
-          place.addressComponents?.forEach((c: any) => { comps[c.types[0]] = c.longText; });
           const res = await fetch('/api/v1/enrich-manual-lead', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              address: `${comps.street_number ?? ''} ${comps.route ?? ''}`.trim(),
-              city: comps.locality || comps.administrative_area_level_2 || '',
-              state: comps.administrative_area_level_1 || '',
-              zip: comps.postal_code || '',
-            }),
+            body: JSON.stringify({ address: street, city, state, zip }),
           });
           const data = await res.json();
           if (data.success) setMessage(`✅ Address validated. Zestimate: ${data.zestimate ? `$${data.zestimate.toLocaleString()}` : 'N/A'}`);
@@ -149,8 +160,16 @@ export function ManualLeadForm() {
       adminContainerRef.current.appendChild(el);
       el.addEventListener('gmp-select', async (event: any) => {
         const place = event.placePrediction.toPlace();
-        await place.fetchFields({ fields: ['formattedAddress'] });
-        adminAddressRef.current = place.formattedAddress ?? '';
+        await place.fetchFields({ fields: ['formattedAddress', 'addressComponents'] });
+        const comps: Record<string, string> = {};
+        place.addressComponents?.forEach((c: any) => { comps[c.types[0]] = c.longText; });
+        adminAddressRef.current = {
+          formattedAddress: place.formattedAddress ?? '',
+          street: `${comps.street_number ?? ''} ${comps.route ?? ''}`.trim(),
+          city: comps.locality || comps.administrative_area_level_3 || '',
+          state: comps.administrative_area_level_1 || '',
+          zip: comps.postal_code || '',
+        };
       });
     }
   }, [mode, lead.type, isMapsLoaded]);
@@ -158,16 +177,16 @@ export function ManualLeadForm() {
   const handleManualSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    const rawAddress = ownerAddressRef.current.trim();
-    const rawAdminAddress = adminAddressRef.current.trim();
+    const ownerAddr = ownerAddressRef.current;
+    const adminAddr = adminAddressRef.current;
 
     if (!lead.type) return setMessage('❌ Missing: Lead Type');
     if (!lead.ownerLastName) return setMessage('❌ Missing: Last Name');
-    if (!rawAddress) return setMessage('❌ Missing: Property Address — please select from the dropdown');
+    if (!ownerAddr) return setMessage('❌ Missing: Property Address — please select from the dropdown');
     if (lead.type === 'PROBATE') {
       if (!lead.adminFirstName) return setMessage('❌ Missing: Admin First Name');
       if (!lead.adminLastName) return setMessage('❌ Missing: Admin Last Name');
-      if (!rawAdminAddress) return setMessage('❌ Missing: Admin Address — please select from the dropdown');
+      if (!adminAddr) return setMessage('❌ Missing: Admin Address — please select from the dropdown');
     }
 
     setLoading(true);
@@ -180,10 +199,10 @@ export function ManualLeadForm() {
           ownerFirstName: lead.ownerFirstName || null,
           ownerLastName: lead.ownerLastName,
           phone: lead.phone || null,
-          rawAddress,
+          ownerAddr,
           adminFirstName: lead.adminFirstName || null,
           adminLastName: lead.adminLastName || null,
-          rawAdminAddress: rawAdminAddress || null,
+          adminAddr: adminAddr || null,
         }),
       });
 
@@ -191,8 +210,8 @@ export function ManualLeadForm() {
       if (!res.ok) throw new Error(data.error || 'Failed to create lead');
 
       setMessage('✅ Lead added successfully!');
-      ownerAddressRef.current = '';
-      adminAddressRef.current = '';
+      ownerAddressRef.current = null;
+      adminAddressRef.current = null;
       setLead({ type: '', ownerFirstName: '', ownerLastName: '', adminFirstName: '', adminLastName: '', phone: '' });
     } catch (err: any) {
       setMessage(`❌ Error: ${err.message}`);
