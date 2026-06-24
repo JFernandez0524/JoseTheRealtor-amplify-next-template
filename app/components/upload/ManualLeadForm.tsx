@@ -177,7 +177,7 @@ export function ManualLeadForm() {
 
     init();
     return () => { cancelled = true; };
-  }, [mode]);
+  }, [mode, lead.type]);
 
   const handleManualSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -185,9 +185,13 @@ export function ManualLeadForm() {
     const rawAddress = ownerAddressRef.current.trim();
     const rawAdminAddress = adminAddressRef.current.trim();
 
-    const probateRequired = lead.type === 'PROBATE' && (!lead.adminFirstName || !lead.adminLastName || !rawAdminAddress);
-    if (!lead.type || !lead.ownerLastName || !rawAddress || probateRequired) {
-      return setMessage('❌ Please fill in all required fields (*)');
+    if (!lead.type) return setMessage('❌ Missing: Lead Type');
+    if (!lead.ownerLastName) return setMessage('❌ Missing: Last Name');
+    if (!rawAddress) return setMessage('❌ Missing: Property Address — please select from the dropdown');
+    if (lead.type === 'PROBATE') {
+      if (!lead.adminFirstName) return setMessage('❌ Missing: Admin First Name');
+      if (!lead.adminLastName) return setMessage('❌ Missing: Admin Last Name');
+      if (!rawAdminAddress) return setMessage('❌ Missing: Admin Address — please select from the dropdown');
     }
 
     setLoading(true);
