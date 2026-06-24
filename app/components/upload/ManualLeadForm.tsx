@@ -213,8 +213,14 @@ export function ManualLeadForm() {
 
   const handleManualSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const probateRequired = lead.type === 'PROBATE' && (!lead.adminFirstName || !lead.adminLastName || !lead.adminAddress);
-    if (!lead.type || !lead.ownerLastName || !lead.ownerAddress || probateRequired) {
+
+    // Read address values directly from the DOM at submit time — onInput on slotted Web Component
+    // inputs doesn't fire when the picker sets the value programmatically after a selection.
+    const rawAddress = ownerRef.current?.querySelector('input')?.value || lead.ownerAddress || '';
+    const rawAdminAddress = adminRef.current?.querySelector('input')?.value || lead.adminAddress || '';
+
+    const probateRequired = lead.type === 'PROBATE' && (!lead.adminFirstName || !lead.adminLastName || !rawAdminAddress);
+    if (!lead.type || !lead.ownerLastName || !rawAddress || probateRequired) {
       return setMessage('❌ Please fill in all required fields (*)');
     }
 
@@ -228,10 +234,10 @@ export function ManualLeadForm() {
           ownerFirstName: lead.ownerFirstName || null,
           ownerLastName: lead.ownerLastName,
           phone: lead.phone || null,
-          rawAddress: lead.ownerAddress,
+          rawAddress,
           adminFirstName: lead.adminFirstName || null,
           adminLastName: lead.adminLastName || null,
-          rawAdminAddress: lead.adminAddress || null,
+          rawAdminAddress: rawAdminAddress || null,
         }),
       });
 
