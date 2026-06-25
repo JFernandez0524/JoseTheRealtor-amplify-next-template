@@ -64,6 +64,7 @@ interface ConversationContext {
   fieldIds?: Record<string, string>;         // Custom contact field IDs for this location
   opportunityFieldIds?: Record<string, string>; // Custom opportunity field IDs for this location
   agentProfile?: { name: string; brokerage: string }; // Per-user identity for outreach messages
+  campaignCalendarId?: string; // Per-user GHL calendar ID for AI appointment booking
 }
 
 interface PropertyAnalysis {
@@ -798,7 +799,8 @@ Respond to their message:`;
 
         try {
           const ghl = createGhlClient(context.accessToken!);
-          const calRes = await ghl.get(`/calendars/tuC1rqAOzPTThWUC7rvS/free-slots`, {
+          const calendarId = context.campaignCalendarId || 'tuC1rqAOzPTThWUC7rvS';
+          const calRes = await ghl.get(`/calendars/${calendarId}/free-slots`, {
             params: { startDate: args.startDate, endDate: args.endDate }
           });
           const data = calRes.data;
@@ -835,7 +837,7 @@ Respond to their message:`;
         try {
           const ghl = createGhlClient(context.accessToken!);
           await ghl.post('/calendars/events/appointments', {
-            calendarId: 'tuC1rqAOzPTThWUC7rvS',
+            calendarId: context.campaignCalendarId || 'tuC1rqAOzPTThWUC7rvS',
             locationId: context.locationId,
             contactId: context.contact?.id,
             startTime: args.startTime,

@@ -14,6 +14,7 @@ export default function GhlCampaignSettings() {
   const [integration, setIntegration] = useState<any>(null);
   const [campaignPhone, setCampaignPhone] = useState('');
   const [campaignEmail, setCampaignEmail] = useState('');
+  const [campaignCalendarId, setCampaignCalendarId] = useState('');
   const [emailSignature, setEmailSignature] = useState('');
 
   useEffect(() => {
@@ -37,6 +38,7 @@ export default function GhlCampaignSettings() {
         setIntegration(userIntegration);
         setCampaignPhone(userIntegration.campaignPhone || '');
         setCampaignEmail(userIntegration.campaignEmail || '');
+        setCampaignCalendarId(userIntegration.campaignCalendarId || '');
         setEmailSignature(userIntegration.emailSignature || '');
       }
     } catch (error) {
@@ -55,6 +57,7 @@ export default function GhlCampaignSettings() {
         id: integration.id,
         campaignPhone,
         campaignEmail,
+        campaignCalendarId,
         emailSignature
       });
 
@@ -147,6 +150,23 @@ export default function GhlCampaignSettings() {
           />
           <p className="text-xs text-slate-500 mt-1">
             Email address for automated campaigns
+          </p>
+        </div>
+
+        {/* Campaign Calendar ID */}
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-2">
+            GHL Calendar ID
+          </label>
+          <input
+            type="text"
+            value={campaignCalendarId}
+            onChange={(e) => setCampaignCalendarId(e.target.value)}
+            placeholder="tuC1rqAOzPTThWUC7rvS"
+            className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 font-mono text-sm"
+          />
+          <p className="text-xs text-slate-500 mt-1">
+            GHL calendar ID for AI-booked appointments. Find it in GHL under Calendars &rarr; Settings &rarr; Calendar URL.
           </p>
         </div>
 

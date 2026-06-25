@@ -86,6 +86,7 @@ const schema = a.schema({
       selectedEmail: a.string(), // User's selected email for campaigns (deprecated - use campaignEmail)
       campaignPhone: a.string(), // Hardcoded phone number for campaigns
       campaignEmail: a.string(), // Hardcoded email address for campaigns
+      campaignCalendarId: a.string(), // GHL calendar ID for AI-booked appointments (per-user)
       emailSignature: a.string(), // User's GHL email signature (HTML)
       // 📧 EMAIL TEMPLATES
       probateEmailSubject: a.string(), // Custom subject for probate leads

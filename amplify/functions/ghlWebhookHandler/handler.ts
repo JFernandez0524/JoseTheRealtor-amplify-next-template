@@ -19,6 +19,7 @@
  * - OPENAI_API_KEY
  */
 
+import { createHmac } from 'crypto';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, ScanCommand } from '@aws-sdk/lib-dynamodb';
 import { validateEnv } from '../shared/config';
@@ -38,6 +39,21 @@ const GHL_INTEGRATION_TABLE = process.env.AMPLIFY_DATA_GhlIntegration_TABLE_NAME
 export const handler = async (event: any) => {
   console.log('📨 [WEBHOOK_LAMBDA] Received event');
   
+  // Validate GHL webhook signature when present (marketplace system webhooks include x-ghl-signature).
+  // Workflow webhooks don't send this header, so we only reject when present-but-invalid.
+  const ghlSignature = event.headers?.['x-ghl-signature'] || event.headers?.['X-Ghl-Signature'];
+  if (ghlSignature) {
+    const rawBody = typeof event.body === 'string' ? event.body : JSON.stringify(event.body);
+    const expectedSig = createHmac('sha256', process.env.GHL_CLIENT_SECRET!)
+      .update(rawBody)
+      .digest('hex');
+    if (ghlSignature !== expectedSig) {
+      console.error('❌ [WEBHOOK_LAMBDA] Invalid GHL signature — rejecting request');
+      return { statusCode: 401, body: JSON.stringify({ error: 'Invalid signature' }) };
+    }
+    console.log('✅ [WEBHOOK_LAMBDA] GHL signature verified');
+  }
+
   // Atomically claim this webhook — prevents duplicate processing under concurrent Lambda invocations
   const webhookId = extractWebhookId(event);
   console.log(`🔑 [WEBHOOK_LAMBDA] Webhook ID: ${webhookId}`);
@@ -468,6 +484,7 @@ export const handler = async (event: any) => {
       fieldIds,
       opportunityFieldIds,
       agentProfile,
+      campaignCalendarId: tokenResult.campaignCalendarId || undefined,
     });
 
     // PHASE 3: OUTBOUND LOGGING (We just sent AI response)

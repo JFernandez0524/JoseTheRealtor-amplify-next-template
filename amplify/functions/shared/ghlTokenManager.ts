@@ -33,6 +33,7 @@ type GhlIntegration = {
   agentName?: string;
   agentBrokerage?: string;
   agentCalendarEmail?: string;
+  campaignCalendarId?: string;
 };
 
 export type GhlTokenResult = {
@@ -44,6 +45,7 @@ export type GhlTokenResult = {
   agentName: string | null;
   agentBrokerage: string | null;
   agentCalendarEmail: string | null;
+  campaignCalendarId: string | null;
 };
 
 /**
@@ -91,6 +93,7 @@ export async function getValidGhlToken(userId: string): Promise<GhlTokenResult |
         agentName: integration.agentName || null,
         agentBrokerage: integration.agentBrokerage || null,
         agentCalendarEmail: integration.agentCalendarEmail || null,
+        campaignCalendarId: integration.campaignCalendarId || null,
       };
     }
 
@@ -150,6 +153,7 @@ export async function getValidGhlToken(userId: string): Promise<GhlTokenResult |
         agentName: integration.agentName || null,
         agentBrokerage: integration.agentBrokerage || null,
         agentCalendarEmail: integration.agentCalendarEmail || null,
+        campaignCalendarId: integration.campaignCalendarId || null,
       };
     } catch (refreshError: any) {
       // Log the actual GHL error response
@@ -198,6 +202,7 @@ export async function getValidGhlToken(userId: string): Promise<GhlTokenResult |
               agentName: updated.agentName || null,
               agentBrokerage: updated.agentBrokerage || null,
               agentCalendarEmail: updated.agentCalendarEmail || null,
+              campaignCalendarId: updated.campaignCalendarId || null,
             };
           }
         }
@@ -222,6 +227,7 @@ export type IntegrationByLocationResult = {
   agentName: string | null;
   agentBrokerage: string | null;
   agentCalendarEmail: string | null;
+  campaignCalendarId: string | null;
 };
 
 /**
@@ -266,6 +272,7 @@ export async function getIntegrationByLocationId(locationId: string): Promise<In
       agentName: integration.agentName || null,
       agentBrokerage: integration.agentBrokerage || null,
       agentCalendarEmail: integration.agentCalendarEmail || null,
+      campaignCalendarId: integration.campaignCalendarId || null,
     };
   } catch (error: any) {
     console.error(`❌ [TOKEN_MANAGER] Failed to get integration for locationId ${locationId}:`, error.message);
