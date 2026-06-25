@@ -33,7 +33,7 @@ const SCOPES = [
   'conversations/message.write',
   'conversations/reports.readonly',
   'conversations/livechat.write',
-  'location/customFields.readonly',
+  'locations/customFields.readonly',
   'locations/customFields.write',
   'emails/builder.write',
   'emails/builder.readonly',
