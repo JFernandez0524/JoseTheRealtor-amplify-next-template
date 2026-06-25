@@ -143,15 +143,6 @@ export function ManualLeadForm() {
           lat: place.location?.lat() ?? null,
           lng: place.location?.lng() ?? null,
         };
-        try {
-          const res = await fetch('/api/v1/enrich-manual-lead', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ address: street, city, state, zip }),
-          });
-          const data = await res.json();
-          if (data.success) setMessage(`✅ Address validated. Zestimate: ${data.zestimate ? `$${data.zestimate.toLocaleString()}` : 'N/A'}`);
-        } catch {}
       });
     }
 
@@ -207,7 +198,7 @@ export function ManualLeadForm() {
       });
 
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to create lead');
+      if (!res.ok) throw new Error(data.details || data.error || 'Failed to create lead');
 
       setMessage('✅ Lead added successfully!');
       ownerAddressRef.current = null;

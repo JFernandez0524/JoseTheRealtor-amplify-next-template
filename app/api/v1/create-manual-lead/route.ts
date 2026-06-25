@@ -53,7 +53,6 @@ export async function POST(request: NextRequest) {
       ownerState: ownerAddr.state,
       ownerZip: ownerAddr.zip,
       ownerCounty: ownerAddr.county || null,
-      standardizedAddress: ownerAddr.formattedAddress as any,
       latitude: latitude ?? undefined,
       longitude: longitude ?? undefined,
       zestimate: zestimate ?? undefined,
