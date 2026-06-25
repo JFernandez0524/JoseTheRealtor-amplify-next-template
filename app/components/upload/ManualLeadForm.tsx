@@ -46,8 +46,12 @@ export function ManualLeadForm() {
 
   const { isLoaded: isMapsLoaded } = useGoogleMaps();
 
+  const [leadCreated, setLeadCreated] = useState(false);
+
   const ownerContainerRef = useRef<HTMLDivElement>(null);
   const adminContainerRef = useRef<HTMLDivElement>(null);
+  const ownerAutocompleteRef = useRef<any>(null);
+  const adminAutocompleteRef = useRef<any>(null);
   const ownerAddressRef = useRef<{
     formattedAddress: string; street: string; city: string;
     state: string; zip: string; county: string;
@@ -126,17 +130,20 @@ export function ManualLeadForm() {
 
     if (ownerContainerRef.current && !ownerContainerRef.current.hasChildNodes()) {
       const el = new G.PlaceAutocompleteElement({ includedRegionCodes: ['us'] });
+      ownerAutocompleteRef.current = el;
       ownerContainerRef.current.appendChild(el);
       el.addEventListener('gmp-select', async (event: any) => {
         const place = event.placePrediction.toPlace();
         await place.fetchFields({ fields: ['formattedAddress', 'addressComponents', 'location'] });
-        const comps: Record<string, string> = {};
-        place.addressComponents?.forEach((c: any) => { comps[c.types[0]] = c.longText; });
-        const street = `${comps.street_number ?? ''} ${comps.route ?? ''}`.trim();
-        const city = comps.locality || comps.administrative_area_level_3 || '';
-        const state = comps.administrative_area_level_1 || '';
-        const zip = comps.postal_code || '';
-        const county = comps.administrative_area_level_2 || '';
+        const getComp = (type: string, useShort = false) => {
+          const c = place.addressComponents?.find((comp: any) => comp.types.includes(type));
+          return useShort ? (c?.shortText || '') : (c?.longText || '');
+        };
+        const street = `${getComp('street_number')} ${getComp('route')}`.trim();
+        const city = getComp('locality') || getComp('administrative_area_level_3');
+        const state = getComp('administrative_area_level_1', true); // shortText = "NJ" not "New Jersey"
+        const zip = getComp('postal_code');
+        const county = getComp('administrative_area_level_2');
         ownerAddressRef.current = {
           formattedAddress: place.formattedAddress ?? '',
           street, city, state, zip, county,
@@ -148,18 +155,21 @@ export function ManualLeadForm() {
 
     if (adminContainerRef.current && !adminContainerRef.current.hasChildNodes()) {
       const el = new G.PlaceAutocompleteElement({ includedRegionCodes: ['us'] });
+      adminAutocompleteRef.current = el;
       adminContainerRef.current.appendChild(el);
       el.addEventListener('gmp-select', async (event: any) => {
         const place = event.placePrediction.toPlace();
         await place.fetchFields({ fields: ['formattedAddress', 'addressComponents'] });
-        const comps: Record<string, string> = {};
-        place.addressComponents?.forEach((c: any) => { comps[c.types[0]] = c.longText; });
+        const getComp = (type: string, useShort = false) => {
+          const c = place.addressComponents?.find((comp: any) => comp.types.includes(type));
+          return useShort ? (c?.shortText || '') : (c?.longText || '');
+        };
         adminAddressRef.current = {
           formattedAddress: place.formattedAddress ?? '',
-          street: `${comps.street_number ?? ''} ${comps.route ?? ''}`.trim(),
-          city: comps.locality || comps.administrative_area_level_3 || '',
-          state: comps.administrative_area_level_1 || '',
-          zip: comps.postal_code || '',
+          street: `${getComp('street_number')} ${getComp('route')}`.trim(),
+          city: getComp('locality') || getComp('administrative_area_level_3'),
+          state: getComp('administrative_area_level_1', true),
+          zip: getComp('postal_code'),
         };
       });
     }
@@ -201,7 +211,8 @@ export function ManualLeadForm() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.details || data.error || 'Failed to create lead');
 
-      setMessage('✅ Lead added successfully!');
+      setLeadCreated(true);
+      setMessage('');
       ownerAddressRef.current = null;
       adminAddressRef.current = null;
       setLead({ type: '', ownerFirstName: '', ownerLastName: '', adminFirstName: '', adminLastName: '', phone: '' });
@@ -484,34 +495,74 @@ export function ManualLeadForm() {
                 Admin / Executor Info
               </h3>
               <div className='grid grid-cols-2 gap-4'>
-                <input
-                  placeholder='Admin First Name'
-                  className='border p-2 rounded bg-white'
-                  value={lead.adminFirstName}
-                  onChange={(e) =>
-                    setLead({ ...lead, adminFirstName: e.target.value })
-                  }
-                />
-                <input
-                  placeholder='Admin Last Name'
-                  className='border p-2 rounded bg-white'
-                  value={lead.adminLastName}
-                  onChange={(e) =>
-                    setLead({ ...lead, adminLastName: e.target.value })
-                  }
-                />
+                <div>
+                  <label className='text-xs font-bold text-gray-400 uppercase'>Admin First Name *</label>
+                  <input
+                    placeholder='Admin First Name'
+                    className='border p-2 rounded bg-white w-full'
+                    value={lead.adminFirstName}
+                    onChange={(e) =>
+                      setLead({ ...lead, adminFirstName: e.target.value })
+                    }
+                    required
+                  />
+                </div>
+                <div>
+                  <label className='text-xs font-bold text-gray-400 uppercase'>Admin Last Name *</label>
+                  <input
+                    placeholder='Admin Last Name'
+                    className='border p-2 rounded bg-white w-full'
+                    value={lead.adminLastName}
+                    onChange={(e) =>
+                      setLead({ ...lead, adminLastName: e.target.value })
+                    }
+                    required
+                  />
+                </div>
               </div>
-              <div ref={adminContainerRef} className='border rounded' />
+              <div className='space-y-1'>
+                <label className='text-xs font-bold text-gray-400 uppercase'>Admin Address *</label>
+                <div ref={adminContainerRef} className='border rounded' />
+              </div>
             </div>
           )}
 
-          <button
-            type='submit'
-            disabled={loading}
-            className='w-full bg-blue-600 text-white p-3 rounded-md font-bold hover:bg-blue-700 disabled:bg-gray-300 transition-colors'
-          >
-            {loading ? 'Adding...' : 'Save Manual Lead'}
-          </button>
+          {leadCreated ? (
+            <div className='space-y-3'>
+              <p className='text-center text-sm font-semibold text-green-700 bg-green-50 border border-green-200 p-3 rounded'>
+                ✅ Lead added successfully! What would you like to do next?
+              </p>
+              <div className='grid grid-cols-2 gap-3'>
+                <button
+                  type='button'
+                  onClick={() => {
+                    setLeadCreated(false);
+                    setMessage('');
+                    if (ownerAutocompleteRef.current) ownerAutocompleteRef.current.value = '';
+                    if (adminAutocompleteRef.current) adminAutocompleteRef.current.value = '';
+                  }}
+                  className='w-full border border-blue-600 text-blue-600 p-3 rounded-md font-bold hover:bg-blue-50 transition-colors'
+                >
+                  Add Another Lead
+                </button>
+                <button
+                  type='button'
+                  onClick={() => router.push('/dashboard')}
+                  className='w-full bg-blue-600 text-white p-3 rounded-md font-bold hover:bg-blue-700 transition-colors'
+                >
+                  Go to Dashboard
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              type='submit'
+              disabled={loading}
+              className='w-full bg-blue-600 text-white p-3 rounded-md font-bold hover:bg-blue-700 disabled:bg-gray-300 transition-colors'
+            >
+              {loading ? 'Adding...' : 'Save Manual Lead'}
+            </button>
+          )}
         </form>
       )}
 
