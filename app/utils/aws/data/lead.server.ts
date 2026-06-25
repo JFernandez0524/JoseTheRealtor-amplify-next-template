@@ -103,6 +103,7 @@ export async function createLead(leadData: CreateLeadInput): Promise<DBLead> {
     const { data: newLead, errors } =
       await cookiesClient.models.PropertyLead.create(leadData);
     if (errors) {
+      console.error('❌ createLead GraphQL errors:', JSON.stringify(errors, null, 2));
       throw new Error(errors.map((e: any) => e.message).join(', '));
     }
     return newLead as DBLead;
