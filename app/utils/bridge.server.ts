@@ -102,6 +102,7 @@ export async function analyzeBridgeProperty(params: {
   zip?: string;
   lat?: number;
   lng?: number;
+  zpid?: string;
 }): Promise<{
   success: boolean;
   valuation?: any;
@@ -111,10 +112,10 @@ export async function analyzeBridgeProperty(params: {
   debug?: any;
   error?: string;
 }> {
-  const { street: rawStreet, city: rawCity, state, zip, lat, lng } = params;
+  const { street: rawStreet, city: rawCity, state, zip, lat, lng, zpid: zpidParam } = params;
   const city = cleanCityName(rawCity || '');
   const streetVariations = generateAddressVariations(rawStreet || '');
-  const zip5 = zip?.split('-')[0]; // Strip ZIP+4 to 5 digits
+  const zip5 = zip?.split('-')[0] || undefined; // Strip ZIP+4; coerce empty string to undefined so Bridge API omits the param
 
   console.log('🔍 Bridge API search params:', { rawStreet, city, state, zip: zip5, lat, lng });
   console.log('📝 Street variations:', streetVariations);
@@ -199,9 +200,27 @@ export async function analyzeBridgeProperty(params: {
     }
   }
 
+  // If address and coordinate searches failed but we have a zpid, try direct zpid lookup
+  if (!valuation && zpidParam) {
+    console.log(`🔗 Trying zpid-based lookup as final fallback: ${zpidParam}`);
+    try {
+      const res = await bridgeClient.get('/zestimates_v2/zestimates', {
+        params: { limit: 1, zpid: zpidParam },
+      });
+      console.log(`📦 zpid lookup returned ${res.data.bundle?.length || 0} results`);
+      if (res.data.bundle?.length > 0) {
+        valuation = res.data.bundle[0];
+        successfulVariation = `zpid:${zpidParam}`;
+        console.log(`✅ Found via zpid: $${valuation.zestimate}`);
+      }
+    } catch (err) {
+      console.log('❌ zpid-based lookup failed');
+    }
+  }
+
   if (!valuation) {
     console.log('❌ No property found for address');
-    console.log('🔍 Search details:', { rawStreet, city, state, zip, lat, lng });
+    console.log('🔍 Search details:', { rawStreet, city, state, zip, lat, lng, zpid: zpidParam });
     console.log('📝 Tried variations:', streetVariations);
     return { success: false, error: 'Property not found. Please verify the address is correct.' };
   }

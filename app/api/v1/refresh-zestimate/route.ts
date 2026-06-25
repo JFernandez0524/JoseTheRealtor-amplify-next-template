@@ -66,6 +66,7 @@ export async function POST(request: NextRequest) {
       zip: searchZip,
       lat: latitude,
       lng: longitude,
+      zpid: resolvedZpid,
     });
 
     if (!result.valuation) {
