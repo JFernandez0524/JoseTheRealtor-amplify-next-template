@@ -119,26 +119,8 @@ export function LeadTable({
     zip: '',
   });
   const [editingZestimateLead, setEditingZestimateLead] = useState<Lead | null>(null);
-  const [zestimateInput, setZestimateInput] = useState('');
-  const [zestimateMode, setZestimateMode] = useState<'manual' | 'url'>('manual');
   const [zestimateUrlInput, setZestimateUrlInput] = useState('');
   const [zestimateError, setZestimateError] = useState('');
-
-  const handleSaveZestimate = async (lead: Lead) => {
-    const parsed = parseFloat(zestimateInput.replace(/[^0-9.]/g, ''));
-    if (isNaN(parsed) || parsed <= 0) return;
-    try {
-      await updateLead(lead.id, {
-        zestimate: parsed,
-        zestimateSource: 'MANUAL',
-        zestimateDate: new Date().toISOString(),
-      });
-      setEditingZestimateLead(null);
-      if (onRefresh) await onRefresh();
-    } catch (err) {
-      console.error('Failed to save zestimate:', err);
-    }
-  };
 
   const handleSaveZestimateUrl = async (lead: Lead) => {
     const match = zestimateUrlInput.match(/(\d+)_zpid/);
@@ -522,49 +504,22 @@ export function LeadTable({
                   <td className='px-4 py-4 whitespace-nowrap text-sm text-gray-900 bg-yellow-50/30' onClick={(e) => e.stopPropagation()}>
                     {editingZestimateLead?.id === lead.id ? (
                       <div className="flex flex-col gap-1 min-w-[180px]">
-                        <div className="flex text-xs border border-gray-300 rounded overflow-hidden">
-                          <button
-                            onClick={() => { setZestimateMode('manual'); setZestimateError(''); }}
-                            className={`flex-1 px-2 py-0.5 ${zestimateMode === 'manual' ? 'bg-blue-600 text-white' : 'bg-white text-gray-600'}`}
-                          >$ Manual</button>
-                          <button
-                            onClick={() => { setZestimateMode('url'); setZestimateError(''); }}
-                            className={`flex-1 px-2 py-0.5 ${zestimateMode === 'url' ? 'bg-blue-600 text-white' : 'bg-white text-gray-600'}`}
-                          >🔗 Zillow URL</button>
-                        </div>
-                        {zestimateMode === 'manual' ? (
+                        <div className="flex flex-col gap-1">
                           <div className="flex items-center gap-1">
-                            <span className="text-gray-500 text-xs">$</span>
                             <input
-                              type="number"
-                              value={zestimateInput}
-                              onChange={(e) => setZestimateInput(e.target.value)}
-                              onKeyDown={(e) => { if (e.key === 'Enter') handleSaveZestimate(lead); if (e.key === 'Escape') setEditingZestimateLead(null); }}
+                              type="text"
+                              value={zestimateUrlInput}
+                              onChange={(e) => { setZestimateUrlInput(e.target.value); setZestimateError(''); }}
+                              onKeyDown={(e) => { if (e.key === 'Enter') handleSaveZestimateUrl(lead); if (e.key === 'Escape') { setEditingZestimateLead(null); setZestimateUrlInput(''); setZestimateError(''); } }}
                               autoFocus
-                              className="w-24 border border-blue-400 rounded px-1 py-0.5 text-xs"
-                              placeholder="e.g. 350000"
+                              className="w-36 border border-blue-400 rounded px-1 py-0.5 text-xs"
+                              placeholder="Paste Zillow URL..."
                             />
-                            <button onClick={() => handleSaveZestimate(lead)} className="text-green-600 text-xs font-bold hover:text-green-800">✓</button>
-                            <button onClick={() => setEditingZestimateLead(null)} className="text-gray-400 text-xs hover:text-gray-600">✕</button>
+                            <button onClick={() => handleSaveZestimateUrl(lead)} className="text-green-600 text-xs font-bold hover:text-green-800">✓</button>
+                            <button onClick={() => { setEditingZestimateLead(null); setZestimateUrlInput(''); setZestimateError(''); }} className="text-gray-400 text-xs hover:text-gray-600">✕</button>
                           </div>
-                        ) : (
-                          <div className="flex flex-col gap-1">
-                            <div className="flex items-center gap-1">
-                              <input
-                                type="text"
-                                value={zestimateUrlInput}
-                                onChange={(e) => { setZestimateUrlInput(e.target.value); setZestimateError(''); }}
-                                onKeyDown={(e) => { if (e.key === 'Enter') handleSaveZestimateUrl(lead); if (e.key === 'Escape') { setEditingZestimateLead(null); setZestimateUrlInput(''); setZestimateError(''); } }}
-                                autoFocus
-                                className="w-36 border border-blue-400 rounded px-1 py-0.5 text-xs"
-                                placeholder="Paste Zillow URL..."
-                              />
-                              <button onClick={() => handleSaveZestimateUrl(lead)} className="text-green-600 text-xs font-bold hover:text-green-800">✓</button>
-                              <button onClick={() => { setEditingZestimateLead(null); setZestimateUrlInput(''); setZestimateError(''); }} className="text-gray-400 text-xs hover:text-gray-600">✕</button>
-                            </div>
-                            {zestimateError && <span className="text-red-500 text-xs">{zestimateError}</span>}
-                          </div>
-                        )}
+                          {zestimateError && <span className="text-red-500 text-xs">{zestimateError}</span>}
+                        </div>
                       </div>
                     ) : (
                       <div className="flex items-center gap-2">
@@ -611,7 +566,7 @@ export function LeadTable({
                         </div>
                         <div className="flex flex-col gap-1">
                           <button
-                            onClick={() => { setZestimateInput(lead.zestimate ? String(lead.zestimate) : ''); setZestimateMode('manual'); setZestimateUrlInput(''); setZestimateError(''); setEditingZestimateLead(lead); }}
+                            onClick={() => { setZestimateUrlInput(''); setZestimateError(''); setEditingZestimateLead(lead); }}
                             className="text-gray-400 hover:text-blue-600 select-none text-xs"
                             title="Manually set Zestimate"
                           >
@@ -636,6 +591,7 @@ export function LeadTable({
                                       zip: lead.ownerZip,
                                       latitude: lead.latitude,
                                       longitude: lead.longitude,
+                                      zillowZpid: lead.zillowZpid,
                                     }),
                                   });
                                   const data = await res.json();

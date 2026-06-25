@@ -34,7 +34,7 @@ function parseZillowUrl(url: string): { street: string; city: string; state: str
 
 export async function POST(request: NextRequest) {
   try {
-    const { leadId, street, city, state, zip, latitude, longitude, zillowUrl } = await request.json();
+    const { leadId, street, city, state, zip, latitude, longitude, zillowUrl, zillowZpid } = await request.json();
 
     if (!leadId) {
       return NextResponse.json({ error: 'Missing leadId' }, { status: 400 });
@@ -44,7 +44,7 @@ export async function POST(request: NextRequest) {
     let searchCity = city;
     let searchState = state;
     let searchZip = zip;
-    let resolvedZpid: string | undefined;
+    let resolvedZpid: string | undefined = zillowZpid || undefined;
     let resolvedZillowUrl: string | undefined = zillowUrl;
 
     if (zillowUrl) {
