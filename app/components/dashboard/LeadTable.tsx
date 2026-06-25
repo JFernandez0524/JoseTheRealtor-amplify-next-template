@@ -128,7 +128,11 @@ export function LeadTable({
     const parsed = parseFloat(zestimateInput.replace(/[^0-9.]/g, ''));
     if (isNaN(parsed) || parsed <= 0) return;
     try {
-      await updateLead(lead.id, { zestimate: parsed });
+      await updateLead(lead.id, {
+        zestimate: parsed,
+        zestimateSource: 'MANUAL',
+        zestimateDate: new Date().toISOString(),
+      });
       setEditingZestimateLead(null);
       if (onRefresh) await onRefresh();
     } catch (err) {
@@ -586,7 +590,7 @@ export function LeadTable({
                                   <span className="text-red-600 text-xs font-bold" title={`Zillow address: ${lead.zillowAddress}`}>⚠️</span>
                                 )}
                               </div>
-                              {!lead.zillowZpid && (
+                              {lead.zestimateSource === 'MANUAL' && (
                                 <span className="text-xs text-gray-400">✏️ manual</span>
                               )}
                               {lead.zillowLastUpdated && lead.zillowZpid && (() => {

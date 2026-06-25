@@ -97,6 +97,8 @@ export async function POST(request: NextRequest) {
       zillowAddress: zillowData.address,
       rentZestimate: zillowData.rentalZestimate,
       zillowLastUpdated: new Date().toISOString(),
+      zestimateSource: 'ZILLOW',
+      zestimateDate: new Date().toISOString(),
     });
 
     if (errors) throw new Error(errors.map((e: any) => e.message).join(', '));

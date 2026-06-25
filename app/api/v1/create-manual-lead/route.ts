@@ -57,6 +57,8 @@ export async function POST(request: NextRequest) {
       longitude: longitude ?? undefined,
       zestimate: zestimate ?? undefined,
       zillowZpid: zillowZpid ?? undefined,
+      zestimateSource: zestimate ? 'ZILLOW' : undefined,
+      zestimateDate: zestimate ? new Date().toISOString() : undefined,
       phones: phone ? [phone] : [],
       skipTraceStatus: phone ? 'COMPLETED' : 'PENDING',
       ghlSyncStatus: 'PENDING',
