@@ -172,6 +172,7 @@ export function ManualLeadForm() {
     const adminAddr = adminAddressRef.current;
 
     if (!lead.type) return setMessage('❌ Missing: Lead Type');
+    if (!lead.ownerFirstName) return setMessage('❌ Missing: First Name');
     if (!lead.ownerLastName) return setMessage('❌ Missing: Last Name');
     if (!ownerAddr) return setMessage('❌ Missing: Property Address — please select from the dropdown');
     if (lead.type === 'PROBATE') {
@@ -413,7 +414,7 @@ export function ManualLeadForm() {
           <div className='grid grid-cols-2 gap-4'>
             <div>
               <label className='text-xs font-bold text-gray-400 uppercase'>
-                First Name
+                First Name *
               </label>
               <input
                 className='w-full border p-2 rounded'
@@ -421,6 +422,7 @@ export function ManualLeadForm() {
                 onChange={(e) =>
                   setLead({ ...lead, ownerFirstName: e.target.value })
                 }
+                required
               />
             </div>
             <div>
