@@ -56,6 +56,7 @@
  * - amplifyFrontEndUser.ts - Authentication utilities
  */
 
+import { getCurrentUser } from 'aws-amplify/auth';
 import { client } from '@/app/utils/aws/data/frontEndClient';
 import { type Schema } from '@/amplify/data/resource';
 
@@ -70,11 +71,15 @@ export type Lead = Schema['PropertyLead']['type'] & {
  */
 export async function fetchLeads(): Promise<Lead[]> {
   try {
+    const { userId } = await getCurrentUser();
     const allLeads: Lead[] = [];
     let nextToken: string | null | undefined;
 
     do {
-      const result = await client.models.PropertyLead.list({ nextToken: nextToken ?? undefined });
+      const result = await client.models.PropertyLead.list({
+        filter: { owner: { eq: userId } },
+        nextToken: nextToken ?? undefined,
+      });
       allLeads.push(...(result.data || []));
       nextToken = result.nextToken;
     } while (nextToken);

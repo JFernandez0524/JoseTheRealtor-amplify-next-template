@@ -1,4 +1,4 @@
-import { cookiesClient } from '../auth/amplifyServerUtils.server';
+import { cookiesClient, AuthGetCurrentUserServer } from '../auth/amplifyServerUtils.server';
 import { type Schema } from '../../../../amplify/data/resource';
 // 💥 NEW: Import DynamoDB client for use in Lambda environment
 import { ddbDocClient } from './dynamoClient.server';
@@ -71,10 +71,14 @@ export type UpdateLeadInput = Partial<BaseLeadInput> & {
  */
 export async function listLeads(): Promise<DBLead[]> {
   try {
+    const user = await AuthGetCurrentUserServer();
+    if (!user) return [];
+
     // 1. Fetch leads explicitly using User Pool auth
     const { data: leads, errors } =
       await cookiesClient.models.PropertyLead.list({
         authMode: 'userPool',
+        filter: { owner: { eq: user.userId } },
         limit: 1000,
       });
 
