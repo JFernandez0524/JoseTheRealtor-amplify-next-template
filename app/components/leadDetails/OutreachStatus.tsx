@@ -2,16 +2,13 @@
 
 import { useState } from 'react';
 import { CardWrapper } from './CardWrapper';
-import { HiOutlinePhone, HiOutlineClock, HiOutlineCheckCircle, HiOutlineTag } from 'react-icons/hi2';
+import { HiOutlineClock, HiOutlineCheckCircle, HiOutlineTag } from 'react-icons/hi2';
 import { HiOutlineMail } from 'react-icons/hi';
 import axios from 'axios';
 
 interface OutreachData {
-  smsAttempts?: number;
   emailAttempts?: number;
-  lastSmsSent?: string;
   lastEmailSent?: string;
-  smsStatus?: string;
   emailStatus?: string;
   callOutcome?: string;
   aiState?: string;
@@ -131,23 +128,6 @@ export function OutreachStatus({ ghlContactId, outreachData, onDataUpdate }: Out
   return (
     <CardWrapper title="📤 Outreach Status">
       <div className="space-y-4">
-        {/* SMS Outreach */}
-        <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
-          <HiOutlinePhone className="w-5 h-5 text-blue-600 mt-0.5" />
-          <div className="flex-1">
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-sm font-medium text-gray-700">Call Outreach</span>
-              <span className={`text-xs px-2 py-1 rounded-full ${getStatusColor(outreachData?.smsStatus)}`}>
-                {outreachData?.smsStatus || 'PENDING'}
-              </span>
-            </div>
-            <div className="text-xs text-gray-600 space-y-1">
-              <div>Call Attempts: <span className="font-medium">{outreachData?.smsAttempts || 0}/7</span></div>
-              <div>Last call: <span className="font-medium">{formatDate(outreachData?.lastSmsSent)}</span></div>
-            </div>
-          </div>
-        </div>
-
         {/* Email Outreach */}
         <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
           <HiOutlineMail className="w-5 h-5 text-purple-600 mt-0.5" />

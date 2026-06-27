@@ -6,7 +6,6 @@ import { uploadCsvHandler } from './functions/uploadCsvHandler/resource';
 import { skipTraceLeads } from './functions/skiptraceLeads/resource';
 import { manualGhlSync } from './functions/manualGhlSync/resource';
 import { aiFollowUpAgent } from './functions/aiFollowUpAgent/resource';
-import { dailyOutreachAgent } from './functions/dailyOutreachAgent/resource';
 import { dailyEmailAgent } from './functions/dailyEmailAgent/resource';
 import { checkManualModeExpiry } from './functions/checkManualModeExpiry/resource';
 
@@ -33,7 +32,6 @@ const backend = defineBackend({
   skipTraceLeads,
   manualGhlSync,
   aiFollowUpAgent,
-  dailyOutreachAgent,
   dailyEmailAgent,
   checkManualModeExpiry,
   ghlWebhookHandler,
@@ -177,40 +175,6 @@ backend.aiFollowUpAgent.resources.lambda.addToRolePolicy(
     effect: Effect.ALLOW,
     actions: ['bedrock:InvokeModel'],
     resources: ['arn:aws:bedrock:*::foundation-model/anthropic.claude-3-5-sonnet-20241022-v2:0']
-  })
-);
-
-// 📤 Configure Daily Outreach Agent
-backend.dailyOutreachAgent.addEnvironment(
-  'AMPLIFY_DATA_GhlIntegration_TABLE_NAME',
-  backend.data.resources.tables['GhlIntegration'].tableName
-);
-
-backend.dailyOutreachAgent.addEnvironment(
-  'AMPLIFY_DATA_OutreachQueue_TABLE_NAME',
-  backend.data.resources.tables['OutreachQueue'].tableName
-);
-
-backend.dailyOutreachAgent.addEnvironment('GHL_CLIENT_ID', process.env.GHL_CLIENT_ID || '');
-backend.dailyOutreachAgent.addEnvironment('GHL_CLIENT_SECRET', process.env.GHL_CLIENT_SECRET || '');
-backend.dailyOutreachAgent.addEnvironment('API_ENDPOINT', process.env.NEXT_PUBLIC_APP_URL || 'https://leads.josetherealtor.com');
-
-backend.data.resources.tables['GhlIntegration'].grantReadWriteData(
-  backend.dailyOutreachAgent.resources.lambda
-);
-
-backend.data.resources.tables['OutreachQueue'].grantReadWriteData(
-  backend.dailyOutreachAgent.resources.lambda
-);
-
-// Grant permission to query GSI indexes
-backend.dailyOutreachAgent.resources.lambda.addToRolePolicy(
-  new PolicyStatement({
-    effect: Effect.ALLOW,
-    actions: ['dynamodb:Query'],
-    resources: [
-      `${backend.data.resources.tables['OutreachQueue'].tableArn}/index/*`
-    ]
   })
 );
 

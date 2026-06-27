@@ -27,6 +27,8 @@ import { OutreachStatus } from './OutreachStatus';
 import { SkipTraceHistory } from './SkipTraceHistory';
 import { ErrorBoundary } from './ErrorBoundary';
 import { ToastProvider, useToast } from './ToastProvider';
+import { DeleteConfirmModal } from '../dashboard/DeleteConfirmModal';
+import { deleteLead } from '@/app/utils/aws/data/lead.client';
 import { 
   MapSkeleton, 
   PropertyInfoSkeleton, 
@@ -84,6 +86,8 @@ function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
   const [navContext, setNavContext] = useState<NavContext | null>(null);
   const [isCoreInfoEditing, setIsCoreInfoEditing] = useState(false);
   const [access, setAccess] = useState({ isAdmin: false, isPro: false });
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [outreachData, setOutreachData] = useState<any>(null);
   const [isLoadingOutreach, setIsLoadingOutreach] = useState(false);
   const [marketDataError, setMarketDataError] = useState<string | null>(null);
@@ -333,6 +337,18 @@ function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
     }
   };
 
+  const handleDeleteConfirm = async () => {
+    setShowDeleteModal(false);
+    setIsDeleting(true);
+    try {
+      await deleteLead(lead.id);
+      router.push('/');
+    } catch (err: any) {
+      addToast({ type: 'error', title: 'Delete Failed', message: err.message || 'Please try again' });
+      setIsDeleting(false);
+    }
+  };
+
   // 4. MAPPINGS
   const parcel = marketData?.assessment || marketData?.parcel;
   const valuation = marketData?.valuation;
@@ -409,6 +425,15 @@ function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
           >
             NEXT
           </button>
+          {access.isAdmin && (
+            <button
+              onClick={() => setShowDeleteModal(true)}
+              disabled={isDeleting}
+              className='px-3 py-1.5 text-sm rounded bg-red-100 text-red-600 hover:bg-red-200 transition shadow-sm disabled:opacity-50'
+            >
+              {isDeleting ? 'Deleting…' : 'Delete'}
+            </button>
+          )}
         </div>
       </div>
 
@@ -865,6 +890,12 @@ function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
           </div>
         </div>
       </div>
+      <DeleteConfirmModal
+        isOpen={showDeleteModal}
+        onClose={() => setShowDeleteModal(false)}
+        onConfirm={handleDeleteConfirm}
+        count={1}
+      />
     </main>
   );
 }

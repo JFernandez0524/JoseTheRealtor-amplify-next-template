@@ -41,15 +41,11 @@ const schema = a.schema({
       queueStatus: a.enum(['OUTREACH', 'CONVERSATION', 'DND', 'WRONG_INFO', 'COMPLETED', 'MANUAL_HANDLING']),
       
       // Outreach channel status
-      smsStatus: a.enum(['PENDING', 'SENT', 'REPLIED', 'FAILED', 'OPTED_OUT']),
       emailStatus: a.enum(['PENDING', 'SENT', 'REPLIED', 'BOUNCED', 'FAILED', 'OPTED_OUT']),
-      
+
       // Tracking timestamps
-      smsAttempts: a.integer().default(0),
       emailAttempts: a.integer().default(0),
-      lastSmsSent: a.datetime(),
       lastEmailSent: a.datetime(),
-      nextSmsDate: a.datetime(), // Scheduled date for next SMS (SMS disabled)
       nextEmailDate: a.datetime(), // Scheduled date for next email
       lastContactDate: a.datetime(), // Last time WE contacted them (any channel)
       lastLeadReplyDate: a.datetime(), // Last time THEY replied to us
@@ -65,7 +61,6 @@ const schema = a.schema({
       allow.groups(['ADMINS']).to(['create', 'read', 'update', 'delete']),
     ])
     .secondaryIndexes((index) => [
-      index('userId').sortKeys(['smsStatus']).queryField('byUserAndSmsStatus'),
       index('userId').sortKeys(['emailStatus']).queryField('byUserAndEmailStatus'),
       index('userId').sortKeys(['queueStatus']).queryField('byUserAndQueueStatus'),
       index('leadId').queryField('byLeadId'),

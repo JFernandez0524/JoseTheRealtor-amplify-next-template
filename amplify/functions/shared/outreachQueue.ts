@@ -18,7 +18,6 @@
  * 
  * RELATED FILES:
  * - amplify/data/resource.ts - OutreachQueue schema
- * - amplify/functions/dailyOutreachAgent/handler.ts - SMS agent (uses queue)
  * - amplify/functions/dailyEmailAgent/handler.ts - Email agent (uses queue)
  * - app/api/v1/ghl-webhook/route.ts - Updates queue on SMS replies
  * - app/api/v1/ghl-email-webhook/route.ts - Updates queue on email replies
@@ -42,13 +41,9 @@ interface OutreachQueueItem {
   contactPhone?: string;
   contactEmail?: string;
   queueStatus?: 'OUTREACH' | 'CONVERSATION' | 'DND' | 'WRONG_INFO' | 'COMPLETED';
-  smsStatus?: 'PENDING' | 'SENT' | 'REPLIED' | 'FAILED' | 'OPTED_OUT';
   emailStatus?: 'PENDING' | 'SENT' | 'REPLIED' | 'BOUNCED' | 'FAILED' | 'OPTED_OUT';
-  smsAttempts?: number;
   emailAttempts?: number;
-  lastSmsSent?: string;
   lastEmailSent?: string;
-  nextSmsDate?: string; // Scheduled date for next SMS (SMS disabled)
   nextEmailDate?: string; // Scheduled date for next email
   lastContactDate?: string;
   lastLeadReplyDate?: string;
@@ -96,9 +91,7 @@ export async function addToOutreachQueue(item: OutreachQueueItem): Promise<strin
     contactPhone: item.contactPhone,
     contactEmail: item.contactEmail,
     queueStatus: 'OUTREACH' as const,
-    smsStatus: item.contactPhone ? 'PENDING' : undefined,
     emailStatus: item.contactEmail ? 'PENDING' : undefined,
-    smsAttempts: 0,
     emailAttempts: 0,
     nextEmailDate: item.contactEmail ? new Date().toISOString() : undefined, // Send first email immediately
     propertyAddress: item.propertyAddress,
@@ -116,84 +109,6 @@ export async function addToOutreachQueue(item: OutreachQueueItem): Promise<strin
 
   console.log(`✅ Added contact ${item.contactId} to outreach queue`);
   return id;
-}
-
-/**
- * Get pending SMS contacts for a user
- * Used by SMS agent to find contacts needing outreach
- * 
- * Enforces 7-touch limit and 4-day cadence between touches
- * 
- * @param userId - User ID to query
- * @param limit - Max contacts to return
- * @returns Array of pending contacts ready for next touch
- */
-export async function getPendingSmsContacts(userId: string, limit: number = 50): Promise<OutreachQueueItem[]> {
-  const result = await docClient.send(new QueryCommand({
-    TableName: OUTREACH_QUEUE_TABLE,
-    IndexName: 'outreachQueuesByUserIdAndSmsStatus',
-    KeyConditionExpression: 'userId = :userId AND smsStatus = :status',
-    ExpressionAttributeValues: {
-      ':userId': userId,
-      ':status': 'PENDING',
-    },
-    Limit: limit * 2, // Get extra to filter by cadence and queue status
-  }));
-
-  const now = new Date();
-  const items = (result.Items || []) as OutreachQueueItem[];
-  
-  // Filter by queue status, 7-touch limit, and 4-day cadence
-  return items.filter(item => {
-    // Only send to contacts in OUTREACH status
-    const status = item.queueStatus || 'OUTREACH'; if (status !== 'OUTREACH') {
-      console.log(`⏹️ Contact ${item.contactId} not in OUTREACH status (${status})`);
-      return false;
-    }
-    
-    // Check if we already contacted them today (any channel)
-    if (item.lastContactDate) {
-      const lastContact = new Date(item.lastContactDate);
-      const today = new Date().toDateString();
-      const lastContactDay = lastContact.toDateString();
-      
-      if (today === lastContactDay) {
-        console.log(`⏹️ Contact ${item.contactId} already contacted today`);
-        return false;
-      }
-    }
-    
-    const attempts = item.smsAttempts || 0;
-    
-    // Max 7 touches per phone
-    if (attempts >= 7) {
-      console.log(`⏹️ Contact ${item.contactId} reached max SMS attempts (7)`);
-      return false;
-    }
-    
-    // First touch - send immediately
-    if (attempts === 0) return true;
-    
-    // Subsequent touches - wait 4 days (AND at least 24 hours to prevent same-day duplicates)
-    if (item.lastSmsSent) {
-      const lastSent = new Date(item.lastSmsSent);
-      const hoursSince = (now.getTime() - lastSent.getTime()) / (1000 * 60 * 60);
-      const daysSince = hoursSince / 24;
-      
-      // Prevent duplicate sends within same day (24 hours minimum)
-      if (hoursSince < 24) {
-        console.log(`⏳ Contact ${item.contactId} sent recently - only ${hoursSince.toFixed(1)} hours ago`);
-        return false;
-      }
-      
-      if (daysSince < 4) {
-        console.log(`⏳ Contact ${item.contactId} not ready - only ${daysSince.toFixed(1)} days since last SMS`);
-        return false;
-      }
-    }
-    
-    return true;
-  }).slice(0, limit);
 }
 
 /**
@@ -277,45 +192,6 @@ export async function getPendingEmailContacts(userId: string, limit: number = 50
 
     return true;
   }).slice(0, limit);
-}
-
-/**
- * Update SMS status after sending
- * Keeps status as PENDING for follow-ups (up to 7 touches)
- * 
- * @param id - Queue item ID
- * @param status - New status
- * @param attempts - Current attempt count
- */
-export async function updateSmsStatus(
-  id: string,
-  status: 'SENT' | 'REPLIED' | 'FAILED' | 'OPTED_OUT',
-  attempts?: number
-): Promise<void> {
-  // Keep as PENDING if under 7 attempts and not replied/opted out
-  const finalStatus = (status === 'SENT' && attempts && attempts < 7) ? 'PENDING' : status;
-  
-  const updateExpression = attempts !== undefined
-    ? 'SET smsStatus = :status, smsAttempts = :attempts, lastSmsSent = :now, updatedAt = :now'
-    : 'SET smsStatus = :status, updatedAt = :now';
-
-  const expressionValues: any = {
-    ':status': finalStatus,
-    ':now': new Date().toISOString(),
-  };
-
-  if (attempts !== undefined) {
-    expressionValues[':attempts'] = attempts;
-  }
-
-  await docClient.send(new UpdateCommand({
-    TableName: OUTREACH_QUEUE_TABLE,
-    Key: { id },
-    UpdateExpression: updateExpression,
-    ExpressionAttributeValues: expressionValues,
-  }));
-
-  console.log(`✅ Updated SMS status to ${finalStatus} for queue item ${id} (attempt ${attempts || 0})`);
 }
 
 /**
