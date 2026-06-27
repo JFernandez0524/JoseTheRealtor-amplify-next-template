@@ -34,6 +34,8 @@ type GhlIntegration = {
   agentBrokerage?: string;
   agentCalendarEmail?: string;
   campaignCalendarId?: string;
+  aiPersona?: string;
+  aiExamples?: string;
 };
 
 export type GhlTokenResult = {
@@ -46,6 +48,8 @@ export type GhlTokenResult = {
   agentBrokerage: string | null;
   agentCalendarEmail: string | null;
   campaignCalendarId: string | null;
+  aiPersona: string | null;
+  aiExamples: string | null;
 };
 
 /**
@@ -94,6 +98,8 @@ export async function getValidGhlToken(userId: string): Promise<GhlTokenResult |
         agentBrokerage: integration.agentBrokerage || null,
         agentCalendarEmail: integration.agentCalendarEmail || null,
         campaignCalendarId: integration.campaignCalendarId || null,
+        aiPersona: integration.aiPersona || null,
+        aiExamples: integration.aiExamples || null,
       };
     }
 
@@ -154,6 +160,8 @@ export async function getValidGhlToken(userId: string): Promise<GhlTokenResult |
         agentBrokerage: integration.agentBrokerage || null,
         agentCalendarEmail: integration.agentCalendarEmail || null,
         campaignCalendarId: integration.campaignCalendarId || null,
+        aiPersona: integration.aiPersona || null,
+        aiExamples: integration.aiExamples || null,
       };
     } catch (refreshError: any) {
       // Log the actual GHL error response
@@ -203,6 +211,8 @@ export async function getValidGhlToken(userId: string): Promise<GhlTokenResult |
               agentBrokerage: updated.agentBrokerage || null,
               agentCalendarEmail: updated.agentCalendarEmail || null,
               campaignCalendarId: updated.campaignCalendarId || null,
+              aiPersona: updated.aiPersona || null,
+              aiExamples: updated.aiExamples || null,
             };
           }
         }
@@ -228,6 +238,8 @@ export type IntegrationByLocationResult = {
   agentBrokerage: string | null;
   agentCalendarEmail: string | null;
   campaignCalendarId: string | null;
+  aiPersona: string | null;
+  aiExamples: string | null;
 };
 
 /**
@@ -273,6 +285,8 @@ export async function getIntegrationByLocationId(locationId: string): Promise<In
       agentBrokerage: integration.agentBrokerage || null,
       agentCalendarEmail: integration.agentCalendarEmail || null,
       campaignCalendarId: integration.campaignCalendarId || null,
+      aiPersona: integration.aiPersona || null,
+      aiExamples: integration.aiExamples || null,
     };
   } catch (error: any) {
     console.error(`❌ [TOKEN_MANAGER] Failed to get integration for locationId ${locationId}:`, error.message);

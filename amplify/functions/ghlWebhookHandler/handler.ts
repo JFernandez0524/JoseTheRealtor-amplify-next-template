@@ -268,8 +268,26 @@ export const handler = async (event: any) => {
     const { token } = tokenResult;
     const fieldIds: Record<string, string> = tokenResult.customFieldIds || {};
     const opportunityFieldIds: Record<string, string> = tokenResult.opportunityFieldIds || {};
-    const agentProfile = tokenResult.agentName && tokenResult.agentBrokerage
-      ? { name: tokenResult.agentName, brokerage: tokenResult.agentBrokerage }
+
+    // If customFieldIds is empty, every property-field lookup below silently returns undefined,
+    // which makes a known lead look brand-new to the AI (generic "buy or sell?" reply). Surface it.
+    if (Object.keys(fieldIds).length === 0) {
+      logWarning('webhook_field_ids', 'customFieldIds is empty — property lookups will fail, lead may be treated as new', {
+        userId,
+        contactId,
+        integrationId: tokenResult.integrationId,
+      });
+    }
+    // Build agentProfile whenever ANY identity/voice field is set. name/brokerage fall back to
+    // empty strings so conversationHandler's "your agent"/"our brokerage" defaults still apply,
+    // while aiPersona/aiExamples can take effect even before name/brokerage are filled in.
+    const agentProfile = (tokenResult.agentName || tokenResult.agentBrokerage || tokenResult.aiPersona || tokenResult.aiExamples)
+      ? {
+          name: tokenResult.agentName || '',
+          brokerage: tokenResult.agentBrokerage || '',
+          persona: tokenResult.aiPersona || undefined,
+          examples: tokenResult.aiExamples || undefined,
+        }
       : undefined;
     console.log('✅ [WEBHOOK_LAMBDA] Got valid GHL token');
 

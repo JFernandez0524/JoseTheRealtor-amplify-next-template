@@ -63,7 +63,7 @@ interface ConversationContext {
   motivation?: string;
   fieldIds?: Record<string, string>;         // Custom contact field IDs for this location
   opportunityFieldIds?: Record<string, string>; // Custom opportunity field IDs for this location
-  agentProfile?: { name: string; brokerage: string }; // Per-user identity for outreach messages
+  agentProfile?: { name: string; brokerage: string; persona?: string; examples?: string }; // Per-user identity + AI voice for outreach messages
   campaignCalendarId?: string; // Per-user GHL calendar ID for AI appointment booking
 }
 
@@ -374,7 +374,20 @@ async function generateOpenAIResponse(context: ConversationContext, propertyData
   
   // Use provided state or calculate it (only for replies, not outreach)
   const calculatedCurrentState = currentState ?? getCurrentState(context.contact, context.fieldIds);
-  const hasAddressForState = !!(context.propertyAddress && context.propertyCity && context.propertyState);
+
+  // A contacted lead (call_attempt_counter > 0) is an existing relationship even if the
+  // property-field lookup came back empty. Without this, a failed custom-field read drops a
+  // known lead into the "new lead / no property info" path (SCENARIO 2), producing a generic
+  // "Are you looking to buy or thinking about selling?" reply to someone we've already texted.
+  const callAttemptFieldId = context.fieldIds?.call_attempt_counter;
+  const callAttempts = callAttemptFieldId
+    ? parseInt(context.contact?.customFields?.find((f: any) => f.id === callAttemptFieldId)?.value || '0', 10)
+    : 0;
+  const hasExistingRelationship = callAttempts > 0;
+
+  const hasAddressForState =
+    !!(context.propertyAddress && context.propertyCity && context.propertyState) ||
+    hasExistingRelationship;
   const calculatedNextState = nextState ?? getNextState(calculatedCurrentState, context.incomingMessage, hasAddressForState, context.leadIntent);
 
   const systemPrompt = `You are an AI assistant helping ${agentFullName}, a licensed real estate agent at ${agentBrokerage}.
@@ -420,6 +433,7 @@ COMPLIANCE RULES (CRITICAL):
 4. DISCLAIMERS: Property values are estimates only, not appraisals
 5. ALREADY LISTED PROPERTIES: If they mention working with another realtor or property being listed, IMMEDIATELY exit gracefully
 6. NEVER REPEAT FULL ADDRESS: After initial outreach, do not repeat the full property address unless the user mentions it first
+7. NO OPT-OUT TEXT OR SIGNATURE: Do NOT add "Reply STOP", "unsubscribe", "opt out", or any sign-off signature ("Thanks, ...", "- ${agentFirstName}") to your message. The messaging platform appends the legally-required opt-out and sender ID automatically — adding your own creates a confusing duplicate.
 
 ALREADY LISTED PROPERTY PROTOCOL:
 If they mention:
@@ -451,9 +465,16 @@ CONVERSATION STATE: ${calculatedNextState}
 
 STATE-SPECIFIC GUIDANCE:
 
-${calculatedNextState === 'NEW_LEAD' || calculatedNextState === 'ASK_INTENT' ? `
+${(calculatedNextState === 'NEW_LEAD' || calculatedNextState === 'ASK_INTENT') && !hasExistingRelationship ? `
 🎯 GOAL: Determine if buyer or seller
 ASK: "Are you looking to buy or thinking about selling?"
+` : ''}
+
+${(calculatedNextState === 'NEW_LEAD' || calculatedNextState === 'ASK_INTENT') && hasExistingRelationship ? `
+🎯 GOAL: Re-engage an existing lead you have already contacted (do NOT treat them as new)
+- Their reply may be short/ambiguous ("what's up?", "who's this?") — that's normal for a lead remembering a prior text.
+- Briefly re-anchor to why you reached out about their property, then ask ONE light question to continue.
+- Do NOT open with "Are you looking to buy or thinking about selling?" — that resets a relationship that already exists.
 ` : ''}
 
 ${calculatedNextState === 'SELLER_QUALIFICATION' ? `
@@ -497,8 +518,8 @@ ${hasAddress ? `- Known property: ${context.propertyAddress}` : ''}
 ${context.leadIntent ? `- Intent: ${context.leadIntent}` : ''}
 
 SCENARIO 1: EXISTING LEAD (Has property address in system)
-${hasAddress ? `
-You already know about their ${context.leadType?.toLowerCase() || 'property'} situation at ${context.propertyAddress}.
+${hasAddress || hasExistingRelationship ? `
+You already know about their ${context.leadType?.toLowerCase() || 'property'} situation${context.propertyAddress ? ` at ${context.propertyAddress}` : ''}. This is someone you have already reached out to — do NOT ask "are you looking to buy or sell" as if they were a brand-new lead. Pick up the existing conversation naturally.
 
 CONVERSATION APPROACH:
 - Acknowledge their response naturally
@@ -591,6 +612,12 @@ RESPONSE STYLE:
 - Use casual language
 - Show personality
 - Be helpful, not salesy
+${context.agentProfile?.persona ? `
+AGENT STYLE (match this voice — it overrides the generic style above where they conflict):
+${context.agentProfile.persona}` : ''}
+${context.agentProfile?.examples ? `
+EXAMPLES — mimic this voice and phrasing, do NOT copy verbatim or reuse their specifics:
+${context.agentProfile.examples}` : ''}
 
 Respond to their message:`;
 

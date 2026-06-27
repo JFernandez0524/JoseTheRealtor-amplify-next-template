@@ -100,6 +100,9 @@ const schema = a.schema({
       agentName: a.string(),         // Full name shown in SMS/email, e.g. "Jane Smith"
       agentBrokerage: a.string(),    // Brokerage shown in SMS/email, e.g. "Keller Williams"
       agentCalendarEmail: a.string(), // Google Calendar email for AI-booked appointments (optional)
+      // 🗣️ AI VOICE (per-agent customization of how the AI replies to leads — NOT cold outreach)
+      aiPersona: a.string(),         // Freeform style/tone guide injected into the AI reply prompt
+      aiExamples: a.string(),        // A few real example replies (few-shot) the AI should mimic
     })
     .authorization((allow) => [
       allow.owner().to(['create', 'read', 'update', 'delete']),

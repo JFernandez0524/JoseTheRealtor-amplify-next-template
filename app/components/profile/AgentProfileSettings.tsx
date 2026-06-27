@@ -15,6 +15,8 @@ export default function AgentProfileSettings() {
   const [agentName, setAgentName] = useState('');
   const [agentBrokerage, setAgentBrokerage] = useState('');
   const [agentCalendarEmail, setAgentCalendarEmail] = useState('');
+  const [aiPersona, setAiPersona] = useState('');
+  const [aiExamples, setAiExamples] = useState('');
 
   useEffect(() => {
     loadSettings();
@@ -38,6 +40,8 @@ export default function AgentProfileSettings() {
         setAgentName(userIntegration.agentName || '');
         setAgentBrokerage(userIntegration.agentBrokerage || '');
         setAgentCalendarEmail(userIntegration.agentCalendarEmail || '');
+        setAiPersona(userIntegration.aiPersona || '');
+        setAiExamples(userIntegration.aiExamples || '');
       }
     } catch (error) {
       console.error('Error loading agent profile:', error);
@@ -56,6 +60,8 @@ export default function AgentProfileSettings() {
         agentName: agentName || null,
         agentBrokerage: agentBrokerage || null,
         agentCalendarEmail: agentCalendarEmail || null,
+        aiPersona: aiPersona || null,
+        aiExamples: aiExamples || null,
       });
 
       alert('Agent profile saved!');
@@ -174,6 +180,46 @@ export default function AgentProfileSettings() {
           <p className="text-xs text-slate-500 mt-1">
             Google Calendar email for AI-booked appointments. Leave blank to skip calendar sync.
           </p>
+        </div>
+
+        <div className="pt-2 border-t border-slate-100">
+          <h4 className="text-sm font-black text-slate-900 mb-1 mt-4">AI Voice <span className="text-slate-400 font-normal">(optional)</span></h4>
+          <p className="text-xs text-slate-500 mb-4">
+            Shape how the AI sounds when it <strong>replies to leads</strong>. These do not change your
+            cold-outreach text messages.
+          </p>
+
+          <div className="mb-6">
+            <label className="block text-sm font-medium text-slate-700 mb-2">
+              Your Style / Persona
+            </label>
+            <textarea
+              value={aiPersona}
+              onChange={(e) => setAiPersona(e.target.value.slice(0, 1000))}
+              rows={4}
+              placeholder="e.g. Warm and casual, never pushy. Lead with the homeowner's situation, not a sales pitch. Use short texts, contractions, and a little humor. Avoid jargon and never give legal or tax advice."
+              className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+            />
+            <p className="text-xs text-slate-500 mt-1">
+              A short guide to your tone and do's/don'ts. {aiPersona.length}/1000 characters.
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-2">
+              Example Replies
+            </label>
+            <textarea
+              value={aiExamples}
+              onChange={(e) => setAiExamples(e.target.value.slice(0, 2000))}
+              rows={6}
+              placeholder={'Paste 3-5 of your best real replies so the AI can mimic your voice, e.g.\nLead: how did you get my number?\nYou: fair question — it’s from public county records, nothing private. happy to explain.\nLead: not interested\nYou: totally understand, I’ll leave you be. if anything changes down the road just reach out.'}
+              className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 font-mono text-sm"
+            />
+            <p className="text-xs text-slate-500 mt-1">
+              A few real replies the AI should imitate (not copy verbatim). {aiExamples.length}/2000 characters.
+            </p>
+          </div>
         </div>
 
         <button
