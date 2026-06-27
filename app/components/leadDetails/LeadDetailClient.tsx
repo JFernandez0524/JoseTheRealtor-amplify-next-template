@@ -481,7 +481,7 @@ function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
                   <p className='text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1'>
                     Zestimate® Value
                   </p>
-                  {(access.isAdmin || access.isPro) && lead.zillowUrl ? (
+                  {lead.zillowUrl ? (
                     <a
                       href={lead.zillowUrl}
                       target='_blank'
@@ -492,9 +492,7 @@ function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
                     </a>
                   ) : (
                     <p className='text-2xl md:text-4xl font-black text-indigo-600 tracking-tighter'>
-                      {access.isAdmin || access.isPro
-                        ? formatCurrency(valuation?.zestimate)
-                        : '$XX,XXX (PRO Only)'}
+                      {formatCurrency(valuation?.zestimate)}
                     </p>
                   )}
                 </div>
