@@ -71,13 +71,17 @@ export async function analyzeLeadIntent(message: string): Promise<SentimentAnaly
  * Classifies as: POSITIVE | NEUTRAL | FRUSTRATED | URGENT | DISENGAGING
  */
 async function detectSentiment(message: string): Promise<ConversationSentiment | null> {
-  if (message.length <= 10) return null;
-  
-  // Check for objection keywords first (fast path)
+  // Check for objection keywords first (fast, local). This MUST run before the short-message
+  // guard below — otherwise literal opt-outs like "Stop" / "quit" (<= 10 chars) return null
+  // and get misclassified as CONVERSATION, so the lead never gets marked DND and we attempt a
+  // doomed AI reply to someone who just unsubscribed.
   const objectionKeywords = ['not interested', 'stop', 'remove', 'unsubscribe', 'leave me alone', 'busy', 'later'];
   if (objectionKeywords.some(kw => message.toLowerCase().includes(kw))) {
     return 'DISENGAGING';
   }
+
+  // Skip the (paid) OpenAI classification for trivially short, non-objection messages.
+  if (message.length <= 10) return null;
 
   try {
     const response = await axios.post(

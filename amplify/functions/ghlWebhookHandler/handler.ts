@@ -373,6 +373,21 @@ export const handler = async (event: any) => {
       tags: fullContact?.tags
     });
 
+    // DND / opt-out guard (authoritative). GHL handles carrier opt-out keywords (STOP, UNSUBSCRIBE,
+    // CANCEL, QUIT, END, …) itself and sets SMS DND — which is more complete than our keyword list.
+    // If the contact is opted out of SMS, never generate or attempt an AI reply (GHL would 400 it),
+    // and bring our OutreachQueue in sync by marking the contact DND.
+    const smsDndStatus = fullContact?.dndSettings?.SMS?.status;
+    const isSmsOptedOut = fullContact?.dnd === true || (!!smsDndStatus && smsDndStatus !== 'inactive');
+    if (messageType === 2 && isSmsOptedOut) {
+      console.log(`🛑 [WEBHOOK_LAMBDA] Contact opted out of SMS (dnd=${fullContact?.dnd}, sms=${smsDndStatus}) - marking DND, skipping AI reply`);
+      await updateQueueStatus(queueId, 'DND', 'Contact opted out (GHL SMS DND)');
+      return {
+        statusCode: 200,
+        body: JSON.stringify({ message: 'Contact opted out of SMS - no AI response', contactId })
+      };
+    }
+
     // Check if this is actually a lead (has ai outreach tag or property data)
     const hasAiOutreachTag = fullContact?.tags?.some((tag: string) => 
       tag.toLowerCase().includes('ai outreach')
