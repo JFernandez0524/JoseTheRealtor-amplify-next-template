@@ -1,3 +1,20 @@
+/**
+ * POST /api/v1/billing/buy-credits
+ *
+ * Creates a Stripe Checkout Session for a one-time skip tracing credit purchase.
+ * Credits are added to the user's account by the Stripe webhook on payment success.
+ *
+ * AUTH: Required (Cognito JWT via cookies)
+ * REQUEST BODY: { package: '100' | '250' | '500' }
+ * RESPONSE: { url: string }  — Stripe-hosted checkout page URL
+ *
+ * PACKAGES:
+ *   '100'  → 100 credits  @ $10.00
+ *   '250'  → 250 credits  @ $25.00
+ *   '500'  → 500 credits  @ $50.00
+ *
+ * RELATED: amplify/functions/stripeWebhookHandler — adds credits on payment.intent.succeeded
+ */
 import { NextRequest, NextResponse } from 'next/server';
 import { AuthGetCurrentUserServer, AuthGetUserEmailServer } from '@/app/utils/aws/auth/amplifyServerUtils.server';
 

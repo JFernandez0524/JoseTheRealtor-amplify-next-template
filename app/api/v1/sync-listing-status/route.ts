@@ -1,3 +1,17 @@
+/**
+ * POST /api/v1/sync-listing-status
+ *
+ * Triggers the syncListingStatus Lambda for the authenticated user.
+ * Checks each lead's property against MLS data and updates listing_status
+ * in both DynamoDB and the GHL contact custom field.
+ *
+ * AUTH: Required (Cognito JWT via cookies)
+ * REQUEST: No body required
+ * RESPONSE: { success: true, updated: number, total: number, failed: number }
+ *
+ * CALLED BY: Settings page "Sync Listing Status" button
+ * LAMBDA: amplify/functions/syncListingStatus
+ */
 import { NextRequest, NextResponse } from 'next/server';
 import { AuthGetCurrentUserServer } from '@/app/utils/aws/auth/amplifyServerUtils.server';
 import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda';

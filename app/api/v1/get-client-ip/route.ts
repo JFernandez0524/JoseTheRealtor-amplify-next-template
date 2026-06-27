@@ -1,3 +1,12 @@
+/**
+ * GET /api/v1/get-client-ip
+ *
+ * Returns the client's IP address by reading x-forwarded-for / x-real-ip headers.
+ * Used client-side to resolve the originating IP for logging or geo lookups.
+ *
+ * AUTH: None
+ * RESPONSE: { ip: string, headers: { x-forwarded-for, x-real-ip } }
+ */
 import { NextRequest, NextResponse } from 'next/server';
 
 export async function GET(request: NextRequest) {

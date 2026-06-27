@@ -1,4 +1,14 @@
-// Shared sync utilities to eliminate code duplication
+/**
+ * GHL SYNC UTILITIES
+ *
+ * Shared helpers for writing GHL sync results back to DynamoDB.
+ * Used by the manualGhlSync Lambda and the uploadCsvHandler pipeline.
+ *
+ * KEY FUNCTIONS:
+ * - updateLeadSyncStatus — writes SUCCESS / FAILED / SKIPPED to PropertyLead
+ * - validateLeadForSync  — checks skip trace prerequisites before attempting sync
+ *   (leads with no skip trace result are skipped; direct-mail-only leads are valid)
+ */
 import { DynamoDBDocumentClient, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 
 export type SyncResult = {

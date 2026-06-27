@@ -1,3 +1,23 @@
+/**
+ * GET /api/v1/oauth/start
+ *
+ * Initiates the GoHighLevel OAuth flow. Builds the GHL authorization URL with
+ * a signed HMAC state parameter (encodes userId + timestamp) and redirects the
+ * user to the GHL consent screen.
+ *
+ * AUTH: Required (Cognito JWT via cookies)
+ * REQUEST: No params
+ * RESPONSE: 302 redirect → GHL OAuth authorization URL
+ *
+ * OAUTH FLOW:
+ * 1. User clicks "Connect GHL" → hits this endpoint
+ * 2. State token created: HMAC(userId + timestamp) — expires in 15 min
+ * 3. Browser redirected to GHL consent page
+ * 4. After approval, GHL redirects to /api/v1/oauth/callback
+ *
+ * SCOPES: Full GHL permission set (contacts, conversations, calendars, etc.)
+ * RELATED: app/api/v1/oauth/callback/route.ts
+ */
 import { NextResponse } from 'next/server';
 import { randomBytes, createHmac } from 'crypto';
 import { AuthGetCurrentUserServer, AuthGetUserGroupsServer } from '@/app/utils/aws/auth/amplifyServerUtils.server';

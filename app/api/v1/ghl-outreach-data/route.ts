@@ -1,3 +1,18 @@
+/**
+ * GET /api/v1/ghl-outreach-data?contactId=<id>
+ *
+ * Returns outreach stats for a GHL contact — call attempts, email attempts,
+ * AI state, last contact date, and live tags.
+ *
+ * AUTH: Required (Cognito JWT via cookies)
+ * QUERY: contactId — GHL contact ID
+ * RESPONSE: outreach field values + { tags: string[] } (always fetched live from GHL)
+ *
+ * DATA SOURCE: Prefers ghlOutreachData cached in PropertyLead DynamoDB record.
+ * Falls back to live GHL custom field lookup if no cached data exists.
+ *
+ * CALLED BY: Lead detail page outreach stats panel
+ */
 import { NextRequest, NextResponse } from 'next/server';
 import { cookiesClient, AuthGetCurrentUserServer } from '@/app/utils/aws/auth/amplifyServerUtils.server';
 import { ghlGetContact } from '../../../../amplify/functions/shared/ghlClient';

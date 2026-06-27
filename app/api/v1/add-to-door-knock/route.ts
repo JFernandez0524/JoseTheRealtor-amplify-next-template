@@ -1,3 +1,15 @@
+/**
+ * POST /api/v1/add-to-door-knock
+ *
+ * Adds one or more PropertyLead records to the DoorKnockQueue so the agent
+ * can visit them in person. Skips leads already in the queue.
+ *
+ * AUTH: Required (Cognito JWT via cookies)
+ * REQUEST BODY: { leadIds: string[] }
+ * RESPONSE: { success: true, added: number, skipped: number, errors: string[] }
+ *
+ * CALLED BY: Lead list bulk action — "Add to Door Knock"
+ */
 import { NextRequest, NextResponse } from 'next/server';
 import {
   AuthGetCurrentUserServer,

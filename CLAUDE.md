@@ -9,9 +9,13 @@ npm run dev        # Start Next.js dev server
 npm run build      # Production build
 npm run lint       # ESLint check
 npm run fix-syncs  # Fix failed GHL sync jobs (runs tsx scripts/fix-failed-syncs.ts)
+npm test           # Run unit tests (Vitest)
+npm run test:watch # Run tests in watch mode
+npm run test:coverage # Run tests with coverage report
 ```
 
-No test suite is configured.
+Tests live in `__tests__/shared/` and cover pure utility functions in `amplify/functions/shared/`.
+Add new tests there when adding logic to shared utilities. Avoid testing Lambda handlers that require AWS SDK mocks.
 
 ## Architecture Overview
 

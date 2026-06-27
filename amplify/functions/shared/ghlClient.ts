@@ -1,3 +1,16 @@
+/**
+ * GHL API CLIENT
+ *
+ * Thin axios wrapper for the GoHighLevel (LeadConnector) REST API v2021-07-28.
+ * All outbound GHL API calls in Lambda functions and API routes go through here.
+ *
+ * PATTERN:
+ * - createGhlClient(token) → AxiosInstance (use for custom/one-off endpoints)
+ * - Named helpers (ghlGetContact, ghlUpdateContact, etc.) for common operations
+ *
+ * BASE URL: https://services.leadconnectorhq.com
+ * TIMEOUT: 10 seconds per request
+ */
 import axios, { AxiosInstance } from 'axios';
 
 const GHL_BASE_URL = 'https://services.leadconnectorhq.com';

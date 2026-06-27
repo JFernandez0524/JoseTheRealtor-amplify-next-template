@@ -1,3 +1,20 @@
+/**
+ * POST /api/v1/billing/create-checkout
+ *
+ * Creates a Stripe Checkout Session for a subscription plan.
+ * Embeds userId and plan in both session metadata and subscription metadata
+ * so the Stripe webhook can grant access regardless of which event fires first.
+ *
+ * AUTH: Required (Cognito JWT via cookies)
+ * REQUEST BODY: { plan: 'sync-plan' | 'ai-outreach' }
+ * RESPONSE: { url: string }  — Stripe-hosted checkout page URL
+ *
+ * PLANS:
+ *   sync-plan     → $39/month  (PRO group)
+ *   ai-outreach   → $250/month (AI_PLAN group)
+ *
+ * RELATED: amplify/functions/stripeWebhookHandler — grants Cognito group on success
+ */
 import { NextRequest, NextResponse } from 'next/server';
 import { AuthGetCurrentUserServer, AuthGetUserEmailServer } from '@/app/utils/aws/auth/amplifyServerUtils.server';
 

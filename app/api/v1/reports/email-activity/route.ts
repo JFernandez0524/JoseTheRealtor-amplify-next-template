@@ -1,3 +1,16 @@
+/**
+ * GET /api/v1/reports/email-activity?days=<n>
+ *
+ * Returns email outreach activity from the OutreachQueue for the authenticated user.
+ * Includes summary stats (sent today/this week/total, replies, bounces) and a
+ * daily activity log for the requested look-back window (max 90 days, default 14).
+ *
+ * AUTH: Required (Cognito JWT via cookies)
+ * QUERY: days — number of days to include in the daily log (1-90, default 14)
+ * RESPONSE: { summary: {...}, byDate: { "YYYY-MM-DD": [...] } }
+ *
+ * CALLED BY: Reports / Email Activity dashboard page
+ */
 import { NextRequest, NextResponse } from 'next/server';
 import { cookiesClient, AuthGetCurrentUserServer } from '@/app/utils/aws/auth/amplifyServerUtils.server';
 

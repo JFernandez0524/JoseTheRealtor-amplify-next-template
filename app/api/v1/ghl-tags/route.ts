@@ -1,3 +1,17 @@
+/**
+ * GHL TAGS API
+ *
+ * Add or remove a single tag on a GHL contact.
+ *
+ * POST /api/v1/ghl-tags
+ *   AUTH: Required
+ *   BODY: { contactId: string, tag: string }
+ *   RESPONSE: { tags: string[] }  — full updated tag list
+ *
+ * DELETE /api/v1/ghl-tags?contactId=<id>&tag=<tag>
+ *   AUTH: Required
+ *   RESPONSE: { tags: string[] }  — full updated tag list
+ */
 import { NextRequest, NextResponse } from 'next/server';
 import { cookiesClient, AuthGetCurrentUserServer } from '@/app/utils/aws/auth/amplifyServerUtils.server';
 import { ghlAddTags, ghlGetContact, createGhlClient } from '../../../../amplify/functions/shared/ghlClient';

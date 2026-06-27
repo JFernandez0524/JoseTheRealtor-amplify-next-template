@@ -1,3 +1,16 @@
+/**
+ * POST /api/update-ghl-status
+ *
+ * Admin utility to manually override a lead's GHL sync status in DynamoDB.
+ * Bypasses normal auth — protected by a hardcoded admin key instead.
+ *
+ * AUTH: adminKey must equal "ghl-admin-2026" (passed in request body)
+ * REQUEST BODY: { leadId, ghlContactId?, status, adminKey }
+ * RESPONSE: { success: true }
+ *
+ * NOTE: Intended for one-off operational fixes, not regular use.
+ * Consider migrating to ADMINS group auth if usage grows.
+ */
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 

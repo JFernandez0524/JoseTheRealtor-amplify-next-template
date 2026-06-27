@@ -1,3 +1,15 @@
+/**
+ * GET /api/v1/door-knock-leads
+ *
+ * Returns all DoorKnockQueue entries for the authenticated user —
+ * leads queued for in-person door knocking, with address, status,
+ * priority, estimated value, and visit/snooze timestamps.
+ *
+ * AUTH: Required (Cognito JWT via cookies)
+ * RESPONSE: { success: true, leads: DoorKnockLead[] }
+ *
+ * CALLED BY: Door knock map / list page
+ */
 import { NextRequest, NextResponse } from 'next/server';
 import { AuthGetCurrentUserServer, cookiesClient } from '@/app/utils/aws/auth/amplifyServerUtils.server';
 

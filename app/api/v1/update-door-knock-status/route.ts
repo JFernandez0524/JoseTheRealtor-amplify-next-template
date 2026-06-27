@@ -1,3 +1,15 @@
+/**
+ * PATCH /api/v1/update-door-knock-status
+ *
+ * Updates a DoorKnockQueue entry's status, notes, priority, or snooze date.
+ * Sets visitedAt automatically when status changes.
+ *
+ * AUTH: Required (Cognito JWT via cookies)
+ * REQUEST BODY: { id, status?, notes?, priority?, snoozedUntil? }
+ * RESPONSE: { success: true, lead: DoorKnockQueue }
+ *
+ * CALLED BY: Door knock list / map — status update actions
+ */
 import { NextRequest, NextResponse } from 'next/server';
 import { AuthGetCurrentUserServer, cookiesClient } from '@/app/utils/aws/auth/amplifyServerUtils.server';
 

@@ -1,3 +1,19 @@
+/**
+ * POST /api/v1/create-manual-lead
+ *
+ * Creates a single PropertyLead record manually (without CSV upload).
+ * Address components must be pre-validated by the Google Places API on the client.
+ * Fetches a Zestimate from Bridge API at creation time (non-fatal if it fails).
+ *
+ * AUTH: Required (Cognito JWT via cookies)
+ * REQUEST BODY:
+ *   { type, ownerLastName, ownerFirstName?, phone?, ownerAddr, adminFirstName?, adminLastName?, adminAddr? }
+ *   ownerAddr / adminAddr: { street, city, state, zip, county?, lat?, lng? }
+ *   Probate leads require adminFirstName, adminLastName, adminAddr.
+ * RESPONSE: { success: true, lead: PropertyLead }
+ *
+ * CALLED BY: Manual lead creation form
+ */
 import { NextRequest, NextResponse } from 'next/server';
 import { AuthGetCurrentUserServer } from '@/app/utils/aws/auth/amplifyServerUtils.server';
 import { analyzeBridgeProperty } from '@/app/utils/bridge.server';

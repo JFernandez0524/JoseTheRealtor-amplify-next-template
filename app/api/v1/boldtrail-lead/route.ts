@@ -1,3 +1,18 @@
+/**
+ * POST /api/v1/boldtrail-lead
+ *
+ * External webhook endpoint for BoldTrail (kvCORE) lead ingestion.
+ * Validates the property address, fetches a Zestimate, creates a kvCORE
+ * contact, and syncs the contact to GHL.
+ *
+ * AUTH: None — public endpoint (CORS allowed from all origins)
+ * REQUEST BODY: BoldTrailLeadRequest
+ *   { street, city?, state?, zip?, lat?, lng?, address?, name?, email?, phone? }
+ * RESPONSE: { success: true, contact: {...}, valuation: {...} }
+ *
+ * CORS: Open (intended to be called from BoldTrail's backend)
+ * NOTE: Add signature verification if this endpoint is abused.
+ */
 import { NextRequest, NextResponse } from 'next/server';
 import { validateAddressWithGoogle } from '@/app/utils/google.server';
 import { analyzeBridgeProperty } from '@/app/utils/bridge.server';

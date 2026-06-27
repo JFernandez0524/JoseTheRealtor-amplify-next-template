@@ -1,3 +1,15 @@
+/**
+ * GET /api/v1/integration-checklist
+ *
+ * Returns a static JSON checklist of GHL integration setup steps —
+ * which items are complete, which are pending, and what GHL workflow
+ * changes are required (dialer campaign, direct mail protection, tag logic).
+ *
+ * AUTH: None (public — read-only reference data)
+ * RESPONSE: nested checklist object
+ *
+ * NOTE: Content is hardcoded and must be updated manually as setup evolves.
+ */
 import { NextResponse } from 'next/server';
 
 export async function GET() {

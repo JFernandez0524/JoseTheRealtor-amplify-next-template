@@ -1,3 +1,18 @@
+/**
+ * POST /api/v1/enrich-manual-lead
+ *
+ * Validates a property address via Google Address Validation API and
+ * fetches a Zestimate from Bridge API. Used in the manual lead creation
+ * flow to pre-populate valuation data before the lead is saved.
+ *
+ * AUTH: Required (Cognito JWT via cookies)
+ * REQUEST BODY: { address, city, state, zip }
+ * RESPONSE:
+ *   { success: true, zestimate: number|null, zpid: string|null, validation: {...} }
+ *   { success: false, error: string, validation: {...} }  — if address invalid
+ *
+ * CALLED BY: Manual lead form — address validation step
+ */
 import { NextRequest, NextResponse } from 'next/server';
 import { AuthGetCurrentUserServer } from '@/app/utils/aws/auth/amplifyServerUtils.server';
 import { validateAddressWithGoogle } from '@/app/utils/google.server';

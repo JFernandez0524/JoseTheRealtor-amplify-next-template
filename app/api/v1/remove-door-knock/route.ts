@@ -1,3 +1,14 @@
+/**
+ * DELETE /api/v1/remove-door-knock
+ *
+ * Removes a single entry from the DoorKnockQueue by its record ID.
+ *
+ * AUTH: Required (Cognito JWT via cookies)
+ * REQUEST BODY: { id: string }
+ * RESPONSE: { success: true }
+ *
+ * CALLED BY: Door knock list — remove action
+ */
 import { NextRequest, NextResponse } from 'next/server';
 import { AuthGetCurrentUserServer, cookiesClient } from '@/app/utils/aws/auth/amplifyServerUtils.server';
 

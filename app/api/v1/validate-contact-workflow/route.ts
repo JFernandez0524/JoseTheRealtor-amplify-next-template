@@ -1,3 +1,16 @@
+/**
+ * POST /api/v1/validate-contact-workflow
+ *
+ * Debug/admin utility that inspects a GHL contact's current workflow state —
+ * tags, custom field values, lead type, contact type, and AI state.
+ * Used to troubleshoot contacts that are not progressing through outreach workflows.
+ *
+ * AUTH: None (uses GHL_API_KEY env var directly — internal/admin use only)
+ * REQUEST BODY: { contactId: string }
+ * RESPONSE: { success: true, contactId, contactName, analysis: {...} }
+ *
+ * NOTE: Not user-scoped. Do not expose in production UI without auth guard.
+ */
 import { NextResponse } from 'next/server';
 import { ghlGetContact } from '../../../../amplify/functions/shared/ghlClient';
 

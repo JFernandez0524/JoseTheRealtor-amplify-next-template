@@ -1,3 +1,14 @@
+/**
+ * POST /api/v1/bulk-delete-leads
+ *
+ * Permanently deletes one or more PropertyLead records from DynamoDB.
+ *
+ * AUTH: Required (Cognito JWT via cookies)
+ * REQUEST BODY: { ids: string[] }
+ * RESPONSE: { success: true, deleted: number }
+ *
+ * NOTE: Deletion is irreversible. The caller is responsible for any GHL cleanup.
+ */
 import { NextResponse } from 'next/server';
 import { cookiesClient } from '@/app/utils/aws/auth/amplifyServerUtils.server';
 

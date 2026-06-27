@@ -1,3 +1,14 @@
+/**
+ * GET /api/v1/admin/outreach-queue-stats
+ *
+ * Returns global OutreachQueue statistics across all users —
+ * total entries, entries added today, and counts broken down by emailStatus.
+ *
+ * AUTH: Required — ADMINS group only
+ * RESPONSE: { total, addedToday, byStatus: { PENDING, SENT, REPLIED, BOUNCED, FAILED, OPTED_OUT } }
+ *
+ * CALLED BY: Admin dashboard outreach stats widget
+ */
 import { NextResponse } from 'next/server';
 import {
   AuthGetUserGroupsServer,

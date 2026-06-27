@@ -1,3 +1,15 @@
+/**
+ * WEBHOOK TEST ENDPOINT
+ *
+ * Development/debug utility that logs all incoming request headers and body.
+ * Use to inspect what payloads third-party services (GHL, Stripe, etc.) send.
+ *
+ * POST /api/v1/webhook-test — logs and returns { success: true }
+ * GET  /api/v1/webhook-test — returns endpoint status message
+ *
+ * AUTH: None
+ * NOTE: Remove or gate behind auth before exposing in production.
+ */
 import { NextResponse } from 'next/server';
 
 export async function POST(req: Request) {

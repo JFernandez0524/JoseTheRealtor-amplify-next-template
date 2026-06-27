@@ -1,3 +1,16 @@
+/**
+ * GET /api/v1/reports/pipeline-stats
+ *
+ * Returns aggregated pipeline statistics for the authenticated user's leads:
+ * skip trace counts/rates, GHL sync counts, outreach progress, and
+ * per-lead detail rows for skip trace history.
+ *
+ * AUTH: Required (Cognito JWT via cookies)
+ * REQUEST: No params
+ * RESPONSE: { skipTrace: {...}, ghlSync: {...}, outreach: {...}, leads: [...] }
+ *
+ * CALLED BY: Reports / Pipeline Stats dashboard page
+ */
 import { NextResponse } from 'next/server';
 import { cookiesClient, AuthGetCurrentUserServer } from '@/app/utils/aws/auth/amplifyServerUtils.server';
 import { fetchAllLeads } from '@/app/utils/aws/data/pagination';

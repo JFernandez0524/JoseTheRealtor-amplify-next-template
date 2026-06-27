@@ -1,3 +1,17 @@
+/**
+ * POST /api/v1/refresh-zestimate
+ *
+ * Re-fetches Zestimate and Zillow link for a PropertyLead using the Bridge API.
+ * Accepts either structured address fields or a Zillow property URL (from which
+ * address and zpid are parsed automatically).
+ *
+ * AUTH: Required (Cognito JWT via cookies)
+ * REQUEST BODY:
+ *   { leadId, street?, city?, state?, zip?, latitude?, longitude?, zillowUrl?, zillowZpid? }
+ * RESPONSE: { success: true, zestimate: number, zpid: string, zillowUrl: string }
+ *
+ * CALLED BY: Lead detail page "Refresh Zestimate" button
+ */
 import { NextRequest, NextResponse } from 'next/server';
 import { cookiesClient } from '@/app/utils/aws/auth/amplifyServerUtils.server';
 import { analyzeBridgeProperty } from '@/app/utils/bridge.server';

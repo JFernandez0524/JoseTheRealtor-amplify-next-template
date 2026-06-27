@@ -1,3 +1,18 @@
+/**
+ * POST /api/v1/ghl/create-subaccount
+ *
+ * Creates a new GHL sub-account (location) under the agency using the agency token.
+ * Intended for provisioning new user accounts during onboarding.
+ *
+ * AUTH: Required (Cognito JWT via cookies)
+ * REQUEST BODY: { businessName: string, phone: string }
+ * RESPONSE: { success: true, subAccountId: string, locationId: string }
+ *
+ * TODO: Billing subscription setup and DynamoDB UserAccount update are not yet
+ * implemented (see TODO comments in handler).
+ *
+ * REQUIRES: GHL_AGENCY_TOKEN env var (agency-level OAuth token)
+ */
 import { NextRequest, NextResponse } from 'next/server';
 import { AuthGetCurrentUserServer } from '@/app/utils/aws/auth/amplifyServerUtils.server';
 import { createGhlClient } from '../../../../../amplify/functions/shared/ghlClient';
