@@ -481,11 +481,22 @@ function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
                   <p className='text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1'>
                     Zestimate® Value
                   </p>
-                  <p className='text-2xl md:text-4xl font-black text-indigo-600 tracking-tighter'>
-                    {access.isAdmin || access.isPro
-                      ? formatCurrency(valuation?.zestimate)
-                      : '$XX,XXX (PRO Only)'}
-                  </p>
+                  {(access.isAdmin || access.isPro) && lead.zillowUrl ? (
+                    <a
+                      href={lead.zillowUrl}
+                      target='_blank'
+                      rel='noopener noreferrer'
+                      className='text-2xl md:text-4xl font-black text-indigo-600 tracking-tighter hover:text-indigo-800 underline underline-offset-4 transition-colors'
+                    >
+                      {formatCurrency(valuation?.zestimate)}
+                    </a>
+                  ) : (
+                    <p className='text-2xl md:text-4xl font-black text-indigo-600 tracking-tighter'>
+                      {access.isAdmin || access.isPro
+                        ? formatCurrency(valuation?.zestimate)
+                        : '$XX,XXX (PRO Only)'}
+                    </p>
+                  )}
                 </div>
               </div>
             )}
