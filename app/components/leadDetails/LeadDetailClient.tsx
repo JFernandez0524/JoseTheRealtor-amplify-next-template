@@ -213,49 +213,7 @@ function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
       }
     });
 
-    const fetchMarketIntel = async () => {
-      if (
-        !initialLead?.id ||
-        (!initialLead?.latitude && !initialLead.standardizedAddress)
-      )
-        return;
-      setIsAnalyzing(true);
-
-      let street = lead?.ownerAddress || initialLead.ownerAddress || '';
-      let city = lead?.ownerCity || initialLead.ownerCity || '';
-      let state = lead?.ownerState || initialLead.ownerState || '';
-      let zip = lead?.ownerZip || initialLead.ownerZip || '';
-
-      const rawAddress = initialLead.standardizedAddress;
-      if (typeof rawAddress === 'string' && rawAddress.trim().startsWith('{')) {
-        try {
-          const parsed = JSON.parse(rawAddress);
-          street = parsed.street || street;
-          city = parsed.city || city;
-          state = parsed.state || state;
-          zip = parsed.zip || zip;
-        } catch (e) {}
-      }
-
-      try {
-        const response = await axios.post('/api/v1/analyze-property', {
-          lat: Number(initialLead.latitude),
-          lng: Number(initialLead.longitude),
-          street,
-          city,
-          state,
-          zip,
-        });
-        if (response.data.success) setMarketData(response.data);
-      } catch (err) {
-        console.error('Analysis Failed:', err);
-      } finally {
-        setIsAnalyzing(false);
-      }
-    };
-    
     setLead(initialLead);
-    fetchMarketIntel();
 
     return () => subscription.unsubscribe();
   }, [initialLead]);
@@ -488,11 +446,11 @@ function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
                       rel='noopener noreferrer'
                       className='text-2xl md:text-4xl font-black text-indigo-600 tracking-tighter hover:text-indigo-800 underline underline-offset-4 transition-colors'
                     >
-                      {formatCurrency(valuation?.zestimate)}
+                      {formatCurrency(lead.zestimate)}
                     </a>
                   ) : (
                     <p className='text-2xl md:text-4xl font-black text-indigo-600 tracking-tighter'>
-                      {formatCurrency(valuation?.zestimate)}
+                      {formatCurrency(lead.zestimate)}
                     </p>
                   )}
                 </div>
@@ -793,6 +751,15 @@ function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
                   className='bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors'
                 >
                   Retry Analysis
+                </button>
+              </div>
+            ) : !marketData ? (
+              <div className='py-8 text-center'>
+                <button
+                  onClick={fetchMarketIntel}
+                  className='bg-slate-800 text-white px-5 py-2 rounded-lg hover:bg-slate-700 transition-colors text-sm font-medium'
+                >
+                  Load Property Details
                 </button>
               </div>
             ) : (
