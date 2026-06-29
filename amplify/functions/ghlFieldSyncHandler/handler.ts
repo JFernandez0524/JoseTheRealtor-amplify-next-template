@@ -1,18 +1,9 @@
 import type { Handler } from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand, ScanCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
+import { isTerminalDisposition } from '../shared/dispositions';
 
 const docClient = DynamoDBDocumentClient.from(new DynamoDBClient({}));
-
-// Legacy hardcoded IDs for Jose's original GHL account (kept as fallback)
-const LEGACY_FIELD_IDS = {
-  CALL_ATTEMPT_COUNTER: '0MD4Pp2LCyOSCbCjA5qF',
-  EMAIL_ATTEMPT_COUNTER: 'wWlrXoXeMXcM6kUexf2L',
-  LAST_CALL_DATE: 'dWNGeSckpRoVUxXLgxMj',
-  AI_STATE: '1NxQW2kKMVgozjSUuu7s',
-  MAIL_SENT_COUNT: 'DTEW0PLqxp35WHOiDLWR',
-  CALL_OUTCOME: 'LNyfm5JDal955puZGbu3',
-};
 
 export const handler: Handler = async (event) => {
   try {
@@ -24,13 +15,15 @@ export const handler: Handler = async (event) => {
       return { statusCode: 400, body: JSON.stringify({ error: 'Missing contact ID' }) };
     }
 
-    // Check both canonical names (new provisioned users) and legacy names/IDs (Jose's account)
-    const callAttempts  = payload['Call Attempt Counter'] ?? payload['Call Attempt or Text Counter'] ?? payload[LEGACY_FIELD_IDS.CALL_ATTEMPT_COUNTER];
-    const emailAttempts = payload['Email Attempt Counter'] ?? payload['email attempt counter']       ?? payload[LEGACY_FIELD_IDS.EMAIL_ATTEMPT_COUNTER];
-    const lastCallDate  = payload['Last Call Date']                                                  ?? payload[LEGACY_FIELD_IDS.LAST_CALL_DATE];
-    const aiState       = payload['AI State']                                                        ?? payload[LEGACY_FIELD_IDS.AI_STATE];
-    const mailSentCount = payload['Mail Sent Count']                                                 ?? payload[LEGACY_FIELD_IDS.MAIL_SENT_COUNT];
-    const callOutcome   = payload['Call Outcome']                                                    ?? payload[LEGACY_FIELD_IDS.CALL_OUTCOME];
+    // GHL's standard webhook payload includes every custom field keyed by its
+    // display name — identical across all tenants (the field provisioner creates
+    // these exact names). No per-account field IDs needed.
+    const callAttempts  = payload['Call Attempt Counter'] ?? payload['Call Attempt or Text Counter'];
+    const emailAttempts = payload['Email Attempt Counter'] ?? payload['email attempt counter'];
+    const lastCallDate  = payload['Last Call Date'];
+    const aiState       = payload['AI State'];
+    const mailSentCount = payload['Mail Sent Count'];
+    const callOutcome   = payload['Call Outcome'];
 
     console.log(`🔄 [FIELD_SYNC] contactId=${contactId}`, { callAttempts, emailAttempts, lastCallDate, aiState, mailSentCount, callOutcome });
 
@@ -79,6 +72,27 @@ export const handler: Handler = async (event) => {
     }));
 
     console.log(`✅ [FIELD_SYNC] Updated PropertyLead ${lead.id}`);
+
+    // 🛑 Terminal call dispositions stop AI outreach. The email agent only sends
+    // to OUTREACH-status items, so moving the queue item to DND halts the cadence.
+    if (isTerminalDisposition(callOutcome)) {
+      try {
+        const { findQueueItemByContactId, updateQueueStatus, updateEmailStatus } =
+          await import('../shared/outreachQueue');
+        const queueItem = await findQueueItemByContactId(contactId);
+        if (queueItem && queueItem.queueStatus !== 'DND') {
+          await updateQueueStatus(queueItem.id, 'DND', `Disposition: ${callOutcome}`);
+          await updateEmailStatus(queueItem.id, 'OPTED_OUT');
+          console.log(`🛑 [FIELD_SYNC] Stopped outreach for ${contactId} — disposition "${callOutcome}"`);
+        } else if (!queueItem) {
+          console.log(`ℹ️ [FIELD_SYNC] No queue item for ${contactId}; disposition "${callOutcome}" noted, nothing to stop`);
+        }
+      } catch (stopErr) {
+        // Non-fatal: field sync already succeeded; don't fail the webhook.
+        console.error(`⚠️ [FIELD_SYNC] Failed to stop outreach for ${contactId}:`, stopErr);
+      }
+    }
+
     return { statusCode: 200, body: JSON.stringify({ success: true, message: 'Fields synced', contactId }) };
 
   } catch (error) {
