@@ -44,6 +44,27 @@ export default function GhlProfileSettings() {
     loadSettings();
   }, []);
 
+  const refreshPhoneNumbers = async () => {
+    try {
+      const res = await fetch('/api/v1/ghl-phone-numbers').then((r) => r.json());
+      if (res?.success) {
+        setPhoneNumbers(res.phoneNumbers || []);
+        setPhonesLoaded(true);
+      }
+    } catch {
+      /* non-fatal: picker falls back to the stored value */
+    }
+  };
+
+  const refreshCalendars = async () => {
+    try {
+      const res = await fetch('/api/v1/ghl-calendars').then((r) => r.json());
+      if (res?.success) setCalendars(res.calendars || []);
+    } catch {
+      /* non-fatal */
+    }
+  };
+
   const loadSettings = async () => {
     try {
       const user = await getFrontEndUser();
@@ -76,19 +97,7 @@ export default function GhlProfileSettings() {
         } catch {
           setUsersError('Could not load GHL users');
         }
-        try {
-          const [phoneRes, calRes] = await Promise.all([
-            fetch('/api/v1/ghl-phone-numbers').then((r) => r.json()).catch(() => null),
-            fetch('/api/v1/ghl-calendars').then((r) => r.json()).catch(() => null),
-          ]);
-          if (phoneRes?.success) {
-            setPhoneNumbers(phoneRes.phoneNumbers || []);
-            setPhonesLoaded(true);
-          }
-          if (calRes?.success) setCalendars(calRes.calendars || []);
-        } catch {
-          /* non-fatal: pickers fall back to showing the stored value */
-        }
+        await Promise.all([refreshPhoneNumbers(), refreshCalendars()]);
       }
     } catch (error) {
       console.error('Error loading profile settings:', error);
@@ -194,12 +203,19 @@ export default function GhlProfileSettings() {
       {noPhoneNumbers && (
         <div className="mb-6 bg-red-50 border border-red-200 rounded-xl px-5 py-4">
           <p className="font-bold text-red-900 mb-1">A phone number is required</p>
-          <p className="text-sm text-red-800">
+          <p className="text-sm text-red-800 mb-3">
             Your GoHighLevel account has no phone number. The app skip-traces and works leads by
             phone, so you must <strong>purchase a phone number in GHL</strong> (Settings → Phone
-            Numbers, and complete A2P 10DLC registration) before you can finish setup. Buy a number,
-            then refresh this page.
+            Numbers, and complete A2P 10DLC registration) before you can finish setup.
+            Once you&apos;ve bought a number, click below to re-check (or reload this page).
           </p>
+          <button
+            type="button"
+            onClick={refreshPhoneNumbers}
+            className="text-sm font-semibold bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors"
+          >
+            I&apos;ve purchased a number — re-check
+          </button>
         </div>
       )}
 
