@@ -2,6 +2,21 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Code Standards (read first — applies to every change)
+
+These are non-negotiable for all work in this repo:
+
+- **Keep it clean.** Prefer small, single-responsibility functions and clear names over cleverness. Match the style, naming, and structure of the surrounding code. Remove dead/commented-out code rather than leaving it behind.
+- **Document thoroughly.** Every exported function, API route, and Lambda handler gets a doc block explaining what it does, its inputs/outputs, and who calls it (follow the existing `/** ... */` blocks in `app/api/v1/**/route.ts` and `amplify/functions/shared/**`). Use inline comments to explain *why*, not *what*. Update the doc block whenever you change behavior.
+- **Be modular — no repeated code (DRY).** Before writing new logic, search for an existing helper and reuse it. If the same logic appears twice, extract it into a shared module:
+  - Backend/Lambda shared logic → `amplify/functions/shared/` (e.g. `outreachQueue.ts`, `ghlFieldProvisioner.ts`, `dispositions.ts`).
+  - Frontend/server-route logic → `app/utils/**` (e.g. `app/utils/leadValidation.ts` is shared by the client form and the API route).
+  - One source of truth: client and server must call the *same* helper so they can't drift.
+- **Extract pure logic and test it.** Pull pure functions out of handlers/components into shared modules and add Vitest coverage in `__tests__/shared/` (e.g. `isTerminalDisposition`, `formatPhoneE164`, `tagsToCreate`).
+- **Verify types correctly.** The root `tsc`/`tsconfig.json` does **not** type-check `amplify/functions/**` (Amplify bundles the backend with its own strict config). After changing backend code, run a strict check on the changed files, e.g.:
+  `npx tsc --noEmit --strict --skipLibCheck --moduleResolution bundler --module es2022 --target es2022 --esModuleInterop <changed backend files>`
+  and run `npm test` before committing.
+
 ## Commands
 
 ```bash
