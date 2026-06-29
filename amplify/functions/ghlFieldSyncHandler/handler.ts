@@ -80,7 +80,7 @@ export const handler: Handler = async (event) => {
         const { findQueueItemByContactId, updateQueueStatus, updateEmailStatus } =
           await import('../shared/outreachQueue');
         const queueItem = await findQueueItemByContactId(contactId);
-        if (queueItem && queueItem.queueStatus !== 'DND') {
+        if (queueItem?.id && queueItem.queueStatus !== 'DND') {
           await updateQueueStatus(queueItem.id, 'DND', `Disposition: ${callOutcome}`);
           await updateEmailStatus(queueItem.id, 'OPTED_OUT');
           console.log(`🛑 [FIELD_SYNC] Stopped outreach for ${contactId} — disposition "${callOutcome}"`);
