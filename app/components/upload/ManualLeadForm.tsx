@@ -10,6 +10,7 @@ import { HiLockClosed } from 'react-icons/hi';
 import { UploadProgressModal } from './UploadProgressModal';
 import { fetchLeads } from '@/app/utils/aws/data/lead.client';
 import { useGoogleMaps } from '@/app/components/GoogleMapsProvider';
+import { sanitizeName, isValidName, formatPhoneE164, sanitizePhoneInput, NAME_MAX } from '@/app/utils/leadValidation';
 
 interface CsvPreview {
   rowCount: number;
@@ -183,12 +184,23 @@ export function ManualLeadForm() {
 
     if (!lead.type) return setMessage('❌ Missing: Lead Type');
     if (!lead.ownerFirstName) return setMessage('❌ Missing: First Name');
+    if (!isValidName(lead.ownerFirstName)) return setMessage('❌ First Name may only contain letters and spaces');
     if (!lead.ownerLastName) return setMessage('❌ Missing: Last Name');
+    if (!isValidName(lead.ownerLastName)) return setMessage('❌ Last Name may only contain letters and spaces');
     if (!ownerAddr) return setMessage('❌ Missing: Property Address — please select from the dropdown');
     if (lead.type === 'PROBATE') {
       if (!lead.adminFirstName) return setMessage('❌ Missing: Admin First Name');
+      if (!isValidName(lead.adminFirstName)) return setMessage('❌ Admin First Name may only contain letters and spaces');
       if (!lead.adminLastName) return setMessage('❌ Missing: Admin Last Name');
+      if (!isValidName(lead.adminLastName)) return setMessage('❌ Admin Last Name may only contain letters and spaces');
       if (!adminAddr) return setMessage('❌ Missing: Admin Address — please select from the dropdown');
+    }
+
+    // Phone is optional, but if provided it must be a valid US number
+    let normalizedPhone: string | null = null;
+    if (lead.phone?.trim()) {
+      normalizedPhone = formatPhoneE164(lead.phone);
+      if (!normalizedPhone) return setMessage('❌ Enter a valid 10-digit US phone number, or leave it blank');
     }
 
     setLoading(true);
@@ -200,7 +212,7 @@ export function ManualLeadForm() {
           type: lead.type,
           ownerFirstName: lead.ownerFirstName || null,
           ownerLastName: lead.ownerLastName,
-          phone: lead.phone || null,
+          phone: normalizedPhone,
           ownerAddr,
           adminFirstName: lead.adminFirstName || null,
           adminLastName: lead.adminLastName || null,
@@ -430,8 +442,9 @@ export function ManualLeadForm() {
               <input
                 className='w-full border p-2 rounded'
                 value={lead.ownerFirstName}
+                maxLength={NAME_MAX}
                 onChange={(e) =>
-                  setLead({ ...lead, ownerFirstName: e.target.value })
+                  setLead({ ...lead, ownerFirstName: sanitizeName(e.target.value) })
                 }
                 required
               />
@@ -443,8 +456,9 @@ export function ManualLeadForm() {
               <input
                 className='w-full border p-2 rounded'
                 value={lead.ownerLastName}
+                maxLength={NAME_MAX}
                 onChange={(e) =>
-                  setLead({ ...lead, ownerLastName: e.target.value })
+                  setLead({ ...lead, ownerLastName: sanitizeName(e.target.value) })
                 }
                 required
               />
@@ -459,7 +473,9 @@ export function ManualLeadForm() {
               placeholder='+12015551234'
               className='w-full border p-2 rounded'
               value={lead.phone}
-              onChange={(e) => setLead({ ...lead, phone: e.target.value })}
+              inputMode='tel'
+              maxLength={12}
+              onChange={(e) => setLead({ ...lead, phone: sanitizePhoneInput(e.target.value) })}
             />
             <p className='text-[10px] text-gray-400'>
               Adding a phone number will skip automated skiptracing.
@@ -501,8 +517,9 @@ export function ManualLeadForm() {
                     placeholder='Admin First Name'
                     className='border p-2 rounded bg-white w-full'
                     value={lead.adminFirstName}
+                    maxLength={NAME_MAX}
                     onChange={(e) =>
-                      setLead({ ...lead, adminFirstName: e.target.value })
+                      setLead({ ...lead, adminFirstName: sanitizeName(e.target.value) })
                     }
                     required
                   />
@@ -513,8 +530,9 @@ export function ManualLeadForm() {
                     placeholder='Admin Last Name'
                     className='border p-2 rounded bg-white w-full'
                     value={lead.adminLastName}
+                    maxLength={NAME_MAX}
                     onChange={(e) =>
-                      setLead({ ...lead, adminLastName: e.target.value })
+                      setLead({ ...lead, adminLastName: sanitizeName(e.target.value) })
                     }
                     required
                   />

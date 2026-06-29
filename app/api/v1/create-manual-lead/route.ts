@@ -18,6 +18,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { AuthGetCurrentUserServer } from '@/app/utils/aws/auth/amplifyServerUtils.server';
 import { analyzeBridgeProperty } from '@/app/utils/bridge.server';
 import { createLead } from '@/app/utils/aws/data/lead.server';
+import { isValidName, formatPhoneE164 } from '@/app/utils/leadValidation';
 
 export async function POST(request: NextRequest) {
   try {
@@ -34,6 +35,32 @@ export async function POST(request: NextRequest) {
 
     if (type === 'PROBATE' && (!adminFirstName || !adminLastName || !adminAddr)) {
       return NextResponse.json({ error: 'adminFirstName, adminLastName, and adminAddr are required for Probate leads' }, { status: 400 });
+    }
+
+    // Field-format validation (defense-in-depth — the client validates too, but
+    // direct API callers must not bypass it). Names: letters + spaces only.
+    if (ownerFirstName && !isValidName(ownerFirstName)) {
+      return NextResponse.json({ error: 'ownerFirstName may only contain letters and spaces (max 50)' }, { status: 400 });
+    }
+    if (!isValidName(ownerLastName)) {
+      return NextResponse.json({ error: 'ownerLastName may only contain letters and spaces (max 50)' }, { status: 400 });
+    }
+    if (type === 'PROBATE') {
+      if (!isValidName(adminFirstName)) {
+        return NextResponse.json({ error: 'adminFirstName may only contain letters and spaces (max 50)' }, { status: 400 });
+      }
+      if (!isValidName(adminLastName)) {
+        return NextResponse.json({ error: 'adminLastName may only contain letters and spaces (max 50)' }, { status: 400 });
+      }
+    }
+
+    // Phone is optional, but if provided it must be a valid US number.
+    let normalizedPhone: string | null = null;
+    if (phone) {
+      normalizedPhone = formatPhoneE164(phone);
+      if (!normalizedPhone) {
+        return NextResponse.json({ error: 'phone must be a valid 10-digit US phone number' }, { status: 400 });
+      }
     }
 
     // Address components come pre-parsed from Places API on the client — no server re-validation needed
@@ -75,8 +102,8 @@ export async function POST(request: NextRequest) {
       zillowZpid: zillowZpid ?? undefined,
       zestimateSource: zestimate ? 'ZILLOW' : undefined,
       zestimateDate: zestimate ? new Date().toISOString() : undefined,
-      phones: phone ? [phone] : [],
-      skipTraceStatus: phone ? 'COMPLETED' : 'PENDING',
+      phones: normalizedPhone ? [normalizedPhone] : [],
+      skipTraceStatus: normalizedPhone ? 'COMPLETED' : 'PENDING',
       ghlSyncStatus: 'PENDING',
       ghlContactId: null,
       listingStatus: 'off_market',
