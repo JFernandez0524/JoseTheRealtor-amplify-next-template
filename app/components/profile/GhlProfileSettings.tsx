@@ -37,6 +37,7 @@ export default function GhlProfileSettings() {
   const [ghlUsers, setGhlUsers] = useState<GhlUser[]>([]);
   const [usersError, setUsersError] = useState('');
   const [phoneNumbers, setPhoneNumbers] = useState<{ number: string; name: string }[]>([]);
+  const [phonesLoaded, setPhonesLoaded] = useState(false);
   const [calendars, setCalendars] = useState<{ id: string; name: string }[]>([]);
 
   useEffect(() => {
@@ -80,7 +81,10 @@ export default function GhlProfileSettings() {
             fetch('/api/v1/ghl-phone-numbers').then((r) => r.json()).catch(() => null),
             fetch('/api/v1/ghl-calendars').then((r) => r.json()).catch(() => null),
           ]);
-          if (phoneRes?.success) setPhoneNumbers(phoneRes.phoneNumbers || []);
+          if (phoneRes?.success) {
+            setPhoneNumbers(phoneRes.phoneNumbers || []);
+            setPhonesLoaded(true);
+          }
           if (calRes?.success) setCalendars(calRes.calendars || []);
         } catch {
           /* non-fatal: pickers fall back to showing the stored value */
@@ -93,7 +97,9 @@ export default function GhlProfileSettings() {
     }
   };
 
-  const requiredComplete = !!agentName && !!agentBrokerage && !!dialerUserId;
+  // A purchased GHL phone number is required for every account (skip tracing is phone-first).
+  const noPhoneNumbers = phonesLoaded && phoneNumbers.length === 0;
+  const requiredComplete = !!agentName && !!agentBrokerage && !!dialerUserId && !!campaignPhone && !noPhoneNumbers;
 
   const saveSettings = async () => {
     if (!integration) return;
@@ -185,6 +191,18 @@ export default function GhlProfileSettings() {
         Your identity for outreach plus the GHL resources the app uses. Pulled live from your connected account where possible.
       </p>
 
+      {noPhoneNumbers && (
+        <div className="mb-6 bg-red-50 border border-red-200 rounded-xl px-5 py-4">
+          <p className="font-bold text-red-900 mb-1">A phone number is required</p>
+          <p className="text-sm text-red-800">
+            Your GoHighLevel account has no phone number. The app skip-traces and works leads by
+            phone, so you must <strong>purchase a phone number in GHL</strong> (Settings → Phone
+            Numbers, and complete A2P 10DLC registration) before you can finish setup. Buy a number,
+            then refresh this page.
+          </p>
+        </div>
+      )}
+
       {showSetup && (
         <div className="mb-6 bg-indigo-50 border border-indigo-200 rounded-xl px-5 py-4">
           <p className="font-bold text-indigo-900 mb-1">Finish connecting your GHL info</p>
@@ -194,6 +212,7 @@ export default function GhlProfileSettings() {
           <div className="flex flex-wrap gap-x-5 gap-y-1">
             <Check done={!!agentName} label="Agent name" />
             <Check done={!!agentBrokerage} label="Brokerage" />
+            <Check done={!noPhoneNumbers && !!campaignPhone} label="Phone number" />
             <Check done={!!dialerUserId} label="Assigned user" />
           </div>
         </div>
