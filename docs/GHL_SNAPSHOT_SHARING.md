@@ -66,8 +66,9 @@ Offer Made → Under Contract → Closed → Not Interested → Dead.
 
 **Intake router** (trigger: tag added = `app:synced`)
 - Create/Update Opportunity → check valid phone →
-  - **CALL branch (core):** assign to user, remove "Start Dialing Campaign" tag, add to
-    dialer loop.
+  - **CALL branch (core):** assign to user, add to dialer loop. *(The old "remove Start
+    Dialing Campaign tag" step is vestigial — the app no longer applies that tag; routing
+    is driven by `app:synced`. Safe to delete from the workflow.)*
   - **MAIL branch:** *(part of the Direct Mail add-on below — omit for non-mail users; the
     router can simply end the no-phone path, or you keep the branch but it does nothing
     without ThanksIO.)*

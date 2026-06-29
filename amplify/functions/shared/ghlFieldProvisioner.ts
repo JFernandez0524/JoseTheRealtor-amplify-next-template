@@ -156,7 +156,6 @@ export const SYSTEM_TAGS: string[] = [
   'data:skiptraced', 'data:originalupload',
   'ai outreach', 'primary_contact', 'multi-phone-lead',
   'direct-mail-only', 'digital-only', 'thanks_io_eligible',
-  'start dialing campaign',
   // conversation / AI outreach
   'conversation:active', 'conversation:manual',
   'ready-for-human-contact', 'conversation_ended',
