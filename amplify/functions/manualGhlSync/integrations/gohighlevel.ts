@@ -92,6 +92,9 @@ export async function syncToGoHighLevel(
       email_2: lead.emails?.[1] || undefined,
       email_3: lead.emails?.[2] || undefined,
       // 🆕 APP CONTROL FIELDS
+      // NOTE: app_plan / app_account_status are DISPLAY-ONLY mirrors of Cognito groups.
+      // They are never read back as an entitlement source — editing them in GHL cannot
+      // change a user's plan or billing. See docs/SECURITY_NOTES.md.
       app_user_id: userId,
       app_plan: appPlan,
       app_account_status: appAccountStatus,

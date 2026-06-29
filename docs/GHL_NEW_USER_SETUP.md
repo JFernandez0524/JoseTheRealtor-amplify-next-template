@@ -64,7 +64,12 @@ The system writes the **Disposition** custom field on opportunities. You need a 
 
 ## 5. Required GHL Workflows
 
-These are automations you build in **Automation → Workflows**. Each one triggers on a tag the system adds to contacts automatically.
+> **Fastest path:** load the **Lead Manager shareable snapshot link** — it installs the
+> pipeline and all of the workflows below in one step. Ask your provider for the link
+> (see [GHL_SNAPSHOT_SHARING.md](GHL_SNAPSHOT_SHARING.md)). The sections below document
+> what the snapshot contains, so you can verify or rebuild manually if needed.
+
+These are automations in **Automation → Workflows**. Each one triggers on a tag the system adds to contacts automatically.
 
 ---
 
@@ -192,6 +197,12 @@ These are automations you build in **Automation → Workflows**. Each one trigge
 
 ## 6. Call Disposition Workflows (Phone System)
 
+> **Note:** Stopping **app-side AI outreach** on terminal dispositions (Sold Already,
+> Not Interested, DNC, Listed With Realtor, Incorrect Number) is now **automatic** via
+> the Field Sync webhook — see [GHL_DISPOSITION_WEBHOOK.md](GHL_DISPOSITION_WEBHOOK.md).
+> The workflows below only handle the **GHL-side** CRM actions (pipeline moves, tags,
+> DND, cleanup tasks).
+
 These trigger from your GHL phone system when an agent logs a call outcome. Go to **Automation → Workflows** and create one per disposition you want to act on.
 
 | Disposition | Trigger | Suggested Action |
@@ -286,7 +297,12 @@ Full reference of every tag the system applies and what it means.
 
 ---
 
-## 9. ThanksIO Setup (Direct Mail)
+## 9. ThanksIO Setup (Direct Mail) — Optional
+
+> **Direct mail is an optional add-on.** Skip this entire section (and the intake
+> router's MAIL branch / Direct Mail Router) if you don't run direct mail. The app still
+> tags mail-eligible contacts, but nothing is sent without ThanksIO configured here — the
+> tags simply stay dormant.
 
 If you are on a plan that includes direct mail:
 
@@ -311,4 +327,4 @@ If you are on a plan that includes direct mail:
 - [ ] Workflow: DNC call disposition → enable DND
 - [ ] Workflow: Requested Appointment → create task
 - [ ] Smart lists created (optional)
-- [ ] ThanksIO configured (if on direct mail plan)
+- [ ] *(Optional — direct mail only)* ThanksIO configured + intake router MAIL branch / Direct Mail Router
