@@ -148,8 +148,9 @@ export async function GET(req: Request) {
       return NextResponse.redirect('https://leads.josetherealtor.com/oauth/error?error=storage_error');
     }
 
-    // Redirect to success page
-    return NextResponse.redirect('https://leads.josetherealtor.com/oauth/success?locationId=' + locationId);
+    // Redirect into the guided profile setup so the user finishes the GHL-backed config
+    // (agent identity + assignment user) the app needs to operate.
+    return NextResponse.redirect('https://leads.josetherealtor.com/profile?setup=1');
 
   } catch (error: any) {
     console.error('OAuth callback error:', error);

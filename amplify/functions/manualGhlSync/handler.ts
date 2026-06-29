@@ -52,6 +52,7 @@ async function processGhlSync(lead: any, groups: string[] = [], ownerId: string 
 
   console.log(`✅ [GHL_SYNC] Token retrieved, locationId: ${ghlData.locationId}`);
   const { token: ghlToken, locationId: ghlLocationId } = ghlData;
+  const assignedUserId = ghlData.dialerUserId || ''; // Account-selected GHL user for contact assignment
   let fieldIds: Record<string, string> = ghlData.customFieldIds || {};
   let oppFieldIds: Record<string, string> = ghlData.opportunityFieldIds || {};
 
@@ -153,7 +154,8 @@ async function processGhlSync(lead: any, groups: string[] = [], ownerId: string 
           ghlToken,
           ghlLocationId,
           fieldIds,
-          oppFieldIds
+          oppFieldIds,
+          assignedUserId
         );
         syncResults.push(ghlContactId);
         
@@ -201,7 +203,8 @@ async function processGhlSync(lead: any, groups: string[] = [], ownerId: string 
       ghlToken,
       ghlLocationId,
       fieldIds,
-      oppFieldIds
+      oppFieldIds,
+      assignedUserId
     );
 
     // 🛡️ SAVE CONTACT ID IMMEDIATELY after successful GHL sync

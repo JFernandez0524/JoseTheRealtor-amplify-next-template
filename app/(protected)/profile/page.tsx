@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation';
+import { Suspense } from 'react';
 import SignOutButton from '@/app/components/Logout';
 import {
   AuthGetCurrentUserServer,
@@ -7,8 +8,7 @@ import {
   cookiesClient,
 } from '@/app/utils/aws/auth/amplifyServerUtils.server';
 import GhlSettingsCard from '@/app/components/profile/GhlSettingsCard';
-import GhlCampaignSettings from '@/app/components/profile/GhlCampaignSettings';
-import AgentProfileSettings from '@/app/components/profile/AgentProfileSettings';
+import GhlProfileSettings from '@/app/components/profile/GhlProfileSettings';
 import EmailTemplateSettings from '@/app/components/profile/EmailTemplateSettings';
 
 import {
@@ -154,12 +154,11 @@ export default async function ProfilePage() {
 
           {/* GHL Integration Settings Card */}
           <GhlSettingsCard />
-          
-          {/* GHL Campaign Settings (Phone, Email, Signature) */}
-          <GhlCampaignSettings />
 
-          {/* Agent Profile (name/brokerage for outreach messages) */}
-          <AgentProfileSettings />
+          {/* Consolidated GHL Profile & Campaign (identity, assignment, campaign resources) */}
+          <Suspense fallback={null}>
+            <GhlProfileSettings />
+          </Suspense>
 
           {/* Email Template Settings Card */}
           {ghlIntegration && (

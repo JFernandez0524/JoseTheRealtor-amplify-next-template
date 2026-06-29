@@ -36,6 +36,7 @@ type GhlIntegration = {
   campaignCalendarId?: string;
   aiPersona?: string;
   aiExamples?: string;
+  dialerUserId?: string;
 };
 
 export type GhlTokenResult = {
@@ -50,6 +51,7 @@ export type GhlTokenResult = {
   campaignCalendarId: string | null;
   aiPersona: string | null;
   aiExamples: string | null;
+  dialerUserId: string | null;
 };
 
 /**
@@ -100,6 +102,7 @@ export async function getValidGhlToken(userId: string): Promise<GhlTokenResult |
         campaignCalendarId: integration.campaignCalendarId || null,
         aiPersona: integration.aiPersona || null,
         aiExamples: integration.aiExamples || null,
+        dialerUserId: integration.dialerUserId || null,
       };
     }
 
@@ -162,6 +165,7 @@ export async function getValidGhlToken(userId: string): Promise<GhlTokenResult |
         campaignCalendarId: integration.campaignCalendarId || null,
         aiPersona: integration.aiPersona || null,
         aiExamples: integration.aiExamples || null,
+        dialerUserId: integration.dialerUserId || null,
       };
     } catch (refreshError: any) {
       // Log the actual GHL error response
@@ -213,6 +217,7 @@ export async function getValidGhlToken(userId: string): Promise<GhlTokenResult |
               campaignCalendarId: updated.campaignCalendarId || null,
               aiPersona: updated.aiPersona || null,
               aiExamples: updated.aiExamples || null,
+              dialerUserId: updated.dialerUserId || null,
             };
           }
         }

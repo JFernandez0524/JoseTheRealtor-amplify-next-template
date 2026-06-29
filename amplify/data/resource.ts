@@ -82,6 +82,8 @@ const schema = a.schema({
       campaignPhone: a.string(), // Hardcoded phone number for campaigns
       campaignEmail: a.string(), // Hardcoded email address for campaigns
       campaignCalendarId: a.string(), // GHL calendar ID for AI-booked appointments (per-user)
+      dialerUserId: a.string(), // GHL user that synced/callable contacts are assigned to (picked in profile settings)
+      onboardingCompletedAt: a.datetime(), // Set once required profile settings are filled after first connect
       emailSignature: a.string(), // User's GHL email signature (HTML)
       // 📧 EMAIL TEMPLATES
       probateEmailSubject: a.string(), // Custom subject for probate leads

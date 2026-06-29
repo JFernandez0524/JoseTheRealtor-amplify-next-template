@@ -13,7 +13,8 @@ export async function syncToGoHighLevel(
   ghlToken: string,
   ghlLocationId: string,
   fieldIds: Record<string, string> = {},
-  opportunityFieldIds: Record<string, string> = {}
+  opportunityFieldIds: Record<string, string> = {},
+  assignedUserId: string = ''
 ): Promise<string> {
   const ghl = createGhlClient(ghlToken);
 
@@ -205,6 +206,7 @@ export async function syncToGoHighLevel(
       // GHL API rejects additionalEmails with string arrays
       tags,
       source: 'JTR_SkipTrace_App',
+      assignedTo: assignedUserId || undefined, // Account-selected GHL user (omitted when unset)
       customFields,
     };
 
