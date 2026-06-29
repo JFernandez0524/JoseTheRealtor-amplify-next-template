@@ -36,6 +36,8 @@ export default function GhlProfileSettings() {
   // Live GHL data
   const [ghlUsers, setGhlUsers] = useState<GhlUser[]>([]);
   const [usersError, setUsersError] = useState('');
+  const [phoneNumbers, setPhoneNumbers] = useState<{ number: string; name: string }[]>([]);
+  const [calendars, setCalendars] = useState<{ id: string; name: string }[]>([]);
 
   useEffect(() => {
     loadSettings();
@@ -64,7 +66,7 @@ export default function GhlProfileSettings() {
         setCampaignCalendarId(i.campaignCalendarId || '');
         setEmailSignature(i.emailSignature || '');
 
-        // Fetch live GHL users for the assignment picker
+        // Fetch live GHL resources for the pickers (users, phone numbers, calendars)
         try {
           const res = await fetch('/api/v1/ghl-users');
           const data = await res.json();
@@ -72,6 +74,16 @@ export default function GhlProfileSettings() {
           else setUsersError(data.error || 'Could not load GHL users');
         } catch {
           setUsersError('Could not load GHL users');
+        }
+        try {
+          const [phoneRes, calRes] = await Promise.all([
+            fetch('/api/v1/ghl-phone-numbers').then((r) => r.json()).catch(() => null),
+            fetch('/api/v1/ghl-calendars').then((r) => r.json()).catch(() => null),
+          ]);
+          if (phoneRes?.success) setPhoneNumbers(phoneRes.phoneNumbers || []);
+          if (calRes?.success) setCalendars(calRes.calendars || []);
+        } catch {
+          /* non-fatal: pickers fall back to showing the stored value */
         }
       }
     } catch (error) {
@@ -222,11 +234,19 @@ export default function GhlProfileSettings() {
           </p>
         </div>
 
-        {/* Campaign phone/email (Phase 2: phone → live dropdown) */}
+        {/* Campaign phone (live from GHL) */}
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-2">Campaign Phone Number</label>
-          <input type="tel" value={campaignPhone} onChange={(e) => setCampaignPhone(e.target.value)} placeholder="(732) 810-0182" className={inputCls} />
-          <p className="text-xs text-slate-500 mt-1">Phone number for SMS campaigns.</p>
+          <select value={campaignPhone} onChange={(e) => setCampaignPhone(e.target.value)} className={inputCls}>
+            <option value="">Select a phone number…</option>
+            {campaignPhone && !phoneNumbers.some((p) => p.number === campaignPhone) && (
+              <option value={campaignPhone}>{campaignPhone} (current)</option>
+            )}
+            {phoneNumbers.map((p) => (
+              <option key={p.number} value={p.number}>{p.number}{p.name ? ` — ${p.name}` : ''}</option>
+            ))}
+          </select>
+          <p className="text-xs text-slate-500 mt-1">Phone number used for SMS campaigns.</p>
         </div>
 
         <div>
@@ -236,8 +256,16 @@ export default function GhlProfileSettings() {
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-2">GHL Calendar ID</label>
-          <input type="text" value={campaignCalendarId} onChange={(e) => setCampaignCalendarId(e.target.value)} placeholder="tuC1rqAOzPTThWUC7rvS" className={`${inputCls} font-mono text-sm`} />
+          <label className="block text-sm font-medium text-slate-700 mb-2">GHL Calendar</label>
+          <select value={campaignCalendarId} onChange={(e) => setCampaignCalendarId(e.target.value)} className={inputCls}>
+            <option value="">Select a calendar…</option>
+            {campaignCalendarId && !calendars.some((c) => c.id === campaignCalendarId) && (
+              <option value={campaignCalendarId}>{campaignCalendarId} (current)</option>
+            )}
+            {calendars.map((c) => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+          </select>
           <p className="text-xs text-slate-500 mt-1">GHL calendar for AI-booked appointments.</p>
         </div>
 
