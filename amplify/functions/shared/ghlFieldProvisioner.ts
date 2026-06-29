@@ -144,6 +144,50 @@ const CALL_DISPOSITIONS = [
   'DNC',
 ];
 
+// Every static tag the system applies (sourced from gohighlevel.ts, conversationHandler.ts,
+// and the email/mail/facebook handlers — see docs/GHL_NEW_USER_SETUP.md §8). Pre-created on
+// connect so tag-triggered workflows and smart lists resolve for brand-new users.
+// GHL stores tags lowercase; defined lowercase here to match.
+// Truly dynamic tags are intentionally excluded — they auto-create when applied:
+//   ended_reason:{reason}, mail:touch{n} beyond touch7.
+export const SYSTEM_TAGS: string[] = [
+  // sync-time
+  'app:synced', 'app:ai-enabled', 'app:billing-hold',
+  'data:skiptraced', 'data:originalupload',
+  'ai outreach', 'primary_contact', 'multi-phone-lead',
+  'direct-mail-only', 'digital-only', 'thanks_io_eligible',
+  'start dialing campaign',
+  // conversation / AI outreach
+  'conversation:active', 'conversation:manual',
+  'ready-for-human-contact', 'conversation_ended',
+  'not_for_sale', 'wrong_contact', 'high-engagement',
+  // email tracking
+  'email:replied', 'email:bounced', 'email:wrong_address', 'needs_review',
+  // direct mail (ThanksIO) — 7-touch cadence
+  'mail:delivered', 'mail:scanned',
+  'mail:touch1', 'mail:touch2', 'mail:touch3', 'mail:touch4',
+  'mail:touch5', 'mail:touch6', 'mail:touch7',
+  // facebook
+  'facebook-lead', 'new-lead',
+  // data error (added alongside conversation_ended)
+  'data_error:wrong_property', 'data_error:wrong_person',
+  'data_error:unclear', 'data_error:persistent_dispute',
+  // sentiment (bounded set)
+  'sentiment:positive', 'sentiment:neutral', 'sentiment:frustrated',
+  'sentiment:urgent', 'sentiment:disengaging',
+  // suppression / DNC labels
+  'dnc', 'not_interested', 'do_not_call',
+];
+
+/**
+ * Pure diff: which desired tags are missing from the existing set (case-insensitive).
+ * Extracted for unit testing without HTTP.
+ */
+export function tagsToCreate(desired: string[], existingNames: string[]): string[] {
+  const existing = new Set(existingNames.map((n) => n.toLowerCase().trim()));
+  return desired.filter((t) => !existing.has(t.toLowerCase().trim()));
+}
+
 async function fetchExistingContactFields(locationId: string, token: string): Promise<Array<{ id: string; name: string }>> {
   const ghl = createGhlClient(token);
   const res = await ghl.get(`/locations/${locationId}/customFields`, { params: { model: 'contact' } });
@@ -259,4 +303,40 @@ export async function provisionOpportunityFields(locationId: string, token: stri
   }
 
   return result;
+}
+
+export async function provisionTags(locationId: string, token: string): Promise<void> {
+  console.log(`🔧 [PROVISIONER] Provisioning tags for location ${locationId}`);
+
+  let existing: Array<{ name: string }> = [];
+  try {
+    const ghl = createGhlClient(token);
+    const res = await ghl.get(`/locations/${locationId}/tags`);
+    existing = res.data?.tags ?? res.data ?? [];
+    if (!Array.isArray(existing)) {
+      console.error('❌ [PROVISIONER] Unexpected tags response shape:', JSON.stringify(res.data).slice(0, 300));
+      existing = [];
+    }
+  } catch (err: any) {
+    console.error('❌ [PROVISIONER] Failed to fetch tags:', err.response?.data || err.message);
+    return;
+  }
+
+  const missing = tagsToCreate(SYSTEM_TAGS, existing.map((t) => t.name || ''));
+  if (missing.length === 0) {
+    console.log(`✅ [PROVISIONER] All ${SYSTEM_TAGS.length} tags already exist`);
+    return;
+  }
+
+  for (const name of missing) {
+    try {
+      const ghl = createGhlClient(token);
+      await ghl.post(`/locations/${locationId}/tags`, { name });
+      console.log(`🆕 [PROVISIONER] Created tag "${name}"`);
+    } catch (err: any) {
+      console.error(`❌ [PROVISIONER] Failed to create tag "${name}":`, err.response?.data || err.message);
+    }
+  }
+
+  console.log(`✅ [PROVISIONER] Tag provisioning complete (${missing.length} created)`);
 }

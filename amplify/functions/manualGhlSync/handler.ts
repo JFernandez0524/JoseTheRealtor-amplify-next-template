@@ -2,7 +2,7 @@ import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand, UpdateCommand, ScanCommand } from '@aws-sdk/lib-dynamodb';
 import { syncToGoHighLevel } from './integrations/gohighlevel';
 import { getValidGhlToken, saveFieldIds } from '../shared/ghlTokenManager';
-import { provisionCustomFields, provisionOpportunityFields } from '../shared/ghlFieldProvisioner';
+import { provisionCustomFields, provisionOpportunityFields, provisionTags, provisionCallDispositions } from '../shared/ghlFieldProvisioner';
 import { validateLeadForSync, updateLeadSyncStatus, SyncResult } from '../shared/syncUtils';
 import { filterValidEmails } from '../shared/emailValidator';
 
@@ -62,6 +62,10 @@ async function processGhlSync(lead: any, groups: string[] = [], ownerId: string 
       const [provisionedFields, provisionedOppFields] = await Promise.all([
         provisionCustomFields(ghlLocationId, ghlToken),
         provisionOpportunityFields(ghlLocationId, ghlToken),
+        // Also create tags + call dispositions so tag-triggered workflows resolve for
+        // new users (return void — results ignored). Each is internally fault-tolerant.
+        provisionTags(ghlLocationId, ghlToken),
+        provisionCallDispositions(ghlLocationId, ghlToken),
       ]);
       fieldIds = provisionedFields;
       oppFieldIds = provisionedOppFields;
