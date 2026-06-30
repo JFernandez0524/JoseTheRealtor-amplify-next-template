@@ -344,25 +344,36 @@ export async function getQueueItemByContact(userId: string, contactId: string): 
 }
 
 /**
- * Find queue item by contactId only (scan operation)
- * Used when userId is unknown (e.g., GHL disposition webhooks)
- * 
+ * Find queue item by contactId only (paginated scan).
+ * Used when userId is unknown (e.g., GHL disposition webhooks). Prefer
+ * getQueueItemByContact() when the userId is known — it's an O(1) key lookup.
+ *
+ * NOTE: DynamoDB `Limit` caps items evaluated BEFORE the FilterExpression, so it
+ * must NOT be used here (a Limit:1 scan would only check the first row of the
+ * table and almost always miss). We paginate until the first match is found.
+ *
  * @param contactId - GHL contact ID
  * @returns Queue item or null
  */
 export async function findQueueItemByContactId(contactId: string): Promise<OutreachQueueItem | null> {
   const { ScanCommand } = await import('@aws-sdk/lib-dynamodb');
-  
-  const result = await docClient.send(new ScanCommand({
-    TableName: OUTREACH_QUEUE_TABLE,
-    FilterExpression: 'contactId = :contactId',
-    ExpressionAttributeValues: {
-      ':contactId': contactId,
-    },
-    Limit: 1,
-  }));
 
-  return result.Items?.[0] as OutreachQueueItem || null;
+  let lastKey: Record<string, any> | undefined;
+  do {
+    const result = await docClient.send(new ScanCommand({
+      TableName: OUTREACH_QUEUE_TABLE,
+      FilterExpression: 'contactId = :contactId',
+      ExpressionAttributeValues: { ':contactId': contactId },
+      ExclusiveStartKey: lastKey,
+    }));
+
+    if (result.Items && result.Items.length > 0) {
+      return result.Items[0] as OutreachQueueItem;
+    }
+    lastKey = result.LastEvaluatedKey;
+  } while (lastKey);
+
+  return null;
 }
 
 /**

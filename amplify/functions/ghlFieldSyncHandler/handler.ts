@@ -77,9 +77,13 @@ export const handler: Handler = async (event) => {
     // to OUTREACH-status items, so moving the queue item to DND halts the cadence.
     if (isTerminalDisposition(callOutcome)) {
       try {
-        const { findQueueItemByContactId, updateQueueStatus, updateEmailStatus } =
+        const { getQueueItemByContact, findQueueItemByContactId, updateQueueStatus, updateEmailStatus } =
           await import('../shared/outreachQueue');
-        const queueItem = await findQueueItemByContactId(contactId);
+        // Prefer the O(1) key lookup (queue id is `${userId}_${contactId}`); the payload
+        // carries the user id as "App User ID". Fall back to the scan if it's absent.
+        const userId = payload['App User ID'];
+        let queueItem = userId ? await getQueueItemByContact(userId, contactId) : null;
+        if (!queueItem) queueItem = await findQueueItemByContactId(contactId);
         if (queueItem?.id && queueItem.queueStatus !== 'DND') {
           await updateQueueStatus(queueItem.id, 'DND', `Disposition: ${callOutcome}`);
           await updateEmailStatus(queueItem.id, 'OPTED_OUT');
