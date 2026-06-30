@@ -1,7 +1,7 @@
 import type { Handler } from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand, ScanCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
-import { isTerminalDisposition } from '../shared/dispositions';
+import { dispositionAction } from '../shared/dispositions';
 
 const docClient = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 
@@ -73,9 +73,11 @@ export const handler: Handler = async (event) => {
 
     console.log(`✅ [FIELD_SYNC] Updated PropertyLead ${lead.id}`);
 
-    // 🛑 Terminal call dispositions stop AI outreach. The email agent only sends
-    // to OUTREACH-status items, so moving the queue item to DND halts the cadence.
-    if (isTerminalDisposition(callOutcome)) {
+    // Call dispositions affect email outreach. STOP (negative) opts the contact out;
+    // ENGAGED (Appointment Set) pauses cold email as engaged. The email agent only sends
+    // to OUTREACH-status items, so both halt the cadence.
+    const action = dispositionAction(callOutcome);
+    if (action !== 'NONE') {
       try {
         const { getQueueItemByContact, findQueueItemByContactId, updateQueueStatus, updateEmailStatus } =
           await import('../shared/outreachQueue');
@@ -84,16 +86,21 @@ export const handler: Handler = async (event) => {
         const userId = payload['App User ID'];
         let queueItem = userId ? await getQueueItemByContact(userId, contactId) : null;
         if (!queueItem) queueItem = await findQueueItemByContactId(contactId);
-        if (queueItem?.id && queueItem.queueStatus !== 'DND') {
+
+        if (!queueItem?.id) {
+          console.log(`ℹ️ [FIELD_SYNC] No queue item for ${contactId}; disposition "${callOutcome}" noted, nothing to stop`);
+        } else if (action === 'STOP' && queueItem.queueStatus !== 'DND') {
           await updateQueueStatus(queueItem.id, 'DND', `Disposition: ${callOutcome}`);
           await updateEmailStatus(queueItem.id, 'OPTED_OUT');
           console.log(`🛑 [FIELD_SYNC] Stopped outreach for ${contactId} — disposition "${callOutcome}"`);
-        } else if (!queueItem) {
-          console.log(`ℹ️ [FIELD_SYNC] No queue item for ${contactId}; disposition "${callOutcome}" noted, nothing to stop`);
+        } else if (action === 'ENGAGED' && queueItem.queueStatus !== 'DND' && queueItem.queueStatus !== 'CONVERSATION') {
+          // Engaged (appointment booked): pause cold email but don't opt out.
+          await updateQueueStatus(queueItem.id, 'CONVERSATION', `Disposition: ${callOutcome}`);
+          console.log(`📅 [FIELD_SYNC] Paused outreach (engaged) for ${contactId} — disposition "${callOutcome}"`);
         }
       } catch (stopErr) {
         // Non-fatal: field sync already succeeded; don't fail the webhook.
-        console.error(`⚠️ [FIELD_SYNC] Failed to stop outreach for ${contactId}:`, stopErr);
+        console.error(`⚠️ [FIELD_SYNC] Failed to update outreach for ${contactId}:`, stopErr);
       }
     }
 
