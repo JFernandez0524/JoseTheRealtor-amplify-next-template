@@ -106,7 +106,17 @@ export const handler = async (event: any) => {
       }
 
       console.log(`\n📧 Processing integration ${integration.id} for location ${integration.locationId}`);
-      
+
+      // ⛔ Bounce-rate circuit breaker: pause this account if its recent bounce rate is too high,
+      // so a problem self-limits instead of cascading into another GHL email suspension.
+      const { resetEmailStatsIfStale, bounceRateExceeded, incrementEmailSent } = await import('../shared/emailStats');
+      const { sent: sentToday, bounced: bouncedToday } = await resetEmailStatsIfStale(integration);
+      if (bounceRateExceeded(sentToday, bouncedToday)) {
+        const pct = ((bouncedToday / sentToday) * 100).toFixed(1);
+        console.warn(`⛔ [EMAIL] Paused ${integration.userId} — bounce rate ${pct}% (${bouncedToday}/${sentToday}) exceeds threshold; skipping this run`);
+        continue;
+      }
+
       // Get valid token (auto-refreshes if expired)
       const tokenData = await getValidGhlToken(integration.userId);
       if (!tokenData) {
@@ -150,6 +160,16 @@ export const handler = async (event: any) => {
         // Send email to each eligible contact
         for (const contact of contacts) {
           try {
+            // Cheap, free last-line guard: never send to a malformed address (deliverability
+            // was already vetted via Debounce at ingest). Mark FAILED so it isn't retried.
+            const { isValidEmailSyntax } = await import('../shared/emailValidator');
+            if (!isValidEmailSyntax(contact.email)) {
+              console.warn(`⚠️ [EMAIL] Skipping ${contact.id} — invalid email syntax: ${contact.email}`);
+              const { updateEmailStatus } = await import('../shared/outreachQueue');
+              await updateEmailStatus(contact._queueId, 'FAILED');
+              continue;
+            }
+
             console.log(`Sending email to contact ${contact.id} (${contact.email})`);
 
             // Pre-lock: set nextEmailDate = +4 days BEFORE sending so the contact is
@@ -184,6 +204,11 @@ export const handler = async (event: any) => {
             if (response.data.success) {
               console.log(`✅ Email sent successfully to ${contact.email}`);
               totalEmailsSent++;
+
+              // Circuit-breaker accounting: count this send for the bounce-rate window.
+              await incrementEmailSent(integration.id).catch((e: any) =>
+                console.error(`⚠️ [EMAIL] Failed to increment sent counter:`, e.message)
+              );
 
               // Update queue status (increments attempts, sets lastEmailSent, keeps +4-day nextEmailDate)
               console.log(`📋 [QUEUE] Updating queue item ${contact._queueId}`);

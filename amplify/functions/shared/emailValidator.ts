@@ -1,20 +1,30 @@
 /**
  * EMAIL VALIDATOR
  *
- * Validates email addresses via the Debounce.io API before outreach to protect
- * sender reputation and reduce bounce rates.
+ * Validates email addresses via the Debounce.io API at INGEST to protect sender
+ * reputation and reduce bounce rates.
  *
  * BEHAVIOR:
- * - Rejects addresses that fail basic regex
+ * - Rejects addresses that fail basic regex (`isValidEmailSyntax`)
  * - Calls Debounce.io; treats send_transactional === "1" as safe
  * - Fails open on API errors so transient outages don't silently drop contacts
  *
  * USED BY:
- * - amplify/functions/dailyEmailAgent — filters contact email lists before sending
+ * - amplify/functions/skiptraceLeads — validates found emails before storing
+ * - amplify/functions/manualGhlSync — validates emails before sync
+ * - amplify/functions/dailyEmailAgent — uses `isValidEmailSyntax` as a cheap
+ *   send-time guard (no API call); deliverability is already vetted at ingest
  */
 import axios from 'axios';
 
-const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+export const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/**
+ * Cheap, free syntax check (no network). Used as a last-line guard before sending.
+ */
+export function isValidEmailSyntax(email: string | null | undefined): boolean {
+  return typeof email === 'string' && EMAIL_REGEX.test(email.trim());
+}
 
 interface DebounceResponse {
   debounce: {

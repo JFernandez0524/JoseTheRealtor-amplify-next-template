@@ -96,6 +96,10 @@ const schema = a.schema({
       lastMessageSent: a.datetime(),
       lastHourReset: a.datetime(),
       lastDayReset: a.datetime(),
+      // 📉 EMAIL BOUNCE-RATE CIRCUIT BREAKER (rolling 24h window, per integration)
+      emailsSentToday: a.integer().default(0),
+      emailsBouncedToday: a.integer().default(0),
+      lastEmailStatsReset: a.datetime(),
       customFieldIds: a.json(),      // Record<string, string> semantic-key → GHL contact field ID per location
       opportunityFieldIds: a.json(), // Record<string, string> semantic-key → GHL opportunity field ID per location
       // 🧑 AGENT PROFILE (for multi-tenant identity in outreach messages)

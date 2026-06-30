@@ -636,7 +636,13 @@ async function handleEmailBounce(body: any) {
     if (!integration) {
       return { statusCode: 404, body: JSON.stringify({ error: 'No integration found' }) };
     }
-    const { token, fieldIds } = integration;
+    const { token, fieldIds, integrationId } = integration;
+
+    // Circuit-breaker accounting: count this bounce for the account's bounce-rate window.
+    const { incrementEmailBounced } = await import('../shared/emailStats');
+    await incrementEmailBounced(integrationId).catch((e: any) =>
+      console.error(`⚠️ [EMAIL] Failed to increment bounced counter:`, e.message)
+    );
 
     const contact = await ghlGetContact(token, contactId);
     const appUserIdFieldId = fieldIds.app_user_id;
@@ -717,6 +723,7 @@ async function handleWrongEmail(contactId: string, emailAddress: string, token: 
  */
 async function getIntegrationForLocation(locationId: string): Promise<{
   token: string;
+  integrationId: string;
   fieldIds: Record<string, string>;
   opportunityFieldIds: Record<string, string>;
 } | null> {
@@ -726,6 +733,7 @@ async function getIntegrationForLocation(locationId: string): Promise<{
     if (!integration) return null;
     return {
       token: integration.token,
+      integrationId: integration.integrationId,
       fieldIds: integration.customFieldIds || {},
       opportunityFieldIds: integration.opportunityFieldIds || {},
     };
