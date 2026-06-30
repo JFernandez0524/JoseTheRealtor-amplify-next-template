@@ -2,6 +2,7 @@
 import { Suspense } from 'react';
 import { redirect } from 'next/navigation';
 import LoadingOverlay from '@/app/components/shared/LoadingOverlay';
+import GhlConnectionBanner from '@/app/components/GhlConnectionBanner';
 
 import { AuthIsUserAuthenticatedServer } from '@/app/utils/aws/auth/amplifyServerUtils.server';
 
@@ -20,6 +21,7 @@ export default async function ProtectedLayout({
 
   return (
     <div className='min-h-screen bg-slate-50'>
+      <GhlConnectionBanner />
       <main>
         <Suspense fallback={<LoadingOverlay />}>{children}</Suspense>
       </main>
