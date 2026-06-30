@@ -90,6 +90,33 @@ automatic. *(Any `Disposition`→mail step belongs to the add-on.)*
 conversation_ended, not_for_sale, wrong_contact, conversation:manual, high-engagement,
 email:bounced).
 
+**Disposition → Call Outcome bridge workflows (one per call disposition)** — each is triggered
+by *Call details* filtered to one Custom Disposition and does a single thing: `Update contact
+field: Call Outcome = <label>`. (Keep them single-action — no `Assign to user` step; the app
+assigns via the profile picker — and let "Call Outcome - Pipeline" own all opportunity moves.)
+
+> **The app keys off the Call Outcome *label*, not the value.** GHL sends the dropdown **label**
+> (e.g. `Sold Already`) in the standard payload, so each bridge must write a valid Call Outcome
+> **label**. Several dispositions are named differently from their Call Outcome label — write the
+> label, not the disposition name:
+
+| Custom Disposition | → write Call Outcome label | App action ([dispositions.ts](../amplify/functions/shared/dispositions.ts)) |
+|---|---|---|
+| No Answer | No Answer | keep cadence |
+| **Voicemail** | **Left Voicemail** | keep |
+| **Follow Up** | **Spoke - Follow Up** | keep |
+| **Requested Appointment** | **Appointment Set** | pause (ENGAGED) |
+| Not Interested | Not Interested | STOP (DND/opt-out) |
+| **Incorrect Number** | **Wrong Number / Disconnected / Invalid Number** | STOP |
+| Listed With Realtor | Listed With Realtor | STOP |
+| Sold Already | Sold Already | STOP |
+| DNC | DNC | STOP |
+
+- The **bold** rows are the name mismatches — easiest to get wrong.
+- `Requested Appointment → Appointment Set` **pauses email as engaged** (not opted-out) — a conscious choice; remap if "requested" ≠ "booked" for you.
+- The `Call Outcome` field must also include **`DEAD / Max Attempts`** (set by the dialer's max-attempts path) and **`Timeline / Not Ready Yet`** — these two have no matching disposition (set by other flows), so they aren't bridged here.
+- Canonical source of truth for STOP / ENGAGED / NONE is `dispositionAction()` in [dispositions.ts](../amplify/functions/shared/dispositions.ts) — keep these labels in lockstep with it.
+
 #### Optional: Direct Mail add-on (only if the user runs ThanksIO mail)
 
 - Intake router **MAIL branch** — update opportunity to Mail-Only, add to **Direct Mail
