@@ -60,9 +60,14 @@ Offer Made → Under Contract → Closed → Not Interested → Dead.
   Text Counter, email attempt counter, Last Call Date, AI State, Mail Sent Count, **Call
   Outcome**. Action: Send Webhook (POST) to the **Field Sync** URL. *Leave the custom-data
   section empty* — the standard payload carries everything.
-  *(This single webhook now also stops AI outreach on terminal dispositions — see
-  [GHL_DISPOSITION_WEBHOOK.md](GHL_DISPOSITION_WEBHOOK.md). No separate disposition
-  workflow is required for the app side.)*
+  *(This single webhook is also the app's source of disposition events: on a Call Outcome
+  change it sends the full payload, and the field-sync handler stops/pauses AI email
+  outreach on terminal/engaged dispositions — see
+  [GHL_DISPOSITION_WEBHOOK.md](GHL_DISPOSITION_WEBHOOK.md).)*
+  > **One webhook per Call Outcome change.** This is the **only** workflow that should POST
+  > to the Field Sync URL. Do **not** add a Send Webhook action to the disposition/pipeline
+  > workflow below — that would double-fire the handler (harmless but redundant). Keep this
+  > workflow **Published** with its `Call Outcome` trigger; it is the single app notifier.
 
 **Intake router** (trigger: tag added = `app:synced`)
 - Create/Update Opportunity → check valid phone →
@@ -74,10 +79,11 @@ Offer Made → Under Contract → Closed → Not Interested → Dead.
     router can simply end the no-phone path, or you keep the branch but it does nothing
     without ThanksIO.)*
 
-**Disposition workflows (GHL-side CRM actions only)** — pipeline moves, tagging, DNC list,
-KVCORE sync per outcome. The app-side outreach stop is now automatic via the field-sync
-webhook, so these no longer need to call the app. *(Any `Disposition`→mail step belongs to
-the add-on.)*
+**Helper: Call Outcome - Pipeline (GHL-side CRM actions only)** — per-disposition routing:
+update the opportunity stage, update contact fields, and remove the lead from the 8x dialer.
+**Ship it WITHOUT a Send Webhook action** — "Sync Custom Fields to App" already notifies the
+app on Call Outcome change (see the one-webhook rule above), so the app-side stop/pause is
+automatic. *(Any `Disposition`→mail step belongs to the add-on.)*
 
 **Tag-driven helper workflows** — the alert/handoff workflows in
 [GHL_NEW_USER_SETUP.md](GHL_NEW_USER_SETUP.md) §5 (Ready-For-Human-Contact,

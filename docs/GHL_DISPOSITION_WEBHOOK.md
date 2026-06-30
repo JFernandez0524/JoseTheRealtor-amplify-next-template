@@ -18,24 +18,34 @@ https://xjiwzxgpa4nzpxdxjl5ib6xdom0gdtvx.lambda-url.us-east-1.on.aws/
 
 This is non-fatal and idempotent: if there's no queue item, or the contact is already DND, nothing breaks and field sync still succeeds.
 
-## Dispositions that STOP outreach (terminal)
+## Dispositions that STOP outreach (terminal → DND / opted-out)
 
 - Sold Already
 - Not Interested
 - DNC
 - Listed With Realtor
-- Incorrect Number (aliases: Wrong Number, Disconnected, Invalid Number)
+- Wrong Number / Disconnected / Invalid Number  *(the exact GHL Call Outcome option;
+  aliases "Incorrect Number" / "Wrong Number" / "Disconnected" / "Invalid Number" also match)*
+
+## Dispositions that PAUSE outreach (engaged → not opted out)
+
+- **Appointment Set** — the lead booked, so cold email pauses (`queueStatus=CONVERSATION`),
+  but they are NOT marked opted-out.
 
 ## Dispositions that KEEP the cadence (non-terminal)
 
 - No Answer
 - Voicemail / Left Voicemail
-- Follow Up / Spoke - Follow Up
-- Requested Appointment
+- Spoke - Follow Up
+- Timeline / Not Ready Yet
+- DEAD / Max Attempts  *(calls are exhausted, but the dialer workflow hands off to
+  email/direct mail, so email keeps running)*
 
-Matching is case- and whitespace-insensitive. The terminal set lives in
+Matching is case- and whitespace-insensitive against the exact GHL Call Outcome field
+options. The logic lives in
 [`amplify/functions/shared/dispositions.ts`](../amplify/functions/shared/dispositions.ts)
-(`isTerminalDisposition`), covered by `__tests__/shared/dispositions.test.ts`.
+(`dispositionAction` → `STOP` | `ENGAGED` | `NONE`), covered by
+`__tests__/shared/dispositions.test.ts`.
 
 ## GHL-side actions still belong in your workflows
 
