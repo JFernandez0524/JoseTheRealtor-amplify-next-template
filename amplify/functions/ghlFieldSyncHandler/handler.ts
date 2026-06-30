@@ -2,6 +2,7 @@ import type { Handler } from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand, ScanCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { dispositionAction } from '../shared/dispositions';
+import { getIntegrationByLocationId } from '../shared/ghlTokenManager';
 
 const docClient = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 
@@ -13,6 +14,16 @@ export const handler: Handler = async (event) => {
 
     if (!contactId) {
       return { statusCode: 400, body: JSON.stringify({ error: 'Missing contact ID' }) };
+    }
+
+    // 🔒 Multi-tenant isolation: identify the account that fired this webhook from its
+    // GHL location, and only ever touch that account's data. The payload's location.id
+    // maps to exactly one connected integration (→ its Cognito userId).
+    const locationId = payload.location?.id;
+    const integration = locationId ? await getIntegrationByLocationId(locationId) : null;
+    if (!integration) {
+      console.log(`🚫 [FIELD_SYNC] Unknown/inactive location ${locationId} — ignoring`);
+      return { statusCode: 200, body: JSON.stringify({ success: true, message: 'Unknown location' }) };
     }
 
     // GHL's standard webhook payload includes every custom field keyed by its
@@ -52,6 +63,13 @@ export const handler: Handler = async (event) => {
       console.log(`⚠️ No PropertyLead found for contact ${contactId}`);
       return { statusCode: 200, body: JSON.stringify({ success: true, message: 'Contact not found in app' }) };
     }
+
+    // 🔒 Tenant guard: the resolved lead must belong to the account that fired the webhook.
+    if (lead.owner !== integration.userId) {
+      console.log(`🚫 [FIELD_SYNC] Lead ${lead.id} (owner ${lead.owner}) not owned by location ${locationId} (user ${integration.userId}) — ignoring`);
+      return { statusCode: 200, body: JSON.stringify({ success: true, message: 'Lead not owned by this location' }) };
+    }
+
     const outreachData: any = { ...(lead.ghlOutreachData || {}) };
 
     if (callAttempts  !== undefined && callAttempts  !== '') outreachData.smsAttempts  = parseInt(callAttempts)  || 0;
@@ -81,10 +99,10 @@ export const handler: Handler = async (event) => {
       try {
         const { getQueueItemByContact, findQueueItemByContactId, updateQueueStatus, updateEmailStatus } =
           await import('../shared/outreachQueue');
-        // Prefer the O(1) key lookup (queue id is `${userId}_${contactId}`); the payload
-        // carries the user id as "App User ID". Fall back to the scan if it's absent.
-        const userId = payload['App User ID'];
-        let queueItem = userId ? await getQueueItemByContact(userId, contactId) : null;
+        // Use the verified tenant userId (queue id is `${userId}_${contactId}`) for the
+        // O(1) lookup — authoritative, not the payload's "App User ID". Fall back to the scan.
+        const userId = integration.userId;
+        let queueItem = await getQueueItemByContact(userId, contactId);
         if (!queueItem) queueItem = await findQueueItemByContactId(contactId);
 
         if (!queueItem?.id) {
