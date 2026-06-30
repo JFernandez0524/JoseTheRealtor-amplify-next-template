@@ -132,18 +132,6 @@ const OPPORTUNITY_FIELDS: Array<{ key: string } & FieldDef> = [
   },
 ];
 
-const CALL_DISPOSITIONS = [
-  'No Answer',
-  'Voicemail',
-  'Follow Up',
-  'Requested Appointment',
-  'Not Interested',
-  'Incorrect Number',
-  'Listed With Realtor',
-  'Sold Already',
-  'DNC',
-];
-
 // Every static tag the system applies (sourced from gohighlevel.ts, conversationHandler.ts,
 // and the email/mail/facebook handlers — see docs/GHL_NEW_USER_SETUP.md §8). Pre-created on
 // connect so tag-triggered workflows and smart lists resolve for brand-new users.
@@ -216,41 +204,9 @@ async function createField(
   return res.data?.customField?.id || res.data?.id;
 }
 
-export async function provisionCallDispositions(locationId: string, token: string): Promise<void> {
-  console.log(`🔧 [PROVISIONER] Provisioning call dispositions for location ${locationId}`);
-
-  let existing: Array<{ id: string; name: string }> = [];
-  try {
-    const ghl = createGhlClient(token);
-    const res = await ghl.get(`/locations/${locationId}/call-dispositions`);
-    existing = res.data?.callDispositions ?? res.data ?? [];
-    if (!Array.isArray(existing)) {
-      console.error('❌ [PROVISIONER] Unexpected call-dispositions response shape:', JSON.stringify(res.data).slice(0, 300));
-      existing = [];
-    }
-  } catch (err: any) {
-    console.error('❌ [PROVISIONER] Failed to fetch call dispositions:', err.response?.data || err.message);
-    return;
-  }
-
-  const existingNames = new Set(existing.map((d) => d.name.toLowerCase().trim()));
-
-  for (const name of CALL_DISPOSITIONS) {
-    if (existingNames.has(name.toLowerCase().trim())) {
-      console.log(`✅ [PROVISIONER] Call disposition "${name}" already exists`);
-      continue;
-    }
-    try {
-      const ghl = createGhlClient(token);
-      await ghl.post(`/locations/${locationId}/call-dispositions`, { name });
-      console.log(`🆕 [PROVISIONER] Created call disposition "${name}"`);
-    } catch (err: any) {
-      console.error(`❌ [PROVISIONER] Failed to create call disposition "${name}":`, err.response?.data || err.message);
-    }
-  }
-
-  console.log(`✅ [PROVISIONER] Call disposition provisioning complete`);
-}
+// NOTE: custom call dispositions are intentionally NOT provisioned here — GHL has no
+// public API for them (GET/POST /locations/{id}/call-dispositions returns 404). They are
+// delivered via the GHL snapshot or created manually during account setup.
 
 export async function provisionCustomFields(locationId: string, token: string): Promise<Record<string, string>> {
   console.log(`🔧 [PROVISIONER] Provisioning contact custom fields for location ${locationId}`);

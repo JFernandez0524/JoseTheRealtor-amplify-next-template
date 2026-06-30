@@ -137,10 +137,17 @@ immediately on load.)
 ### 4. Tags
 **No need to hand-build tags.** On the user's first sync, the app auto-provisions all
 system tags (`SYSTEM_TAGS` in
-[`amplify/functions/shared/ghlFieldProvisioner.ts`](../amplify/functions/shared/ghlFieldProvisioner.ts)),
-plus the call dispositions — so tag-triggered workflows and smart lists resolve even
-before any leads flow. Including tags in the snapshot is optional/harmless (the app
-de-dupes by name).
+[`amplify/functions/shared/ghlFieldProvisioner.ts`](../amplify/functions/shared/ghlFieldProvisioner.ts))
+— so tag-triggered workflows and smart lists resolve even before any leads flow. Including
+tags in the snapshot is optional/harmless (the app de-dupes by name).
+
+### 5. Custom Call Dispositions (MUST be in the snapshot)
+The app **cannot** auto-create custom call dispositions — GHL has no public API for them
+(the endpoint 404s). So the snapshot **must include** the 9 dispositions, or the new user
+adds them manually (Settings → Phone → Call Dispositions): **No Answer, Voicemail, Follow
+Up, Requested Appointment, Not Interested, Incorrect Number, Listed With Realtor, Sold
+Already, DNC**. These are what agents pick on a call; the bridge workflows map them to the
+`Call Outcome` field labels (see the mapping table above).
 
 ---
 

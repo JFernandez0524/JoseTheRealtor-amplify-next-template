@@ -14,9 +14,14 @@ When you authorize, the system automatically creates in your GHL account:
 |---|---|
 | 35+ contact custom fields | Property info, outreach counters, AI state, etc. |
 | 1 opportunity custom field | Disposition (single-select) |
-| 9 phone call dispositions | No Answer, Voicemail, Follow Up, etc. |
+| System tags | All workflow/state tags (so tag-triggered workflows + smart lists resolve) |
 
-You do **not** need to create any of these manually.
+You do **not** need to create those manually.
+
+> **Custom phone Call Dispositions are NOT auto-created** — GHL has no public API for them.
+> Get the 9 dispositions (No Answer, Voicemail, Follow Up, Requested Appointment, Not
+> Interested, Incorrect Number, Listed With Realtor, Sold Already, DNC) from the **GHL
+> snapshot**, or add them manually under **Settings → Phone → Call Dispositions**.
 
 ---
 
@@ -315,7 +320,8 @@ If you are on a plan that includes direct mail:
 
 ## Checklist
 
-- [ ] Connected GHL account (custom fields + call dispositions auto-created)
+- [ ] Connected GHL account (custom fields + system tags auto-created)
+- [ ] Custom Call Dispositions present (from snapshot, or added manually — not auto-created)
 - [ ] Purchased phone number + A2P 10DLC registered
 - [ ] Email sending domain verified
 - [ ] Lead Manager pipeline created with all stages
