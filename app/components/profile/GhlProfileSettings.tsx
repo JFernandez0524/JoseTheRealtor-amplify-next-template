@@ -207,7 +207,10 @@ export default function GhlProfileSettings() {
             Your GoHighLevel account has no phone number. The app skip-traces and works leads by
             phone, so you must <strong>purchase a phone number in GHL</strong> (Settings → Phone
             Numbers, and complete A2P 10DLC registration) before you can finish setup.
-            Once you&apos;ve bought a number, click below to re-check (or reload this page).
+            {' '}<strong>Can&apos;t buy a number?</strong> Your GHL phone system may need to be
+            enabled first (Settings → Phone System) — if it says &ldquo;requires configuration,&rdquo;
+            contact your provider/agency to activate it. Once you&apos;ve bought a number, click
+            below to re-check (or reload this page).
           </p>
           <button
             type="button"

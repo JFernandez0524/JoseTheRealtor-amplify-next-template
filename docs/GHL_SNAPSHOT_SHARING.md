@@ -170,6 +170,11 @@ Already, DNC**. These are what agents pick on a call; the bridge workflows map t
 1. Open the **shareable snapshot link** and load it into your GHL sub-account.
 2. Connect Lead Manager (Settings → GHL Integration → Connect) — this provisions/reuses
    custom fields automatically.
-3. Complete the per-user items the snapshot can't set: **phone number / A2P 10DLC**,
-   **sending email domain (DNS)**, and **calendar selection**. See
+3. Complete the per-user items the snapshot can't set: **phone system activation +
+   phone number / A2P 10DLC**, **sending email domain (DNS)**, and **calendar selection**. See
    [GHL_NEW_USER_SETUP.md](GHL_NEW_USER_SETUP.md).
+
+> **Agency prerequisite — LC Phone.** The snapshot does **not** enable the sub-account's
+> phone system. A new sub-account can't buy a number until the **agency activates LC Phone**
+> for it (otherwise the Phone Numbers screen shows *"requires configuration"*). Do this per
+> sub-account before the user completes setup — same class of agency step as this snapshot.

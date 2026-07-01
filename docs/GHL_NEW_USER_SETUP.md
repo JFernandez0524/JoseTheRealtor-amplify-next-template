@@ -27,11 +27,19 @@ You do **not** need to create those manually.
 
 ## 2. Buy or Assign a Phone Number
 
-The AI outreach agent sends SMS from your GHL phone number.
+A phone number is **required** — the app skip-traces and works leads by phone (SMS/email are secondary).
 
-1. Go to **Settings → Phone Numbers**
-2. Purchase a local number in your market area
-3. Make sure A2P 10DLC registration is complete — SMS will be blocked without it
+> **Prerequisite (agency step):** the sub-account's **phone system (LC Phone) must be enabled**
+> before you can buy a number. New sub-accounts don't have it by default — if **Settings → Phone
+> System → Phone Numbers** says *"Your phone system requires configuration… reach out to support,"*
+> the **agency** must activate LC Phone for the sub-account first. A sub-account user can't do this.
+
+Setup order: **agency enables LC Phone → buy number + A2P → connect the app + finish profile setup.**
+
+1. (Agency) Enable the phone system (LC Phone) for the sub-account.
+2. Go to **Settings → Phone Numbers** and purchase a local number in your market area.
+3. Complete **A2P 10DLC** registration — SMS will be blocked without it.
+4. Select that number as your **Campaign Phone** in the app's profile settings.
 
 ---
 
