@@ -1,21 +1,21 @@
 import { NextResponse } from 'next/server';
-import { ghlAddTags, ghlUpdateContact } from '../../../../amplify/functions/shared/ghlClient';
-import { getValidGhlToken } from '@/app/utils/aws/data/ghlIntegration.server';
 
 /**
- * UNSUBSCRIBE API
+ * POST /api/v1/unsubscribe
  *
- * Handles email unsubscribe requests from contacts.
+ * Thin proxy to the `unsubscribeHandler` Lambda Function URL.
  *
- * ACTIONS:
- * 1. Tags contact as "unsubscribed" in GHL
- * 2. Updates GHL DND settings to block emails
- * 3. Updates OutreachQueue status to OPTED_OUT
+ * WHY A PROXY: honoring an unsubscribe click requires reading/writing across tenants
+ * (GhlIntegration/OutreachQueue/PropertyLead are owner-scoped in AppSync) and the Next.js SSR
+ * runtime has neither the DynamoDB table names nor IAM to do it — only Lambdas do. The Lambda
+ * resolves the owning tenant from the contact and applies the opt-out in the correct account.
  *
- * COMPLIANCE:
- * - CAN-SPAM Act compliant (instant unsubscribe)
- * - Permanent opt-out (no re-subscription without explicit consent)
- * - No login or payment required
+ * REQUEST:  { contactId: string, email?: string }
+ * RESPONSE: { success: boolean, message?: string, error?: string }  (passed through from the Lambda)
+ *
+ * AUTH: none — public, CAN-SPAM compliant (instant opt-out, no login). Called by app/unsubscribe/page.tsx.
+ *
+ * CONFIG: UNSUBSCRIBE_FUNCTION_URL must be present in the SSR runtime (see amplify.yml env allow-list).
  */
 export async function POST(req: Request) {
   try {
@@ -28,69 +28,31 @@ export async function POST(req: Request) {
       );
     }
 
-    // Get contact to find userId
-    const { cookiesClient } = await import(
-      '@/app/utils/aws/auth/amplifyServerUtils.server'
-    );
-
-    // Fetch contact from GHL to get locationId
-    // We need to find the integration first - try to get it from the contact's location
-    // For now, we'll use a direct GHL API call with any active integration
-    const { data: integrations } =
-      await cookiesClient.models.GhlIntegration.list({
-        filter: { isActive: { eq: true } },
-      });
-
-    if (!integrations || integrations.length === 0) {
+    const functionUrl = process.env.UNSUBSCRIBE_FUNCTION_URL;
+    if (!functionUrl) {
+      console.error('❌ [UNSUBSCRIBE] UNSUBSCRIBE_FUNCTION_URL is not configured');
       return NextResponse.json(
-        { success: false, error: 'No active GHL integration found' },
-        { status: 404 },
+        { success: false, error: 'Unsubscribe service is not configured' },
+        { status: 500 },
       );
     }
 
-    // Use first active integration (in production, you'd match by locationId)
-    const integration = integrations[0];
-    const accessToken = await getValidGhlToken(integration.userId);
-
-    if (!accessToken) {
-      return NextResponse.json({ success: false, error: 'Failed to retrieve GHL token' }, { status: 500 });
-    }
-
-    // 1. Tag contact as unsubscribed
-    await ghlAddTags(accessToken, contactId, ['unsubscribed', 'email:opted-out']);
-
-    // 2. Update DND settings to block emails
-    await ghlUpdateContact(accessToken, contactId, {
-      dndSettings: { Email: { status: 'active', message: 'Contact unsubscribed from emails' } }
+    const res = await fetch(functionUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contactId, email }),
     });
 
-    // 3. Update OutreachQueue status to OPTED_OUT
-    const { data: queueItems } = await cookiesClient.models.OutreachQueue.list({
-      filter: {
-        contactId: { eq: contactId },
-      },
-    });
+    const data = await res.json().catch(() => ({
+      success: false,
+      error: 'Unsubscribe service returned an invalid response',
+    }));
 
-    for (const item of queueItems) {
-      await cookiesClient.models.OutreachQueue.update({
-        id: item.id,
-        emailStatus: 'OPTED_OUT',
-      });
-    }
-
-    console.log(`✅ Contact ${contactId} unsubscribed successfully`);
-
-    return NextResponse.json({
-      success: true,
-      message: 'Successfully unsubscribed',
-    });
+    return NextResponse.json(data, { status: res.status });
   } catch (error: any) {
-    console.error('Unsubscribe error:', error.response?.data || error.message);
+    console.error('❌ [UNSUBSCRIBE] Proxy error:', error?.message || error);
     return NextResponse.json(
-      {
-        success: false,
-        error: 'Failed to process unsubscribe request',
-      },
+      { success: false, error: 'Failed to process unsubscribe request' },
       { status: 500 },
     );
   }

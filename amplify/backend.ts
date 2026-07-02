@@ -15,7 +15,7 @@ import { populateQueueFromGhl } from './functions/populateQueueFromGhl/resource'
 import { syncListingStatus } from './functions/syncListingStatus/resource';
 import { ghlFieldSyncHandler } from './functions/ghlFieldSyncHandler/resource';
 import { thanksIoWebhookHandler } from './functions/thanksIoWebhookHandler/resource';
-import { facebookWebhookHandler } from './functions/facebookWebhookHandler/resource';
+import { unsubscribeHandler } from './functions/unsubscribeHandler/resource';
 import { stripeWebhookHandler } from './functions/stripeWebhookHandler/resource';
 import { addUserToGroup } from './data/add-user-to-group/resource';
 import { removeUserFromGroup } from './data/remove-user-from-group/resource';
@@ -40,7 +40,7 @@ const backend = defineBackend({
   syncListingStatus,
   ghlFieldSyncHandler,
   thanksIoWebhookHandler,
-  facebookWebhookHandler,
+  unsubscribeHandler,
   addUserToGroup,
   removeUserFromGroup,
   stripeWebhookHandler,
@@ -409,6 +409,12 @@ backend.thanksIoWebhookHandler.addEnvironment(
   backend.data.resources.tables['OutreachQueue'].tableName
 );
 
+// resolveOwnerByGhlContactId() scans PropertyLead to attribute the contact to a tenant.
+backend.thanksIoWebhookHandler.addEnvironment(
+  'AMPLIFY_DATA_PropertyLead_TABLE_NAME',
+  backend.data.resources.tables['PropertyLead'].tableName
+);
+
 backend.thanksIoWebhookHandler.addEnvironment('GHL_CLIENT_ID', process.env.GHL_CLIENT_ID || '');
 backend.thanksIoWebhookHandler.addEnvironment('GHL_CLIENT_SECRET', process.env.GHL_CLIENT_SECRET || '');
 
@@ -417,6 +423,10 @@ backend.data.resources.tables['GhlIntegration'].grantReadWriteData(
 );
 
 backend.data.resources.tables['OutreachQueue'].grantReadData(
+  backend.thanksIoWebhookHandler.resources.lambda
+);
+
+backend.data.resources.tables['PropertyLead'].grantReadData(
   backend.thanksIoWebhookHandler.resources.lambda
 );
 
@@ -437,44 +447,44 @@ backend.thanksIoWebhookHandler.resources.lambda.addPermission('AllowPublicFuncti
   functionUrlAuthType: FunctionUrlAuthType.NONE,
 });
 
-// 📘 Configure Facebook Webhook Handler
-backend.facebookWebhookHandler.addEnvironment(
-  'AMPLIFY_DATA_GhlIntegration_TABLE_NAME',
-  backend.data.resources.tables['GhlIntegration'].tableName
+// 🚫 Configure Unsubscribe Handler (public — honors anonymous email unsubscribe clicks)
+backend.unsubscribeHandler.addEnvironment(
+  'AMPLIFY_DATA_PropertyLead_TABLE_NAME',
+  backend.data.resources.tables['PropertyLead'].tableName
 );
-
-backend.facebookWebhookHandler.addEnvironment(
+backend.unsubscribeHandler.addEnvironment(
   'AMPLIFY_DATA_OutreachQueue_TABLE_NAME',
   backend.data.resources.tables['OutreachQueue'].tableName
 );
-
-backend.facebookWebhookHandler.addEnvironment('GHL_CLIENT_ID', process.env.GHL_CLIENT_ID || '');
-backend.facebookWebhookHandler.addEnvironment('GHL_CLIENT_SECRET', process.env.GHL_CLIENT_SECRET || '');
-backend.facebookWebhookHandler.addEnvironment('META_VERIFY_TOKEN', process.env.META_VERIFY_TOKEN || '');
-backend.facebookWebhookHandler.addEnvironment('META_APP_SECRET', process.env.META_APP_SECRET || '');
-backend.facebookWebhookHandler.addEnvironment('FB_PAGE_ACCESS_TOKEN', process.env.FB_PAGE_ACCESS_TOKEN || '');
-backend.facebookWebhookHandler.addEnvironment('OPENAI_API_KEY', process.env.OPENAI_API_KEY || '');
-backend.facebookWebhookHandler.addEnvironment('APP_URL', process.env.NEXT_PUBLIC_APP_URL || 'https://leads.josetherealtor.com');
-
-backend.data.resources.tables['GhlIntegration'].grantReadWriteData(
-  backend.facebookWebhookHandler.resources.lambda
+backend.unsubscribeHandler.addEnvironment(
+  'AMPLIFY_DATA_GhlIntegration_TABLE_NAME',
+  backend.data.resources.tables['GhlIntegration'].tableName
 );
+backend.unsubscribeHandler.addEnvironment('GHL_CLIENT_ID', process.env.GHL_CLIENT_ID || '');
+backend.unsubscribeHandler.addEnvironment('GHL_CLIENT_SECRET', process.env.GHL_CLIENT_SECRET || '');
 
+// Owner resolution reads PropertyLead; queue opt-out writes OutreachQueue; token refresh writes GhlIntegration.
+backend.data.resources.tables['PropertyLead'].grantReadData(
+  backend.unsubscribeHandler.resources.lambda
+);
 backend.data.resources.tables['OutreachQueue'].grantReadWriteData(
-  backend.facebookWebhookHandler.resources.lambda
+  backend.unsubscribeHandler.resources.lambda
+);
+backend.data.resources.tables['GhlIntegration'].grantReadWriteData(
+  backend.unsubscribeHandler.resources.lambda
 );
 
-// Enable Function URL for webhook
-backend.facebookWebhookHandler.resources.lambda.addFunctionUrl({
+// Enable Function URL for the unsubscribe endpoint (proxied by app/api/v1/unsubscribe/route.ts)
+backend.unsubscribeHandler.resources.lambda.addFunctionUrl({
   authType: FunctionUrlAuthType.NONE,
   cors: {
     allowedOrigins: ['*'],
-    allowedMethods: [HttpMethod.GET, HttpMethod.POST],
+    allowedMethods: [HttpMethod.POST],
     allowedHeaders: ['*'],
   }
 });
 
-backend.facebookWebhookHandler.resources.lambda.addPermission('AllowPublicFacebookWebhook', {
+backend.unsubscribeHandler.resources.lambda.addPermission('AllowPublicUnsubscribe', {
   principal: new AnyPrincipal(),
   action: 'lambda:InvokeFunctionUrl',
   functionUrlAuthType: FunctionUrlAuthType.NONE,

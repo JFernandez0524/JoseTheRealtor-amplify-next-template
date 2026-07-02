@@ -10,12 +10,8 @@
 
 import type { Handler } from 'aws-lambda';
 import { getValidGhlToken } from '../shared/ghlTokenManager';
-import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, GetCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { ghlGetContact, ghlUpdateContact } from '../shared/ghlClient';
-
-const dynamoClient = new DynamoDBClient({});
-const docClient = DynamoDBDocumentClient.from(dynamoClient);
+import { resolveOwnerByGhlContactId } from '../shared/tenantResolver';
 
 
 export const handler: Handler = async (event) => {
@@ -70,9 +66,12 @@ async function handleDeliveryUpdate(contactId: string, data: any) {
     return;
   }
 
-  // Get user ID and field IDs from contact
-  const userId = await getUserIdFromContact(contactId);
-  if (!userId) return;
+  // Resolve the owning tenant from our own records (multi-tenant safe).
+  const userId = await resolveOwnerByGhlContactId(contactId);
+  if (!userId) {
+    console.error(`❌ [THANKS.IO] No owner found for contact ${contactId} — skipping`);
+    return;
+  }
 
   // Get GHL token and dynamic field IDs
   const tokenData = await getValidGhlToken(userId);
@@ -113,9 +112,12 @@ async function handleQRScan(contactId: string, data: any) {
 
   console.log(`📱 [THANKS.IO] QR scan for ${contactId}: ${scanCount} scans`);
 
-  // Look up the correct user for this contact (multi-tenant safe)
-  const userId = await getUserIdFromContact(contactId);
-  if (!userId) return;
+  // Resolve the correct owning tenant for this contact (multi-tenant safe)
+  const userId = await resolveOwnerByGhlContactId(contactId);
+  if (!userId) {
+    console.error(`❌ [THANKS.IO] No owner found for contact ${contactId} — skipping`);
+    return;
+  }
 
   const tokenData = await getValidGhlToken(userId);
   if (!tokenData) return;
@@ -134,45 +136,4 @@ async function handleQRScan(contactId: string, data: any) {
   });
 
   console.log(`✅ [THANKS.IO] Updated contact ${contactId} - QR scanned ${scanCount} times`);
-}
-
-async function getUserIdFromContact(contactId: string): Promise<string | null> {
-  try {
-    const { ScanCommand } = await import('@aws-sdk/lib-dynamodb');
-    
-    // Get any GHL integration to fetch contact details
-    const integrationResult = await docClient.send(new ScanCommand({
-      TableName: process.env.AMPLIFY_DATA_GhlIntegration_TABLE_NAME!,
-      Limit: 1
-    }));
-
-    if (!integrationResult.Items?.length) {
-      console.error(`❌ [THANKS.IO] No GHL integrations found`);
-      return null;
-    }
-
-    const tokenData = await getValidGhlToken(integrationResult.Items[0].userId);
-    if (!tokenData) return null;
-
-    const contact = await ghlGetContact(tokenData.token, contactId);
-    const locationId = contact.locationId;
-    
-    // Find userId for this locationId
-    const userResult = await docClient.send(new ScanCommand({
-      TableName: process.env.AMPLIFY_DATA_GhlIntegration_TABLE_NAME!,
-      FilterExpression: 'locationId = :locationId',
-      ExpressionAttributeValues: { ':locationId': locationId },
-      Limit: 1
-    }));
-
-    if (userResult.Items?.length) {
-      return userResult.Items[0].userId;
-    }
-
-    console.error(`❌ [THANKS.IO] No userId found for locationId ${locationId}`);
-    return null;
-  } catch (error: any) {
-    console.error('❌ [THANKS.IO] Error getting userId:', error.message);
-    return null;
-  }
 }
