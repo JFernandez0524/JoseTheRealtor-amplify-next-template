@@ -192,6 +192,7 @@ export const handler = async (event: any) => {
                 emailSignature: integration.emailSignature,
                 toEmail: contact.email,
                 touchNumber: contact._queueAttempts + 1, // 1=initial, 2-7=follow-ups
+                callOutcomeFieldId: fieldIds.call_outcome, // enables the send route's terminal-disposition guard
               },
               {
                 headers: {
@@ -241,8 +242,19 @@ export const handler = async (event: any) => {
               console.error(`Failed to send email to ${contact.email}:`, response.data.error);
 
               const errorMsg = response.data.error || '';
+              // Terminal Call Outcome (Listed With Realtor, DNC, etc.): opt the contact out so
+              // the cadence stops permanently — even if the GHL field-sync workflow didn't.
+              const isTerminalOutcome = errorMsg.includes('terminal Call Outcome');
               const isPermanentFailure = errorMsg.includes('DND is active') || errorMsg.includes('Contact has no email');
-              if (isPermanentFailure) {
+              if (isTerminalOutcome) {
+                try {
+                  const { updateEmailStatus } = await import('../shared/outreachQueue');
+                  await updateEmailStatus(contact._queueId, 'OPTED_OUT');
+                  console.log(`🛑 [QUEUE] Opted out ${contact._queueId} (${errorMsg})`);
+                } catch (queueError: any) {
+                  console.error(`❌ [QUEUE] Failed to opt out:`, queueError.message);
+                }
+              } else if (isPermanentFailure) {
                 // Mark permanently so it never retries
                 try {
                   const { updateEmailStatus } = await import('../shared/outreachQueue');

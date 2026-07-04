@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { ghlGetContact } from '../../../../amplify/functions/shared/ghlClient';
+import { dispositionAction } from '../../../../amplify/functions/shared/dispositions';
 import { generateEmailAIResponse } from '@/app/utils/ai/emailConversationHandler';
 
 /**
@@ -64,7 +65,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    const { contactId, accessToken, fromEmail, emailSignature, toEmail, touchNumber } = await req.json();
+    const { contactId, accessToken, fromEmail, emailSignature, toEmail, touchNumber, callOutcomeFieldId } = await req.json();
 
     if (!contactId || !accessToken) {
       return NextResponse.json(
@@ -75,6 +76,22 @@ export async function POST(req: Request) {
 
     // Fetch contact from GHL
     const contact = await ghlGetContact(accessToken, contactId);
+
+    // Terminal-disposition guard (defense in depth): never email a contact whose live Call
+    // Outcome is terminal, regardless of whether the GHL field-sync workflow flipped the
+    // queue. Reuses the same classifier as the queue path. The agent passes the tenant's
+    // resolved Call Outcome field id (multi-tenant safe — no hardcoded id here).
+    if (callOutcomeFieldId) {
+      const callOutcome = contact?.customFields?.find((f: any) => f.id === callOutcomeFieldId)?.value;
+      const action = dispositionAction(callOutcome);
+      if (action !== 'NONE') {
+        console.log(`⛔ [EMAIL] Skipping ${contactId} — terminal Call Outcome "${callOutcome}" (${action})`);
+        return NextResponse.json(
+          { success: false, error: `Outreach stopped: terminal Call Outcome (${callOutcome})` },
+          { status: 400 },
+        );
+      }
+    }
     
     // Validate toEmail against contact's known emails in GHL
     // GHL rejects emailTo if it's not the primary or an additional email
