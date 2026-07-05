@@ -61,11 +61,12 @@ interface OutreachQueueItem {
  * @returns Queue item ID
  */
 export async function addToOutreachQueue(item: OutreachQueueItem): Promise<string> {
-  // Create unique ID per contact+email combination (supports multiple emails per contact)
-  const emailSuffix = item.contactEmail ? `_${item.contactEmail.replace(/[^a-zA-Z0-9]/g, '')}` : '';
-  const id = item.id || `${item.userId}_${item.contactId}${emailSuffix}`;
-  
-  // Check if this specific contact+email already exists in queue
+  // One row per contact, keyed `${userId}_${contactId}` — matches getQueueItemByContact and the
+  // disposition-stop / unsubscribe lookups (the old per-email suffix created duplicate rows the
+  // stop couldn't reach). Callers now pass the single best email as contactEmail.
+  const id = item.id || `${item.userId}_${item.contactId}`;
+
+  // Check if this contact already exists in queue
   try {
     const existing = await docClient.send(new GetCommand({
       TableName: OUTREACH_QUEUE_TABLE,

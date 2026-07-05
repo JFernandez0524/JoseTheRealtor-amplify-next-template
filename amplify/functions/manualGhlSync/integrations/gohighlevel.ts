@@ -287,17 +287,11 @@ export async function syncToGoHighLevel(
     if (contactId && tags.includes('ai outreach')) {
       try {
         const { addToOutreachQueue } = await import('../../shared/outreachQueue');
-        
-        // SMS outreach disabled - EMAIL ONLY
-        
-        // Add queue items for each email (up to 3)
-        const emails = [
-          primaryEmail,
-          lead.emails?.[1],
-          lead.emails?.[2]
-        ].filter((e): e is string => !!e);
-        
-        for (const email of emails) {
+
+        // SMS outreach disabled - EMAIL ONLY.
+        // One queue row per contact, using the single best email (lead.emails is ranked
+        // best-first by filterValidEmails). Emailing every address 2-3x'd volume and bounces.
+        if (primaryEmail) {
           await addToOutreachQueue({
             userId,
             locationId: ghlLocationId,
@@ -305,15 +299,15 @@ export async function syncToGoHighLevel(
             leadId: lead.id,
             contactName: `${basePayload.firstName} ${basePayload.lastName}`,
             contactPhone: undefined, // Email only
-            contactEmail: email,
+            contactEmail: primaryEmail,
             propertyAddress: lead.ownerAddress,
             propertyCity: lead.ownerCity,
             propertyState: lead.ownerState,
             leadType: lead.type,
           });
-          console.log(`✅ Added email ${email} to outreach queue`);
+          console.log(`✅ Added best email ${primaryEmail} to outreach queue`);
         }
-        
+
       } catch (queueError) {
         console.error(`⚠️ Failed to add to outreach queue:`, queueError);
         // Don't fail the sync if queue add fails

@@ -101,29 +101,22 @@ export const handler: Handler = async () => {
     console.log(`📊 AI outreach contacts for user: ${aiOutreachContacts.length}`);
     console.log(`Sample contact tags:`, aiOutreachContacts[0]?.tags);
 
-    // Add to queue in batches (parallel processing)
-    // Create one queue entry per email address (supports multiple emails per contact)
+    // Add to queue in batches (parallel processing).
+    // One queue entry per contact, using the GHL primary email only (the best address —
+    // secondary emails live in email_2/email_3). Emailing every address 2-3x'd volume + bounces.
     const BATCH_SIZE = 25;
     const queueEntries: any[] = [];
-    
+
     for (const contact of aiOutreachContacts) {
-      const emails = [contact.email];
-      if (contact.additionalEmails && contact.additionalEmails.length > 0) {
-        emails.push(...contact.additionalEmails.filter((e): e is string => e !== null && e.length > 0));
-      }
-      
-      // Create queue entry for each email
-      for (const email of emails) {
-        if (email) {
-          queueEntries.push({
-            userId: integration.userId,
-            locationId: tokenData.locationId,
-            contactId: contact.id,
-            contactName: `${contact.firstName || ''} ${contact.lastName || ''}`.trim(),
-            contactPhone: contact.phone,
-            contactEmail: email,
-          });
-        }
+      if (contact.email) {
+        queueEntries.push({
+          userId: integration.userId,
+          locationId: tokenData.locationId,
+          contactId: contact.id,
+          contactName: `${contact.firstName || ''} ${contact.lastName || ''}`.trim(),
+          contactPhone: contact.phone,
+          contactEmail: contact.email,
+        });
       }
     }
     
