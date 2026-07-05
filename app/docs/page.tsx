@@ -241,6 +241,39 @@ export default function DocsPage() {
                 </ol>
               </div>
 
+              <div className="border-l-4 border-purple-500 pl-4">
+                <h3 className="text-lg font-medium text-gray-900 mb-2">What We Capture</h3>
+                <p className="text-gray-700 mb-2">For each lead we pull the owner&apos;s contact and mailing details from our data provider:</p>
+                <ul className="list-disc list-inside space-y-1 text-gray-700">
+                  <li><strong>Cell phone numbers</strong> (mobiles only — landlines are dropped)</li>
+                  <li><strong>Email addresses</strong></li>
+                  <li><strong>Mailing address</strong> (used for direct mail)</li>
+                  <li><strong>Owner name</strong> (fills in missing names)</li>
+                </ul>
+              </div>
+
+              <div className="bg-green-50 p-4 rounded-lg">
+                <h4 className="font-medium text-green-800 mb-2">✅ How We Keep It Clean &amp; Compliant</h4>
+                <p className="text-sm text-green-700 mb-2">We deliberately drop low-quality and non-compliant contact info at the source — this protects your dialer, your sender reputation, and respects consumer choice:</p>
+                <ul className="list-disc list-inside space-y-1 text-green-700 text-sm">
+                  <li><strong>Do-Not-Call numbers are removed</strong> — DNC-flagged phones are never captured, and DNC contacts are kept out of the dialer campaign.</li>
+                  <li><strong>Only high-quality mobiles</strong> — we keep mobile numbers that score 90+ for reachability; landlines and low-confidence numbers are discarded.</li>
+                  <li><strong>Emails are validated (Debounce)</strong> — every address is checked for deliverability; undeliverable ones are dropped so bounces stay low.</li>
+                  <li><strong>Business hours enforced</strong> — automated email only sends Mon–Fri 9a–7p and Sat 9a–12p (no Sundays).</li>
+                  <li><strong>Opt-outs are honored</strong> — an unsubscribe or a terminal call outcome (Listed With Realtor, DNC, Not Interested, Sold) stops all outreach and sets Do-Not-Disturb.</li>
+                </ul>
+              </div>
+
+              <div className="bg-blue-50 p-4 rounded-lg">
+                <h4 className="font-medium text-blue-800 mb-2">🎯 We Sync Only the Best Result</h4>
+                <p className="text-sm text-blue-700 mb-2">A person often has several phones and emails. We rank them and put the best one front-and-center so your dialer and AI outreach always start with the strongest contact:</p>
+                <ul className="list-disc list-inside space-y-1 text-blue-700 text-sm">
+                  <li><strong>Best phone first</strong> — mobiles are ordered by quality score; the highest becomes the contact&apos;s <strong>primary phone</strong>. (Additional good mobiles still create their own dialer contacts.)</li>
+                  <li><strong>Best email first</strong> — validated emails are ranked (Deliverable &gt; catch-all &gt; role); the best becomes the <strong>primary email</strong> and the single address AI outreach uses.</li>
+                  <li><strong>Extras are kept for reference</strong> in <code className="bg-blue-100 px-1 rounded text-xs">Phone 2–5</code> and <code className="bg-blue-100 px-1 rounded text-xs">Email 2–3</code>, but only the best drives automation — so a contact is never emailed at 3 addresses.</li>
+                </ul>
+              </div>
+
               <div className="bg-yellow-50 p-4 rounded-lg">
                 <h4 className="font-medium text-yellow-800 mb-2">💰 Cost Savings</h4>
                 <p className="text-sm text-yellow-700 mb-2">Leads marked as SOLD or SKIP are automatically excluded from skip tracing to prevent wasted credits.</p>
@@ -609,7 +642,7 @@ export default function DocsPage() {
                   <div className="flex gap-3 items-start"><code className="bg-gray-200 px-2 py-0.5 rounded text-xs whitespace-nowrap">App:Synced</code><span className="text-gray-700">Contact was synced from Lead Manager to Launch AI</span></div>
                   <div className="flex gap-3 items-start"><code className="bg-purple-100 px-2 py-0.5 rounded text-xs whitespace-nowrap">App:AI-Enabled</code><span className="text-gray-700">User is on the AI Outreach plan</span></div>
                   <div className="flex gap-3 items-start"><code className="bg-red-100 px-2 py-0.5 rounded text-xs whitespace-nowrap">App:Billing-Hold</code><span className="text-gray-700">Billing issue on the account — outreach automatically paused</span></div>
-                  <div className="flex gap-3 items-start"><code className="bg-green-100 px-2 py-0.5 rounded text-xs whitespace-nowrap">ai outreach</code><span className="text-gray-700">Contact is eligible for AI email + SMS outreach. <strong>Remove this tag to stop all AI automation.</strong></span></div>
+                  <div className="flex gap-3 items-start"><code className="bg-green-100 px-2 py-0.5 rounded text-xs whitespace-nowrap">ai outreach</code><span className="text-gray-700">Master switch for automated AI <strong>email</strong> outreach (added to skip-traced contacts that have an email, on the AI plan). <strong>Remove this tag to stop all AI automation.</strong></span></div>
                   <div className="flex gap-3 items-start"><code className="bg-blue-100 px-2 py-0.5 rounded text-xs whitespace-nowrap">Multi-Phone-Lead</code><span className="text-gray-700">Lead has 2+ phone numbers — multiple contacts created, one per phone</span></div>
                   <div className="flex gap-3 items-start"><code className="bg-blue-100 px-2 py-0.5 rounded text-xs whitespace-nowrap">Direct-Mail-Only</code><span className="text-gray-700">No qualified contact info found — direct mail only, no AI outreach</span></div>
                   <div className="flex gap-3 items-start"><code className="bg-gray-200 px-2 py-0.5 rounded text-xs whitespace-nowrap">Primary_Contact</code><span className="text-gray-700">Primary contact record when a lead has multiple phone numbers</span></div>
@@ -643,6 +676,20 @@ export default function DocsPage() {
                   <div className="flex gap-3 items-start"><code className="bg-indigo-100 px-2 py-0.5 rounded text-xs whitespace-nowrap">mail:touch3</code><span className="text-gray-700">Third mail piece delivered → move to "Touch 3 - Delivered" pipeline stage</span></div>
                   <div className="flex gap-3 items-start"><code className="bg-orange-200 px-2 py-0.5 rounded text-xs whitespace-nowrap">mail:scanned</code><span className="text-gray-700">🔥 QR code scanned — HOT LEAD! Move to "Engaged" stage and call immediately</span></div>
                   <div className="flex gap-3 items-start"><code className="bg-orange-200 px-2 py-0.5 rounded text-xs whitespace-nowrap">high-engagement</code><span className="text-gray-700">Added alongside mail:scanned to flag high-engagement contacts</span></div>
+                </div>
+              </div>
+
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <h4 className="font-medium text-gray-800 mb-3">Key Custom Fields (added automatically on sync)</h4>
+                <p className="text-sm text-gray-600 mb-3">These fields carry the property/lead data your outreach copy and workflows reference, plus the counters and state the app and Launch AI keep in sync. The most important for automation:</p>
+                <div className="space-y-2 text-sm">
+                  <div className="flex gap-3 items-start"><code className="bg-red-100 px-2 py-0.5 rounded text-xs whitespace-nowrap">Call Outcome</code><span className="text-gray-700"><strong>The dialer disposition.</strong> Set this on a call and the app reacts: terminal outcomes (<em>Listed With Realtor, DNC, Not Interested, Sold Already, Wrong Number</em>) <strong>stop all outreach and set email Do-Not-Disturb</strong>; <em>Appointment Set</em> pauses cold email (engaged); others keep the cadence running.</span></div>
+                  <div className="flex gap-3 items-start"><code className="bg-blue-100 px-2 py-0.5 rounded text-xs whitespace-nowrap">AI State</code><span className="text-gray-700">Where the contact is in AI outreach: not_started / running / paused / handoff.</span></div>
+                  <div className="flex gap-3 items-start"><code className="bg-gray-200 px-2 py-0.5 rounded text-xs whitespace-nowrap">SkipTraceStatus</code><span className="text-gray-700">COMPLETED / NO_MATCH / NO_QUALITY_CONTACTS — a contact must be COMPLETED with a phone to enter the dialer.</span></div>
+                  <div className="flex gap-3 items-start"><code className="bg-gray-200 px-2 py-0.5 rounded text-xs whitespace-nowrap">Listing Status</code><span className="text-gray-700">off market / active / sold / … — SOLD and SKIP are excluded from future skip tracing.</span></div>
+                  <div className="flex gap-3 items-start"><code className="bg-gray-200 px-2 py-0.5 rounded text-xs whitespace-nowrap">Call / Email / Mail counters + dates</code><span className="text-gray-700">Attempt counters and last-touch dates, kept in sync between Launch AI and the app to drive cadence and reporting.</span></div>
+                  <div className="flex gap-3 items-start"><code className="bg-gray-200 px-2 py-0.5 rounded text-xs whitespace-nowrap">Property Address / Zestimate / cash offer / Zillow Link / Lead Type</code><span className="text-gray-700">Property data used to personalize dialer scripts, emails, and direct mail. <code className="bg-gray-200 px-1 rounded">cash offer</code> = 70% of the Zestimate.</span></div>
+                  <div className="flex gap-3 items-start"><code className="bg-gray-200 px-2 py-0.5 rounded text-xs whitespace-nowrap">Phone 2–5 / Email 2–3</code><span className="text-gray-700">Backup numbers/addresses. The <em>best</em> phone and email are the contact&apos;s primary; these are kept for reference and manual use.</span></div>
                 </div>
               </div>
 
