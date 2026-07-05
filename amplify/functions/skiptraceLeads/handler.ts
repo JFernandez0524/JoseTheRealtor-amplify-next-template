@@ -2,6 +2,7 @@ import axios, { isAxiosError } from 'axios';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand, UpdateCommand, ScanCommand } from '@aws-sdk/lib-dynamodb';
 import { filterValidEmails } from '../shared/emailValidator';
+import { rankMobilePhones } from '../shared/sanitize';
 
 const dynamoClient = new DynamoDBClient({ region: process.env.AWS_REGION });
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
@@ -188,16 +189,9 @@ async function callBatchDataBulk(leads: any[]): Promise<{ resultMap: Map<string,
           };
         }
 
-        person.phoneNumbers?.forEach((p: any) => {
-          if (
-            p.type === 'Mobile' &&
-            (parseFloat(p.score) || 0) >= 90 &&
-            !p.dnc &&
-            p.number
-          ) {
-            foundPhones.push(p.number);
-          }
-        });
+        // Qualifying mobiles (score >= 90, not DNC), ranked best-first so phones[0] is the
+        // highest-quality number → the GHL primary phone contact the dialer uses.
+        foundPhones.push(...rankMobilePhones(person.phoneNumbers || []));
 
         person.emails?.forEach((e: any) => {
           if (e.tested && e.email) foundEmails.push(e.email);

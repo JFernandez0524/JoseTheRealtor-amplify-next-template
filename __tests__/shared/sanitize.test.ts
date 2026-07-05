@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { sanitizeId, sanitizeEmail, sanitizePhone } from '../../amplify/functions/shared/sanitize';
+import { sanitizeId, sanitizeEmail, sanitizePhone, rankMobilePhones } from '../../amplify/functions/shared/sanitize';
 
 describe('sanitizeId', () => {
   it('removes special characters, keeps alphanumeric, underscores, and hyphens', () => {
@@ -65,5 +65,38 @@ describe('sanitizePhone', () => {
 
   it('returns digits only if no + present', () => {
     expect(sanitizePhone('abc123def')).toBe('123');
+  });
+});
+
+describe('rankMobilePhones', () => {
+  const mobile = (number: string, score: number | string, extra: any = {}) =>
+    ({ type: 'Mobile', score, dnc: false, number, ...extra });
+
+  it('keeps only qualifying mobiles (Mobile, score>=90, not DNC, has number)', () => {
+    const input = [
+      mobile('111', 95),
+      { type: 'Landline', score: 99, dnc: false, number: '222' }, // not mobile
+      mobile('333', 80), // score too low
+      mobile('444', 99, { dnc: true }), // DNC
+      { type: 'Mobile', score: 99, dnc: false, number: '' }, // no number
+    ];
+    expect(rankMobilePhones(input)).toEqual(['111']);
+  });
+
+  it('orders qualifying mobiles best-first by score', () => {
+    const input = [mobile('low', 90), mobile('high', 99), mobile('mid', 95)];
+    expect(rankMobilePhones(input)).toEqual(['high', 'mid', 'low']);
+  });
+
+  it('is stable on equal scores (preserves input order)', () => {
+    const input = [mobile('a', 95), mobile('b', 95), mobile('c', 95)];
+    expect(rankMobilePhones(input)).toEqual(['a', 'b', 'c']);
+  });
+
+  it('tolerates string scores, missing/NaN score, and non-array input', () => {
+    expect(rankMobilePhones([mobile('x', '96'), mobile('y', '90')])).toEqual(['x', 'y']);
+    expect(rankMobilePhones([mobile('z', undefined as any)])).toEqual([]); // NaN score -> 0 -> filtered
+    expect(rankMobilePhones(null as any)).toEqual([]);
+    expect(rankMobilePhones([])).toEqual([]);
   });
 });
