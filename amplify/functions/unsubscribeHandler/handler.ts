@@ -19,7 +19,7 @@ import type { Handler } from 'aws-lambda';
 import { resolveOwnerByGhlContactId } from '../shared/tenantResolver';
 import { getValidGhlToken } from '../shared/ghlTokenManager';
 import { ghlAddTags, ghlUpdateContact } from '../shared/ghlClient';
-import { getQueueItemByContact, updateEmailStatus } from '../shared/outreachQueue';
+import { getQueueItemByContact, findQueueItemByContactId, updateEmailStatus } from '../shared/outreachQueue';
 
 export const handler: Handler = async (event) => {
   try {
@@ -52,8 +52,11 @@ export const handler: Handler = async (event) => {
       dndSettings: { Email: { status: 'active', message: 'Contact unsubscribed from emails' } },
     });
 
-    // 3. Stop our own outreach cadence for this contact (O(1) lookup by userId+contactId).
-    const queueItem = await getQueueItemByContact(userId, contactId);
+    // 3. Stop our own outreach cadence for this contact. Try the O(1) key lookup first, then
+    // fall back to a scan — queue rows are keyed `${userId}_${contactId}_<email>`, so the
+    // key-only lookup misses email-bearing rows (same fallback pattern as ghlFieldSyncHandler).
+    let queueItem = await getQueueItemByContact(userId, contactId);
+    if (!queueItem) queueItem = await findQueueItemByContactId(contactId);
     if (queueItem?.id) {
       await updateEmailStatus(queueItem.id, 'OPTED_OUT');
     }
