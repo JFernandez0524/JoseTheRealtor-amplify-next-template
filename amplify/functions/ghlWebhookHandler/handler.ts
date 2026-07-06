@@ -416,11 +416,24 @@ export const handler = async (event: any) => {
       console.log('🚫 [WEBHOOK_LAMBDA] Contact has conversation:manual tag - skipping AI response');
       return {
         statusCode: 200,
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           message: 'Skipped - manual handling active',
           contactId,
           tags: fullContact?.tags
         })
+      };
+    }
+
+    // FIELD SWITCH: honor the AI State field as a human-controlled off switch. Set AI State =
+    // "paused" (or "handoff") — e.g. via a GHL workflow when an appointment is booked or a
+    // follow-up task is created — to tell the app a human is handling this lead. The AI never
+    // writes "paused" itself, so it's a safe manual/workflow-only control.
+    const aiState = (findField('ai_state') || '').toString().toLowerCase();
+    if (aiState === 'paused' || aiState === 'handoff') {
+      console.log(`🚫 [WEBHOOK_LAMBDA] AI State = "${aiState}" (human handling) - skipping AI response`);
+      return {
+        statusCode: 200,
+        body: JSON.stringify({ message: 'Skipped - AI paused/handoff', contactId, aiState })
       };
     }
 
