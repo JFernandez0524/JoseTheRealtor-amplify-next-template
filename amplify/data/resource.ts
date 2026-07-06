@@ -260,17 +260,29 @@ const schema = a.schema({
       
       // 🏦 BatchData Enrichment Fields (Preforeclosure only)
       equityPercent: a.float(), // Real equity % from BatchData
+      ltv: a.float(), // Loan-to-value % (from valuation)
       ownerOccupied: a.boolean(), // Lives in property vs investor
+      hasLandline: a.boolean(), // Owner has a landline on file
       freeAndClear: a.boolean(), // No mortgage
       batchDataEnriched: a.boolean(), // Has been enriched
       batchDataEnrichedAt: a.datetime(), // When enriched
 
       // --- 🟢 Foreclosure Specifics ---
-      foreclosureStatus: a.string(), // e.g. "Pre-Foreclosure"
+      foreclosureStatus: a.string(), // e.g. "Notice of Default and Lis Pendens"
       foreclosureRecordingDate: a.date(),
       foreclosureAuctionDate: a.date(), // Critical for sorting
       foreclosureAmount: a.float(),
+      foreclosureUnpaidBalance: a.float(), // Unpaid principal on the foreclosure doc
+      foreclosureCaseNumber: a.string(),
+      foreclosureLenderName: a.string(), // currentLenderName in the foreclosure action
+      foreclosureDefaultDate: a.date(),
       foreclosureTrustee: a.string(),
+      foreclosureTrusteePhone: a.string(),
+
+      // Raw + full-detail JSON captures (nothing lost; queryable without re-parsing)
+      foreclosureData: a.json(), // full foreclosure object from BatchData
+      openLienData: a.json(), // full openLien object (mortgages[], balances, flags)
+      rawEnrichmentData: a.json(), // entire BatchData property response (mirrors rawSkipTraceData)
 
       createdAt: a.datetime(),
       updatedAt: a.datetime(),
