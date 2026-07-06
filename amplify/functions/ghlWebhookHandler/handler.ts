@@ -437,11 +437,14 @@ export const handler = async (event: any) => {
       };
     }
 
-    // AUTO-DETECT: Check for recent manual activity (30-minute window)
+    // AUTO-DETECT: Check for recent manual activity (120-minute window)
+    // Widened from 30 → 120 min so a human touch within ~2 hours auto-pauses the AI
+    // (e.g. a manual call/text 66 min before the lead's reply). Complements the
+    // deliberate `AI State = paused` field switch; this is the automatic catch.
     if (conversationId) {
       const { checkRecentActivity, activateManualMode } = await import('../shared/conversationActivity');
-      
-      const activity = await checkRecentActivity(conversationId, token, 30);
+
+      const activity = await checkRecentActivity(conversationId, token, 120);
       
       if (activity.hasRecentOutbound) {
         console.log('🚫 [WEBHOOK_LAMBDA] Detected recent manual activity - activating manual mode');
