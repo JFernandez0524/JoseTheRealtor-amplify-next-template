@@ -58,3 +58,17 @@ export function dispositionAction(callOutcome: string | null | undefined): Dispo
 export function isTerminalDisposition(callOutcome: string | null | undefined): boolean {
   return dispositionAction(callOutcome) === 'STOP';
 }
+
+/**
+ * Map an AI `end_conversation` reason (from conversationHandler) to the GHL "Call Outcome"
+ * picklist value to write on the contact. Every mapped value is a terminal/STOP disposition
+ * (see STOP_DISPOSITIONS), so setting it flows through the field-sync webhook →
+ * ghlFieldSyncHandler → queue DND/OPTED_OUT. A hard "No" (default) → "Not Interested".
+ */
+export function callOutcomeForEndReason(reason: string | null | undefined): string {
+  const r = (reason || '').trim().toLowerCase();
+  if (r.includes('realtor') || r.includes('listed') || r.includes('agent')) return 'Listed With Realtor';
+  if (r.includes('sold')) return 'Sold Already';
+  if (r.includes('wrong')) return 'Wrong Number / Disconnected / Invalid Number';
+  return 'Not Interested';
+}

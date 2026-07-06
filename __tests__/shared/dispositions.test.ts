@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { dispositionAction, isTerminalDisposition } from '../../amplify/functions/shared/dispositions';
+import { dispositionAction, isTerminalDisposition, callOutcomeForEndReason } from '../../amplify/functions/shared/dispositions';
 
 // dispositionAction / isTerminalDisposition are pure — no AWS setup required.
 
@@ -56,5 +56,31 @@ describe('isTerminalDisposition (wrapper: STOP only)', () => {
     expect(isTerminalDisposition('Appointment Set')).toBe(false);
     expect(isTerminalDisposition('No Answer')).toBe(false);
     expect(isTerminalDisposition(null)).toBe(false);
+  });
+});
+
+describe('callOutcomeForEndReason (AI end-reason → Call Outcome)', () => {
+  it('maps a hard no / default to "Not Interested"', () => {
+    expect(callOutcomeForEndReason('not_interested')).toBe('Not Interested');
+    expect(callOutcomeForEndReason('')).toBe('Not Interested');
+    expect(callOutcomeForEndReason(null)).toBe('Not Interested');
+    expect(callOutcomeForEndReason('something_else')).toBe('Not Interested');
+  });
+
+  it('maps realtor/listed/agent reasons to "Listed With Realtor"', () => {
+    expect(callOutcomeForEndReason('has_realtor')).toBe('Listed With Realtor');
+    expect(callOutcomeForEndReason('already_listed')).toBe('Listed With Realtor');
+    expect(callOutcomeForEndReason('working with an agent')).toBe('Listed With Realtor');
+  });
+
+  it('maps sold / wrong-number reasons', () => {
+    expect(callOutcomeForEndReason('already_sold')).toBe('Sold Already');
+    expect(callOutcomeForEndReason('wrong_number')).toBe('Wrong Number / Disconnected / Invalid Number');
+  });
+
+  it('every mapped value is a terminal STOP disposition', () => {
+    for (const reason of ['not_interested', 'has_realtor', 'already_sold', 'wrong_number']) {
+      expect(isTerminalDisposition(callOutcomeForEndReason(reason))).toBe(true);
+    }
   });
 });
