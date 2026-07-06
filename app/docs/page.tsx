@@ -23,6 +23,7 @@ export default function DocsPage() {
               <a href="#launch-ai-setup" className="text-blue-600 hover:underline">• Launch AI Account Setup</a>
               <a href="#launch-ai-integration" className="text-blue-600 hover:underline">• Launch AI Integration</a>
               <a href="#launch-ai-tags" className="text-blue-600 hover:underline">• Launch AI Tags Reference</a>
+              <a href="#ai-auto-response" className="text-blue-600 hover:underline">• How the AI Auto-Responds</a>
               <a href="#direct-mail" className="text-blue-600 hover:underline">• Direct Mail (Thanks.io)</a>
               <a href="#pricing" className="text-blue-600 hover:underline">• Pricing & Plans</a>
               <a href="#troubleshooting" className="text-blue-600 hover:underline">• Troubleshooting</a>
@@ -710,6 +711,133 @@ export default function DocsPage() {
                   <div>60 days in "Touch 3" without <code className="bg-blue-100 px-1 rounded">mail:scanned</code> → Move to "Dead"</div>
                 </div>
               </div>
+            </div>
+          </section>
+
+          {/* AI Auto-Response Workflow */}
+          <section id="ai-auto-response" className="mb-12">
+            <h2 className="text-2xl font-semibold text-gray-900 mb-6">🤖 How the AI Handles Automatic Responses</h2>
+
+            <p className="text-gray-700 mb-6">
+              When a lead replies to one of your text messages, GoHighLevel fires a <strong>&quot;Customer Replied&quot;</strong> webhook
+              to Launch AI. Before the AI writes a single word, that reply passes through a series of safety gates.
+              The core rule: <strong>the AI only auto-responds to cold leads that no human is actively working.</strong> The
+              moment you (or a workflow you control) touch a conversation, the AI steps aside.
+            </p>
+
+            <div className="space-y-6">
+
+              {/* Decision flow */}
+              <div>
+                <h3 className="text-lg font-medium text-gray-900 mb-3">The Decision Flow (in order)</h3>
+                <p className="text-sm text-gray-600 mb-4">
+                  Each inbound reply runs top-to-bottom through these checks. If any check trips, the AI stops there and
+                  does <strong>not</strong> send a reply.
+                </p>
+                <ol className="space-y-3">
+                  <li className="flex gap-3 items-start">
+                    <span className="flex-shrink-0 w-6 h-6 rounded-full bg-blue-600 text-white text-xs font-bold flex items-center justify-center mt-0.5">1</span>
+                    <span className="text-gray-700"><strong>Duplicate check.</strong> The webhook is claimed atomically so the same reply can never be processed twice (24-hour dedup window), even if GHL retries or fires it concurrently.</span>
+                  </li>
+                  <li className="flex gap-3 items-start">
+                    <span className="flex-shrink-0 w-6 h-6 rounded-full bg-blue-600 text-white text-xs font-bold flex items-center justify-center mt-0.5">2</span>
+                    <span className="text-gray-700"><strong>Inbound only.</strong> Outbound messages (the ones <em>you</em> or the AI send) are ignored — the AI only reacts to messages <em>from the lead</em>.</span>
+                  </li>
+                  <li className="flex gap-3 items-start">
+                    <span className="flex-shrink-0 w-6 h-6 rounded-full bg-blue-600 text-white text-xs font-bold flex items-center justify-center mt-0.5">3</span>
+                    <span className="text-gray-700"><strong>Right tenant.</strong> The reply is matched to the account that owns the lead (by user ID or GHL location). If it can&apos;t be matched, it&apos;s dropped — never handled under the wrong account.</span>
+                  </li>
+                  <li className="flex gap-3 items-start">
+                    <span className="flex-shrink-0 w-6 h-6 rounded-full bg-blue-600 text-white text-xs font-bold flex items-center justify-center mt-0.5">4</span>
+                    <span className="text-gray-700"><strong>Text only.</strong> Media messages (images, video, audio) and empty messages are skipped — the AI answers text replies. <span className="text-gray-500">(Email replies follow a separate path.)</span></span>
+                  </li>
+                  <li className="flex gap-3 items-start">
+                    <span className="flex-shrink-0 w-6 h-6 rounded-full bg-red-500 text-white text-xs font-bold flex items-center justify-center mt-0.5">5</span>
+                    <span className="text-gray-700"><strong>Opt-out / DND guard.</strong> If the contact is opted out of SMS (GHL handles carrier keywords like STOP, UNSUBSCRIBE, CANCEL, QUIT, END), the AI never replies and the app marks the outreach queue <code className="bg-gray-200 px-1 rounded text-xs">DND</code>.</span>
+                  </li>
+                  <li className="flex gap-3 items-start">
+                    <span className="flex-shrink-0 w-6 h-6 rounded-full bg-blue-600 text-white text-xs font-bold flex items-center justify-center mt-0.5">6</span>
+                    <span className="text-gray-700"><strong>Is it actually a lead?</strong> The contact must have the <code className="bg-green-100 px-1 rounded text-xs">ai outreach</code> tag or property data on file. Random contacts never get an AI reply.</span>
+                  </li>
+                  <li className="flex gap-3 items-start">
+                    <span className="flex-shrink-0 w-6 h-6 rounded-full bg-yellow-500 text-white text-xs font-bold flex items-center justify-center mt-0.5">7</span>
+                    <span className="text-gray-700"><strong>Manual-handling tag.</strong> If the contact has <code className="bg-yellow-100 px-1 rounded text-xs">conversation:manual</code>, a human has already taken over — AI stays silent.</span>
+                  </li>
+                  <li className="flex gap-3 items-start">
+                    <span className="flex-shrink-0 w-6 h-6 rounded-full bg-yellow-500 text-white text-xs font-bold flex items-center justify-center mt-0.5">8</span>
+                    <span className="text-gray-700"><strong>AI State field switch.</strong> If <code className="bg-blue-100 px-1 rounded text-xs">AI State = paused</code> or <code className="bg-blue-100 px-1 rounded text-xs">handoff</code>, the AI stands down. This is your deliberate &quot;I&apos;ve got this one&quot; control (see below).</span>
+                  </li>
+                  <li className="flex gap-3 items-start">
+                    <span className="flex-shrink-0 w-6 h-6 rounded-full bg-yellow-500 text-white text-xs font-bold flex items-center justify-center mt-0.5">9</span>
+                    <span className="text-gray-700"><strong>Recent-activity auto-pause.</strong> If <em>any</em> outbound message (a manual call/text or a workflow) touched this conversation in the last <strong>2 hours</strong>, the AI assumes a human is engaged, tags the contact <code className="bg-yellow-100 px-1 rounded text-xs">conversation:manual</code>, and steps aside.</span>
+                  </li>
+                  <li className="flex gap-3 items-start">
+                    <span className="flex-shrink-0 w-6 h-6 rounded-full bg-green-600 text-white text-xs font-bold flex items-center justify-center mt-0.5">✓</span>
+                    <span className="text-gray-700"><strong>All clear → the AI replies.</strong> Only a genuinely cold lead with no human activity reaches this point. The AI reads the full conversation history and generates a natural, on-brand response.</span>
+                  </li>
+                </ol>
+              </div>
+
+              {/* Manual override controls */}
+              <div className="bg-yellow-50 p-4 rounded-lg">
+                <h3 className="text-lg font-medium text-yellow-900 mb-3">🖐️ How to Take Over a Conversation (stop the AI)</h3>
+                <p className="text-sm text-yellow-800 mb-3">You have three ways to tell the app &quot;a human is handling this — AI, stay out.&quot; Any one of them is enough:</p>
+                <div className="space-y-3 text-sm">
+                  <div className="flex gap-3 items-start">
+                    <code className="bg-blue-100 px-2 py-0.5 rounded text-xs whitespace-nowrap">AI State = paused</code>
+                    <span className="text-yellow-900"><strong>The deliberate switch.</strong> Set this field (manually or via a GHL workflow) to take over precisely. The AI never sets <code className="bg-yellow-100 px-1 rounded text-xs">paused</code> on itself, so it&apos;s a safe human/workflow-only control. Set it back to <code className="bg-yellow-100 px-1 rounded text-xs">running</code> to hand the lead back to the AI.</span>
+                  </div>
+                  <div className="flex gap-3 items-start">
+                    <code className="bg-yellow-100 px-2 py-0.5 rounded text-xs whitespace-nowrap">conversation:manual</code>
+                    <span className="text-yellow-900"><strong>The tag.</strong> Add it to pause the AI. It&apos;s also added automatically when you reply or when recent activity is detected. Removed after 3 days of no activity so a stale lead can re-enter automation.</span>
+                  </div>
+                  <div className="flex gap-3 items-start">
+                    <code className="bg-gray-200 px-2 py-0.5 rounded text-xs whitespace-nowrap">2-hour window</code>
+                    <span className="text-yellow-900"><strong>Automatic.</strong> Simply calling or texting the lead yourself pauses the AI for the next 2 hours (and flips on <code className="bg-yellow-100 px-1 rounded text-xs">conversation:manual</code>). No field or tag to set — just work the lead.</span>
+                  </div>
+                </div>
+                <p className="text-xs text-yellow-700 mt-3">
+                  <strong>Make it hands-off:</strong> add GHL workflows that set <code className="bg-yellow-100 px-1 rounded">AI State = paused</code> when an appointment is booked, a follow-up task is created, or the pipeline moves to a &quot;working&quot; stage. Then the AI only ever answers leads you haven&apos;t engaged.
+                </p>
+              </div>
+
+              {/* What the AI can do when it replies */}
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <h3 className="text-lg font-medium text-gray-900 mb-3">What the AI Can Do When It Replies</h3>
+                <p className="text-sm text-gray-600 mb-3">The AI is a qualifying assistant — its job is to answer questions, gauge interest, and hand hot leads to you. It has a set of tools it can use mid-conversation:</p>
+                <div className="space-y-2 text-sm">
+                  <div className="flex gap-3 items-start"><code className="bg-gray-200 px-2 py-0.5 rounded text-xs whitespace-nowrap">validate_address</code><span className="text-gray-700">Confirm the property address the lead is referring to</span></div>
+                  <div className="flex gap-3 items-start"><code className="bg-gray-200 px-2 py-0.5 rounded text-xs whitespace-nowrap">get_property_value</code><span className="text-gray-700">Share the estimated value / cash-offer figure on file</span></div>
+                  <div className="flex gap-3 items-start"><code className="bg-gray-200 px-2 py-0.5 rounded text-xs whitespace-nowrap">check_availability</code><span className="text-gray-700">Look at open times before proposing a call</span></div>
+                  <div className="flex gap-3 items-start"><code className="bg-green-100 px-2 py-0.5 rounded text-xs whitespace-nowrap">schedule_consultation</code><span className="text-gray-700">Book a consultation when the lead is ready</span></div>
+                  <div className="flex gap-3 items-start"><code className="bg-gray-200 px-2 py-0.5 rounded text-xs whitespace-nowrap">save_buyer_search</code><span className="text-gray-700">Capture buyer criteria if the lead is looking to buy</span></div>
+                  <div className="flex gap-3 items-start"><code className="bg-red-100 px-2 py-0.5 rounded text-xs whitespace-nowrap">end_conversation</code><span className="text-gray-700">Gracefully close when the lead is already listed, working with a realtor, sold, or not interested</span></div>
+                </div>
+                <div className="mt-4 border-l-4 border-green-500 pl-4">
+                  <p className="text-sm text-gray-700"><strong>🔥 Hot-lead handoff.</strong> When a lead signals real interest, the AI tags <code className="bg-green-200 px-1 rounded text-xs">Ready-For-Human-Contact</code>, sets <code className="bg-blue-100 px-1 rounded text-xs">AI State = handoff</code>, and tells the lead a specialist will reach out shortly. That tag is your cue to call immediately.</p>
+                </div>
+                <div className="mt-3 border-l-4 border-red-500 pl-4">
+                  <p className="text-sm text-gray-700"><strong>Terminal outcomes stop everything.</strong> When the AI recognizes a hard &quot;no,&quot; an existing realtor, an already-sold property, or a wrong number, it not only ends the chat — it sets the <code className="bg-red-100 px-1 rounded text-xs">Call Outcome</code> field (e.g. <em>Not Interested</em>, <em>Listed With Realtor</em>). That flows through the disposition pipeline to stop all future outreach and set email Do-Not-Disturb, so the lead is never contacted again.</p>
+                </div>
+              </div>
+
+              {/* Outcome tags summary */}
+              <div className="bg-blue-50 p-4 rounded-lg">
+                <h4 className="font-medium text-blue-900 mb-2">Where to Watch It Happen</h4>
+                <p className="text-sm text-blue-800">
+                  Every automatic action leaves a trail on the contact: the tags in the{' '}
+                  <a href="#launch-ai-tags" className="underline">Tags Reference</a> above (e.g.{' '}
+                  <code className="bg-blue-100 px-1 rounded text-xs">conversation_ended</code>,{' '}
+                  <code className="bg-blue-100 px-1 rounded text-xs">not_for_sale</code>,{' '}
+                  <code className="bg-blue-100 px-1 rounded text-xs">wrong_contact</code>,{' '}
+                  <code className="bg-green-200 px-1 rounded text-xs">Ready-For-Human-Contact</code>), the{' '}
+                  <code className="bg-blue-100 px-1 rounded text-xs">AI State</code> and{' '}
+                  <code className="bg-blue-100 px-1 rounded text-xs">Call Outcome</code> fields, and a timestamped note
+                  whenever the AI pauses for manual handling. Build your GHL pipeline automations off these tags to route
+                  hot leads to yourself the instant the AI flags them.
+                </p>
+              </div>
+
             </div>
           </section>
 
