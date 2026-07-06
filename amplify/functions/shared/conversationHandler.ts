@@ -598,6 +598,7 @@ CONVERSATION RULES:
 - After a polite close, if they acknowledge → SILENCE IS SUCCESS
 - In outbound conversations, silence after acknowledgment is professional, not failure
 - DO NOT try to "save the deal" after a clear exit signal
+- If the user is coordinating timing or confirming/rescheduling an existing appointment or call ("I'll let you know around 2:30", "running late", "can we do later?", "I have another appointment at 2") → reply with ONE warm, brief acknowledgment and STOP. Do NOT pitch, do NOT ask to "discuss options," do NOT add a "meanwhile…" follow-up. They already have an appointment or are working with a person — just acknowledge.
 `}
 
 TOOLS AVAILABLE:
@@ -613,6 +614,7 @@ RESPONSE STYLE:
 - Use casual language
 - Show personality
 - Be helpful, not salesy
+- NEVER tack a call-to-action onto an acknowledgment (e.g. "Meanwhile, would you like to discuss options for your property?"). A simple acknowledgment is a complete, professional reply — if a CTA doesn't fit the moment, leave it out entirely.
 ${context.agentProfile?.persona ? `
 AGENT STYLE (match this voice — it overrides the generic style above where they conflict):
 ${context.agentProfile.persona}` : ''}
