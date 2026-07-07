@@ -94,28 +94,42 @@ function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
   const [outreachError, setOutreachError] = useState<string | null>(null);
   const [isEditingZestimate, setIsEditingZestimate] = useState(false);
   const [zestimateInput, setZestimateInput] = useState('');
+  const [zestimateUrlInput, setZestimateUrlInput] = useState('');
 
   const { isLoaded: isMapLoaded } = useGoogleMaps();
 
   /**
-   * Save a manually-entered Zestimate dollar amount for properties Zillow's feed doesn't cover.
-   * Writes zestimate + zestimateSource='MANUAL' (mirrors the dashboard table's manual entry).
+   * Save a manually-entered Zestimate for properties Zillow's feed doesn't cover. Writes the dollar
+   * amount as a MANUAL value; if a Zillow link is also given, saves the URL/zpid too so the displayed
+   * value links out to that property (mirrors the dashboard table's one-step manual entry).
    */
   const saveManualZestimate = async () => {
     const amount = Number(zestimateInput.replace(/[$,\s]/g, ''));
     if (!Number.isFinite(amount) || amount <= 0) {
-      addToast({ type: 'error', title: 'Invalid amount', message: 'Enter a dollar amount, e.g. 725000.' });
+      addToast({ type: 'error', title: 'Invalid amount', message: 'Enter a dollar amount, e.g. 720700.' });
       return;
+    }
+    const urlRaw = zestimateUrlInput.trim();
+    let zpid: string | undefined;
+    if (urlRaw) {
+      const m = urlRaw.match(/(\d+)_zpid/);
+      if (!m) {
+        addToast({ type: 'error', title: 'Invalid link', message: 'That URL has no _zpid/ — paste a full Zillow link or leave it blank.' });
+        return;
+      }
+      zpid = m[1];
     }
     try {
       const updated = await updateLead(lead.id, {
         zestimate: amount,
         zestimateSource: 'MANUAL',
         zestimateDate: new Date().toISOString(),
+        ...(urlRaw ? { zillowUrl: urlRaw, zillowZpid: zpid } : {}),
       });
       setLead(updated as Lead);
       setIsEditingZestimate(false);
       setZestimateInput('');
+      setZestimateUrlInput('');
       addToast({ type: 'success', title: 'Value saved', message: `Zestimate set to ${formatCurrency(amount)}.` });
     } catch (err: any) {
       addToast({ type: 'error', title: 'Save failed', message: err.message || 'Could not save value.' });
@@ -470,16 +484,24 @@ function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
                     <div className='flex flex-col items-end gap-2'>
                       <input
                         type='text'
+                        value={zestimateUrlInput}
+                        onChange={(e) => setZestimateUrlInput(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') saveManualZestimate(); if (e.key === 'Escape') { setIsEditingZestimate(false); setZestimateInput(''); setZestimateUrlInput(''); } }}
+                        placeholder='Zillow URL (optional)'
+                        className='w-56 border border-indigo-400 rounded px-2 py-1 text-right text-xs'
+                      />
+                      <input
+                        type='text'
                         autoFocus
                         value={zestimateInput}
                         onChange={(e) => setZestimateInput(e.target.value)}
-                        onKeyDown={(e) => { if (e.key === 'Enter') saveManualZestimate(); if (e.key === 'Escape') { setIsEditingZestimate(false); setZestimateInput(''); } }}
+                        onKeyDown={(e) => { if (e.key === 'Enter') saveManualZestimate(); if (e.key === 'Escape') { setIsEditingZestimate(false); setZestimateInput(''); setZestimateUrlInput(''); } }}
                         placeholder='$ value'
                         className='w-40 border border-indigo-400 rounded px-2 py-1 text-right text-lg font-bold'
                       />
                       <div className='flex gap-2'>
                         <button onClick={saveManualZestimate} className='text-xs font-bold text-green-600 hover:text-green-800'>✓ Save</button>
-                        <button onClick={() => { setIsEditingZestimate(false); setZestimateInput(''); }} className='text-xs text-slate-400 hover:text-slate-600'>✕ Cancel</button>
+                        <button onClick={() => { setIsEditingZestimate(false); setZestimateInput(''); setZestimateUrlInput(''); }} className='text-xs text-slate-400 hover:text-slate-600'>✕ Cancel</button>
                       </div>
                     </div>
                   ) : (
@@ -500,8 +522,8 @@ function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
                           </p>
                         )}
                         <button
-                          onClick={() => { setZestimateInput(''); setIsEditingZestimate(true); }}
-                          title='Set value manually'
+                          onClick={() => { setZestimateInput(''); setZestimateUrlInput(lead.zillowUrl || ''); setIsEditingZestimate(true); }}
+                          title='Set value manually (Zillow URL and/or $ value)'
                           className='text-slate-400 hover:text-indigo-600 text-sm'
                         >
                           ✏️

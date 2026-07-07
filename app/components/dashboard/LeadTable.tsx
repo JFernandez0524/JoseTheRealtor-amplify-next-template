@@ -120,35 +120,57 @@ export function LeadTable({
   });
   const [editingZestimateLead, setEditingZestimateLead] = useState<Lead | null>(null);
   const [zestimateUrlInput, setZestimateUrlInput] = useState('');
+  const [zestimateValueInput, setZestimateValueInput] = useState('');
   const [zestimateError, setZestimateError] = useState('');
   const [zestimateNotice, setZestimateNotice] = useState(''); // non-error info (e.g. "no Zillow data")
 
+  const closeZestimateEditor = () => {
+    setEditingZestimateLead(null);
+    setZestimateUrlInput('');
+    setZestimateValueInput('');
+    setZestimateError('');
+    setZestimateNotice('');
+  };
+
   /**
-   * Save a Zestimate from the inline editor. Accepts EITHER a Zillow URL (looked up via the Bridge
-   * API through /api/v1/refresh-zestimate) OR a plain dollar amount (written directly as a MANUAL
-   * value). Manual entry is the fallback for properties Zillow's feed doesn't cover.
+   * Save a Zestimate from the inline editor. Two optional inputs — a Zillow URL and a dollar amount:
+   * - Amount present → write it as a MANUAL value; if a URL is also given, save the URL/zpid too so
+   *   the displayed value links out to that Zillow page (one-step manual entry for uncovered properties).
+   * - URL only → look it up via the Bridge API (/api/v1/refresh-zestimate); covered properties fill
+   *   automatically, uncovered ones save the link and prompt for a manual amount.
    */
   const handleSaveZestimate = async (lead: Lead) => {
-    const raw = zestimateUrlInput.trim();
-    const isZillowUrl = /zillow\.com/i.test(raw) || /_zpid/i.test(raw);
+    const urlRaw = zestimateUrlInput.trim();
+    const amountRaw = zestimateValueInput.trim();
+    const amount = Number(amountRaw.replace(/[$,\s]/g, ''));
+    const hasAmount = amountRaw !== '' && Number.isFinite(amount) && amount > 0;
+    const hasUrl = urlRaw !== '';
 
-    // Manual dollar amount path (anything that isn't a Zillow URL and parses as a number)
-    if (!isZillowUrl) {
-      const amount = Number(raw.replace(/[$,\s]/g, ''));
-      if (!raw || !Number.isFinite(amount) || amount <= 0) {
-        setZestimateError('Enter a Zillow URL or a dollar amount (e.g. 725000)');
-        return;
+    if (amountRaw !== '' && !hasAmount) {
+      setZestimateError('Enter a valid dollar amount (e.g. 720700)');
+      return;
+    }
+    if (!hasAmount && !hasUrl) {
+      setZestimateError('Enter a Zillow URL, a dollar amount, or both');
+      return;
+    }
+
+    // Manual amount path (optionally with a link so the value is clickable)
+    if (hasAmount) {
+      let zpid: string | undefined;
+      if (hasUrl) {
+        const m = urlRaw.match(/(\d+)_zpid/);
+        if (!m) { setZestimateError('That URL has no _zpid/ — paste a full Zillow link or leave it blank'); return; }
+        zpid = m[1];
       }
       try {
         await updateLead(lead.id, {
           zestimate: amount,
           zestimateSource: 'MANUAL',
           zestimateDate: new Date().toISOString(),
+          ...(hasUrl ? { zillowUrl: urlRaw, zillowZpid: zpid } : {}),
         });
-        setEditingZestimateLead(null);
-        setZestimateUrlInput('');
-        setZestimateError('');
-        setZestimateNotice('');
+        closeZestimateEditor();
         if (onRefresh) await onRefresh();
       } catch (err: any) {
         setZestimateError(err.message || 'Failed to save value');
@@ -156,8 +178,8 @@ export function LeadTable({
       return;
     }
 
-    // Zillow URL path
-    if (!/(\d+)_zpid/.test(raw)) {
+    // URL-only path → Bridge lookup
+    if (!/(\d+)_zpid/.test(urlRaw)) {
       setZestimateError('No zpid found in URL. Make sure it contains _zpid/');
       return;
     }
@@ -165,22 +187,19 @@ export function LeadTable({
       const res = await fetch('/api/v1/refresh-zestimate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ leadId: lead.id, zillowUrl: raw }),
+        body: JSON.stringify({ leadId: lead.id, zillowUrl: urlRaw }),
       });
       const data = await res.json();
       if (!res.ok) { setZestimateError(data.error || 'Failed'); return; }
-      // Empty-but-saved: Zillow has no value for this property. Keep the editor open and tell the
-      // user, rather than silently closing (which reads as "nothing happened").
+      // Empty-but-saved: Zillow has no value. Keep the editor open and prompt for a manual amount
+      // (the link is already saved), rather than silently closing ("nothing happened").
       if (data.partial || !data.zillowData) {
         setZestimateError('');
-        setZestimateNotice(data.message || 'Zillow has no value for this property. Enter a dollar amount here instead.');
+        setZestimateNotice(data.message || 'Zillow has no value for this property. Enter a dollar amount below.');
         if (onRefresh) await onRefresh();
         return;
       }
-      setEditingZestimateLead(null);
-      setZestimateUrlInput('');
-      setZestimateError('');
-      setZestimateNotice('');
+      closeZestimateEditor();
       if (onRefresh) await onRefresh();
     } catch (err: any) {
       setZestimateError(err.message);
@@ -545,24 +564,31 @@ export function LeadTable({
                   {/* Zestimate Column */}
                   <td className='px-4 py-4 whitespace-nowrap text-sm text-gray-900 bg-yellow-50/30' onClick={(e) => e.stopPropagation()}>
                     {editingZestimateLead?.id === lead.id ? (
-                      <div className="flex flex-col gap-1 min-w-[180px]">
-                        <div className="flex flex-col gap-1">
-                          <div className="flex items-center gap-1">
-                            <input
-                              type="text"
-                              value={zestimateUrlInput}
-                              onChange={(e) => { setZestimateUrlInput(e.target.value); setZestimateError(''); setZestimateNotice(''); }}
-                              onKeyDown={(e) => { if (e.key === 'Enter') handleSaveZestimate(lead); if (e.key === 'Escape') { setEditingZestimateLead(null); setZestimateUrlInput(''); setZestimateError(''); setZestimateNotice(''); } }}
-                              autoFocus
-                              className="w-36 border border-blue-400 rounded px-1 py-0.5 text-xs"
-                              placeholder="Zillow URL or $ value"
-                            />
-                            <button onClick={() => handleSaveZestimate(lead)} className="text-green-600 text-xs font-bold hover:text-green-800">✓</button>
-                            <button onClick={() => { setEditingZestimateLead(null); setZestimateUrlInput(''); setZestimateError(''); setZestimateNotice(''); }} className="text-gray-400 text-xs hover:text-gray-600">✕</button>
-                          </div>
-                          {zestimateError && <span className="text-red-500 text-xs">{zestimateError}</span>}
-                          {zestimateNotice && <span className="text-blue-600 text-xs">{zestimateNotice}</span>}
+                      <div className="flex flex-col gap-1 min-w-[200px]">
+                        <input
+                          type="text"
+                          value={zestimateUrlInput}
+                          onChange={(e) => { setZestimateUrlInput(e.target.value); setZestimateError(''); setZestimateNotice(''); }}
+                          onKeyDown={(e) => { if (e.key === 'Enter') handleSaveZestimate(lead); if (e.key === 'Escape') closeZestimateEditor(); }}
+                          autoFocus
+                          className="w-full border border-blue-400 rounded px-1 py-0.5 text-xs"
+                          placeholder="Zillow URL (optional)"
+                        />
+                        <div className="flex items-center gap-1">
+                          <input
+                            type="text"
+                            value={zestimateValueInput}
+                            onChange={(e) => { setZestimateValueInput(e.target.value); setZestimateError(''); setZestimateNotice(''); }}
+                            onKeyDown={(e) => { if (e.key === 'Enter') handleSaveZestimate(lead); if (e.key === 'Escape') closeZestimateEditor(); }}
+                            className="w-24 border border-blue-400 rounded px-1 py-0.5 text-xs"
+                            placeholder="$ value"
+                          />
+                          <button onClick={() => handleSaveZestimate(lead)} className="text-green-600 text-xs font-bold hover:text-green-800">✓</button>
+                          <button onClick={closeZestimateEditor} className="text-gray-400 text-xs hover:text-gray-600">✕</button>
                         </div>
+                        {zestimateError && <span className="text-red-500 text-xs">{zestimateError}</span>}
+                        {zestimateNotice && <span className="text-blue-600 text-xs">{zestimateNotice}</span>}
+                        <span className="text-gray-400 text-[10px]">Paste the Zillow link to make the value clickable; add a $ amount if Zillow has none.</span>
                       </div>
                     ) : (
                       <div className="flex items-center gap-2">
@@ -609,9 +635,9 @@ export function LeadTable({
                         </div>
                         <div className="flex flex-col gap-1">
                           <button
-                            onClick={() => { setZestimateUrlInput(''); setZestimateError(''); setZestimateNotice(''); setEditingZestimateLead(lead); }}
+                            onClick={() => { setZestimateUrlInput(lead.zillowUrl || ''); setZestimateValueInput(''); setZestimateError(''); setZestimateNotice(''); setEditingZestimateLead(lead); }}
                             className="text-gray-400 hover:text-blue-600 select-none text-xs"
-                            title="Set Zestimate (Zillow URL or $ value)"
+                            title="Set Zestimate (Zillow URL and/or $ value)"
                           >
                             ✏️
                           </button>
