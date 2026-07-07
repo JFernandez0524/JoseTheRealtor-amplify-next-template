@@ -26,6 +26,30 @@ const schema = a.schema({
       allow.groups(['ADMINS']).to(['create', 'read', 'update', 'delete']),
     ]),
 
+  // One record per BatchData job run (Skip Trace or Enrichment). Powers the per-job Reports tab so
+  // users can see, for each batch they ran: leads sent, matched, not matched (and which), and the exact
+  // credit/$ charge. Clients are billed only for matched leads (NO_MATCH is free — BatchData bills per
+  // match). Written by skiptraceLeads (Lambda) and enrich-leads (route).
+  BatchDataJob: a
+    .model({
+      userId: a.string().required(),
+      jobType: a.enum(['SKIP_TRACE', 'ENRICHMENT']),
+      leadsSent: a.integer().default(0), // attempted this run (matched + noMatch + failed)
+      matched: a.integer().default(0), // BatchData matches — the billable count
+      noMatch: a.integer().default(0), // BatchData found nobody — never charged
+      noQuality: a.integer().default(0), // skip-trace only: matched but no quality contact (subset of matched)
+      failed: a.integer().default(0),
+      skipped: a.integer().default(0), // already done/ineligible, not sent
+      creditsPerMatch: a.integer().default(0), // 1 (skip trace) or 3 (enrichment)
+      creditsCharged: a.integer().default(0), // matched × creditsPerMatch
+      dollarsCharged: a.float().default(0), // creditsCharged × $0.10
+      noMatchLeads: a.json().array(), // [{ id, address }] — the leads that did not match
+    })
+    .authorization((allow) => [
+      allow.owner().to(['create', 'read', 'update', 'delete']),
+      allow.groups(['ADMINS']).to(['create', 'read', 'update', 'delete']),
+    ]),
+
   OutreachQueue: a
     .model({
       userId: a.string().required(),

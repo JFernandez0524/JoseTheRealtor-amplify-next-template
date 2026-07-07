@@ -98,6 +98,10 @@ backend.skipTraceLeads.addEnvironment(
   'AMPLIFY_DATA_UserAccount_TABLE_NAME',
   backend.data.resources.tables['UserAccount'].tableName
 );
+backend.skipTraceLeads.addEnvironment(
+  'AMPLIFY_DATA_BatchDataJob_TABLE_NAME',
+  backend.data.resources.tables['BatchDataJob'].tableName
+);
 
 backend.manualGhlSync.addEnvironment(
   'AMPLIFY_DATA_PropertyLead_TABLE_NAME',
@@ -133,6 +137,9 @@ backend.data.resources.tables['PropertyLead'].grantReadWriteData(
   backend.skipTraceLeads.resources.lambda
 );
 backend.data.resources.tables['UserAccount'].grantReadWriteData(
+  backend.skipTraceLeads.resources.lambda
+);
+backend.data.resources.tables['BatchDataJob'].grantWriteData(
   backend.skipTraceLeads.resources.lambda
 );
 backend.data.resources.tables['PropertyLead'].grantReadWriteData(

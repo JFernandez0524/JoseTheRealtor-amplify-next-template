@@ -651,8 +651,22 @@ export default function LeadDashboardClient({}: Props) {
 
     // Show modal first
     const alreadyEnriched = preforeclosureLeads.filter(lead => lead.batchDataEnriched);
+    const toEnrichCount = preforeclosureLeads.length - alreadyEnriched.length;
+
+    // Credit gate — enrichment charges 3 credits per matched lead; worst case is all matched.
+    // (Server re-checks and only actually deducts for matches.)
+    const ENRICH_CREDITS_PER_MATCH = 3;
+    if (!isAdmin && toEnrichCount > 0) {
+      const currentCredits = userAccount?.credits || 0;
+      const worstCase = toEnrichCount * ENRICH_CREDITS_PER_MATCH;
+      if (currentCredits < worstCase) {
+        addToast({ type: 'error', title: 'Insufficient Credits', message: `Enriching ${toEnrichCount} lead(s) needs up to ${worstCase} credits (${ENRICH_CREDITS_PER_MATCH} per match), but you have ${currentCredits}. You are only charged for matches. Purchase more credits to continue.` });
+        return;
+      }
+    }
+
     setAlreadyTracedCount(alreadyEnriched.length);
-    setIsLargeBatch((preforeclosureLeads.length - alreadyEnriched.length) > 50);
+    setIsLargeBatch(toEnrichCount > 50);
     setPendingAction('enrich');
     setShowRouteModal(true);
   };

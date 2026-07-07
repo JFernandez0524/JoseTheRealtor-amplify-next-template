@@ -1,5 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import { billableSkipCount, BILLABLE_SKIP_STATUSES } from '../../amplify/functions/shared/skiptraceBilling';
+import {
+  billableSkipCount,
+  BILLABLE_SKIP_STATUSES,
+  creditsFor,
+  dollarsFor,
+  DOLLARS_PER_CREDIT,
+  SKIPTRACE_CREDITS_PER_MATCH,
+  ENRICHMENT_CREDITS_PER_MATCH,
+} from '../../amplify/functions/shared/skiptraceBilling';
 
 // Pure billing rule — BatchData bills per matched record, never for NO_MATCH.
 
@@ -32,5 +40,27 @@ describe('billableSkipCount', () => {
 
   it('BILLABLE set is exactly the two matched-record statuses', () => {
     expect([...BILLABLE_SKIP_STATUSES].sort()).toEqual(['NO_QUALITY_CONTACTS', 'SUCCESS']);
+  });
+});
+
+describe('credit charge math', () => {
+  it('rates are correct (skip 1/match, enrich 3/match, $0.10/credit)', () => {
+    expect(SKIPTRACE_CREDITS_PER_MATCH).toBe(1);
+    expect(ENRICHMENT_CREDITS_PER_MATCH).toBe(3);
+    expect(DOLLARS_PER_CREDIT).toBe(0.1);
+  });
+
+  it('creditsFor = matched × rate, never negative', () => {
+    expect(creditsFor(12, SKIPTRACE_CREDITS_PER_MATCH)).toBe(12); // skip: 12 × 1
+    expect(creditsFor(4, ENRICHMENT_CREDITS_PER_MATCH)).toBe(12); // enrich: 4 × 3
+    expect(creditsFor(0, ENRICHMENT_CREDITS_PER_MATCH)).toBe(0); // no match → no charge
+    expect(creditsFor(-3, SKIPTRACE_CREDITS_PER_MATCH)).toBe(0);
+  });
+
+  it('dollarsFor converts credits at $0.10 each (2dp)', () => {
+    expect(dollarsFor(12)).toBe(1.2); // 12 skip matches = $1.20
+    expect(dollarsFor(12)).toBe(1.2); // 4 enrich matches × 3 = 12 credits = $1.20
+    expect(dollarsFor(0)).toBe(0);
+    expect(dollarsFor(3)).toBe(0.3); // 1 enrich match = 3 credits = $0.30
   });
 });

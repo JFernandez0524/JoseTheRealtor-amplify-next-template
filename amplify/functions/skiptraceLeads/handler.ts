@@ -1,9 +1,10 @@
 import axios, { isAxiosError } from 'axios';
+import { randomUUID } from 'crypto';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, GetCommand, UpdateCommand, ScanCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, GetCommand, PutCommand, UpdateCommand, ScanCommand } from '@aws-sdk/lib-dynamodb';
 import { filterValidEmails } from '../shared/emailValidator';
 import { rankMobilePhones } from '../shared/sanitize';
-import { billableSkipCount } from '../shared/skiptraceBilling';
+import { billableSkipCount, SKIPTRACE_CREDITS_PER_MATCH, creditsFor, dollarsFor } from '../shared/skiptraceBilling';
 
 const dynamoClient = new DynamoDBClient({ region: process.env.AWS_REGION });
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
@@ -14,6 +15,7 @@ const BATCH_DATA_SERVER_TOKEN = process.env.BATCH_DATA_SERVER_TOKEN;
 const DEBOUNCE_API_KEY = process.env.DEBOUNCE_API_KEY;
 const propertyLeadTableName = process.env.AMPLIFY_DATA_PropertyLead_TABLE_NAME;
 const userAccountTableName = process.env.AMPLIFY_DATA_UserAccount_TABLE_NAME;
+const batchDataJobTableName = process.env.AMPLIFY_DATA_BatchDataJob_TABLE_NAME;
 
 console.log('🔧 [SKIP_TRACE] Lambda initialized');
 console.log('🔧 [SKIP_TRACE] Environment:', {
@@ -613,6 +615,48 @@ export const handler: Handler = async (event) => {
           throw new Error('Insufficient Credits: Your credit balance was too low to complete this batch. Please purchase more credits.');
         }
         throw deductErr;
+      }
+    }
+
+    // 📄 8. Persist a job record for the Reports "Job Reports" tab (one row per run). Charge is on
+    // matched records only (chargeableCount); NO_MATCH is free. Best-effort — never fail the run on this.
+    if (batchDataJobTableName && ownerId) {
+      try {
+        const noMatchLeads = updateResults
+          .filter(r => r.status === 'NO_MATCH')
+          .map(r => {
+            const lead = leadsToProcess.find(l => l.id === r.id);
+            return {
+              id: r.id,
+              address: [lead?.ownerAddress, lead?.ownerCity, lead?.ownerState].filter(Boolean).join(', '),
+            };
+          });
+        const creditsCharged = creditsFor(chargeableCount, SKIPTRACE_CREDITS_PER_MATCH);
+        const now = new Date().toISOString();
+        await docClient.send(new PutCommand({
+          TableName: batchDataJobTableName,
+          Item: {
+            id: randomUUID(),
+            owner: ownerId,
+            userId: ownerId,
+            jobType: 'SKIP_TRACE',
+            leadsSent: leadsToProcess.length,
+            matched: chargeableCount,
+            noMatch,
+            noQuality: noQualityContacts,
+            failed,
+            skipped: skippedLeads.length,
+            creditsPerMatch: SKIPTRACE_CREDITS_PER_MATCH,
+            creditsCharged: (isOwner || isAdmin) ? 0 : creditsCharged,
+            dollarsCharged: (isOwner || isAdmin) ? 0 : dollarsFor(creditsCharged),
+            noMatchLeads,
+            createdAt: now,
+            updatedAt: now,
+          },
+        }));
+        console.log(`📄 BatchDataJob (SKIP_TRACE) recorded: ${chargeableCount} matched, ${noMatch} no-match`);
+      } catch (jobErr: any) {
+        console.error('⚠️ Failed to record BatchDataJob (non-fatal):', jobErr?.message);
       }
     }
 

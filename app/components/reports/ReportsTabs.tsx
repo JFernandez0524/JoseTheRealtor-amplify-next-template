@@ -4,12 +4,14 @@ import { useState } from 'react';
 import EmailOutreachReport from './EmailOutreachReport';
 import SkipTraceReport from './SkipTraceReport';
 import GhlSyncReport from './GhlSyncReport';
+import BatchDataJobsReport from './BatchDataJobsReport';
 
-type Tab = 'email' | 'skiptrace' | 'ghl';
+type Tab = 'email' | 'skiptrace' | 'jobs' | 'ghl';
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'email',     label: 'Email Outreach' },
   { id: 'skiptrace', label: 'Skip Trace' },
+  { id: 'jobs',      label: 'Job Reports' },
   { id: 'ghl',       label: 'Launch AI Sync' },
 ];
 
@@ -38,6 +40,7 @@ export default function ReportsTabs() {
       {/* Tab Content */}
       {active === 'email'     && <EmailOutreachReport />}
       {active === 'skiptrace' && <SkipTraceReport />}
+      {active === 'jobs'      && <BatchDataJobsReport />}
       {active === 'ghl'       && <GhlSyncReport />}
     </div>
   );

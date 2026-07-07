@@ -14,6 +14,23 @@
 /** Result statuses BatchData charges us for (a record was matched and returned). */
 export const BILLABLE_SKIP_STATUSES = new Set<string>(['SUCCESS', 'NO_QUALITY_CONTACTS']);
 
+// ---- Credit pricing (single source of truth for both flows + the reports) ----
+// Clients pay in credits; 1 credit = $0.10 (see billing/buy-credits). We charge per BatchData match:
+// skip-trace 1 credit/match ($0.10); enrichment 3 credits/match ($0.30 retail, our cost ~$0.28).
+export const DOLLARS_PER_CREDIT = 0.1;
+export const SKIPTRACE_CREDITS_PER_MATCH = 1;
+export const ENRICHMENT_CREDITS_PER_MATCH = 3;
+
+/** Credits charged for a job = matched records × the per-match rate (never charged for no-match). */
+export function creditsFor(matched: number, creditsPerMatch: number): number {
+  return Math.max(0, matched) * creditsPerMatch;
+}
+
+/** Dollar value of a credit count. */
+export function dollarsFor(credits: number): number {
+  return Math.round(credits * DOLLARS_PER_CREDIT * 100) / 100;
+}
+
 /**
  * Count how many skip-trace results are billable (matched records). NO_MATCH / FAILED / ERROR /
  * INVALID_GEO are free.
