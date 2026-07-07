@@ -174,6 +174,16 @@ export interface EnrichmentRunResult {
 }
 
 /**
+ * Serialize a value for an `a.json()` (AWSJSON) field. The SSR Amplify Data client (aws-amplify 6.x)
+ * rejects raw objects passed to AWSJSON fields ("Variable 'X' has an invalid value"), so we pass a JSON
+ * string instead — the app's read path already tolerates either form (see LeadDetailClient's
+ * `typeof … === 'string' ? JSON.parse(...) : …`). null/undefined → undefined (field left untouched).
+ */
+export function asJson(value: unknown): string | undefined {
+  return value == null ? undefined : JSON.stringify(value);
+}
+
+/**
  * Convert a value to an AWSDate (`YYYY-MM-DD`) string, or undefined if absent/unparseable. BatchData
  * returns full ISO datetimes (e.g. "2026-04-06T00:00:00.000Z"); our `a.date()` schema fields (auction/
  * recording/default dates) reject the time component, so we strip it before persisting.
@@ -331,14 +341,14 @@ function mapPropertyToLead(property: EnrichProperty, lead: DBLead): Partial<DBLe
     // Liens / mortgages
     mortgageBalance: lien.totalOpenLienBalance ?? lead.mortgageBalance,
     freeAndClear: typeof lien.totalOpenLienBalance === 'number' ? lien.totalOpenLienBalance === 0 : lead.freeAndClear,
-    openLienData: property.openLien ?? undefined,
+    openLienData: asJson(property.openLien),
 
     // Owner / occupancy
     ownerOccupied: owner.ownerOccupied ?? lead.ownerOccupied,
     hasLandline: owner.hasLandline ?? lead.hasLandline,
 
     // Property basics
-    homeDetails: property.building ?? lead.homeDetails,
+    homeDetails: asJson(property.building) ?? lead.homeDetails,
 
     // Foreclosure (the priority object). The *Date fields are schema type a.date() (AWSDate = YYYY-MM-DD),
     // but BatchData sends full ISO datetimes — toDateOnly strips the time so the write doesn't get rejected.
@@ -352,10 +362,10 @@ function mapPropertyToLead(property: EnrichProperty, lead: DBLead): Partial<DBLe
     foreclosureDefaultDate: toDateOnly(fc.defaultDate) ?? lead.foreclosureDefaultDate,
     foreclosureTrustee: fc.trusteeName ?? lead.foreclosureTrustee,
     foreclosureTrusteePhone: fc.trusteePhone ?? lead.foreclosureTrusteePhone,
-    foreclosureData: property.foreclosure ?? undefined,
+    foreclosureData: asJson(property.foreclosure),
 
     // Raw capture (nothing lost)
-    rawEnrichmentData: property as any,
+    rawEnrichmentData: asJson(property),
 
     batchDataEnriched: true,
     batchDataEnrichedAt: new Date().toISOString(),

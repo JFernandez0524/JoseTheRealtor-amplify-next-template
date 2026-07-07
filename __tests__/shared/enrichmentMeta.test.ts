@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { readBatchMeta, toDateOnly } from '../../app/utils/batchdata/enrichment';
+import { readBatchMeta, toDateOnly, asJson } from '../../app/utils/batchdata/enrichment';
 
 // readBatchMeta pulls BatchData's authoritative match accounting from the nested response shape
 // (results.meta.results.{matchCount,noMatchCount} + results.meta.requestId). This drives billing.
@@ -53,5 +53,20 @@ describe('toDateOnly (BatchData ISO datetime → AWSDate)', () => {
     expect(toDateOnly(null)).toBeUndefined();
     expect(toDateOnly(undefined)).toBeUndefined();
     expect(toDateOnly('not a date')).toBeUndefined();
+  });
+});
+
+describe('asJson (object → JSON string for AWSJSON fields)', () => {
+  it('stringifies objects and arrays, round-trips via JSON.parse', () => {
+    const obj = { status: 'Rescission Recording', caseNumber: 'F-003701-23', mortgages: [{ lenderName: 'NATIONSTAR' }] };
+    const s = asJson(obj);
+    expect(typeof s).toBe('string');
+    expect(JSON.parse(s as string)).toEqual(obj);
+    expect(asJson([1, 2, 3])).toBe('[1,2,3]');
+  });
+
+  it('returns undefined for null/undefined (leaves the field untouched)', () => {
+    expect(asJson(null)).toBeUndefined();
+    expect(asJson(undefined)).toBeUndefined();
   });
 });
