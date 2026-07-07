@@ -222,9 +222,11 @@ export async function enrichPreforeclosureLeads(leads: DBLead[]): Promise<Enrich
     const batch = leadsToEnrich.slice(i, i + BATCH_SIZE);
     const request = {
       requests: batch.map((lead) => ({
+        // Send the FULL street line (e.g. "71 Cascades Ave") in `street`, exactly as BatchData's docs
+        // expect. Splitting the house number into a separate `houseNumber` field matches the wrong parcel
+        // (BatchData returns an invalid township lot) — verified against the API.
         address: {
-          houseNumber: extractHouseNumber(lead.ownerAddress),
-          street: extractStreet(lead.ownerAddress),
+          street: lead.ownerAddress,
           city: lead.ownerCity,
           state: lead.ownerState,
           zip: lead.ownerZip,
@@ -352,15 +354,6 @@ function mapPropertyToLead(property: EnrichProperty, lead: DBLead): Partial<DBLe
 }
 
 // ---- Helpers ----
-
-function extractHouseNumber(address?: string): string {
-  const match = (address || '').match(/^(\d+)/);
-  return match ? match[1] : '';
-}
-
-function extractStreet(address?: string): string {
-  return (address || '').replace(/^\d+\s*/, '').trim();
-}
 
 /** Normalized key for matching a returned property back to its lead (alphanumeric street + 5-digit zip). */
 function normalizeAddr(street?: string | null, zip?: string | null): string {
