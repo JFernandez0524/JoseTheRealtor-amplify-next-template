@@ -44,6 +44,10 @@ const schema = a.schema({
       creditsCharged: a.integer().default(0), // matched × creditsPerMatch
       dollarsCharged: a.float().default(0), // creditsCharged × $0.10
       noMatchLeads: a.json().array(), // [{ id, address }] — the leads that did not match
+      // Reconciliation against the BatchData invoice — BatchData's own match accounting + request IDs.
+      batchRequestIds: a.string().array(), // one per BatchData request (skip trace: 1; enrichment: 1 per batch)
+      batchMatchCount: a.integer().default(0), // BatchData's authoritative matched count for this run
+      batchNoMatchCount: a.integer().default(0), // BatchData's authoritative no-match count
     })
     .authorization((allow) => [
       allow.owner().to(['create', 'read', 'update', 'delete']),

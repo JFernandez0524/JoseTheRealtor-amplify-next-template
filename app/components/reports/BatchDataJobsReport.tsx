@@ -20,7 +20,17 @@ interface Job {
   creditsCharged: number;
   dollarsCharged: number;
   noMatchLeads: NoMatchLead[] | null;
+  batchRequestIds: string[] | null;
+  batchMatchCount: number;
+  batchNoMatchCount: number;
   createdAt: string;
+}
+
+/** True when our billed match count disagrees with BatchData's, or some no-match leads were actually
+ *  matched-but-unmapped — a data-mapping issue worth a look (billing already follows BatchData). */
+function needsReview(job: Job): boolean {
+  const unmapped = (job.noMatchLeads?.length || 0) - (job.batchNoMatchCount || 0);
+  return job.matched !== job.batchMatchCount || unmapped > 0;
 }
 
 interface Totals {
@@ -162,6 +172,9 @@ export default function BatchDataJobsReport() {
                         <td className='px-4 py-3 text-slate-600 text-xs whitespace-nowrap'>{new Date(job.createdAt).toLocaleString()}</td>
                         <td className='px-4 py-3'>
                           <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${TYPE_STYLE[job.jobType]}`}>{TYPE_LABEL[job.jobType]}</span>
+                          {needsReview(job) && (
+                            <span className='ml-1 text-xs text-amber-600' title='BatchData matched more than we could map to a lead — billing follows BatchData; the unmapped lead(s) need review'>⚠</span>
+                          )}
                         </td>
                         <td className='px-4 py-3 text-right text-slate-700'>{job.leadsSent}</td>
                         <td className='px-4 py-3 text-right font-semibold text-green-700'>{job.matched}</td>
@@ -181,7 +194,10 @@ export default function BatchDataJobsReport() {
                       {isOpen && noMatchLeads.length > 0 && (
                         <tr className='bg-yellow-50/50'>
                           <td colSpan={7} className='px-4 py-3'>
-                            <p className='text-xs font-semibold text-slate-600 mb-2'>Leads BatchData couldn&apos;t match (not charged):</p>
+                            {job.batchRequestIds && job.batchRequestIds.length > 0 && (
+                              <p className='text-[10px] text-slate-400 mb-2'>BatchData request {job.batchRequestIds.length > 1 ? 'IDs' : 'ID'}: <span className='font-mono'>{job.batchRequestIds.join(', ')}</span></p>
+                            )}
+                            <p className='text-xs font-semibold text-slate-600 mb-2'>Leads not enriched (BatchData no-match, not charged):</p>
                             <div className='space-y-1'>
                               {noMatchLeads.map(l => (
                                 <div key={l.id} className='flex justify-between items-center text-xs bg-white rounded border px-3 py-1.5'>

@@ -151,7 +151,43 @@ interface BatchDataResponse {
   status?: { code?: number; text?: string };
   results?: {
     properties?: EnrichProperty[];
-    meta?: Record<string, unknown>;
+    // Authoritative match accounting from BatchData — the source of truth for billing. Same nesting
+    // the skip-trace handler reads (results.meta.results.matchCount + results.meta.requestId).
+    meta?: {
+      requestId?: string;
+      results?: { requestCount?: number; matchCount?: number; noMatchCount?: number; errorCount?: number };
+    };
+  };
+}
+
+/** BatchData's authoritative match accounting for a run, aggregated across batches. */
+export interface EnrichmentMeta {
+  matchCount: number; // properties BatchData matched (and billed us for)
+  noMatchCount: number; // BatchData found nothing — free
+  requestIds: string[]; // one per batch — for reconciling against the BatchData invoice
+}
+
+/** Result of an enrichment run: the fields to persist per matched+mapped lead, plus BatchData's meta. */
+export interface EnrichmentRunResult {
+  results: Map<string, Partial<DBLead>>;
+  meta: EnrichmentMeta;
+}
+
+/**
+ * Extract BatchData's authoritative match accounting from one response. The counts live at
+ * `results.meta.results.{matchCount,noMatchCount}` and the id at `results.meta.requestId`. Pure +
+ * tested so the (easy-to-get-wrong) nesting is verified without a live call.
+ */
+export function readBatchMeta(data: BatchDataResponse | null | undefined): {
+  matchCount: number;
+  noMatchCount: number;
+  requestId: string | null;
+} {
+  const m = data?.results?.meta;
+  return {
+    matchCount: m?.results?.matchCount ?? 0,
+    noMatchCount: m?.results?.noMatchCount ?? 0,
+    requestId: m?.requestId ?? null,
   };
 }
 
@@ -163,20 +199,23 @@ const PROJECTION_GROUPS = [
 // ---- Public API ----
 
 /**
- * Enrich multiple preforeclosure leads. Returns a map of leadId → fields to persist.
- * Skips non-preforeclosure and already-enriched leads. Never sets phones/emails.
+ * Enrich multiple preforeclosure leads. Returns the fields to persist per matched+mapped lead PLUS
+ * BatchData's authoritative match accounting (meta) — billing is charged on meta.matchCount, not on how
+ * many properties our address-join could map. Skips non-preforeclosure/already-enriched. Never sets
+ * phones/emails.
  */
-export async function enrichPreforeclosureLeads(leads: DBLead[]): Promise<Map<string, Partial<DBLead>>> {
+export async function enrichPreforeclosureLeads(leads: DBLead[]): Promise<EnrichmentRunResult> {
   const results = new Map<string, Partial<DBLead>>();
+  const meta: EnrichmentMeta = { matchCount: 0, noMatchCount: 0, requestIds: [] };
   if (!BATCHDATA_API_KEY) {
     console.error('[ENRICH] BATCH_DATA_SERVER_TOKEN not configured');
-    return results;
+    return { results, meta };
   }
 
   const leadsToEnrich = leads.filter(
     (lead) => lead.type?.toUpperCase() === 'PREFORECLOSURE' && !lead.batchDataEnriched,
   );
-  if (leadsToEnrich.length === 0) return results;
+  if (leadsToEnrich.length === 0) return { results, meta };
 
   const BATCH_SIZE = 10; // BatchData request limit
   for (let i = 0; i < leadsToEnrich.length; i += BATCH_SIZE) {
@@ -215,6 +254,12 @@ export async function enrichPreforeclosureLeads(leads: DBLead[]): Promise<Map<st
         continue;
       }
 
+      // Aggregate BatchData's authoritative match accounting (the billing source of truth).
+      const batchMeta = readBatchMeta(data);
+      meta.matchCount += batchMeta.matchCount;
+      meta.noMatchCount += batchMeta.noMatchCount;
+      if (batchMeta.requestId) meta.requestIds.push(batchMeta.requestId);
+
       const properties = data?.results?.properties || [];
       // Match each returned property back to its lead by normalized address (no-match results can
       // shift indices, so don't rely on position). Single-lead batches fall back to index 0.
@@ -236,7 +281,7 @@ export async function enrichPreforeclosureLeads(leads: DBLead[]): Promise<Map<st
     }
   }
 
-  return results;
+  return { results, meta };
 }
 
 /**
@@ -246,7 +291,7 @@ export async function enrichPreforeclosureLead(lead: DBLead): Promise<Partial<DB
   if (lead.type?.toUpperCase() !== 'PREFORECLOSURE') {
     throw new Error('BatchData enrichment only for PREFORECLOSURE leads');
   }
-  const results = await enrichPreforeclosureLeads([lead]);
+  const { results } = await enrichPreforeclosureLeads([lead]);
   return results.get(lead.id) || {};
 }
 

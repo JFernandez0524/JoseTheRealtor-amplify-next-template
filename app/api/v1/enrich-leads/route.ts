@@ -103,13 +103,19 @@ export async function POST(request: NextRequest) {
     }
 
     // Enrich leads
-    const enrichmentResults = await enrichPreforeclosureLeads(toEnrich);
+    const { results: enrichmentResults, meta: batchMeta } = await enrichPreforeclosureLeads(toEnrich);
 
-    // BatchData bills enrichment PER MATCH, not per attempt — a no-match lookup is free (verified:
-    // BatchData returns matchCount 0 and does not charge). So the client is only charged for the
-    // properties BatchData actually matched (enrichmentResults holds one entry per matched lead).
-    const matchedCount = enrichmentResults.size;
-    const noMatchCount = toEnrich.length - matchedCount;
+    // Bill on BatchData's AUTHORITATIVE match count (what BatchData charged us), not on how many
+    // properties our address-join could map. A no-match is free (matchCount 0). `mappedCount` is how many
+    // leads we actually populated — if BatchData matched more than we could map, the difference is a
+    // data-mapping issue to fix, but the client is still charged for the match (bill what BatchData billed).
+    const matchedCount = batchMeta.matchCount;
+    const noMatchCount = batchMeta.noMatchCount;
+    const mappedCount = enrichmentResults.size;
+    const unmappedMatched = Math.max(0, matchedCount - mappedCount);
+    if (unmappedMatched > 0) {
+      console.warn(`[ENRICH] ${unmappedMatched} lead(s) matched by BatchData but not mapped to a lead (address-join miss) — charged, needs review. requestIds=${batchMeta.requestIds.join(',')}`);
+    }
     const creditsCharged = isExempt ? 0 : creditsFor(matchedCount, ENRICHMENT_CREDITS_PER_MATCH);
     const totalCost = dollarsFor(creditsCharged); // $ charged for matched leads
 
@@ -136,7 +142,8 @@ export async function POST(request: NextRequest) {
     const successCount = updateResults.filter((r) => r.success).length;
     const failedCount = updateResults.filter((r) => !r.success).length;
 
-    // Leads BatchData couldn't match — returned so the client can keep them selected/visible.
+    // Leads we couldn't populate (no data written) — the ones to keep selected/review. This is
+    // BatchData's genuine no-matches PLUS any matched-but-unmapped (flagged via unmappedMatched above).
     const noMatchLeads = toEnrich
       .filter((lead) => !enrichmentResults.has(lead.id))
       .map((lead) => ({
@@ -151,7 +158,7 @@ export async function POST(request: NextRequest) {
         userId,
         jobType: 'ENRICHMENT',
         leadsSent: toEnrich.length,
-        matched: matchedCount,
+        matched: matchedCount, // BatchData's authoritative match count = what we bill
         noMatch: noMatchCount,
         noQuality: 0,
         failed: failedCount,
@@ -160,6 +167,10 @@ export async function POST(request: NextRequest) {
         creditsCharged,
         dollarsCharged: totalCost,
         noMatchLeads,
+        // Reconciliation against the BatchData invoice.
+        batchRequestIds: batchMeta.requestIds,
+        batchMatchCount: batchMeta.matchCount,
+        batchNoMatchCount: batchMeta.noMatchCount,
       });
     } catch (jobErr) {
       console.error('⚠️ Failed to record BatchDataJob (non-fatal):', jobErr);
@@ -171,6 +182,7 @@ export async function POST(request: NextRequest) {
       matched: matchedCount,
       noMatch: noMatchCount,
       noMatchIds,
+      unmappedMatched,
       attempted: toEnrich.length,
       failed: failedCount,
       skipped: alreadyEnriched.length,

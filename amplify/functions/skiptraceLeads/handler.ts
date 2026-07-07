@@ -618,6 +618,12 @@ export const handler: Handler = async (event) => {
       }
     }
 
+    // Reconcile our per-record derived match count against BatchData's authoritative aggregate — they
+    // should be equal (both come from BatchData's meta.matched). Log if they diverge for investigation.
+    if (batchMeta.matchCount !== chargeableCount) {
+      console.warn(`⚠️ Match count divergence: billed ${chargeableCount} (per-record) vs BatchData meta.matchCount ${batchMeta.matchCount} (requestId=${batchMeta.requestId})`);
+    }
+
     // 📄 8. Persist a job record for the Reports "Job Reports" tab (one row per run). Charge is on
     // matched records only (chargeableCount); NO_MATCH is free. Best-effort — never fail the run on this.
     if (batchDataJobTableName && ownerId) {
@@ -650,6 +656,10 @@ export const handler: Handler = async (event) => {
             creditsCharged: (isOwner || isAdmin) ? 0 : creditsCharged,
             dollarsCharged: (isOwner || isAdmin) ? 0 : dollarsFor(creditsCharged),
             noMatchLeads,
+            // Reconciliation against the BatchData invoice.
+            batchRequestIds: batchMeta.requestId ? [batchMeta.requestId] : [],
+            batchMatchCount: batchMeta.matchCount,
+            batchNoMatchCount: batchMeta.noMatchCount,
             createdAt: now,
             updatedAt: now,
           },
