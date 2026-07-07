@@ -90,9 +90,9 @@ export async function POST(request: NextRequest) {
           zillowZpid: resolvedZpid,
           zillowUrl: resolvedZillowUrl,
         });
-        return NextResponse.json({ success: true, partial: true, message: 'Zillow link saved. Enter the value manually using $ Manual.' });
+        return NextResponse.json({ success: true, partial: true, message: 'Zillow has no data for this property. It will fill from enrichment, or set the value manually with ✏️.' });
       }
-      return NextResponse.json({ error: 'No Zestimate data found' }, { status: 404 });
+      return NextResponse.json({ error: 'No Zestimate found for this address. Run enrichment or set the value manually with ✏️.' }, { status: 404 });
     }
 
     const v = result.valuation;
