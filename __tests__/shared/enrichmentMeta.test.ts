@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { readBatchMeta } from '../../app/utils/batchdata/enrichment';
+import { readBatchMeta, toDateOnly } from '../../app/utils/batchdata/enrichment';
 
 // readBatchMeta pulls BatchData's authoritative match accounting from the nested response shape
 // (results.meta.results.{matchCount,noMatchCount} + results.meta.requestId). This drives billing.
@@ -35,5 +35,23 @@ describe('readBatchMeta', () => {
     expect(readBatchMeta({})).toEqual({ matchCount: 0, noMatchCount: 0, requestId: null });
     expect(readBatchMeta(null)).toEqual({ matchCount: 0, noMatchCount: 0, requestId: null });
     expect(readBatchMeta(undefined)).toEqual({ matchCount: 0, noMatchCount: 0, requestId: null });
+  });
+});
+
+describe('toDateOnly (BatchData ISO datetime → AWSDate)', () => {
+  it('strips the time from an ISO datetime', () => {
+    expect(toDateOnly('2026-04-06T00:00:00.000Z')).toBe('2026-04-06');
+    expect(toDateOnly('2026-03-31T12:34:56Z')).toBe('2026-03-31');
+  });
+
+  it('passes through an already date-only string', () => {
+    expect(toDateOnly('2026-04-06')).toBe('2026-04-06');
+  });
+
+  it('returns undefined for empty / null / undefined / garbage', () => {
+    expect(toDateOnly('')).toBeUndefined();
+    expect(toDateOnly(null)).toBeUndefined();
+    expect(toDateOnly(undefined)).toBeUndefined();
+    expect(toDateOnly('not a date')).toBeUndefined();
   });
 });

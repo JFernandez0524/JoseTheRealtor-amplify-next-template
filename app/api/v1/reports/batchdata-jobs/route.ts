@@ -26,8 +26,12 @@ export async function GET() {
 
   // Job records are low-volume (one per batch run); a single high-limit list covers all realistic
   // history without pagination. Owner-scoped by the model's auth rules.
+  // `beginsWith` (not `eq`) because the owner field is stored two ways depending on the writer: the
+  // skip-trace Lambda writes the bare Cognito `sub`, while the enrich route (Amplify Data client) stamps
+  // the `sub::identity` composite. The bare sub is a UUID prefix of both, so beginsWith matches both with
+  // no cross-user collision.
   const { data: jobsRaw } = await cookiesClient.models.BatchDataJob.list({
-    filter: { owner: { eq: user.userId } },
+    filter: { owner: { beginsWith: user.userId } },
     limit: 1000,
   });
 

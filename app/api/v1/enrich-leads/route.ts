@@ -156,6 +156,7 @@ export async function POST(request: NextRequest) {
     try {
       await cookiesClient.models.BatchDataJob.create({
         userId,
+        owner: userId, // store the bare sub (like the skip-trace Lambda) so the Reports owner filter matches
         jobType: 'ENRICHMENT',
         leadsSent: toEnrich.length,
         matched: matchedCount, // BatchData's authoritative match count = what we bill

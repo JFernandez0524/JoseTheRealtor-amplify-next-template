@@ -174,6 +174,20 @@ export interface EnrichmentRunResult {
 }
 
 /**
+ * Convert a value to an AWSDate (`YYYY-MM-DD`) string, or undefined if absent/unparseable. BatchData
+ * returns full ISO datetimes (e.g. "2026-04-06T00:00:00.000Z"); our `a.date()` schema fields (auction/
+ * recording/default dates) reject the time component, so we strip it before persisting.
+ */
+export function toDateOnly(value?: string | null): string | undefined {
+  if (!value) return undefined;
+  // Fast path for ISO strings ("YYYY-MM-DD..."); fall back to Date parsing for other formats.
+  const iso = /^\d{4}-\d{2}-\d{2}/.exec(value);
+  if (iso) return iso[0];
+  const d = new Date(value);
+  return isNaN(d.getTime()) ? undefined : d.toISOString().slice(0, 10);
+}
+
+/**
  * Extract BatchData's authoritative match accounting from one response. The counts live at
  * `results.meta.results.{matchCount,noMatchCount}` and the id at `results.meta.requestId`. Pure +
  * tested so the (easy-to-get-wrong) nesting is verified without a live call.
@@ -326,15 +340,16 @@ function mapPropertyToLead(property: EnrichProperty, lead: DBLead): Partial<DBLe
     // Property basics
     homeDetails: property.building ?? lead.homeDetails,
 
-    // Foreclosure (the priority object)
+    // Foreclosure (the priority object). The *Date fields are schema type a.date() (AWSDate = YYYY-MM-DD),
+    // but BatchData sends full ISO datetimes — toDateOnly strips the time so the write doesn't get rejected.
     foreclosureStatus: fc.status ?? lead.foreclosureStatus,
-    foreclosureRecordingDate: fc.recordingDate ?? lead.foreclosureRecordingDate,
-    foreclosureAuctionDate: fc.auctionDate ?? lead.foreclosureAuctionDate,
+    foreclosureRecordingDate: toDateOnly(fc.recordingDate) ?? lead.foreclosureRecordingDate,
+    foreclosureAuctionDate: toDateOnly(fc.auctionDate) ?? lead.foreclosureAuctionDate,
     foreclosureUnpaidBalance: fc.unpaidBalance ?? lead.foreclosureUnpaidBalance,
     foreclosureAmount: fc.unpaidBalance ?? fc.pastDueAmount ?? lead.foreclosureAmount,
     foreclosureCaseNumber: fc.caseNumber ?? lead.foreclosureCaseNumber,
     foreclosureLenderName: fc.currentLenderName ?? lead.foreclosureLenderName,
-    foreclosureDefaultDate: fc.defaultDate ?? lead.foreclosureDefaultDate,
+    foreclosureDefaultDate: toDateOnly(fc.defaultDate) ?? lead.foreclosureDefaultDate,
     foreclosureTrustee: fc.trusteeName ?? lead.foreclosureTrustee,
     foreclosureTrusteePhone: fc.trusteePhone ?? lead.foreclosureTrusteePhone,
     foreclosureData: property.foreclosure ?? undefined,
