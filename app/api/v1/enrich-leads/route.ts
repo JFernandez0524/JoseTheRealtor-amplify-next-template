@@ -79,12 +79,16 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Calculate cost ($0.30 per lead)
-    const costPerLead = 0.35;
-    const totalCost = toEnrich.length * costPerLead;
-
     // Enrich leads
     const enrichmentResults = await enrichPreforeclosureLeads(toEnrich);
+
+    // BatchData bills enrichment PER MATCH, not per attempt — a no-match lookup is free (verified:
+    // BatchData returns matchCount 0 and does not charge). So the client is only charged for the
+    // properties BatchData actually matched (enrichmentResults holds one entry per matched lead).
+    const costPerLead = 0.35;
+    const matchedCount = enrichmentResults.size;
+    const noMatchCount = toEnrich.length - matchedCount;
+    const totalCost = matchedCount * costPerLead;
 
     // Update leads in database
     const updatePromises = Array.from(enrichmentResults.entries()).map(
@@ -103,12 +107,21 @@ export async function POST(request: NextRequest) {
     const successCount = updateResults.filter((r) => r.success).length;
     const failedCount = updateResults.filter((r) => !r.success).length;
 
+    // Leads BatchData couldn't match — returned so the client can keep them selected/visible.
+    const noMatchIds = toEnrich
+      .map((lead) => lead.id)
+      .filter((id) => !enrichmentResults.has(id));
+
     return NextResponse.json({
-      message: `Enriched ${successCount} preforeclosure leads`,
+      message: `Enriched ${successCount} of ${toEnrich.length} preforeclosure leads (BatchData matched ${matchedCount}, no match ${noMatchCount})`,
       enriched: successCount,
+      matched: matchedCount,
+      noMatch: noMatchCount,
+      noMatchIds,
+      attempted: toEnrich.length,
       failed: failedCount,
       skipped: alreadyEnriched.length,
-      cost: totalCost,
+      cost: totalCost, // charged only for BatchData matches
       results: updateResults,
     });
   } catch (error) {

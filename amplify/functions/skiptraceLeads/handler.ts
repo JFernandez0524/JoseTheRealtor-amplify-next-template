@@ -3,6 +3,7 @@ import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand, UpdateCommand, ScanCommand } from '@aws-sdk/lib-dynamodb';
 import { filterValidEmails } from '../shared/emailValidator';
 import { rankMobilePhones } from '../shared/sanitize';
+import { billableSkipCount } from '../shared/skiptraceBilling';
 
 const dynamoClient = new DynamoDBClient({ region: process.env.AWS_REGION });
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
@@ -591,10 +592,12 @@ export const handler: Handler = async (event) => {
     console.log(`📊 Results: ${processedSuccessfully} successful, ${noQualityContacts} no quality contacts, ${noMatch} no match, ${failed} failed`);
 
     // 💰 7. Deduct Credits (all users except OWNER)
-    // BatchData charges for every request regardless of match quality
-    const chargeableCount = updateResults.filter(r => ['SUCCESS', 'NO_QUALITY_CONTACTS', 'NO_MATCH'].includes(r.status)).length;
+    // BatchData bills only matched records — SUCCESS and NO_QUALITY_CONTACTS (a person was matched and
+    // a record returned). NO_MATCH means BatchData found nobody and did not charge us, so the client
+    // is not charged either. FAILED/ERROR never billed. (billableSkipCount is pure + unit-tested.)
+    const chargeableCount = billableSkipCount(updateResults.map(r => r.status));
     if (chargeableCount > 0 && !isOwner && !isAdmin && userAccount) {
-      console.log(`💳 Deducting ${chargeableCount} credits (all API calls are chargeable)...`);
+      console.log(`💳 Deducting ${chargeableCount} credits (matched records only; ${noMatch} no-match not charged)...`);
       try {
         await docClient.send(new UpdateCommand({
           TableName: userAccountTableName,

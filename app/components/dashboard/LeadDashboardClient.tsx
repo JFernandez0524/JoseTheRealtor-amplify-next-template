@@ -568,12 +568,12 @@ export default function LeadDashboardClient({}: Props) {
       const noMatch = allResults.filter((r: any) => r?.status === 'NO_MATCH').length;
       const noQuality = allResults.filter((r: any) => r?.status === 'NO_QUALITY_CONTACTS').length;
 
-      addToast({ type: 'success', title: 'Skip-trace complete!', message: `Successful: ${successful} | Failed: ${failed} | No Match: ${noMatch} | No Quality: ${noQuality}`, duration: 8000 });
+      addToast({ type: 'success', title: 'Skip-trace complete!', message: `Successful: ${successful} | No Match (not charged): ${noMatch} | No Quality: ${noQuality} | Failed: ${failed}`, duration: 8000 });
 
       setSelectedIds([]);
 
-      // Refresh page after 1 second
-      setTimeout(() => window.location.reload(), 1000);
+      // Refresh data in place — a hard reload would wipe the toast before it can be read.
+      await refreshLeads();
     } catch (err: any) {
       console.error('Skip-trace error:', err);
       addToast({ type: 'error', title: 'Skip-trace Error', message: err.message || 'Check your network connection' });
@@ -670,16 +670,23 @@ export default function LeadDashboardClient({}: Props) {
 
       if (!response.ok) throw new Error(result.error);
 
-      addToast({ type: 'success', title: 'Enrichment Complete!', message: `Enriched: ${result.enriched} | Skipped: ${result.skipped} | Failed: ${result.failed} | Cost: $${result.cost.toFixed(2)}`, duration: 8000 });
-      setSelectedIds([]);
+      const noMatch = result.noMatch ?? 0;
+      if (result.enriched > 0) {
+        addToast({ type: 'success', title: 'Enrichment Complete!', message: `Enriched: ${result.enriched}${noMatch ? ` | No BatchData match: ${noMatch}` : ''} | Skipped: ${result.skipped} | Charged: $${result.cost.toFixed(2)}`, duration: 8000 });
+      } else {
+        // Nothing matched → nothing charged. Make that explicit instead of a silent "0".
+        addToast({ type: 'warning', title: 'No BatchData match', message: `BatchData has no record for ${noMatch === 1 ? 'this property' : `these ${noMatch} properties`} (common for new construction). No charge. Try another lead.`, duration: 8000 });
+      }
+      // Keep the un-matched leads selected so the user can see exactly which ones BatchData missed;
+      // matched leads drop out of the selection.
+      setSelectedIds(result.noMatchIds ?? []);
+      // Refresh data in place — do NOT hard-reload (a reload wipes the toast before it can be read).
       await refreshLeads();
     } catch (err) {
       console.error('Enrichment error:', err);
       addToast({ type: 'error', title: 'Enrichment Failed', message: err instanceof Error ? err.message : String(err) });
     } finally {
       setIsProcessing(false);
-      // Force page refresh to ensure all data is updated
-      window.location.reload();
     }
   };
 
