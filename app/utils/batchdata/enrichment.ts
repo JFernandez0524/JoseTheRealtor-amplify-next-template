@@ -344,13 +344,9 @@ function mapPropertyToLead(property: EnrichProperty, lead: DBLead): Partial<DBLe
     batchDataEnrichedAt: new Date().toISOString(),
   };
 
-  const notes = buildEnrichmentNotes(property);
-  if (notes) {
-    enrichment.notes = [
-      ...((lead.notes as any[]) || []),
-      { text: notes, createdAt: new Date().toISOString(), createdBy: 'BatchData Enrichment' },
-    ];
-  }
+  // NOTE: we deliberately do NOT append to `notes` here. It's the only `a.json().array()` field enrichment
+  // touches, and appending through the SSR Amplify Data client fails the whole update ("Variable 'notes' has
+  // an invalid value"). The enrichment summary is redundant with the structured fields + the Job Reports tab.
 
   return enrichment;
 }
@@ -373,30 +369,3 @@ function normalizeAddr(street?: string | null, zip?: string | null): string {
   return `${s}_${z}`;
 }
 
-/** Null-safe human-readable enrichment summary stored in the lead's notes. */
-function buildEnrichmentNotes(property: EnrichProperty): string | null {
-  const lines: string[] = [];
-  const v = property.valuation;
-  const lien = property.openLien;
-  const fc = property.foreclosure;
-
-  if (v?.equityPercent != null || v?.estimatedValue != null) {
-    if (v?.equityPercent != null) lines.push(`Equity: ${v.equityPercent}%`);
-    if (v?.estimatedValue != null) lines.push(`Estimated Value: $${v.estimatedValue.toLocaleString()}`);
-    if (v?.ltv != null) lines.push(`LTV: ${v.ltv}%`);
-  }
-  if (lien?.totalOpenLienBalance) {
-    lines.push(`Total Liens: $${lien.totalOpenLienBalance.toLocaleString()} (${lien.totalOpenLienCount ?? '?'})`);
-    const primary = lien.mortgages?.[0];
-    if (primary?.lenderName) lines.push(`Primary Lender: ${primary.lenderName}`);
-  }
-  if (fc && (fc.status || fc.auctionDate || fc.unpaidBalance != null)) {
-    if (fc.status) lines.push(`Foreclosure: ${fc.status}`);
-    if (fc.auctionDate) lines.push(`Auction Date: ${fc.auctionDate}${fc.auctionTime ? ` ${fc.auctionTime}` : ''}`);
-    if (fc.unpaidBalance != null) lines.push(`Unpaid Balance: $${fc.unpaidBalance.toLocaleString()}`);
-    if (fc.currentLenderName) lines.push(`Lender: ${fc.currentLenderName}`);
-    if (fc.trusteeName) lines.push(`Trustee: ${fc.trusteeName}${fc.trusteePhone ? ` (${fc.trusteePhone})` : ''}`);
-  }
-
-  return lines.length ? ['=== BatchData Enrichment ===', ...lines].join('\n') : null;
-}

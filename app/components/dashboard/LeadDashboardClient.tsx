@@ -684,12 +684,18 @@ export default function LeadDashboardClient({}: Props) {
 
       if (!response.ok) throw new Error(result.error);
 
+      // Base the message on BatchData's authoritative match count, not on how many we saved — a match we
+      // couldn't save (rare) is NOT a "no match".
+      const matched = result.matched ?? result.enriched ?? 0;
+      const enriched = result.enriched ?? 0;
       const noMatch = result.noMatch ?? 0;
-      if (result.enriched > 0) {
-        addToast({ type: 'success', title: 'Enrichment Complete!', message: `Enriched: ${result.enriched}${noMatch ? ` | No BatchData match: ${noMatch}` : ''} | Skipped: ${result.skipped} | Charged: $${result.cost.toFixed(2)}`, duration: 8000 });
-      } else {
-        // Nothing matched → nothing charged. Make that explicit instead of a silent "0".
+      if (matched === 0) {
         addToast({ type: 'warning', title: 'No BatchData match', message: `BatchData has no record for ${noMatch === 1 ? 'this property' : `these ${noMatch} properties`} (common for new construction). No charge. Try another lead.`, duration: 8000 });
+      } else if (enriched < matched) {
+        // BatchData matched (and billed us) but some records couldn't be saved to the lead — surfaced for review.
+        addToast({ type: 'warning', title: 'Matched — needs review', message: `BatchData matched ${matched} but ${matched - enriched} couldn't be saved to the lead. Charged: $${(result.cost ?? 0).toFixed(2)}. See Job Reports.`, duration: 9000 });
+      } else {
+        addToast({ type: 'success', title: 'Enrichment Complete!', message: `Enriched: ${enriched}${noMatch ? ` | No BatchData match: ${noMatch}` : ''} | Skipped: ${result.skipped} | Charged: $${(result.cost ?? 0).toFixed(2)}`, duration: 8000 });
       }
       // Keep the un-matched leads selected so the user can see exactly which ones BatchData missed;
       // matched leads drop out of the selection.
