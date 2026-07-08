@@ -15,6 +15,7 @@ import { useGhl } from '@/app/context/GhlContext';
 import { useToast } from '@/app/components/leadDetails/ToastProvider';
 import { LeadTable } from './LeadTable';
 import { DashboardFilters } from './DashboardFilters';
+import { classifyForeclosureStage } from '@/app/utils/foreclosure';
 import { GhlConnection } from './GhlConnection';
 import { RouteExplanationModal } from './RouteExplanationModal';
 import { SyncConfirmModal } from './SyncConfirmModal';
@@ -65,6 +66,10 @@ export default function LeadDashboardClient({}: Props) {
   const [filterCrmStatus, setFilterCrmStatus] = useState('');
   const [filterHasPhone, setFilterHasPhone] = useState('');
   const [filterListingStatus, setFilterListingStatus] = useState('');
+  // Foreclosure qualification filters (target motivated leads before skip trace)
+  const [filterForeclosureStage, setFilterForeclosureStage] = useState('');
+  const [filterAuctionWindow, setFilterAuctionWindow] = useState('');
+  const [filterMinEquity, setFilterMinEquity] = useState('');
   const [filterDateAdded, setFilterDateAdded] = useState('');
   const [filterDateAddedTo, setFilterDateAddedTo] = useState('');
   const [filterSource, setFilterSource] = useState('');
@@ -274,6 +279,36 @@ export default function LeadDashboardClient({}: Props) {
 
         const matchesSource = !filterSource || lead.uploadSource === filterSource;
 
+        // ── Foreclosure qualification (motivated-lead targeting) ──
+        // Foreclosure stage: ACTIVE = active or auction; AUCTION = auction only; DEAD = rescinded/released.
+        const matchesForeclosureStage = (() => {
+          if (!filterForeclosureStage) return true;
+          const stage = classifyForeclosureStage(lead.foreclosureStatus);
+          if (filterForeclosureStage === 'ACTIVE') return stage === 'ACTIVE' || stage === 'AUCTION';
+          if (filterForeclosureStage === 'AUCTION') return stage === 'AUCTION';
+          if (filterForeclosureStage === 'DEAD') return stage === 'DEAD';
+          return true;
+        })();
+
+        // Auction within N days: needs a foreclosureAuctionDate between today and today+N.
+        const matchesAuctionWindow = (() => {
+          if (!filterAuctionWindow) return true;
+          if (!lead.foreclosureAuctionDate) return false;
+          const auction = new Date(lead.foreclosureAuctionDate).getTime();
+          if (isNaN(auction)) return false;
+          const now = Date.now();
+          const horizon = now + Number(filterAuctionWindow) * 24 * 60 * 60 * 1000;
+          return auction >= now && auction <= horizon;
+        })();
+
+        // Minimum equity %.
+        const matchesEquity = (() => {
+          if (!filterMinEquity) return true;
+          const min = Number(filterMinEquity);
+          if (!Number.isFinite(min)) return true;
+          return (lead.equityPercent ?? -1) >= min;
+        })();
+
         // Date filtering for skip trace completion
         const matchesDateRange = (() => {
           if (!skipTraceFromDate && !skipTraceToDate) return true;
@@ -296,6 +331,9 @@ export default function LeadDashboardClient({}: Props) {
           matchesCrm &&
           matchesPhone &&
           matchesListingStatus &&
+          matchesForeclosureStage &&
+          matchesAuctionWindow &&
+          matchesEquity &&
           matchesDateAdded &&
           matchesSource &&
           matchesDateRange
@@ -353,6 +391,9 @@ export default function LeadDashboardClient({}: Props) {
     filterCrmStatus,
     filterHasPhone,
     filterListingStatus,
+    filterForeclosureStage,
+    filterAuctionWindow,
+    filterMinEquity,
     filterDateAdded,
     filterDateAddedTo,
     filterSource,
@@ -387,6 +428,9 @@ export default function LeadDashboardClient({}: Props) {
     filterCrmStatus,
     filterHasPhone,
     filterListingStatus,
+    filterForeclosureStage,
+    filterAuctionWindow,
+    filterMinEquity,
     skipTraceFromDate,
     skipTraceToDate,
     sortField,
@@ -1047,6 +1091,12 @@ export default function LeadDashboardClient({}: Props) {
         setFilterHasPhone={setFilterHasPhone}
         filterListingStatus={filterListingStatus}
         setFilterListingStatus={setFilterListingStatus}
+        filterForeclosureStage={filterForeclosureStage}
+        setFilterForeclosureStage={setFilterForeclosureStage}
+        filterAuctionWindow={filterAuctionWindow}
+        setFilterAuctionWindow={setFilterAuctionWindow}
+        filterMinEquity={filterMinEquity}
+        setFilterMinEquity={setFilterMinEquity}
         filterDateAdded={filterDateAdded}
         setFilterDateAdded={setFilterDateAdded}
         filterDateAddedTo={filterDateAddedTo}

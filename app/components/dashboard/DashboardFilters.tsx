@@ -31,6 +31,13 @@ type Props = {
   setFilterHasPhone: (val: string) => void;
   filterListingStatus: string;
   setFilterListingStatus: (val: string) => void;
+  // Foreclosure qualification filters (motivated-lead targeting for the enrich → skip-trace funnel)
+  filterForeclosureStage: string;
+  setFilterForeclosureStage: (val: string) => void;
+  filterAuctionWindow: string;
+  setFilterAuctionWindow: (val: string) => void;
+  filterMinEquity: string;
+  setFilterMinEquity: (val: string) => void;
   filterDateAdded: string;
   setFilterDateAdded: (val: string) => void;
   filterDateAddedTo: string;
@@ -82,6 +89,12 @@ export function DashboardFilters({
   setFilterHasPhone,
   filterListingStatus,
   setFilterListingStatus,
+  filterForeclosureStage,
+  setFilterForeclosureStage,
+  filterAuctionWindow,
+  setFilterAuctionWindow,
+  filterMinEquity,
+  setFilterMinEquity,
   filterDateAdded,
   setFilterDateAdded,
   filterDateAddedTo,
@@ -222,6 +235,41 @@ export function DashboardFilters({
             <option value='door_knock'>Door Knock</option>
           </select>
 
+          {/* 6a. FORECLOSURE STAGE (motivated-lead targeting) */}
+          <select
+            value={filterForeclosureStage}
+            onChange={(e) => setFilterForeclosureStage(e.target.value)}
+            className='border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:ring-2 focus:ring-red-500 outline-none w-full'
+          >
+            <option value=''>Foreclosure: All Stages</option>
+            <option value='ACTIVE'>Active (NOD · Lis Pendens · Auction)</option>
+            <option value='AUCTION'>Facing Auction only</option>
+            <option value='DEAD'>Dead (Rescinded · Released)</option>
+          </select>
+
+          {/* 6b. AUCTION DATE WINDOW */}
+          <select
+            value={filterAuctionWindow}
+            onChange={(e) => setFilterAuctionWindow(e.target.value)}
+            className='border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:ring-2 focus:ring-red-500 outline-none w-full'
+          >
+            <option value=''>Auction: Any</option>
+            <option value='30'>Auction: Next 30 days</option>
+            <option value='60'>Auction: Next 60 days</option>
+            <option value='90'>Auction: Next 90 days</option>
+          </select>
+
+          {/* 6c. MIN EQUITY % */}
+          <input
+            type='number'
+            min={0}
+            max={100}
+            value={filterMinEquity}
+            onChange={(e) => setFilterMinEquity(e.target.value)}
+            placeholder='Min equity %'
+            className='border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:ring-2 focus:ring-red-500 outline-none w-full'
+          />
+
           {/* 7. DATE ADDED FILTER */}
           <div className='flex flex-col gap-1'>
             <label className='text-xs text-gray-600'>Date Added (From):</label>
@@ -303,7 +351,7 @@ export function DashboardFilters({
         </div>
 
         {/* Clear All Button */}
-        {(filterType || filterStatus || filterGhlStatus || filterHasPhone || filterListingStatus || skipTraceFromDate || skipTraceToDate) && (
+        {(filterType || filterStatus || filterGhlStatus || filterHasPhone || filterListingStatus || filterForeclosureStage || filterAuctionWindow || filterMinEquity || skipTraceFromDate || skipTraceToDate) && (
           <button
             onClick={() => {
               setFilterType('');
@@ -311,6 +359,9 @@ export function DashboardFilters({
               setFilterGhlStatus('');
               setFilterHasPhone('');
               setFilterListingStatus('');
+              setFilterForeclosureStage('');
+              setFilterAuctionWindow('');
+              setFilterMinEquity('');
               setSkipTraceFromDate('');
               setSkipTraceToDate('');
             }}
