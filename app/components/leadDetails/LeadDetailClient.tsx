@@ -20,6 +20,7 @@ import { FiMapPin } from 'react-icons/fi';
 
 // Modular Components
 import { CoreLeadInfo } from './CoreLeadInfo';
+import { EnrichmentDetails } from './EnrichmentDetails';
 import { GhlActions } from './GhlActions';
 import { LeadStatusBadge } from './LeadStatusBadge';
 import { CardWrapper } from './CardWrapper';
@@ -815,6 +816,12 @@ function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
               </div>
             </CardWrapper>
           </div>
+
+          {lead.type === 'PREFORECLOSURE' && lead.batchDataEnriched && (
+            <CardWrapper title='Property Enrichment (BatchData)'>
+              <EnrichmentDetails lead={lead} />
+            </CardWrapper>
+          )}
 
           <CardWrapper title='Technical Property Analysis'>
             {isAnalyzing ? (
