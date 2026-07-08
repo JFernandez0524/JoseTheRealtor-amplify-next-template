@@ -58,3 +58,21 @@ export function sanitizePhoneInput(raw: string): string {
   const digits = raw.replace(/\D/g, '').slice(0, 11);
   return hasLeadingPlus ? `+${digits}` : digits;
 }
+
+/**
+ * Decide whether a Google Address Validation result is "usable" — i.e. worth geocoding, pricing a
+ * Zestimate for, and marking VALID. An address is usable only when the validation call returned a
+ * result AND Google did not flag it as a partial/incomplete match
+ * (`verdict.addressComplete === false`, surfaced as `isPartialMatch` by validateAddressWithGoogle).
+ *
+ * Kept as a pure, env-free predicate (no google.server import — that throws at load without the API
+ * key) so the CSV upload Lambda and any client code share one definition of "valid address", and so
+ * it can be unit-tested. `null`/`undefined` (e.g. the Google call threw) → not usable.
+ *
+ * Used by: amplify/functions/uploadCsvHandler/handler.ts (per-row property + admin address gate).
+ */
+export function isUsableAddress(
+  v: { success?: boolean; isPartialMatch?: boolean } | null | undefined
+): boolean {
+  return !!v && v.success !== false && v.isPartialMatch !== true;
+}

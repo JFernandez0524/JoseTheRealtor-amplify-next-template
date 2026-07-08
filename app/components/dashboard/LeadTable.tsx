@@ -5,6 +5,7 @@ import React, { useState } from 'react';
 import { StatusBadge } from '../shared/StatusBadge';
 import { formatDate } from '@/app/utils/formatters';
 import { updateLead } from '@/app/utils/aws/data/lead.client';
+import { AddressAutocomplete, ParsedAddress } from '@/app/components/address/AddressAutocomplete';
 import { type Schema } from '@/amplify/data/resource';
 
 // Format listing status for display
@@ -112,12 +113,8 @@ export function LeadTable({
   const modalRef = React.useRef<HTMLDivElement>(null);
   const [editingLead, setEditingLead] = useState<Lead | null>(null);
   const [isSaving, setIsSaving] = useState(false);
-  const [editForm, setEditForm] = useState({
-    street: '',
-    city: '',
-    state: '',
-    zip: '',
-  });
+  // The corrected address the user picked from the Google autocomplete (null until they select one).
+  const [selectedAddress, setSelectedAddress] = useState<ParsedAddress | null>(null);
   const [editingZestimateLead, setEditingZestimateLead] = useState<Lead | null>(null);
   const [zestimateUrlInput, setZestimateUrlInput] = useState('');
   const [zestimateValueInput, setZestimateValueInput] = useState('');
@@ -254,37 +251,47 @@ export function LeadTable({
 
   const handleEditAddress = (lead: Lead) => {
     setEditingLead(lead);
-    setEditForm({
-      street: lead.ownerAddress || '',
-      city: lead.ownerCity || '',
-      state: lead.ownerState || '',
-      zip: lead.ownerZip || '',
-    });
+    setSelectedAddress(null); // user must pick a fresh address from the dropdown
     setIsSaving(false); // Reset saving state when opening modal
   };
 
   const handleSaveAddress = async () => {
-    if (!editingLead) return;
-    
+    // Require a Google-picked address — it's validated by construction, so we can safely clear the
+    // INVALID flag (same trust model as the manual lead form + /api/v1/create-manual-lead).
+    if (!editingLead || !selectedAddress) return;
+    const addr = selectedAddress;
+
     setIsSaving(true);
     try {
       await updateLead(editingLead.id, {
-        ownerAddress: editForm.street,
-        ownerCity: editForm.city,
-        ownerState: editForm.state,
-        ownerZip: editForm.zip,
+        ownerAddress: addr.street,
+        ownerCity: addr.city,
+        ownerState: addr.state,
+        ownerZip: addr.zip,
+        ownerCounty: addr.county || null,
+        latitude: addr.lat,
+        longitude: addr.lng,
+        standardizedAddress: {
+          street: addr.street,
+          city: addr.city,
+          state: addr.state,
+          zip: addr.zip,
+          county: addr.county,
+        },
+        // Google confirmed this address — flip the lead back to VALID and clear the ⚠️ flag.
+        validationStatus: 'VALID',
       });
 
-      // Refresh Zestimate with new address
+      // Refresh Zestimate with the corrected address
       const res = await fetch('/api/v1/refresh-zestimate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           leadId: editingLead.id,
-          street: editForm.street,
-          city: editForm.city,
-          state: editForm.state,
-          zip: editForm.zip,
+          street: addr.street,
+          city: addr.city,
+          state: addr.state,
+          zip: addr.zip,
         }),
       });
 
@@ -860,51 +867,38 @@ export function LeadTable({
           }}
         >
           <div ref={modalRef} className='bg-white rounded-lg p-6 max-w-md w-full'>
-            <h3 className='text-lg font-bold mb-4'>Edit Address</h3>
+            <h3 className='text-lg font-bold mb-1'>Edit Address</h3>
+            <p className='text-xs text-gray-500 mb-4'>
+              Start typing and pick the correct address from the dropdown. Choosing a Google-suggested
+              address clears the invalid-address flag.
+            </p>
             <div className='space-y-3'>
               <div>
-                <label className='block text-sm font-medium text-gray-700 mb-1'>Street Address</label>
-                <input
-                  type='text'
-                  value={editForm.street}
-                  onChange={(e) => setEditForm({ ...editForm, street: e.target.value })}
-                  className='w-full px-3 py-2 border border-gray-300 rounded-md'
-                />
+                <label className='block text-sm font-medium text-gray-500 mb-1'>Current address</label>
+                <p className='text-sm text-gray-700 bg-gray-50 border border-gray-200 rounded-md px-3 py-2'>
+                  {[editingLead.ownerAddress, editingLead.ownerCity, editingLead.ownerState, editingLead.ownerZip]
+                    .filter(Boolean).join(', ') || '—'}
+                </p>
               </div>
               <div>
-                <label className='block text-sm font-medium text-gray-700 mb-1'>City</label>
-                <input
-                  type='text'
-                  value={editForm.city}
-                  onChange={(e) => setEditForm({ ...editForm, city: e.target.value })}
-                  className='w-full px-3 py-2 border border-gray-300 rounded-md'
+                <label className='block text-sm font-medium text-gray-700 mb-1'>New address *</label>
+                <AddressAutocomplete
+                  key={editingLead.id}
+                  onSelect={setSelectedAddress}
+                  className='w-full'
                 />
-              </div>
-              <div className='grid grid-cols-2 gap-3'>
-                <div>
-                  <label className='block text-sm font-medium text-gray-700 mb-1'>State</label>
-                  <input
-                    type='text'
-                    value={editForm.state}
-                    onChange={(e) => setEditForm({ ...editForm, state: e.target.value })}
-                    className='w-full px-3 py-2 border border-gray-300 rounded-md'
-                  />
-                </div>
-                <div>
-                  <label className='block text-sm font-medium text-gray-700 mb-1'>ZIP</label>
-                  <input
-                    type='text'
-                    value={editForm.zip}
-                    onChange={(e) => setEditForm({ ...editForm, zip: e.target.value })}
-                    className='w-full px-3 py-2 border border-gray-300 rounded-md'
-                  />
-                </div>
+                {selectedAddress && (
+                  <p className='mt-2 text-sm text-green-700 bg-green-50 border border-green-200 rounded-md px-3 py-2'>
+                    ✓ {[selectedAddress.street, selectedAddress.city, selectedAddress.state, selectedAddress.zip]
+                      .filter(Boolean).join(', ')}
+                  </p>
+                )}
               </div>
             </div>
             <div className='flex gap-3 mt-6'>
               <button
                 onClick={handleSaveAddress}
-                disabled={isSaving}
+                disabled={isSaving || !selectedAddress}
                 className='flex-1 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2'
               >
                 {isSaving ? (

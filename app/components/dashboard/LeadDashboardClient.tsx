@@ -73,6 +73,8 @@ export default function LeadDashboardClient({}: Props) {
   const [filterDateAdded, setFilterDateAdded] = useState('');
   const [filterDateAddedTo, setFilterDateAddedTo] = useState('');
   const [filterSource, setFilterSource] = useState('');
+  // Data-quality filter: '' = all, 'INVALID' = unconfirmed address, 'NO_ZESTIMATE' = no Zillow value.
+  const [filterDataQuality, setFilterDataQuality] = useState('');
   const [skipTraceFromDate, setSkipTraceFromDate] = useState('');
   const [skipTraceToDate, setSkipTraceToDate] = useState('');
 
@@ -279,6 +281,17 @@ export default function LeadDashboardClient({}: Props) {
 
         const matchesSource = !filterSource || lead.uploadSource === filterSource;
 
+        // Data-quality: surface leads that need attention. INVALID = Google couldn't confirm the
+        // address; NO_ZESTIMATE = no Zillow valuation (a broader set — includes VALID leads Zillow
+        // simply has no data for). Distinct filters, not the same set.
+        const matchesDataQuality =
+          !filterDataQuality ||
+          (filterDataQuality === 'INVALID'
+            ? lead.validationStatus === 'INVALID'
+            : filterDataQuality === 'NO_ZESTIMATE'
+              ? lead.zestimate == null
+              : true);
+
         // ── Foreclosure qualification (motivated-lead targeting) ──
         // Foreclosure stage: ACTIVE = active or auction; AUCTION = auction only; DEAD = rescinded/released.
         const matchesForeclosureStage = (() => {
@@ -336,6 +349,7 @@ export default function LeadDashboardClient({}: Props) {
           matchesEquity &&
           matchesDateAdded &&
           matchesSource &&
+          matchesDataQuality &&
           matchesDateRange
         );
       })
@@ -397,6 +411,7 @@ export default function LeadDashboardClient({}: Props) {
     filterDateAdded,
     filterDateAddedTo,
     filterSource,
+    filterDataQuality,
     skipTraceFromDate,
     skipTraceToDate,
     sortField,
@@ -431,6 +446,8 @@ export default function LeadDashboardClient({}: Props) {
     filterForeclosureStage,
     filterAuctionWindow,
     filterMinEquity,
+    filterSource,
+    filterDataQuality,
     skipTraceFromDate,
     skipTraceToDate,
     sortField,
@@ -1103,6 +1120,8 @@ export default function LeadDashboardClient({}: Props) {
         setFilterDateAddedTo={setFilterDateAddedTo}
         filterSource={filterSource}
         setFilterSource={setFilterSource}
+        filterDataQuality={filterDataQuality}
+        setFilterDataQuality={setFilterDataQuality}
         skipTraceFromDate={skipTraceFromDate}
         setSkipTraceFromDate={setSkipTraceFromDate}
         skipTraceToDate={skipTraceToDate}

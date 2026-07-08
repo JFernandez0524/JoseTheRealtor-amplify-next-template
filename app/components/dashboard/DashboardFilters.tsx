@@ -44,6 +44,8 @@ type Props = {
   setFilterDateAddedTo: (val: string) => void;
   filterSource: string;
   setFilterSource: (val: string) => void;
+  filterDataQuality: string;
+  setFilterDataQuality: (val: string) => void;
   skipTraceFromDate: string;
   setSkipTraceFromDate: (val: string) => void;
   skipTraceToDate: string;
@@ -101,6 +103,8 @@ export function DashboardFilters({
   setFilterDateAddedTo,
   filterSource,
   setFilterSource,
+  filterDataQuality,
+  setFilterDataQuality,
   skipTraceFromDate,
   setSkipTraceFromDate,
   skipTraceToDate,
@@ -316,7 +320,18 @@ export function DashboardFilters({
             <option value='api_import'>🔗 API Import</option>
           </select>
 
-          {/* 9. SKIP TRACE DATE FILTERS */}
+          {/* 9. DATA QUALITY FILTER — surface leads needing attention */}
+          <select
+            value={filterDataQuality}
+            onChange={(e) => setFilterDataQuality(e.target.value)}
+            className='border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none w-full'
+          >
+            <option value=''>Data Quality: All</option>
+            <option value='INVALID'>⚠️ Invalid Address</option>
+            <option value='NO_ZESTIMATE'>🏠 No Zestimate</option>
+          </select>
+
+          {/* 10. SKIP TRACE DATE FILTERS */}
           <div className='flex flex-col gap-1'>
             <label className='text-xs text-gray-600'>Skip Traced:</label>
             <select
@@ -351,7 +366,7 @@ export function DashboardFilters({
         </div>
 
         {/* Clear All Button */}
-        {(filterType || filterStatus || filterGhlStatus || filterHasPhone || filterListingStatus || filterForeclosureStage || filterAuctionWindow || filterMinEquity || skipTraceFromDate || skipTraceToDate) && (
+        {(filterType || filterStatus || filterGhlStatus || filterHasPhone || filterListingStatus || filterForeclosureStage || filterAuctionWindow || filterMinEquity || filterDataQuality || skipTraceFromDate || skipTraceToDate) && (
           <button
             onClick={() => {
               setFilterType('');
@@ -362,6 +377,7 @@ export function DashboardFilters({
               setFilterForeclosureStage('');
               setFilterAuctionWindow('');
               setFilterMinEquity('');
+              setFilterDataQuality('');
               setSkipTraceFromDate('');
               setSkipTraceToDate('');
             }}

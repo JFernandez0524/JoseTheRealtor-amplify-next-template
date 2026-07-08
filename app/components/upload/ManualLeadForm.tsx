@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef } from 'react';
 import { uploadData } from 'aws-amplify/storage';
 import { getFrontEndUser } from '@/app/utils/aws/auth/amplifyFrontEndUser';
 import { client } from '@/app/utils/aws/data/frontEndClient';
@@ -9,7 +9,7 @@ import { useAccess } from '@/app/context/AccessContext';
 import { HiLockClosed } from 'react-icons/hi';
 import { UploadProgressModal } from './UploadProgressModal';
 import { fetchLeads } from '@/app/utils/aws/data/lead.client';
-import { useGoogleMaps } from '@/app/components/GoogleMapsProvider';
+import { AddressAutocomplete, ParsedAddress } from '@/app/components/address/AddressAutocomplete';
 import { sanitizeName, isValidName, formatPhoneE164, sanitizePhoneInput, NAME_MAX } from '@/app/utils/leadValidation';
 
 interface CsvPreview {
@@ -45,22 +45,12 @@ export function ManualLeadForm() {
     phone: '',
   });
 
-  const { isLoaded: isMapsLoaded } = useGoogleMaps();
-
   const [leadCreated, setLeadCreated] = useState(false);
+  // Bump to remount the AddressAutocomplete widgets (clears their inputs) when starting a new lead.
+  const [autocompleteKey, setAutocompleteKey] = useState(0);
 
-  const ownerContainerRef = useRef<HTMLDivElement>(null);
-  const adminContainerRef = useRef<HTMLDivElement>(null);
-  const ownerAutocompleteRef = useRef<any>(null);
-  const adminAutocompleteRef = useRef<any>(null);
-  const ownerAddressRef = useRef<{
-    formattedAddress: string; street: string; city: string;
-    state: string; zip: string; county: string;
-    lat: number | null; lng: number | null;
-  } | null>(null);
-  const adminAddressRef = useRef<{
-    formattedAddress: string; street: string; city: string; state: string; zip: string;
-  } | null>(null);
+  const ownerAddressRef = useRef<ParsedAddress | null>(null);
+  const adminAddressRef = useRef<ParsedAddress | null>(null);
 
   const parseFilePreview = async (selectedFile: File) => {
     setCsvPreview({ rowCount: 0, duplicateCount: 0, loading: true });
@@ -120,61 +110,6 @@ export function ManualLeadForm() {
     a.click();
     window.URL.revokeObjectURL(url);
   };
-
-  // Mount PlaceAutocompleteElement widgets once GoogleMapsProvider signals Maps is ready.
-  // GoogleMapsProvider (root layout) already loads the places library globally.
-  useEffect(() => {
-    if (mode !== 'manual' || !isMapsLoaded) return;
-
-    const G = (window as any).google?.maps?.places;
-    if (!G?.PlaceAutocompleteElement) return;
-
-    if (ownerContainerRef.current && !ownerContainerRef.current.hasChildNodes()) {
-      const el = new G.PlaceAutocompleteElement({ includedRegionCodes: ['us'] });
-      ownerAutocompleteRef.current = el;
-      ownerContainerRef.current.appendChild(el);
-      el.addEventListener('gmp-select', async (event: any) => {
-        const place = event.placePrediction.toPlace();
-        await place.fetchFields({ fields: ['formattedAddress', 'addressComponents', 'location'] });
-        const getComp = (type: string, useShort = false) => {
-          const c = place.addressComponents?.find((comp: any) => comp.types.includes(type));
-          return useShort ? (c?.shortText || '') : (c?.longText || '');
-        };
-        const street = `${getComp('street_number')} ${getComp('route')}`.trim();
-        const city = getComp('locality') || getComp('administrative_area_level_3');
-        const state = getComp('administrative_area_level_1', true); // shortText = "NJ" not "New Jersey"
-        const zip = getComp('postal_code');
-        const county = getComp('administrative_area_level_2');
-        ownerAddressRef.current = {
-          formattedAddress: place.formattedAddress ?? '',
-          street, city, state, zip, county,
-          lat: place.location?.lat() ?? null,
-          lng: place.location?.lng() ?? null,
-        };
-      });
-    }
-
-    if (adminContainerRef.current && !adminContainerRef.current.hasChildNodes()) {
-      const el = new G.PlaceAutocompleteElement({ includedRegionCodes: ['us'] });
-      adminAutocompleteRef.current = el;
-      adminContainerRef.current.appendChild(el);
-      el.addEventListener('gmp-select', async (event: any) => {
-        const place = event.placePrediction.toPlace();
-        await place.fetchFields({ fields: ['formattedAddress', 'addressComponents'] });
-        const getComp = (type: string, useShort = false) => {
-          const c = place.addressComponents?.find((comp: any) => comp.types.includes(type));
-          return useShort ? (c?.shortText || '') : (c?.longText || '');
-        };
-        adminAddressRef.current = {
-          formattedAddress: place.formattedAddress ?? '',
-          street: `${getComp('street_number')} ${getComp('route')}`.trim(),
-          city: getComp('locality') || getComp('administrative_area_level_3'),
-          state: getComp('administrative_area_level_1', true),
-          zip: getComp('postal_code'),
-        };
-      });
-    }
-  }, [mode, lead.type, isMapsLoaded]);
 
   const handleManualSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -502,7 +437,10 @@ export function ManualLeadForm() {
             <label className='text-xs font-bold text-gray-400 uppercase'>
               Property Address *
             </label>
-            <div ref={ownerContainerRef} className='border rounded' />
+            <AddressAutocomplete
+              key={`owner-${autocompleteKey}`}
+              onSelect={(addr) => { ownerAddressRef.current = addr; }}
+            />
           </div>
 
           {lead.type === 'PROBATE' && (
@@ -540,7 +478,10 @@ export function ManualLeadForm() {
               </div>
               <div className='space-y-1'>
                 <label className='text-xs font-bold text-gray-400 uppercase'>Admin Address *</label>
-                <div ref={adminContainerRef} className='border rounded' />
+                <AddressAutocomplete
+                  key={`admin-${autocompleteKey}`}
+                  onSelect={(addr) => { adminAddressRef.current = addr; }}
+                />
               </div>
             </div>
           )}
@@ -556,8 +497,8 @@ export function ManualLeadForm() {
                   onClick={() => {
                     setLeadCreated(false);
                     setMessage('');
-                    if (ownerAutocompleteRef.current) ownerAutocompleteRef.current.value = '';
-                    if (adminAutocompleteRef.current) adminAutocompleteRef.current.value = '';
+                    // Remount the autocomplete widgets so their inputs clear for the next lead.
+                    setAutocompleteKey((k) => k + 1);
                   }}
                   className='w-full border border-blue-600 text-blue-600 p-3 rounded-md font-bold hover:bg-blue-50 transition-colors'
                 >

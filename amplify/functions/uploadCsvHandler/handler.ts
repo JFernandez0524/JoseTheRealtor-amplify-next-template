@@ -12,6 +12,7 @@ import { Readable } from 'stream';
 import { randomUUID } from 'crypto';
 import { validateAddressWithGoogle, toTitleCase } from '../../../app/utils/google.server';
 import { fetchBestZestimate } from '../../../app/utils/bridge.server';
+import { isUsableAddress } from '../../../app/utils/leadValidation';
 
 const s3 = new S3Client({ region: process.env.AWS_REGION });
 const dynamoClient = new DynamoDBClient({ region: process.env.AWS_REGION });
@@ -446,9 +447,21 @@ export const handler: S3Handler = async (event) => {
           const fullPropString = `${rawPropAddr}, ${cleanCity}, ${rawPropState} ${rawPropZip}`;
 
           // --- 🔍 VALIDATE PROPERTY ADDRESS WITH GOOGLE ---
+          // Wrap the call: validateAddressWithGoogle THROWS on a hard failure. Without this guard a
+          // throw would bubble to the row-level catch and silently drop the whole lead. Instead we
+          // treat a throw (or a partial/incomplete match) as "not usable" — the lead is still saved,
+          // flagged INVALID, so the user can find and correct it in the dashboard.
           await delay(GOOGLE_API_DELAY_MS); // respect Google Address Validation QPS limit
-          const propValidation =
-            await validateAddressWithGoogle(fullPropString);
+          let propValidation: Awaited<ReturnType<typeof validateAddressWithGoogle>> | null = null;
+          try {
+            propValidation = await validateAddressWithGoogle(fullPropString);
+          } catch (validationError: any) {
+            console.warn(`⚠️ Property address validation failed for "${fullPropString}": ${validationError?.message}`);
+          }
+          // "Usable" = Google returned a result AND did not flag it a partial/incomplete match.
+          // Gates whether we fetch a Zestimate (no point pricing an address Google couldn't confirm)
+          // and whether the lead is flagged VALID or INVALID.
+          const addressUsable = isUsableAddress(propValidation);
 
           const std = propValidation?.components;
           // Keep original CSV address for Zillow links, use standardized for geocoding
@@ -505,9 +518,16 @@ export const handler: S3Handler = async (event) => {
 
             if (rawAdminAddr) {
               await delay(GOOGLE_API_DELAY_MS); // respect Google Address Validation QPS limit
-              const adminValidation = await validateAddressWithGoogle(
-                `${rawAdminAddr}, ${sanitize(row['adminCity'])} ${rawAdminZip}`
-              );
+              // Same defensive wrap as the property address: a throw here must not drop the whole
+              // probate row — fall back to the raw admin address instead.
+              let adminValidation: Awaited<ReturnType<typeof validateAddressWithGoogle>> | null = null;
+              try {
+                adminValidation = await validateAddressWithGoogle(
+                  `${rawAdminAddr}, ${sanitize(row['adminCity'])} ${rawAdminZip}`
+                );
+              } catch (adminValidationError: any) {
+                console.warn(`⚠️ Admin address validation failed for "${rawAdminAddr}": ${adminValidationError?.message}`);
+              }
               const aStd = adminValidation?.components;
               finalMailAddr = toTitleCase(aStd?.street || rawAdminAddr);
               finalMailCity = toTitleCase(aStd?.city || sanitize(row['adminCity']));
@@ -577,35 +597,41 @@ export const handler: S3Handler = async (event) => {
 
             continue; // Skip this lead
           }
-          // 🏠 Fetch Zestimate data during upload
+          // 🏠 Fetch Zestimate data during upload — only for addresses Google could confirm. No point
+          // attaching a valuation to an unconfirmed address (it would likely match the wrong parcel);
+          // the lead is flagged INVALID below so the user can fix the address and re-run.
           let zillowData = null;
-          
-          try {
-            // 🚦 Rate limit: Wait before API call
-            await delay(BRIDGE_API_DELAY_MS);
-            
-            // Use standardized address from Google (USPS CASS) for better matching
-            const zestimateStreet = standardizedAddress?.street || finalPropAddr;
-            const zestimateCity = standardizedAddress?.city || finalPropCity;
-            // Strip +4 from zip code (Bridge API doesn't like it)
-            const zestimateZip = (standardizedAddress?.zip || finalPropZip)?.split('-')[0];
-            
-            zillowData = await fetchBestZestimate({
-              lat: latitude || undefined,
-              lng: longitude || undefined,
-              street: zestimateStreet,
-              city: zestimateCity,
-              state: finalPropState,
-              zip: zestimateZip,
-            });
-            
-            if (zillowData) {
-              console.log('✅ Zestimate fetched:', { zpid: zillowData.zpid, zestimate: zillowData.zestimate });
-            } else {
-              console.log('❌ No Zestimate data for address:', { address: zestimateStreet, city: zestimateCity });
+
+          if (addressUsable) {
+            try {
+              // 🚦 Rate limit: Wait before API call
+              await delay(BRIDGE_API_DELAY_MS);
+
+              // Use standardized address from Google (USPS CASS) for better matching
+              const zestimateStreet = standardizedAddress?.street || finalPropAddr;
+              const zestimateCity = standardizedAddress?.city || finalPropCity;
+              // Strip +4 from zip code (Bridge API doesn't like it)
+              const zestimateZip = (standardizedAddress?.zip || finalPropZip)?.split('-')[0];
+
+              zillowData = await fetchBestZestimate({
+                lat: latitude || undefined,
+                lng: longitude || undefined,
+                street: zestimateStreet,
+                city: zestimateCity,
+                state: finalPropState,
+                zip: zestimateZip,
+              });
+
+              if (zillowData) {
+                console.log('✅ Zestimate fetched:', { zpid: zillowData.zpid, zestimate: zillowData.zestimate });
+              } else {
+                console.log('❌ No Zestimate data for address:', { address: zestimateStreet, city: zestimateCity });
+              }
+            } catch (error: any) {
+              console.log('Bridge API error:', error.message);
             }
-          } catch (error: any) {
-            console.log('Bridge API error:', error.message);
+          } else {
+            console.log(`⏭️ Skipping Zestimate for unconfirmed address (validationStatus=INVALID): ${fullPropString}`);
           }
 
           const leadItem = {
@@ -651,7 +677,7 @@ export const handler: S3Handler = async (event) => {
             ghlSyncStatus: 'PENDING',
             listingStatus: 'off_market', // Default to off_market for new leads
             uploadSource: 'csv_upload',
-            validationStatus: propValidation ? 'VALID' : 'INVALID',
+            validationStatus: addressUsable ? 'VALID' : 'INVALID',
             
             // 🏠 Zestimate and Zillow data
             estimatedValue: parseFloat(row['estimatedValue'] || row['Estimated Value']) || null,
