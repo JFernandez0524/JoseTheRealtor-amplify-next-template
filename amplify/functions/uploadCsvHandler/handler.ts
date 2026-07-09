@@ -12,7 +12,8 @@ import { Readable } from 'stream';
 import { randomUUID } from 'crypto';
 import { validateAddressWithGoogle, toTitleCase } from '../../../app/utils/google.server';
 import { fetchBestZestimate } from '../../../app/utils/bridge.server';
-import { isUsableAddress, isEntityName, isTaxForeclosureCase } from '../../../app/utils/leadValidation';
+import { isUsableAddress, isTaxForeclosureCase } from '../../../app/utils/leadValidation';
+import { resolveOwnerName } from '../../../app/utils/csvMapping';
 
 const s3 = new S3Client({ region: process.env.AWS_REGION });
 const dynamoClient = new DynamoDBClient({ region: process.env.AWS_REGION });
@@ -93,91 +94,9 @@ const parseCurrency = (val: any): number | null => {
   return Number.isFinite(n) ? n : null;
 };
 
-const formatName = (val: any): string => {
-  const s = sanitize(val, 50);
-  if (!s) return '';
-  return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
-};
-
-const parseOwnershipName = (ownership: string): { firstName: string; lastName: string } => {
-  if (!ownership) return { firstName: '', lastName: '' };
-  
-  // Remove common suffixes
-  const cleaned = ownership
-    .replace(/\b(ESTATE|TRUST|TRUSTEE|EXEC|EXECUTOR|ETAL|ET AL|C\/O|%)\b/gi, '')
-    .trim();
-  
-  if (!cleaned) return { firstName: '', lastName: '' };
-  
-  // Check if there are multiple people (contains &)
-  if (cleaned.includes('&')) {
-    const people = cleaned.split('&').map(p => p.trim());
-    const firstNames: string[] = [];
-    const lastNames: string[] = [];
-    
-    for (const person of people) {
-      if (person.includes(',')) {
-        // "LAST, FIRST" format
-        const parts = person.split(',').map(s => s.trim());
-        lastNames.push(formatName(parts[0]));
-        firstNames.push(formatName(parts.slice(1).join(' ')));
-      } else {
-        // "FIRST LAST" format
-        const words = person.split(/\s+/).filter(w => w.length > 0);
-        if (words.length === 1) {
-          lastNames.push(formatName(words[0]));
-        } else {
-          const suffixes = ['JR', 'SR', 'II', 'III', 'IV', 'V'];
-          const lastWord = words[words.length - 1].toUpperCase().replace(/\./g, '');
-          const lastNameIndex = suffixes.includes(lastWord) ? words.length - 2 : words.length - 1;
-          
-          firstNames.push(words.slice(0, lastNameIndex).map(w => formatName(w)).join(' '));
-          lastNames.push(formatName(words[lastNameIndex]));
-        }
-      }
-    }
-    
-    return {
-      firstName: firstNames.filter(f => f).join(' & '),
-      lastName: lastNames.filter(l => l).join(' & '),
-    };
-  }
-  
-  // Single person - check if format is "LAST, FIRST"
-  if (cleaned.includes(',')) {
-    const parts = cleaned.split(',').map(s => s.trim());
-    const lastPart = parts[0];
-    const firstPart = parts.slice(1).join(' ').trim();
-    
-    return {
-      firstName: formatName(firstPart || ''),
-      lastName: formatName(lastPart || ''),
-    };
-  }
-  
-  // Single person - "FIRST MIDDLE LAST" format
-  const words = cleaned.split(/\s+/).filter(w => w.length > 0);
-  
-  if (words.length === 0) return { firstName: '', lastName: '' };
-  if (words.length === 1) return { firstName: '', lastName: formatName(words[0]) };
-  
-  const lastWord = words[words.length - 1].toUpperCase().replace(/\./g, '');
-  const suffixes = ['JR', 'SR', 'II', 'III', 'IV', 'V', 'ESQ', 'MD', 'PHD', 'DDS'];
-  
-  let lastNameIndex = words.length - 1;
-  if (suffixes.includes(lastWord)) {
-    lastNameIndex = words.length - 2;
-  }
-  
-  if (lastNameIndex <= 0) {
-    return { firstName: '', lastName: formatName(words[0]) };
-  }
-  
-  const firstName = words.slice(0, lastNameIndex).map(w => formatName(w)).join(' ');
-  const lastName = formatName(words[lastNameIndex]);
-  
-  return { firstName, lastName };
-};
+// Owner/admin name parsing (formatName, parseOwnershipName) and combined-vs-split resolution now live
+// in app/utils/csvMapping.ts (resolveOwnerName) so the client mapping UI and this Lambda share one
+// implementation.
 
 const cleanCityForGeocoding = (city: string) => {
   if (!city) return '';
@@ -261,6 +180,9 @@ export const handler: S3Handler = async (event) => {
     const duplicateLeads: any[] = [];
     let ownerId = '';
     let jobId = '';
+    // User's column mapping (canonicalField -> source header) from the upload UI; undefined for legacy
+    // uploads, in which case the per-row `cell()` helper falls back to hardcoded header aliases.
+    let columnMapping: Record<string, string> | undefined;
 
     try {
       // 1. Extract Metadata from S3 Object
@@ -301,7 +223,12 @@ export const handler: S3Handler = async (event) => {
       }
 
       jobId = jobScan.Items[0].id as string;
-      console.log(`📝 Found job record: ${jobId}`);
+      const rawMapping = jobScan.Items[0].columnMapping;
+      columnMapping =
+        rawMapping && typeof rawMapping === 'object' && !Array.isArray(rawMapping)
+          ? (rawMapping as Record<string, string>)
+          : undefined;
+      console.log(`📝 Found job record: ${jobId}`, columnMapping ? `(column mapping: ${Object.keys(columnMapping).length} fields)` : '(no column mapping)');
 
       // Update job status to PROCESSING
       await docClient.send(new UpdateCommand({
@@ -453,13 +380,22 @@ export const handler: S3Handler = async (event) => {
       for await (const row of parser) {
         currentRow++;
         try {
+          // Resolve a canonical field's value from this row: prefer the user's column mapping, then
+          // fall back to the given legacy header aliases (so pre-mapping uploads still work).
+          const cell = (canonicalKey: string, ...legacyAliases: string[]): string => {
+            const mapped = columnMapping?.[canonicalKey];
+            if (mapped && row[mapped] != null && row[mapped] !== '') return String(row[mapped]);
+            for (const alias of legacyAliases) {
+              if (row[alias] != null && row[alias] !== '') return String(row[alias]);
+            }
+            return '';
+          };
+
           // --- RAW DATA EXTRACTION ---
-          const rawPropZip = formatZip(row['ownerZip'] || row['Zip']);
-          const rawPropAddr = sanitize(
-            row['ownerAddress'] || row['Property Address']
-          );
-          const rawPropCity = sanitize(row['ownerCity']);
-          const rawPropState = sanitize(row['ownerState']);
+          const rawPropZip = formatZip(cell('ownerZip', 'ownerZip', 'Zip'));
+          const rawPropAddr = sanitize(cell('ownerAddress', 'ownerAddress', 'Property Address'));
+          const rawPropCity = sanitize(cell('ownerCity', 'ownerCity'));
+          const rawPropState = sanitize(cell('ownerState', 'ownerState'));
 
           const cleanCity = cleanCityForGeocoding(rawPropCity);
           const fullPropString = `${rawPropAddr}, ${cleanCity}, ${rawPropState} ${rawPropZip}`;
@@ -508,17 +444,27 @@ export const handler: S3Handler = async (event) => {
             ? Number(propValidation.location.longitude)
             : null;
 
+          // --- Owner/borrower name (combined OR split column, entity-aware — one shared resolver) ---
+          const ownerName = resolveOwnerName({
+            full: cell('ownerFullName', 'borrowerName', 'Borrower Name', 'BORROWER OR DEFENDANT NAME', 'OWNERSHIP', 'ownership'),
+            first: cell('ownerFirstName', 'ownerFirstName', 'First Name'),
+            last: cell('ownerLastName', 'ownerLastName', 'Last Name'),
+          });
+          const ownerFirstName = ownerName.firstName;
+          const ownerLastName = ownerName.lastName;
+          const isEntityOwner = ownerName.isEntity;
+
+          const labels: string[] = [leadType];
+          if (isEntityOwner) labels.push('ENTITY');
+
           // --- PROBATE ADMIN LOGIC ---
           let finalMailAddr = null,
             finalMailCity = null,
             finalMailState = null,
             finalMailZip = null;
-          let adminFirstName = null,
-            adminLastName = null,
+          let adminFirstName: string | null = null,
+            adminLastName: string | null = null,
             adminStandardizedAddress = null;
-          let ownerFirstName = formatName(row['ownerFirstName'] || row['First Name']);
-          let ownerLastName = formatName(row['ownerLastName'] || row['Last Name']);
-          const labels: string[] = [leadType];
 
           // --- County foreclosure data (authoritative; captured from the source file) ---
           let countyFilingDate: string | null = null;
@@ -527,22 +473,20 @@ export const handler: S3Handler = async (event) => {
           let foreclosureTrusteeCsv: string | null = null;
           let foreclosureAmountCsv: number | null = null;
           let foreclosureStatusCsv: string | null = null;
-          let isEntityOwner = false;
           let isTaxForeclosure = false;
 
           if (leadType === 'PROBATE') {
-            // Parse ownership name if provided, otherwise use individual fields
-            if (row['OWNERSHIP'] || row['ownership']) {
-              const parsed = parseOwnershipName(row['OWNERSHIP'] || row['ownership']);
-              ownerFirstName = parsed.firstName;
-              ownerLastName = parsed.lastName;
-            }
-            adminFirstName = formatName(row['adminFirstName']);
-            adminLastName = formatName(row['adminLastName']);
-            const rawAdminZip = formatZip(row['adminZip']);
-            const rawAdminAddr = sanitize(
-              row['adminAddress'] || row['Mailing Address']
-            );
+            const adminName = resolveOwnerName({
+              full: cell('adminFullName', 'adminName'),
+              first: cell('adminFirstName', 'adminFirstName'),
+              last: cell('adminLastName', 'adminLastName'),
+            });
+            adminFirstName = adminName.firstName;
+            adminLastName = adminName.lastName;
+            const rawAdminZip = formatZip(cell('adminZip', 'adminZip'));
+            const rawAdminAddr = sanitize(cell('adminAddress', 'adminAddress', 'Mailing Address'));
+            const rawAdminCity = sanitize(cell('adminCity', 'adminCity'));
+            const rawAdminState = sanitize(cell('adminState', 'adminState'));
 
             if (rawAdminAddr) {
               await delay(GOOGLE_API_DELAY_MS); // respect Google Address Validation QPS limit
@@ -551,15 +495,15 @@ export const handler: S3Handler = async (event) => {
               let adminValidation: Awaited<ReturnType<typeof validateAddressWithGoogle>> | null = null;
               try {
                 adminValidation = await validateAddressWithGoogle(
-                  `${rawAdminAddr}, ${sanitize(row['adminCity'])} ${rawAdminZip}`
+                  `${rawAdminAddr}, ${rawAdminCity} ${rawAdminZip}`
                 );
               } catch (adminValidationError: any) {
                 console.warn(`⚠️ Admin address validation failed for "${rawAdminAddr}": ${adminValidationError?.message}`);
               }
               const aStd = adminValidation?.components;
               finalMailAddr = toTitleCase(aStd?.street || rawAdminAddr);
-              finalMailCity = toTitleCase(aStd?.city || sanitize(row['adminCity']));
-              finalMailState = aStd?.state || sanitize(row['adminState']);
+              finalMailCity = toTitleCase(aStd?.city || rawAdminCity);
+              finalMailState = aStd?.state || rawAdminState;
               // Strip +4 from admin zip
               finalMailZip = (aStd?.zip || rawAdminZip)?.split('-')[0];
               
@@ -579,27 +523,9 @@ export const handler: S3Handler = async (event) => {
           }
 
           if (leadType === 'PREFORECLOSURE') {
-            // Borrower/defendant may be a single "First Last" column, and county files mix in
-            // LLCs/trusts/funds. Detect entities (flag + label, don't split), else parse into first/last.
-            const rawBorrower = sanitize(
-              row['borrowerName'] || row['Borrower Name'] || row['BORROWER OR DEFENDANT NAME']
-            );
-            const combinedName = rawBorrower || `${ownerFirstName} ${ownerLastName}`.trim();
-
-            if (combinedName && isEntityName(combinedName)) {
-              isEntityOwner = true;
-              labels.push('ENTITY');
-              // Preserve the entity's legal name as-is (don't re-case "LLC"/split into first/last).
-              ownerFirstName = '';
-              ownerLastName = sanitize(combinedName, 100);
-            } else if (rawBorrower && !ownerFirstName && !ownerLastName) {
-              const parsed = parseOwnershipName(rawBorrower);
-              ownerFirstName = parsed.firstName;
-              ownerLastName = parsed.lastName;
-            }
-
             // Authoritative county foreclosure fields — the source of truth BatchData must not overwrite.
-            const rawCase = sanitize(row['caseNumber'] || row['Case Number'] || row['CASE NUMBER']);
+            // (Owner name + entity detection are handled globally above via resolveOwnerName.)
+            const rawCase = sanitize(cell('caseNumber', 'caseNumber', 'Case Number', 'CASE NUMBER'));
             if (rawCase) {
               foreclosureCaseNumberCsv = rawCase;
               if (isTaxForeclosureCase(rawCase)) {
@@ -608,14 +534,14 @@ export const handler: S3Handler = async (event) => {
               }
             }
             countyFilingDate = formatDateOnly(
-              row['recordingDate'] || row['Recording Date'] || row['RECORDING DATE']
+              cell('recordingDate', 'recordingDate', 'Recording Date', 'RECORDING DATE')
             );
             foreclosureLenderNameCsv =
-              sanitize(row['lender'] || row['Lender'] || row['LENDER OR PLAINTIFF NAME']) || null;
+              sanitize(cell('lender', 'lender', 'Lender', 'LENDER OR PLAINTIFF NAME')) || null;
             foreclosureTrusteeCsv =
-              sanitize(row['trustee'] || row['Trustee'] || row['TRUSTEE OR DEPUTY NAME']) || null;
+              sanitize(cell('trustee', 'trustee', 'Trustee', 'TRUSTEE OR DEPUTY NAME')) || null;
             foreclosureAmountCsv = parseCurrency(
-              row['loanAmount'] || row['Loan Amount'] || row['LOAN AMOUNT']
+              cell('loanAmount', 'loanAmount', 'Loan Amount', 'LOAN AMOUNT')
             );
             // A fresh county recording = an active filing. Give the classifier an ACTIVE status so a
             // later stale BatchData "rescission" can't be the only signal. (Enrichment guards against
@@ -623,7 +549,8 @@ export const handler: S3Handler = async (event) => {
             if (countyFilingDate) foreclosureStatusCsv = 'Pre-Foreclosure — County Recording';
           }
 
-          const preSkiptracedPhone = formatPhoneNumber(row['phone']);
+          const preSkiptracedPhone = formatPhoneNumber(cell('phone', 'phone'));
+          const csvEstimatedValue = parseCurrency(cell('estimatedValue', 'estimatedValue', 'Estimated Value'));
 
           // --- 💾 CHECK FOR DUPLICATES BEFORE SAVING ---
           // O(1) lookup against the pre-loaded Set — replaces a full table scan per row
@@ -765,10 +692,10 @@ export const handler: S3Handler = async (event) => {
             validationStatus: addressUsable ? 'VALID' : 'INVALID',
             
             // 🏠 Zestimate and Zillow data
-            estimatedValue: parseFloat(row['estimatedValue'] || row['Estimated Value']) || null,
-            zestimate: zillowData?.zestimate || parseFloat(row['estimatedValue'] || row['Estimated Value']) || null,
+            estimatedValue: csvEstimatedValue,
+            zestimate: zillowData?.zestimate ?? csvEstimatedValue,
             zestimateDate: zillowData ? new Date().toISOString() : null,
-            zestimateSource: zillowData ? 'ZILLOW' : (row['estimatedValue'] ? 'CSV' : null),
+            zestimateSource: zillowData ? 'ZILLOW' : (csvEstimatedValue != null ? 'CSV' : null),
             zillowZpid: zillowData?.zpid || null,
             zillowUrl: zillowData?.url || null,
             zillowAddress: zillowData?.address || null,

@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
+import { parse as parseCsvSync } from 'csv-parse/browser/esm/sync';
 import { uploadData } from 'aws-amplify/storage';
 import { getFrontEndUser } from '@/app/utils/aws/auth/amplifyFrontEndUser';
 import { client } from '@/app/utils/aws/data/frontEndClient';
@@ -11,6 +12,7 @@ import { UploadProgressModal } from './UploadProgressModal';
 import { fetchLeads } from '@/app/utils/aws/data/lead.client';
 import { AddressAutocomplete, ParsedAddress } from '@/app/components/address/AddressAutocomplete';
 import { sanitizeName, isValidName, formatPhoneE164, sanitizePhoneInput, NAME_MAX } from '@/app/utils/leadValidation';
+import { canonicalFields, autoDetectMapping, missingRequired, type LeadType } from '@/app/utils/csvMapping';
 
 interface CsvPreview {
   rowCount: number;
@@ -40,6 +42,9 @@ export function ManualLeadForm() {
   const [uploadJobId, setUploadJobId] = useState<string | null>(null);
   const [showProgressModal, setShowProgressModal] = useState(false);
   const [csvPreview, setCsvPreview] = useState<CsvPreview | null>(null);
+  // Column mapping (bulk CSV): the uploaded file's header row + the user's field→column choices.
+  const [sourceHeaders, setSourceHeaders] = useState<string[]>([]);
+  const [columnMapping, setColumnMapping] = useState<Record<string, string>>({});
   const [lead, setLead] = useState<any>({
     type: '',
     ownerFirstName: '',
@@ -101,6 +106,30 @@ export function ManualLeadForm() {
       setCsvPreview({ rowCount: 0, duplicateCount: 0, loading: false });
     }
   };
+
+  // Read just the header row of the chosen CSV (robust parse, same options the Lambda uses) so the
+  // user can map columns. Empty on parse failure — the mapping panel then shows nothing to map.
+  const readHeaders = async (selectedFile: File) => {
+    try {
+      const text = await selectedFile.text();
+      const rows = parseCsvSync(text, {
+        to: 1, columns: false, trim: true, bom: true, skip_empty_lines: true,
+      }) as string[][];
+      setSourceHeaders(rows[0] || []);
+    } catch {
+      setSourceHeaders([]);
+    }
+  };
+
+  // Re-run auto-detection whenever a new file's headers load or the lead type changes. User edits to
+  // the mapping persist (this only fires on file/type change, not on every mapping tweak).
+  useEffect(() => {
+    if (sourceHeaders.length && lead.type) {
+      setColumnMapping(autoDetectMapping(sourceHeaders, canonicalFields(lead.type.toUpperCase() as LeadType)));
+    } else {
+      setColumnMapping({});
+    }
+  }, [sourceHeaders, lead.type]);
 
   const downloadTemplate = () => {
     if (!lead.type) return alert('Please select a Lead Type first.');
@@ -187,6 +216,17 @@ export function ManualLeadForm() {
       return setMessage(`❌ File too large (${csvPreview.rowCount} rows). Maximum is ${MAX_ROWS} per upload. Split the file and upload in batches.`);
     }
 
+    // Require the essential columns to be mapped so we never import rows missing address/name.
+    const fields = canonicalFields(lead.type.toUpperCase() as LeadType);
+    const missing = missingRequired(columnMapping, fields);
+    if (missing.length > 0) {
+      const labelFor = (k: string) =>
+        k === 'ownerName' ? 'Owner name (full, or first + last)'
+        : k === 'adminName' ? 'Administrator name (full, or first + last)'
+        : (fields.find((f) => f.key === k)?.label || k);
+      return setMessage(`❌ Map these required columns before importing: ${missing.map(labelFor).join(', ')}`);
+    }
+
     setLoading(true);
     try {
       const user = await getFrontEndUser();
@@ -206,6 +246,8 @@ export function ManualLeadForm() {
         successCount: 0,
         duplicateCount: 0,
         errorCount: 0,
+        // The user's column mapping travels with the job; the Lambda reads it to resolve each field.
+        columnMapping: Object.keys(columnMapping).length ? columnMapping : undefined,
         startedAt: new Date().toISOString(),
       });
 
@@ -324,7 +366,11 @@ export function ManualLeadForm() {
                   const selected = e.target.files?.[0] || null;
                   setFile(selected);
                   setCsvPreview(null);
-                  if (selected) parseFilePreview(selected);
+                  setSourceHeaders([]);
+                  if (selected) {
+                    parseFilePreview(selected);
+                    readHeaders(selected);
+                  }
                 }}
                 className='w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100'
               />
@@ -358,6 +404,48 @@ export function ManualLeadForm() {
                 </div>
               )}
             </div>
+
+            {sourceHeaders.length > 0 && lead.type && (
+              <div className='bg-gray-50 p-4 rounded-md border border-gray-100'>
+                <label className='block text-xs font-bold text-gray-500 uppercase mb-2'>
+                  3. Map Columns
+                </label>
+                <p className='text-xs text-gray-500 mb-3'>
+                  We auto-matched your file&apos;s columns to our fields — adjust any that are wrong.
+                  Required fields are marked <span className='text-red-600'>*</span>.
+                </p>
+                <div className='space-y-2'>
+                  {canonicalFields(lead.type.toUpperCase() as LeadType).map((f) => (
+                    <div key={f.key} className='grid grid-cols-2 gap-2 items-center'>
+                      <label className='text-xs text-gray-700'>
+                        {f.label}
+                        {f.required && <span className='text-red-600'> *</span>}
+                      </label>
+                      <select
+                        value={columnMapping[f.key] || ''}
+                        onChange={(e) =>
+                          setColumnMapping((m) => {
+                            const next = { ...m };
+                            if (e.target.value) next[f.key] = e.target.value;
+                            else delete next[f.key];
+                            return next;
+                          })
+                        }
+                        className='border border-gray-300 rounded px-2 py-1 text-xs bg-white outline-none focus:ring-2 focus:ring-blue-100'
+                      >
+                        <option value=''>— skip —</option>
+                        {sourceHeaders.map((h) => (
+                          <option key={h} value={h}>{h}</option>
+                        ))}
+                      </select>
+                    </div>
+                  ))}
+                </div>
+                <p className='text-[11px] text-gray-400 mt-2'>
+                  Owner name: map a single full-name column, <em>or</em> both first and last name columns.
+                </p>
+              </div>
+            )}
 
             <button
               onClick={handleCsvSubmit}

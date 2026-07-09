@@ -18,6 +18,10 @@ const schema = a.schema({
       errorCount: a.integer().default(0),
       errorMessage: a.string(),
       duplicateLeads: a.json().array(), // Array of {csvData: {ownerName, address, city, state, zip}, existingLeadId: string, existingLeadData: {ownerName, address, zestimate}}
+      // User's column mapping from the upload UI: { [canonicalField]: sourceHeader }. Lets any CSV
+      // layout be imported — the Lambda resolves each canonical field through this (falling back to
+      // legacy header aliases when absent, so older uploads keep working). See app/utils/csvMapping.ts.
+      columnMapping: a.json(),
       startedAt: a.datetime(),
       completedAt: a.datetime(),
     })
