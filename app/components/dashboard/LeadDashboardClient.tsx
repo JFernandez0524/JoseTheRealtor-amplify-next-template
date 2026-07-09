@@ -15,7 +15,7 @@ import { useGhl } from '@/app/context/GhlContext';
 import { useToast } from '@/app/components/leadDetails/ToastProvider';
 import { LeadTable } from './LeadTable';
 import { DashboardFilters } from './DashboardFilters';
-import { classifyForeclosureStage } from '@/app/utils/foreclosure';
+import { classifyForeclosureStageWithRecency } from '@/app/utils/foreclosure';
 import { GhlConnection } from './GhlConnection';
 import { RouteExplanationModal } from './RouteExplanationModal';
 import { SyncConfirmModal } from './SyncConfirmModal';
@@ -75,6 +75,9 @@ export default function LeadDashboardClient({}: Props) {
   const [filterSource, setFilterSource] = useState('');
   // Data-quality filter: '' = all, 'INVALID' = unconfirmed address, 'NO_ZESTIMATE' = no Zillow value.
   const [filterDataQuality, setFilterDataQuality] = useState('');
+  // Owner type: 'INDIVIDUALS' (default, hides entities), 'INCLUDE_ENTITIES', or 'ENTITIES_ONLY'.
+  const [filterOwnerType, setFilterOwnerType] = useState('INDIVIDUALS');
+  const [filterTaxForeclosure, setFilterTaxForeclosure] = useState(false);
   const [skipTraceFromDate, setSkipTraceFromDate] = useState('');
   const [skipTraceToDate, setSkipTraceToDate] = useState('');
 
@@ -293,15 +296,27 @@ export default function LeadDashboardClient({}: Props) {
               : true);
 
         // ── Foreclosure qualification (motivated-lead targeting) ──
-        // Foreclosure stage: ACTIVE = active or auction; AUCTION = auction only; DEAD = rescinded/released.
+        // Recency-aware: a stale BatchData "DEAD" record that predates the fresh county filing is
+        // promoted to ACTIVE, so genuinely fresh leads stop being excluded from the Active funnel.
         const matchesForeclosureStage = (() => {
           if (!filterForeclosureStage) return true;
-          const stage = classifyForeclosureStage(lead.foreclosureStatus);
+          const stage = classifyForeclosureStageWithRecency(lead).stage;
           if (filterForeclosureStage === 'ACTIVE') return stage === 'ACTIVE' || stage === 'AUCTION';
           if (filterForeclosureStage === 'AUCTION') return stage === 'AUCTION';
           if (filterForeclosureStage === 'DEAD') return stage === 'DEAD';
           return true;
         })();
+
+        // Owner type: hide corporate/entity-owned properties by default (user targets individuals).
+        const matchesOwnerType =
+          filterOwnerType === 'INCLUDE_ENTITIES'
+            ? true
+            : filterOwnerType === 'ENTITIES_ONLY'
+              ? lead.isEntityOwner === true
+              : lead.isEntityOwner !== true; // default 'INDIVIDUALS'
+
+        // Tax foreclosure quick filter (higher-value, usually free-and-clear).
+        const matchesTaxForeclosure = !filterTaxForeclosure || lead.isTaxForeclosure === true;
 
         // Auction within N days: needs a foreclosureAuctionDate between today and today+N.
         const matchesAuctionWindow = (() => {
@@ -350,6 +365,8 @@ export default function LeadDashboardClient({}: Props) {
           matchesDateAdded &&
           matchesSource &&
           matchesDataQuality &&
+          matchesOwnerType &&
+          matchesTaxForeclosure &&
           matchesDateRange
         );
       })
@@ -412,6 +429,8 @@ export default function LeadDashboardClient({}: Props) {
     filterDateAddedTo,
     filterSource,
     filterDataQuality,
+    filterOwnerType,
+    filterTaxForeclosure,
     skipTraceFromDate,
     skipTraceToDate,
     sortField,
@@ -448,6 +467,8 @@ export default function LeadDashboardClient({}: Props) {
     filterMinEquity,
     filterSource,
     filterDataQuality,
+    filterOwnerType,
+    filterTaxForeclosure,
     skipTraceFromDate,
     skipTraceToDate,
     sortField,
@@ -1122,6 +1143,10 @@ export default function LeadDashboardClient({}: Props) {
         setFilterSource={setFilterSource}
         filterDataQuality={filterDataQuality}
         setFilterDataQuality={setFilterDataQuality}
+        filterOwnerType={filterOwnerType}
+        setFilterOwnerType={setFilterOwnerType}
+        filterTaxForeclosure={filterTaxForeclosure}
+        setFilterTaxForeclosure={setFilterTaxForeclosure}
         skipTraceFromDate={skipTraceFromDate}
         setSkipTraceFromDate={setSkipTraceFromDate}
         skipTraceToDate={skipTraceToDate}

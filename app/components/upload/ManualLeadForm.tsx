@@ -21,8 +21,12 @@ interface CsvPreview {
 // 🎯 CSV Template Headers matching your updated Probate file requirements
 const PROBATE_TEMPLATE =
   'OWNERSHIP,ownerAddress,ownerCity,ownerState,ownerZip,adminFirstName,adminLastName,adminAddress,adminCity,adminState,adminZip,phone';
+// Pre-foreclosure template mirrors the county-clerk file: a single borrowerName column (entities like
+// LLCs/trusts are auto-detected) plus the authoritative foreclosure fields (recording date, case
+// number, lender/plaintiff, trustee, loan amount). ownerFirstName/ownerLastName are still accepted by
+// the importer for older files.
 const PREFORECLOSURE_TEMPLATE =
-  'ownerFirstName,ownerLastName,ownerAddress,ownerCity,ownerState,ownerZip';
+  'borrowerName,ownerAddress,ownerCity,ownerState,ownerZip,recordingDate,caseNumber,lender,trustee,loanAmount';
 
 export function ManualLeadForm() {
   const { hasPaidPlan, isAdmin } = useAccess();

@@ -10,7 +10,7 @@
  */
 import { useState } from 'react';
 import type { Schema } from '@/amplify/data/resource';
-import { classifyForeclosureStage } from '@/app/utils/foreclosure';
+import { classifyForeclosureStageWithRecency } from '@/app/utils/foreclosure';
 
 type Lead = Schema['PropertyLead']['type'];
 
@@ -74,7 +74,14 @@ export function EnrichmentDetails({ lead }: { lead: Lead }) {
   const history: any[] = Array.isArray(raw.mortgageHistory) ? raw.mortgageHistory : [];
   const invLiens: any[] = Array.isArray(raw.involuntaryLien?.liens) ? raw.involuntaryLien.liens : [];
 
-  const stage = classifyForeclosureStage((lead as any).foreclosureStatus || fc.status);
+  // Recency-aware: fall back to the blob's status if the flat column is empty, then judge staleness
+  // against the county filing so a years-old BatchData "rescission" doesn't read as DEAD on a fresh lead.
+  const { stage, baseStage, stale } = classifyForeclosureStageWithRecency({
+    ...(lead as any),
+    foreclosureStatus: (lead as any).foreclosureStatus || fc.status,
+  });
+  const isEntity = (lead as any).isEntityOwner === true;
+  const isTax = (lead as any).isTaxForeclosure === true;
 
   return (
     <div>
@@ -92,11 +99,30 @@ export function EnrichmentDetails({ lead }: { lead: Lead }) {
 
       {/* Foreclosure */}
       <Section title='Foreclosure'>
-        <div className='mb-3'>
+        <div className='mb-3 flex flex-wrap items-center gap-2'>
           <span className={`px-2 py-1 text-xs font-bold rounded ${STAGE_STYLE[stage]}`}>{stage}</span>
+          {isTax && (
+            <span className='px-2 py-1 text-xs font-bold rounded bg-emerald-100 text-emerald-800'>
+              🏛️ TAX FORECLOSURE
+            </span>
+          )}
+          {isEntity && (
+            <span className='px-2 py-1 text-xs font-bold rounded bg-slate-200 text-slate-700'>
+              🏢 ENTITY OWNER
+            </span>
+          )}
         </div>
+        {stale && (
+          <div className='mb-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800'>
+            ⚠️ BatchData&apos;s foreclosure record ({date((lead as any).foreclosureRecordingDate || fc.recordingDate || fc.filingDate)})
+            predates the county filing ({date((lead as any).countyFilingDate)}) and reads as{' '}
+            <span className='font-bold'>{baseStage}</span>. It likely reflects a prior foreclosure —
+            treating this lead as <span className='font-bold'>ACTIVE</span> based on the fresh filing.
+          </div>
+        )}
         <div className='grid grid-cols-2 md:grid-cols-3 gap-4'>
           <Field label='Status' value={txt((lead as any).foreclosureStatus || fc.status)} />
+          <Field label='County Filing Date' value={date((lead as any).countyFilingDate)} />
           <Field label='Document Type' value={txt(fc.documentType)} />
           <Field label='Case Number' value={txt((lead as any).foreclosureCaseNumber || fc.caseNumber)} />
           <Field label='Recording Date' value={date((lead as any).foreclosureRecordingDate || fc.recordingDate)} />

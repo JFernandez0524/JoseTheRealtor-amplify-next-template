@@ -546,6 +546,22 @@ export function LeadTable({
                           ⚠️
                         </span>
                       )}
+                      {(lead as any).isTaxForeclosure && (
+                        <span
+                          className='text-[10px] bg-emerald-600 text-white px-1.5 py-0.5 rounded font-bold'
+                          title='Tax foreclosure — usually free-and-clear'
+                        >
+                          TAX
+                        </span>
+                      )}
+                      {(lead as any).isEntityOwner && (
+                        <span
+                          className='text-[10px] bg-slate-500 text-white px-1.5 py-0.5 rounded font-bold'
+                          title='Entity/corporate owner'
+                        >
+                          ENTITY
+                        </span>
+                      )}
                       <button
                         onClick={(e) => {
                           e.stopPropagation();

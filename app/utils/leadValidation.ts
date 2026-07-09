@@ -76,3 +76,54 @@ export function isUsableAddress(
 ): boolean {
   return !!v && v.success !== false && v.isPartialMatch !== true;
 }
+
+// Word-boundary patterns that mark a borrower/defendant name as a corporate/legal entity rather than
+// an individual homeowner. County foreclosure files mix in LLCs, trusts, funds, banks, and
+// redevelopment entities the user doesn't want to work; we flag them so they can be filtered out.
+const ENTITY_PATTERNS: RegExp[] = [
+  /\bl\.?l\.?c\.?\b/i,          // LLC / L.L.C.
+  /\bl\.?l\.?p\.?\b/i,          // LLP
+  /\bl\.?p\.?\b/i,              // LP
+  /\binc\.?\b/i,                // Inc
+  /\bcorp(oration)?\b/i,        // Corp / Corporation
+  /\bco\.?\b/i,                 // Co.
+  /\bcompany\b/i,
+  /\btrust\b/i,
+  /\btrustee\b/i,
+  /\bfund\b/i,
+  /\bbank\b/i,
+  /\bn\.?a\.?\b/i,              // N.A. (national association)
+  /\bassociation\b/i,
+  /\bassociates\b/i,
+  /\bpartners(hip)?\b/i,
+  /\bproperties\b/i,
+  /\bholdings?\b/i,
+  /\bventures?\b/i,
+  /\bgroup\b/i,
+  /\brealty\b/i,
+  /\bcapital\b/i,
+  /\binvestments?\b/i,
+  /\bservicing\b/i,
+  /\bmortgage\b/i,
+  /\burban renewal\b/i,
+];
+
+/**
+ * True when a borrower/defendant name looks like a corporate or legal entity (LLC, trust, fund, bank,
+ * etc.) rather than an individual. Used by the pre-foreclosure importer to tag `isEntityOwner` so the
+ * dashboard can hide entity-owned properties by default.
+ */
+export function isEntityName(name: string | null | undefined): boolean {
+  if (!name || typeof name !== 'string') return false;
+  return ENTITY_PATTERNS.some((re) => re.test(name));
+}
+
+/**
+ * True when a foreclosure case/docket number is flagged as a tax foreclosure (e.g. "F-07510-26
+ * Tax_Fore"). Tax foreclosures usually mean little/no mortgage — free-and-clear, high-equity leads —
+ * so the importer labels them and the dashboard can prioritize/filter them.
+ */
+export function isTaxForeclosureCase(caseNumber: string | null | undefined): boolean {
+  if (!caseNumber || typeof caseNumber !== 'string') return false;
+  return /tax[_\s-]?fore/i.test(caseNumber);
+}

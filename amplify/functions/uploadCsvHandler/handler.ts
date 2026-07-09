@@ -12,7 +12,7 @@ import { Readable } from 'stream';
 import { randomUUID } from 'crypto';
 import { validateAddressWithGoogle, toTitleCase } from '../../../app/utils/google.server';
 import { fetchBestZestimate } from '../../../app/utils/bridge.server';
-import { isUsableAddress } from '../../../app/utils/leadValidation';
+import { isUsableAddress, isEntityName, isTaxForeclosureCase } from '../../../app/utils/leadValidation';
 
 const s3 = new S3Client({ region: process.env.AWS_REGION });
 const dynamoClient = new DynamoDBClient({ region: process.env.AWS_REGION });
@@ -73,6 +73,24 @@ const formatZip = (val: any): string => {
   const s = sanitize(String(val), 10).replace(/\D/g, '');
   if (s.length > 0 && s.length < 5) return s.padStart(5, '0');
   return s;
+};
+
+// Parse a CSV date cell (e.g. "7/2/2026" or an ISO string) to an AWSDate (`YYYY-MM-DD`), or null.
+// County files use M/D/YYYY; `a.date()` schema fields reject anything but YYYY-MM-DD.
+const formatDateOnly = (val: any): string | null => {
+  const s = sanitize(String(val ?? ''), 40);
+  if (!s) return null;
+  const iso = /^\d{4}-\d{2}-\d{2}/.exec(s);
+  if (iso) return iso[0];
+  const d = new Date(s);
+  return isNaN(d.getTime()) ? null : d.toISOString().slice(0, 10);
+};
+
+// Parse a currency/number cell ("$40,000.00") to a number, or null.
+const parseCurrency = (val: any): number | null => {
+  if (val == null) return null;
+  const n = parseFloat(String(val).replace(/[$,\s]/g, ''));
+  return Number.isFinite(n) ? n : null;
 };
 
 const formatName = (val: any): string => {
@@ -502,6 +520,16 @@ export const handler: S3Handler = async (event) => {
           let ownerLastName = formatName(row['ownerLastName'] || row['Last Name']);
           const labels: string[] = [leadType];
 
+          // --- County foreclosure data (authoritative; captured from the source file) ---
+          let countyFilingDate: string | null = null;
+          let foreclosureCaseNumberCsv: string | null = null;
+          let foreclosureLenderNameCsv: string | null = null;
+          let foreclosureTrusteeCsv: string | null = null;
+          let foreclosureAmountCsv: number | null = null;
+          let foreclosureStatusCsv: string | null = null;
+          let isEntityOwner = false;
+          let isTaxForeclosure = false;
+
           if (leadType === 'PROBATE') {
             // Parse ownership name if provided, otherwise use individual fields
             if (row['OWNERSHIP'] || row['ownership']) {
@@ -548,6 +576,51 @@ export const handler: S3Handler = async (event) => {
               
               labels.push('ABSENTEE');
             }
+          }
+
+          if (leadType === 'PREFORECLOSURE') {
+            // Borrower/defendant may be a single "First Last" column, and county files mix in
+            // LLCs/trusts/funds. Detect entities (flag + label, don't split), else parse into first/last.
+            const rawBorrower = sanitize(
+              row['borrowerName'] || row['Borrower Name'] || row['BORROWER OR DEFENDANT NAME']
+            );
+            const combinedName = rawBorrower || `${ownerFirstName} ${ownerLastName}`.trim();
+
+            if (combinedName && isEntityName(combinedName)) {
+              isEntityOwner = true;
+              labels.push('ENTITY');
+              // Preserve the entity's legal name as-is (don't re-case "LLC"/split into first/last).
+              ownerFirstName = '';
+              ownerLastName = sanitize(combinedName, 100);
+            } else if (rawBorrower && !ownerFirstName && !ownerLastName) {
+              const parsed = parseOwnershipName(rawBorrower);
+              ownerFirstName = parsed.firstName;
+              ownerLastName = parsed.lastName;
+            }
+
+            // Authoritative county foreclosure fields — the source of truth BatchData must not overwrite.
+            const rawCase = sanitize(row['caseNumber'] || row['Case Number'] || row['CASE NUMBER']);
+            if (rawCase) {
+              foreclosureCaseNumberCsv = rawCase;
+              if (isTaxForeclosureCase(rawCase)) {
+                isTaxForeclosure = true;
+                labels.push('TAX_FORECLOSURE');
+              }
+            }
+            countyFilingDate = formatDateOnly(
+              row['recordingDate'] || row['Recording Date'] || row['RECORDING DATE']
+            );
+            foreclosureLenderNameCsv =
+              sanitize(row['lender'] || row['Lender'] || row['LENDER OR PLAINTIFF NAME']) || null;
+            foreclosureTrusteeCsv =
+              sanitize(row['trustee'] || row['Trustee'] || row['TRUSTEE OR DEPUTY NAME']) || null;
+            foreclosureAmountCsv = parseCurrency(
+              row['loanAmount'] || row['Loan Amount'] || row['LOAN AMOUNT']
+            );
+            // A fresh county recording = an active filing. Give the classifier an ACTIVE status so a
+            // later stale BatchData "rescission" can't be the only signal. (Enrichment guards against
+            // overwriting this with an older record — see enrichment.ts mapPropertyToLead.)
+            if (countyFilingDate) foreclosureStatusCsv = 'Pre-Foreclosure — County Recording';
           }
 
           const preSkiptracedPhone = formatPhoneNumber(row['phone']);
@@ -661,7 +734,19 @@ export const handler: S3Handler = async (event) => {
             latitude,
             longitude,
             isAbsenteeOwner: labels.includes('ABSENTEE'),
+            isEntityOwner,
+            isTaxForeclosure,
             leadLabels: labels,
+
+            // --- 🟢 County foreclosure data (authoritative source-of-truth) ---
+            countyFilingDate,
+            foreclosureRecordingDate: countyFilingDate, // seed the recording date from the county filing
+            foreclosureStatus: foreclosureStatusCsv,
+            foreclosureCaseNumber: foreclosureCaseNumberCsv,
+            foreclosureLenderName: foreclosureLenderNameCsv,
+            foreclosureTrustee: foreclosureTrusteeCsv,
+            foreclosureAmount: foreclosureAmountCsv,
+
             phones: preSkiptracedPhone ? [preSkiptracedPhone] : [],
             skipTraceStatus: preSkiptracedPhone ? 'COMPLETED' : 'PENDING',
             skipTraceCompletedAt: preSkiptracedPhone ? new Date().toISOString() : null,

@@ -307,6 +307,13 @@ const schema = a.schema({
       foreclosureTrustee: a.string(),
       foreclosureTrusteePhone: a.string(),
 
+      // Authoritative county-clerk recording date from the source file. This is the "fresh filing"
+      // anchor: it is NEVER overwritten by BatchData enrichment, so we can detect when a BatchData
+      // foreclosure record predates the filing (stale) and must not mark a fresh lead DEAD.
+      countyFilingDate: a.date(),
+      isEntityOwner: a.boolean(), // Borrower is an LLC/trust/fund/corp (not an individual homeowner)
+      isTaxForeclosure: a.boolean(), // Case number marked "Tax_Fore" — usually free-and-clear, higher value
+
       // Raw + full-detail JSON captures (nothing lost; queryable without re-parsing)
       foreclosureData: a.json(), // full foreclosure object from BatchData
       openLienData: a.json(), // full openLien object (mortgages[], balances, flags)

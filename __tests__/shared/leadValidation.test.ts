@@ -5,6 +5,8 @@ import {
   formatPhoneE164,
   sanitizePhoneInput,
   NAME_MAX,
+  isEntityName,
+  isTaxForeclosureCase,
 } from '@/app/utils/leadValidation';
 
 // All functions are pure — no AWS / network setup required.
@@ -82,5 +84,44 @@ describe('sanitizePhoneInput', () => {
 
   it('drops a + that is not leading', () => {
     expect(sanitizePhoneInput('201+555')).toBe('201555');
+  });
+});
+
+describe('isEntityName', () => {
+  it('flags corporate/legal entities from the county file', () => {
+    expect(isEntityName('Showboat Properties LLC')).toBe(true);
+    expect(isEntityName('TLOA of NJ LLC')).toBe(true);
+    expect(isEntityName('Delaware Valley Opportunity Fund 231')).toBe(true);
+    expect(isEntityName('Emerson Redevelopers Urban Renewal')).toBe(true);
+    expect(isEntityName('RRA CP Opportunity Trust 2')).toBe(true);
+    expect(isEntityName('US Bank Trust National Association')).toBe(true);
+    expect(isEntityName('Fagan and Fagan LLC')).toBe(true);
+  });
+
+  it('does not flag individual homeowners', () => {
+    expect(isEntityName('Kelly Mooney')).toBe(false);
+    expect(isEntityName('Anne Marie Grady')).toBe(false);
+    expect(isEntityName('Devyaniben Patel')).toBe(false);
+  });
+
+  it('handles empty / null / undefined', () => {
+    expect(isEntityName('')).toBe(false);
+    expect(isEntityName(null)).toBe(false);
+    expect(isEntityName(undefined)).toBe(false);
+  });
+});
+
+describe('isTaxForeclosureCase', () => {
+  it('detects the Tax_Fore marker on case numbers', () => {
+    expect(isTaxForeclosureCase('F-07510-26 Tax_Fore')).toBe(true);
+    expect(isTaxForeclosureCase('F-07246-26 Tax_Fore')).toBe(true);
+    expect(isTaxForeclosureCase('F-07441-26  Tax_Fore')).toBe(true);
+    expect(isTaxForeclosureCase('tax foreclosure')).toBe(true);
+  });
+
+  it('returns false for ordinary mortgage foreclosure cases', () => {
+    expect(isTaxForeclosureCase('F-07450-26')).toBe(false);
+    expect(isTaxForeclosureCase('')).toBe(false);
+    expect(isTaxForeclosureCase(null)).toBe(false);
   });
 });

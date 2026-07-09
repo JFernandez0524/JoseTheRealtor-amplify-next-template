@@ -46,6 +46,10 @@ type Props = {
   setFilterSource: (val: string) => void;
   filterDataQuality: string;
   setFilterDataQuality: (val: string) => void;
+  filterOwnerType: string;
+  setFilterOwnerType: (val: string) => void;
+  filterTaxForeclosure: boolean;
+  setFilterTaxForeclosure: (val: boolean) => void;
   skipTraceFromDate: string;
   setSkipTraceFromDate: (val: string) => void;
   skipTraceToDate: string;
@@ -105,6 +109,10 @@ export function DashboardFilters({
   setFilterSource,
   filterDataQuality,
   setFilterDataQuality,
+  filterOwnerType,
+  setFilterOwnerType,
+  filterTaxForeclosure,
+  setFilterTaxForeclosure,
   skipTraceFromDate,
   setSkipTraceFromDate,
   skipTraceToDate,
@@ -331,7 +339,29 @@ export function DashboardFilters({
             <option value='NO_ZESTIMATE'>🏠 No Zestimate</option>
           </select>
 
-          {/* 10. SKIP TRACE DATE FILTERS */}
+          {/* 10. OWNER TYPE — hide corporate/entity-owned properties by default */}
+          <select
+            value={filterOwnerType}
+            onChange={(e) => setFilterOwnerType(e.target.value)}
+            className='border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none w-full'
+          >
+            <option value='INDIVIDUALS'>👤 Individuals only</option>
+            <option value='INCLUDE_ENTITIES'>Include entities (LLC/trust)</option>
+            <option value='ENTITIES_ONLY'>🏢 Entities only</option>
+          </select>
+
+          {/* 11. TAX FORECLOSURE — higher-value, usually free-and-clear */}
+          <label className='flex items-center gap-2 text-sm text-gray-700 px-1'>
+            <input
+              type='checkbox'
+              checked={filterTaxForeclosure}
+              onChange={(e) => setFilterTaxForeclosure(e.target.checked)}
+              className='rounded border-gray-300'
+            />
+            🏛️ Tax foreclosures only
+          </label>
+
+          {/* 12. SKIP TRACE DATE FILTERS */}
           <div className='flex flex-col gap-1'>
             <label className='text-xs text-gray-600'>Skip Traced:</label>
             <select
@@ -366,7 +396,7 @@ export function DashboardFilters({
         </div>
 
         {/* Clear All Button */}
-        {(filterType || filterStatus || filterGhlStatus || filterHasPhone || filterListingStatus || filterForeclosureStage || filterAuctionWindow || filterMinEquity || filterDataQuality || skipTraceFromDate || skipTraceToDate) && (
+        {(filterType || filterStatus || filterGhlStatus || filterHasPhone || filterListingStatus || filterForeclosureStage || filterAuctionWindow || filterMinEquity || filterDataQuality || filterTaxForeclosure || filterOwnerType !== 'INDIVIDUALS' || skipTraceFromDate || skipTraceToDate) && (
           <button
             onClick={() => {
               setFilterType('');
@@ -378,6 +408,8 @@ export function DashboardFilters({
               setFilterAuctionWindow('');
               setFilterMinEquity('');
               setFilterDataQuality('');
+              setFilterOwnerType('INDIVIDUALS');
+              setFilterTaxForeclosure(false);
               setSkipTraceFromDate('');
               setSkipTraceToDate('');
             }}

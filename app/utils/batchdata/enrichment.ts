@@ -331,6 +331,24 @@ function mapPropertyToLead(property: EnrichProperty, lead: DBLead): Partial<DBLe
   const owner = property.owner || {};
   const building = property.building || {};
 
+  // County filing is authoritative. If BatchData's newest foreclosure event predates the county
+  // recording date, BatchData is describing a PRIOR (often rescinded) foreclosure and hasn't ingested
+  // the fresh filing yet — do NOT let it overwrite the county foreclosure fields (we still keep its
+  // raw object in foreclosureData for reference). countyFilingDate itself is never written here.
+  const countyMs = lead.countyFilingDate ? new Date(lead.countyFilingDate).getTime() : NaN;
+  const bdEventMs = [fc.recordingDate, fc.filingDate, fc.defaultDate, fc.auctionDate]
+    .map((d) => (d ? new Date(d).getTime() : NaN))
+    .filter((t) => !Number.isNaN(t))
+    .reduce((max, t) => (t > max ? t : max), -Infinity);
+  const batchForeclosureStale =
+    !Number.isNaN(countyMs) && bdEventMs !== -Infinity && bdEventMs < countyMs;
+  if (batchForeclosureStale) {
+    console.warn(
+      `[ENRICH] BatchData foreclosure record for lead ${lead.id} predates the county filing ` +
+        `(${new Date(bdEventMs).toISOString().slice(0, 10)} < ${lead.countyFilingDate}) — keeping county data.`,
+    );
+  }
+
   const enrichment: Partial<DBLead> = {
     // Valuation / equity
     estimatedValue: v.estimatedValue ?? lead.estimatedValue,
@@ -352,17 +370,18 @@ function mapPropertyToLead(property: EnrichProperty, lead: DBLead): Partial<DBLe
 
     // Foreclosure (the priority object). The *Date fields are schema type a.date() (AWSDate = YYYY-MM-DD),
     // but BatchData sends full ISO datetimes — toDateOnly strips the time so the write doesn't get rejected.
-    foreclosureStatus: fc.status ?? lead.foreclosureStatus,
-    foreclosureRecordingDate: toDateOnly(fc.recordingDate) ?? lead.foreclosureRecordingDate,
-    foreclosureAuctionDate: toDateOnly(fc.auctionDate) ?? lead.foreclosureAuctionDate,
-    foreclosureUnpaidBalance: fc.unpaidBalance ?? lead.foreclosureUnpaidBalance,
-    foreclosureAmount: fc.unpaidBalance ?? fc.pastDueAmount ?? lead.foreclosureAmount,
-    foreclosureCaseNumber: fc.caseNumber ?? lead.foreclosureCaseNumber,
-    foreclosureLenderName: fc.currentLenderName ?? lead.foreclosureLenderName,
-    foreclosureDefaultDate: toDateOnly(fc.defaultDate) ?? lead.foreclosureDefaultDate,
-    foreclosureTrustee: fc.trusteeName ?? lead.foreclosureTrustee,
-    foreclosureTrusteePhone: fc.trusteePhone ?? lead.foreclosureTrusteePhone,
-    foreclosureData: asJson(property.foreclosure),
+    // When BatchData is stale relative to the county filing, keep the authoritative county values.
+    foreclosureStatus: batchForeclosureStale ? lead.foreclosureStatus : (fc.status ?? lead.foreclosureStatus),
+    foreclosureRecordingDate: batchForeclosureStale ? lead.foreclosureRecordingDate : (toDateOnly(fc.recordingDate) ?? lead.foreclosureRecordingDate),
+    foreclosureAuctionDate: batchForeclosureStale ? lead.foreclosureAuctionDate : (toDateOnly(fc.auctionDate) ?? lead.foreclosureAuctionDate),
+    foreclosureUnpaidBalance: batchForeclosureStale ? lead.foreclosureUnpaidBalance : (fc.unpaidBalance ?? lead.foreclosureUnpaidBalance),
+    foreclosureAmount: batchForeclosureStale ? lead.foreclosureAmount : (fc.unpaidBalance ?? fc.pastDueAmount ?? lead.foreclosureAmount),
+    foreclosureCaseNumber: batchForeclosureStale ? lead.foreclosureCaseNumber : (fc.caseNumber ?? lead.foreclosureCaseNumber),
+    foreclosureLenderName: batchForeclosureStale ? lead.foreclosureLenderName : (fc.currentLenderName ?? lead.foreclosureLenderName),
+    foreclosureDefaultDate: batchForeclosureStale ? lead.foreclosureDefaultDate : (toDateOnly(fc.defaultDate) ?? lead.foreclosureDefaultDate),
+    foreclosureTrustee: batchForeclosureStale ? lead.foreclosureTrustee : (fc.trusteeName ?? lead.foreclosureTrustee),
+    foreclosureTrusteePhone: batchForeclosureStale ? lead.foreclosureTrusteePhone : (fc.trusteePhone ?? lead.foreclosureTrusteePhone),
+    foreclosureData: asJson(property.foreclosure), // always keep BatchData's raw object for reference
 
     // Raw capture (nothing lost)
     rawEnrichmentData: asJson(property),
