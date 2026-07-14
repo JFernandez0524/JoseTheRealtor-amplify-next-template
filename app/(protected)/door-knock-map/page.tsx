@@ -284,7 +284,10 @@ export default function DoorKnockMapPage() {
         alert('Location access denied. Please enable location permissions in your browser and try again.');
       } else {
         console.error('Route optimization failed:', error);
-        alert('Failed to optimize route. Please try again.');
+        // Surface the Google DirectionsStatus (e.g. REQUEST_DENIED, ZERO_RESULTS)
+        // so failures are diagnosable from a phone without devtools.
+        const status = error?.code || error?.message;
+        alert(`Failed to optimize route${status ? ` (${status})` : ''}. Please try again.`);
       }
     } finally {
       setOptimizing(false);
