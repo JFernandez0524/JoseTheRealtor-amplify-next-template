@@ -5,6 +5,7 @@ import {
   missingRequired,
   resolveOwnerName,
   parseOwnershipName,
+  parseColumnMapping,
 } from '../../app/utils/csvMapping';
 
 // Real header rows from county files, to prove auto-detect maps arbitrary layouts.
@@ -136,5 +137,32 @@ describe('resolveOwnerName', () => {
 describe('parseOwnershipName (LAST, FIRST)', () => {
   it('handles comma order', () => {
     expect(parseOwnershipName('MOONEY, KELLY')).toEqual({ firstName: 'Kelly', lastName: 'Mooney' });
+  });
+});
+
+describe('parseColumnMapping', () => {
+  const mapping = { ownerFullName: 'BORROWER OR DEFENDANT NAME', ownerAddress: 'SITUS ADDRESS' };
+
+  it('passes an object through unchanged', () => {
+    expect(parseColumnMapping(mapping)).toEqual(mapping);
+  });
+
+  it('parses the JSON-string form the upload form writes via asJson', () => {
+    expect(parseColumnMapping(JSON.stringify(mapping))).toEqual(mapping);
+  });
+
+  it('returns undefined for an invalid JSON string', () => {
+    expect(parseColumnMapping('not json')).toBeUndefined();
+  });
+
+  it('returns undefined for null/undefined', () => {
+    expect(parseColumnMapping(null)).toBeUndefined();
+    expect(parseColumnMapping(undefined)).toBeUndefined();
+  });
+
+  it('returns undefined for arrays and other non-objects', () => {
+    expect(parseColumnMapping(['a'])).toBeUndefined();
+    expect(parseColumnMapping('["a"]')).toBeUndefined();
+    expect(parseColumnMapping(42)).toBeUndefined();
   });
 });

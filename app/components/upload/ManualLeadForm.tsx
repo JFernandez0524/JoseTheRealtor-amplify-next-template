@@ -13,6 +13,7 @@ import { fetchLeads } from '@/app/utils/aws/data/lead.client';
 import { AddressAutocomplete, ParsedAddress } from '@/app/components/address/AddressAutocomplete';
 import { sanitizeName, isValidName, formatPhoneE164, sanitizePhoneInput, NAME_MAX } from '@/app/utils/leadValidation';
 import { canonicalFields, autoDetectMapping, missingRequired, type LeadType } from '@/app/utils/csvMapping';
+import { asJson } from '@/app/utils/batchdata/enrichment';
 
 interface CsvPreview {
   rowCount: number;
@@ -247,12 +248,14 @@ export function ManualLeadForm() {
         duplicateCount: 0,
         errorCount: 0,
         // The user's column mapping travels with the job; the Lambda reads it to resolve each field.
-        columnMapping: Object.keys(columnMapping).length ? columnMapping : undefined,
+        // AWSJSON fields reject raw objects, so serialize with asJson (the Lambda parses either form).
+        columnMapping: Object.keys(columnMapping).length ? asJson(columnMapping) : undefined,
         startedAt: new Date().toISOString(),
       });
 
       if (errors || !newJob) {
-        throw new Error('Failed to create upload job');
+        console.error('❌ CsvUploadJob.create errors:', JSON.stringify(errors, null, 2));
+        throw new Error(errors?.[0]?.message || 'Failed to create upload job');
       }
 
       // Wait for DynamoDB consistency (1000ms)

@@ -113,6 +113,27 @@ export function missingRequired(mapping: Record<string, string>, fields: Canonic
   return missing;
 }
 
+/**
+ * Normalize a CsvUploadJob.columnMapping value read back from DynamoDB into a mapping, or undefined.
+ * The upload form writes the mapping through an AWSJSON field as a JSON string (see asJson in
+ * app/utils/batchdata/enrichment.ts), but depending on how AppSync persisted it the raw item value
+ * may be either that string or an already-parsed object — accept both. Called by uploadCsvHandler.
+ */
+export function parseColumnMapping(raw: unknown): Record<string, string> | undefined {
+  let value = raw;
+  if (typeof value === 'string') {
+    try {
+      value = JSON.parse(value);
+    } catch {
+      return undefined;
+    }
+  }
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    return value as Record<string, string>;
+  }
+  return undefined;
+}
+
 // ---- Name parsing (moved here so client + Lambda share one implementation) ----
 
 /** Capitalize a single name token: first letter upper, rest lower; strips tags/control chars, caps 50. */

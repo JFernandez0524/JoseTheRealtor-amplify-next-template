@@ -13,7 +13,7 @@ import { randomUUID } from 'crypto';
 import { validateAddressWithGoogle, toTitleCase } from '../../../app/utils/google.server';
 import { fetchBestZestimate } from '../../../app/utils/bridge.server';
 import { isUsableAddress, isTaxForeclosureCase } from '../../../app/utils/leadValidation';
-import { resolveOwnerName } from '../../../app/utils/csvMapping';
+import { resolveOwnerName, parseColumnMapping } from '../../../app/utils/csvMapping';
 
 const s3 = new S3Client({ region: process.env.AWS_REGION });
 const dynamoClient = new DynamoDBClient({ region: process.env.AWS_REGION });
@@ -223,11 +223,7 @@ export const handler: S3Handler = async (event) => {
       }
 
       jobId = jobScan.Items[0].id as string;
-      const rawMapping = jobScan.Items[0].columnMapping;
-      columnMapping =
-        rawMapping && typeof rawMapping === 'object' && !Array.isArray(rawMapping)
-          ? (rawMapping as Record<string, string>)
-          : undefined;
+      columnMapping = parseColumnMapping(jobScan.Items[0].columnMapping);
       console.log(`📝 Found job record: ${jobId}`, columnMapping ? `(column mapping: ${Object.keys(columnMapping).length} fields)` : '(no column mapping)');
 
       // Update job status to PROCESSING
