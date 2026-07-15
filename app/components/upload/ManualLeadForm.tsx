@@ -43,6 +43,8 @@ export function ManualLeadForm() {
   const [uploadJobId, setUploadJobId] = useState<string | null>(null);
   const [showProgressModal, setShowProgressModal] = useState(false);
   const [csvPreview, setCsvPreview] = useState<CsvPreview | null>(null);
+  // Whether a file is being dragged over the dropzone (drives the highlight style).
+  const [isDragging, setIsDragging] = useState(false);
   // Column mapping (bulk CSV): the uploaded file's header row + the user's field→column choices.
   const [sourceHeaders, setSourceHeaders] = useState<string[]>([]);
   const [columnMapping, setColumnMapping] = useState<Record<string, string>>({});
@@ -61,6 +63,23 @@ export function ManualLeadForm() {
 
   const ownerAddressRef = useRef<ParsedAddress | null>(null);
   const adminAddressRef = useRef<ParsedAddress | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  /** Accept a CSV chosen via the file input or dropped on the dropzone: set state + kick off preview/header parsing. */
+  const handleFileSelected = (selected: File | null) => {
+    if (selected && !/\.csv$/i.test(selected.name)) {
+      setMessage('❌ Only .csv files are supported.');
+      return;
+    }
+    setMessage('');
+    setFile(selected);
+    setCsvPreview(null);
+    setSourceHeaders([]);
+    if (selected) {
+      parseFilePreview(selected);
+      readHeaders(selected);
+    }
+  };
 
   const parseFilePreview = async (selectedFile: File) => {
     setCsvPreview({ rowCount: 0, duplicateCount: 0, loading: true });
@@ -358,25 +377,36 @@ export function ManualLeadForm() {
               )}
             </div>
 
-            <div className='p-4 border border-dashed border-gray-300 rounded-md text-center'>
+            <div
+              onDragOver={(e) => {
+                e.preventDefault();
+                setIsDragging(true);
+              }}
+              onDragLeave={() => setIsDragging(false)}
+              onDrop={(e) => {
+                e.preventDefault();
+                setIsDragging(false);
+                // Clear the native input so its label can't show a previously-picked file.
+                if (fileInputRef.current) fileInputRef.current.value = '';
+                handleFileSelected(e.dataTransfer.files?.[0] || null);
+              }}
+              className={`p-4 border border-dashed rounded-md text-center transition-colors ${
+                isDragging ? 'border-blue-400 bg-blue-50' : 'border-gray-300'
+              }`}
+            >
               <label className='block text-xs font-bold text-gray-500 uppercase mb-2 text-left'>
                 2. Upload File
               </label>
               <input
+                ref={fileInputRef}
                 type='file'
                 accept='.csv'
-                onChange={(e) => {
-                  const selected = e.target.files?.[0] || null;
-                  setFile(selected);
-                  setCsvPreview(null);
-                  setSourceHeaders([]);
-                  if (selected) {
-                    parseFilePreview(selected);
-                    readHeaders(selected);
-                  }
-                }}
+                onChange={(e) => handleFileSelected(e.target.files?.[0] || null)}
                 className='w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100'
               />
+              <p className='mt-2 text-xs text-gray-400'>
+                {file ? <>Selected: <strong className='text-gray-600'>{file.name}</strong></> : 'or drag & drop a .csv file here'}
+              </p>
 
               {csvPreview && (
                 <div className='mt-3 text-left space-y-2'>
