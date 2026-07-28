@@ -77,7 +77,14 @@ export async function syncToGoHighLevel(
       mailing_state: mailingState,
       mailing_zipcode: mailingZip,
       lead_type: lead.type === 'PROBATE' ? 'Probate' : lead.type === 'PREFORECLOSURE' ? 'Preforeclosure' : lead.type,
-      contact_type: specificPhone ? 'Phone Contact' : 'Direct Mail',
+      // A landline makes this a phone contact too. Keying only off `specificPhone` (the mobile being
+      // synced) left landline-only leads typed 'Direct Mail', so any dialer filtering on
+      // 'Phone Contact' never saw them and the number sat unused.
+      // Isolated change: the Thanks_IO_Eligible / direct-mail-only / Digital-Only tags below are
+      // computed from specificPhone and the value range, never from contact_type, so direct-mail
+      // routing driven by those tags is unaffected.
+      contact_type:
+        specificPhone || (lead.landlinePhones?.length ?? 0) > 0 ? 'Phone Contact' : 'Direct Mail',
       skiptracestatus: lead.skipTraceStatus?.toUpperCase() || 'PENDING',
       listing_status: lead.listingStatus || 'off market',
       lead_source_id: lead.id, // 🎯 Shared Lead ID for suppression workflows
