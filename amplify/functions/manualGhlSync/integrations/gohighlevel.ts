@@ -1,6 +1,7 @@
 import { type AxiosInstance } from 'axios';
 import { createGhlClient } from '../../shared/ghlClient';
 import { AI_OUTREACH_TAG, shouldQueueForOutreach } from '../../shared/outreachGate';
+import { isDirectMailOnlyLead, resolveDialablePhone } from '../../shared/contactChannels';
 import { DBLead } from '../../../../app/utils/aws/data/lead.server';
 
 // 🎯 Updated parameters for "1 Phone = 1 Contact" strategy
@@ -21,6 +22,16 @@ export async function syncToGoHighLevel(
 
   try {
     const primaryEmail = lead.emails?.[0]?.toLowerCase() || null;
+
+    // The number this contact is actually dialed on. `specificPhone` is the mobile handed to this
+    // contact by the one-phone-one-contact loop; when the lead has no mobile, its best landline
+    // takes that slot. The dialer reads only GHL's primary phone field, so a landline left in a
+    // custom field would never be called.
+    const dialablePhone = resolveDialablePhone(specificPhone, lead.landlinePhones);
+    // Landlines beyond the one promoted above, for reference on the contact record.
+    const extraLandlines = (lead.landlinePhones ?? []).filter(
+      (n): n is string => typeof n === 'string' && n.trim() !== '' && n !== dialablePhone
+    );
 
     // 🆕 Determine user plan and account status
     const isAIPlan = userGroups.includes('AI_PLAN');
@@ -77,14 +88,10 @@ export async function syncToGoHighLevel(
       mailing_state: mailingState,
       mailing_zipcode: mailingZip,
       lead_type: lead.type === 'PROBATE' ? 'Probate' : lead.type === 'PREFORECLOSURE' ? 'Preforeclosure' : lead.type,
-      // A landline makes this a phone contact too. Keying only off `specificPhone` (the mobile being
-      // synced) left landline-only leads typed 'Direct Mail', so any dialer filtering on
-      // 'Phone Contact' never saw them and the number sat unused.
-      // Isolated change: the Thanks_IO_Eligible / direct-mail-only / Digital-Only tags below are
-      // computed from specificPhone and the value range, never from contact_type, so direct-mail
-      // routing driven by those tags is unaffected.
-      contact_type:
-        specificPhone || (lead.landlinePhones?.length ?? 0) > 0 ? 'Phone Contact' : 'Direct Mail',
+      // A landline makes this a phone contact. Keying only off `specificPhone` (the mobile) left
+      // landline-only leads typed 'Direct Mail', so a dialer filtering on 'Phone Contact' never
+      // saw them and the number sat unused.
+      contact_type: dialablePhone ? 'Phone Contact' : 'Direct Mail',
       skiptracestatus: lead.skipTraceStatus?.toUpperCase() || 'PENDING',
       listing_status: lead.listingStatus || 'off market',
       lead_source_id: lead.id, // 🎯 Shared Lead ID for suppression workflows
@@ -100,12 +107,11 @@ export async function syncToGoHighLevel(
       // 📧 Additional emails
       email_2: lead.emails?.[1] || undefined,
       email_3: lead.emails?.[2] || undefined,
-      // ☎️ Non-DNC landlines, on the primary contact only. Deliberately NOT fed through the
-      // per-phone contact loop in manualGhlSync/handler.ts (which iterates `lead.phones`), so a
-      // landline never spawns a sibling contact. Call/mail reach only — landlines cannot receive
-      // SMS, which is why they live outside `phones` in the first place.
-      phone_2: isPrimary ? lead.landlinePhones?.[0] || undefined : undefined,
-      phone_3: isPrimary ? lead.landlinePhones?.[1] || undefined : undefined,
+      // ☎️ Any landlines beyond the one promoted to the primary phone field above. Deliberately
+      // NOT fed through the per-phone contact loop in manualGhlSync/handler.ts (which iterates
+      // `lead.phones`), so a landline never spawns a sibling contact.
+      phone_2: isPrimary ? extraLandlines[0] || undefined : undefined,
+      phone_3: isPrimary ? extraLandlines[1] || undefined : undefined,
       // 🆕 APP CONTROL FIELDS
       // NOTE: app_plan / app_account_status are DISPLAY-ONLY mirrors of Cognito groups.
       // They are never read back as an entitlement source — editing them in GHL cannot
@@ -155,40 +161,34 @@ export async function syncToGoHighLevel(
       tags.push('App:Billing-Hold');
     }
     
-    // 🎯 DIALER CAMPAIGN LOGIC - All users need completed skip trace + phone
-    const isCallable = specificPhone && 
-                      lead.skipTraceStatus === 'COMPLETED' && 
-                      !(lead.leadLabels || []).filter((tag: any) => tag !== null).some((tag: any) => ['DNC', 'Not_Interested', 'Do_Not_Call'].includes(tag));
-    
     // 🛡️ PROPERTY VALUE FILTER - Only mid-range properties get direct mail ($300k-$850k)
     const propertyValue = lead.zestimate || lead.estimatedValue || 0;
     const isDirectMailEligible = propertyValue >= 300000 && propertyValue <= 850000;
-    
+
     // 🔢 Multi-Phone-Lead tag only for leads with multiple phones
     const hasMultiplePhones = lead.phones && lead.phones.length > 1;
-    
-    if (isCallable) {
+
+    // 🚫 Lead-level do-not-call labels. Distinct from the per-phone `dnc` flag that
+    // rankMobilePhones/rankLandlinePhones already filter on: this one comes from the CSV or a call
+    // disposition and marks the *person* as off-limits however good the number is.
+    const hasDoNotCallLabel = (lead.leadLabels || [])
+      .filter((tag: any) => tag !== null)
+      .some((tag: any) => ['DNC', 'Not_Interested', 'Do_Not_Call'].includes(tag));
+
+    // 🎯 DIALER CAMPAIGN LOGIC
+    // A lead we can dial — on a mobile or a landline — is never routed to mail. Mail is the last
+    // resort for leads with no way to reach them at all, which is what isDirectMailOnlyLead
+    // encodes. Previously this branch mailed any lead lacking a *mobile*, which sent mailers to
+    // people who were perfectly callable on a landline.
+    if (dialablePhone && !hasDoNotCallLabel) {
       if (hasMultiplePhones) {
         tags.push('Multi-Phone-Lead');
       }
-      // Removed 'start dialing campaign' - GHL workflow handles routing based on App:Synced tag
-    } else if (specificPhone) {
-      // Has phone but not callable (failed skip trace, DNC, etc.)
-      if (hasMultiplePhones) {
-        tags.push('Multi-Phone-Lead');
-      }
-      if (isDirectMailEligible) {
-        tags.push('Direct-Mail-Only'); // Route to mail for $300k-$850k properties
-      } else {
-        tags.push('Digital-Only'); // Outside $300k-$850k range - no direct mail
-      }
+      // Routing is handled by the GHL workflow off the App:Synced tag.
+    } else if (isDirectMailEligible) {
+      tags.push('Direct-Mail-Only'); // Route to mail for $300k-$850k properties
     } else {
-      // No phone at all
-      if (isDirectMailEligible) {
-        tags.push('Direct-Mail-Only');
-      } else {
-        tags.push('Digital-Only'); // Outside $300k-$850k range - no direct mail
-      }
+      tags.push('Digital-Only'); // Outside $300k-$850k range - no direct mail
     }
     
     // 🛡️ Probate leads MUST have admin info
@@ -200,12 +200,11 @@ export async function syncToGoHighLevel(
       }
     }
 
-    // 🛡️ DIRECT MAIL ELIGIBILITY - Only for leads that need direct mail
-    // Criteria: NO_MATCH, NO_QUALITY_CONTACTS, or only emails (no phones)
-    const isDirectMailOnly = 
-      lead.skipTraceStatus === 'NO_MATCH' || 
-      lead.skipTraceStatus === 'NO_QUALITY_CONTACTS' ||
-      (!specificPhone && (lead.emails && lead.emails.length > 0));
+    // 🛡️ DIRECT MAIL ELIGIBILITY — mail is the last resort, only once a skip trace has concluded
+    // and turned up no mobile, no landline and no email. See shared/contactChannels.ts for the
+    // rule and why the previous version had it backwards (it mailed leads *because* they had an
+    // email, and mailed landline-reachable leads).
+    const isDirectMailOnly = isDirectMailOnlyLead(lead);
     
     // 🛡️ DIRECT MAIL PROTECTION - Only ONE sibling gets mail eligibility (and only if direct mail criteria met)
     if (isPrimary && isDirectMailEligible && isDirectMailOnly) {
@@ -221,7 +220,8 @@ export async function syncToGoHighLevel(
       firstName: lead.adminFirstName || lead.ownerFirstName || 'Property',
       lastName: `${lead.adminLastName || lead.ownerLastName || 'Owner'}${specificPhone && phoneIndex > 1 ? ` (${phoneIndex})` : ''}`,
       email: isPrimary ? primaryEmail : undefined, // Attach email only to primary to avoid duplicates
-      phone: specificPhone || undefined, // Don't send empty phone
+      // The dialer reads only this field, so a landline-only lead must carry its landline here.
+      phone: dialablePhone || undefined, // Don't send empty phone
       // Secondary emails stored in custom fields (email_2, email_3) instead of additionalEmails
       // GHL API rejects additionalEmails with string arrays
       tags,
@@ -231,7 +231,7 @@ export async function syncToGoHighLevel(
     };
 
     const performUpdate = async (ghlId: string) => {
-      console.info(`🔄 Updating contact ${ghlId}${specificPhone ? ` with phone ${specificPhone}` : ' (direct mail only)'}`);
+      console.info(`🔄 Updating contact ${ghlId}${dialablePhone ? ` with phone ${dialablePhone}` : ' (no phone)'}`);
       const res = await ghl.put(`/contacts/${ghlId}`, basePayload);
       return res.data?.contact?.id || ghlId;
     };
@@ -240,13 +240,16 @@ export async function syncToGoHighLevel(
     let existingContact: any = null;
     
     try {
-      if (specificPhone) {
+      if (dialablePhone) {
+        // Search on whichever number this contact will carry — mobile or promoted landline.
+        // Using specificPhone alone meant a landline-only lead was looked up by email or not at
+        // all, so an existing GHL contact holding that landline went unmatched and was duplicated.
         // Try multiple phone formats
         const phoneVariations = [
-          specificPhone,
-          specificPhone.replace(/\D/g, ''), // Remove all non-digits
-          `+1${specificPhone.replace(/\D/g, '')}`, // Add +1 prefix
-          specificPhone.replace(/^\+1/, ''), // Remove +1 prefix
+          dialablePhone,
+          dialablePhone.replace(/\D/g, ''), // Remove all non-digits
+          `+1${dialablePhone.replace(/\D/g, '')}`, // Add +1 prefix
+          dialablePhone.replace(/^\+1/, ''), // Remove +1 prefix
         ].filter((v, i, arr) => arr.indexOf(v) === i); // Unique values only
 
         console.log(`🔍 Searching for existing contact by phone variations:`, phoneVariations);
@@ -303,7 +306,7 @@ export async function syncToGoHighLevel(
 
     const createContact = async () => {
       console.info(
-        `🆕 Creating new contact${specificPhone ? ` for phone ${phoneIndex}: ${specificPhone}` : ' for direct mail workflow'}`
+        `🆕 Creating new contact${dialablePhone ? ` for phone ${phoneIndex}: ${dialablePhone}` : ' with no phone (direct mail)'}`
       );
       const res = await ghl.post('/contacts/', {
         ...basePayload,
