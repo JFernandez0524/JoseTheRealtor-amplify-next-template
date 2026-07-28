@@ -3,6 +3,58 @@ import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand, ScanCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { dispositionAction } from '../shared/dispositions';
 import { getIntegrationByLocationId } from '../shared/ghlTokenManager';
+import { isInManualMode } from '../shared/ghlTags';
+import {
+  findConversationId,
+  checkRecentActivity,
+  activateManualMode,
+} from '../shared/conversationActivity';
+
+/** How far back a human outbound message still counts as an active takeover. */
+const TAKEOVER_WINDOW_MINUTES = 120;
+
+/**
+ * Pause the AI when the agent has **called** this lead by hand.
+ *
+ * Scope note: this path catches calls, not texts. GHL fires the "Helper: Sync Custom Fields to App"
+ * workflow when a custom field changes, and the account's own GHL automation increments
+ * `Call Attempt or Text Counter` on **calls only** — a manual text moves no field and produces no
+ * webhook here. (Verified against contact LmJHniQhqQcipgeQhNys: the counter held at 1 across every
+ * field-sync webhook of the day, unchanged by a manual text.) Manual *texts* are caught separately,
+ * by `wasLastOutboundHuman` in ghlWebhookHandler on the lead's next inbound message.
+ *
+ * That split is necessary rather than redundant: a phone call leaves no message in the
+ * conversation at all, so the last-outbound test is structurally blind to it, and this counter
+ * bump is the only signal available.
+ *
+ * The payload does not say which field changed, so this is treated purely as a "something happened
+ * on this contact" ping and the conversation is then inspected. Ordered cheapest-first so routine
+ * field changes cost no GHL API calls.
+ */
+async function detectManualCallTakeover(
+  contactId: string,
+  token: string,
+  payloadTags: unknown,
+  aiState: unknown
+): Promise<boolean> {
+  // Already paused — nothing to do, and no reason to spend API calls confirming it.
+  if (isInManualMode(payloadTags)) return false;
+  if (typeof aiState === 'string' && aiState.toLowerCase() === 'paused') return false;
+
+  const conversationId = await findConversationId(contactId, token);
+  if (!conversationId) return false;
+
+  // Counts only human-sent outbound: this app's AI replies and GHL workflow sends are outbound
+  // too, and treating those as a takeover would pause the agent on every conversation it answers.
+  const activity = await checkRecentActivity(conversationId, token, TAKEOVER_WINDOW_MINUTES);
+  if (!activity.hasRecentOutbound) return false;
+
+  console.log(
+    `🤚 [FIELD_SYNC] Human outbound at ${activity.lastOutboundTime} for ${contactId} — pausing AI`
+  );
+  await activateManualMode(contactId, token, 'Agent contacted the lead directly');
+  return true;
+}
 
 const docClient = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 
@@ -68,6 +120,15 @@ export const handler: Handler = async (event) => {
     if (lead.owner !== integration.userId) {
       console.log(`🚫 [FIELD_SYNC] Lead ${lead.id} (owner ${lead.owner}) not owned by location ${locationId} (user ${integration.userId}) — ignoring`);
       return { statusCode: 200, body: JSON.stringify({ success: true, message: 'Lead not owned by this location' }) };
+    }
+
+    // Pause the AI if the agent has called this lead by hand (texts are caught elsewhere — see the
+    // note on detectManualCallTakeover). Best-effort: a failure here must not block the field sync
+    // below, which is this handler's primary job.
+    try {
+      await detectManualCallTakeover(contactId, integration.token, payload.tags, aiState);
+    } catch (takeoverErr: any) {
+      console.error(`⚠️ [FIELD_SYNC] Manual-call takeover check failed for ${contactId}:`, takeoverErr?.message);
     }
 
     const outreachData: any = { ...(lead.ghlOutreachData || {}) };

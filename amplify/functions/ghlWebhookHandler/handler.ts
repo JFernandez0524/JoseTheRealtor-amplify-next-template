@@ -453,26 +453,28 @@ export const handler = async (event: any) => {
       }
     }
 
-    // AUTO-DETECT: Check for recent manual activity (120-minute window)
-    // Widened from 30 → 120 min so a human touch within ~2 hours auto-pauses the AI
-    // (e.g. a manual call/text 66 min before the lead's reply). Complements the
-    // deliberate `AI State = paused` field switch; this is the automatic catch.
+    // AUTO-DETECT: if the agent was the last one to message this lead, stand down.
+    // This is an ordering test, not a time window: a fixed lookback (previously 120 minutes)
+    // silently let the AI talk over the agent whenever the lead replied the next morning.
+    // isHumanOutbound excludes this app's own sends and GHL workflow sends, so the AI cannot
+    // mistake its own reply for a takeover and pause itself. Complements the deliberate
+    // `AI State = paused` field switch; this is the automatic catch.
     if (conversationId) {
-      const { checkRecentActivity, activateManualMode } = await import('../shared/conversationActivity');
+      const { wasLastOutboundHuman, activateManualMode } = await import('../shared/conversationActivity');
 
-      const activity = await checkRecentActivity(conversationId, token, 120);
+      const lastOutbound = await wasLastOutboundHuman(conversationId, token);
 
-      if (activity.hasRecentOutbound) {
-        console.log('🚫 [WEBHOOK_LAMBDA] Detected recent manual activity - activating manual mode');
+      if (lastOutbound.isHuman) {
+        console.log('🚫 [WEBHOOK_LAMBDA] Agent sent the last message - activating manual mode');
 
-        await activateManualMode(contactId, token, 'Recent manual activity detected', fieldIds);
+        await activateManualMode(contactId, token, 'Agent messaged the lead directly', fieldIds);
 
         return {
           statusCode: 200,
           body: JSON.stringify({
             message: 'Manual mode activated - AI paused',
             contactId,
-            lastOutboundTime: activity.lastOutboundTime
+            lastOutboundTime: lastOutbound.lastOutboundTime
           })
         };
       }

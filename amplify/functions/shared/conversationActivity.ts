@@ -8,11 +8,69 @@
 import { ghlGetContact, ghlUpdateContact, createGhlClient } from './ghlClient';
 import { extractGhlMessages, isHumanOutbound } from './ghlMessages';
 
+/**
+ * Resolve a contact's conversation id.
+ *
+ * Webhook payloads don't always carry one — workflow webhooks in particular carry none at all —
+ * so callers that need conversation-level data have to look it up.
+ */
+export async function findConversationId(
+  contactId: string,
+  token: string
+): Promise<string | null> {
+  try {
+    const ghl = createGhlClient(token);
+    const res = await ghl.get('/conversations/search', { params: { contactId, limit: 1 } });
+    return res.data?.conversations?.[0]?.id || null;
+  } catch (error: any) {
+    console.error(`❌ [ACTIVITY] Failed to find conversation for ${contactId}:`, error.message);
+    return null;
+  }
+}
+
 export interface ActivityResult {
   hasRecentOutbound: boolean;
   lastActivityTime: string | null;
   lastOutboundTime: string | null;
   messageCount: number;
+}
+
+/**
+ * Was the most recent outbound message in this conversation sent by a human?
+ *
+ * This is the takeover test for **texts**. It asks an ordering question rather than a time-window
+ * one: if the last thing sent to this lead came from the agent, the AI must not speak next,
+ * however long ago it was. A fixed window (the previous approach) silently fails whenever a lead
+ * replies the following morning.
+ *
+ * Only the newest outbound is considered — once the AI has legitimately replied after the agent,
+ * the conversation is back in its hands.
+ */
+export async function wasLastOutboundHuman(
+  conversationId: string,
+  token: string
+): Promise<{ isHuman: boolean; lastOutboundTime: string | null }> {
+  try {
+    const ghl = createGhlClient(token);
+    const res = await ghl.get(`/conversations/${conversationId}/messages`, { params: { limit: 20 } });
+    const messages = extractGhlMessages(res.data);
+
+    // GHL returns newest-first, so the first outbound encountered is the most recent one.
+    const lastOutbound = messages.find((m) => m.direction === 'outbound');
+    if (!lastOutbound) {
+      return { isHuman: false, lastOutboundTime: null };
+    }
+
+    const isHuman = isHumanOutbound(lastOutbound);
+    console.log(
+      `🔍 [ACTIVITY] Last outbound at ${lastOutbound.dateAdded} was ${isHuman ? 'human' : 'automated'}`
+    );
+    return { isHuman, lastOutboundTime: lastOutbound.dateAdded ?? null };
+  } catch (error: any) {
+    // Fail open: a lookup failure must not silence the agent everywhere.
+    console.error('❌ [ACTIVITY] Failed to check last outbound sender:', error.message);
+    return { isHuman: false, lastOutboundTime: null };
+  }
 }
 
 /**
