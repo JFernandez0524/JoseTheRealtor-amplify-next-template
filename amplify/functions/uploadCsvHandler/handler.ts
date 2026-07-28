@@ -11,7 +11,7 @@ import { parse } from 'csv-parse';
 import { Readable } from 'stream';
 import { randomUUID } from 'crypto';
 import { validateAddressWithGoogle, toTitleCase } from '../../../app/utils/google.server';
-import { fetchBestZestimate } from '../../../app/utils/bridge.server';
+import { fetchBestZestimateResult } from '../../../app/utils/bridge.server';
 import { isUsableAddress, isTaxForeclosureCase } from '../../../app/utils/leadValidation';
 import { resolveOwnerName, parseColumnMapping } from '../../../app/utils/csvMapping';
 
@@ -116,13 +116,39 @@ function makeAddressKey(addr: string | null | undefined, zip: string | null | un
   return `${cleanAddr}|${cleanZip}`;
 }
 
-// Single paginated scan instead of one scan per row — dramatically reduces DynamoDB cost and time
+/**
+ * Snapshot of an already-existing lead, stored on a CsvUploadJob's `duplicateLeads` entries so the
+ * duplicate report can show what the incoming row collided with. Kept to the three columns the
+ * report renders — see generateDuplicateComparisonCSV in app/utils/csvExport.ts.
+ */
+type ExistingLeadSummary = {
+  ownerName: string;
+  address: string;
+  zestimate: number | null;
+};
+
+function summarizeExistingLead(lead: Record<string, any>): ExistingLeadSummary {
+  return {
+    ownerName: `${lead.ownerFirstName || ''} ${lead.ownerLastName || ''}`.trim(),
+    address: [lead.ownerAddress, lead.ownerCity].filter(Boolean).join(', '),
+    zestimate: typeof lead.zestimate === 'number' ? lead.zestimate : null,
+  };
+}
+
+// Single paginated scan instead of one scan per row — dramatically reduces DynamoDB cost and time.
+// Also carries a per-key summary of the existing lead so a duplicate row can be reported against
+// the record it collided with, without a second fetch per duplicate.
 async function preloadExistingLeadKeys(
   tableName: string,
   ownerId: string
-): Promise<{ keys: Set<string>; keyToId: Map<string, string> }> {
+): Promise<{
+  keys: Set<string>;
+  keyToId: Map<string, string>;
+  keyToData: Map<string, ExistingLeadSummary>;
+}> {
   const keys = new Set<string>();
   const keyToId = new Map<string, string>();
+  const keyToData = new Map<string, ExistingLeadSummary>();
   let lastKey: Record<string, any> | undefined;
   do {
     const { Items, LastEvaluatedKey } = await docClient.send(new ScanCommand({
@@ -132,22 +158,35 @@ async function preloadExistingLeadKeys(
         '#owner': 'owner',
         '#oa': 'ownerAddress',
         '#oz': 'ownerZip',
+        '#oc': 'ownerCity',
+        '#ofn': 'ownerFirstName',
+        '#oln': 'ownerLastName',
         '#ma': 'mailingAddress',
         '#mz': 'mailingZip',
+        '#ze': 'zestimate',
       },
       ExpressionAttributeValues: { ':ownerId': ownerId },
-      ProjectionExpression: 'id, #oa, #oz, #ma, #mz',
+      ProjectionExpression: 'id, #oa, #oz, #oc, #ofn, #oln, #ma, #mz, #ze',
       ExclusiveStartKey: lastKey,
     }));
     for (const lead of Items || []) {
+      const summary = summarizeExistingLead(lead);
       const prefoKey = makeAddressKey(lead.ownerAddress, lead.ownerZip);
-      if (prefoKey) { keys.add(prefoKey); keyToId.set(prefoKey, lead.id); }
+      if (prefoKey) {
+        keys.add(prefoKey);
+        keyToId.set(prefoKey, lead.id);
+        keyToData.set(prefoKey, summary);
+      }
       const probateKey = makeAddressKey(lead.mailingAddress, lead.mailingZip);
-      if (probateKey && probateKey !== prefoKey) { keys.add(probateKey); keyToId.set(probateKey, lead.id); }
+      if (probateKey && probateKey !== prefoKey) {
+        keys.add(probateKey);
+        keyToId.set(probateKey, lead.id);
+        keyToData.set(probateKey, summary);
+      }
     }
     lastKey = LastEvaluatedKey;
   } while (lastKey);
-  return { keys, keyToId };
+  return { keys, keyToId, keyToData };
 }
 
 // ---------------------------------------------------------
@@ -180,6 +219,10 @@ export const handler: S3Handler = async (event) => {
     const duplicateLeads: any[] = [];
     let ownerId = '';
     let jobId = '';
+    // Circuit breaker for the Bridge/Zillow valuation API. Deliberately per-invocation, NOT
+    // module-level: Lambda reuses warm containers, and module state would keep the breaker tripped
+    // long after the credential is renewed.
+    let bridgeAuthFailed = false;
     // User's column mapping (canonicalField -> source header) from the upload UI; undefined for legacy
     // uploads, in which case the per-row `cell()` helper falls back to hardcoded header aliases.
     let columnMapping: Record<string, string> | undefined;
@@ -359,8 +402,11 @@ export const handler: S3Handler = async (event) => {
 
       // Pre-load all existing lead addresses for O(1) duplicate detection (replaces per-row table scan)
       console.log('🔍 Pre-loading existing lead addresses for duplicate detection...');
-      const { keys: existingAddressKeys, keyToId: existingKeyToId } =
-        await preloadExistingLeadKeys(propertyLeadTableName!, ownerId);
+      const {
+        keys: existingAddressKeys,
+        keyToId: existingKeyToId,
+        keyToData: existingKeyToData,
+      } = await preloadExistingLeadKeys(propertyLeadTableName!, ownerId);
       console.log(`📋 ${existingAddressKeys.size} existing address keys loaded`);
 
       // 4. Initiate Stream Processing
@@ -570,7 +616,7 @@ export const handler: S3Handler = async (event) => {
                   zip: finalPropZip,
                 },
                 existingLeadId: existingKeyToId.get(dupKey) || null,
-                existingLeadData: null,
+                existingLeadData: existingKeyToData.get(dupKey) || null,
               });
             }
 
@@ -598,7 +644,7 @@ export const handler: S3Handler = async (event) => {
           // the lead is flagged INVALID below so the user can fix the address and re-run.
           let zillowData = null;
 
-          if (addressUsable) {
+          if (addressUsable && !bridgeAuthFailed) {
             try {
               // 🚦 Rate limit: Wait before API call
               await delay(BRIDGE_API_DELAY_MS);
@@ -609,7 +655,7 @@ export const handler: S3Handler = async (event) => {
               // Strip +4 from zip code (Bridge API doesn't like it)
               const zestimateZip = (standardizedAddress?.zip || finalPropZip)?.split('-')[0];
 
-              zillowData = await fetchBestZestimate({
+              const zestimateResult = await fetchBestZestimateResult({
                 lat: latitude || undefined,
                 lng: longitude || undefined,
                 street: zestimateStreet,
@@ -617,8 +663,18 @@ export const handler: S3Handler = async (event) => {
                 state: finalPropState,
                 zip: zestimateZip,
               });
+              zillowData = zestimateResult.data;
 
-              if (zillowData) {
+              if (zestimateResult.authFailed) {
+                // Bridge rejected the credential. Every remaining row would fail identically, so
+                // trip the breaker rather than spend the rest of the Lambda's budget on ~7 doomed
+                // requests per lead. Rows still import — just without valuation data.
+                bridgeAuthFailed = true;
+                console.error(
+                  `🔑 Bridge API credentials rejected at row ${currentRow}. Skipping Zestimate ` +
+                    'lookups for the rest of this upload; leads will import without valuation data.'
+                );
+              } else if (zillowData) {
                 console.log('✅ Zestimate fetched:', { zpid: zillowData.zpid, zestimate: zillowData.zestimate });
               } else {
                 console.log('❌ No Zestimate data for address:', { address: zestimateStreet, city: zestimateCity });
@@ -626,6 +682,8 @@ export const handler: S3Handler = async (event) => {
             } catch (error: any) {
               console.log('Bridge API error:', error.message);
             }
+          } else if (addressUsable && bridgeAuthFailed) {
+            // Breaker already tripped — no log here, it would repeat for every remaining row.
           } else {
             console.log(`⏭️ Skipping Zestimate for unconfirmed address (validationStatus=INVALID): ${fullPropString}`);
           }
@@ -712,8 +770,14 @@ export const handler: S3Handler = async (event) => {
             Item: leadItem
           }));
 
-          // Register new lead in the duplicate set so intra-file duplicates are caught
-          if (dupKey) existingAddressKeys.add(dupKey);
+          // Register new lead in the duplicate set so intra-file duplicates are caught. Record the
+          // id/summary too, not just the key — otherwise a row duplicated *within* this same file
+          // reports existingLeadId: null and the report can't link back to the row that won.
+          if (dupKey) {
+            existingAddressKeys.add(dupKey);
+            existingKeyToId.set(dupKey, leadItem.id);
+            existingKeyToData.set(dupKey, summarizeExistingLead(leadItem));
+          }
 
           successCount++;
 
@@ -736,11 +800,21 @@ export const handler: S3Handler = async (event) => {
         }
       }
 
-      // 5. Update job record as completed
+      // 5. Update job record as completed. Warnings are for a job that imported successfully but
+      // lost optional enrichment — distinct from errorMessage, which belongs to status FAILED.
+      const warnings: string[] = [];
+      if (bridgeAuthFailed) {
+        warnings.push(
+          'Zestimates unavailable: the Bridge/Zillow API rejected our credentials (401). ' +
+            'Leads were imported without valuation data — renew BRIDGE_API_KEY, then refresh ' +
+            'Zestimates from each lead’s detail page.'
+        );
+      }
+
       await docClient.send(new UpdateCommand({
         TableName: csvUploadJobTableName,
         Key: { id: jobId },
-        UpdateExpression: 'SET #status = :status, successCount = :success, duplicateCount = :duplicate, duplicateLeads = :duplicates, errorCount = :errors, processedRows = :processed, completedAt = :completed, updatedAt = :updated',
+        UpdateExpression: 'SET #status = :status, successCount = :success, duplicateCount = :duplicate, duplicateLeads = :duplicates, errorCount = :errors, processedRows = :processed, warnings = :warnings, completedAt = :completed, updatedAt = :updated',
         ExpressionAttributeNames: {
           '#status': 'status'
         },
@@ -751,6 +825,7 @@ export const handler: S3Handler = async (event) => {
           ':duplicates': duplicateLeads,
           ':errors': currentRow - successCount - duplicateCount,
           ':processed': currentRow,
+          ':warnings': warnings,
           ':completed': new Date().toISOString(),
           ':updated': new Date().toISOString(),
         }

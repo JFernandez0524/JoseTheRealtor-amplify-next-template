@@ -1,5 +1,6 @@
 // app/utils/bridge.server.ts
 import axios from 'axios';
+import { classifyBridgeError, describeBridgeError } from './bridgeErrors';
 
 const BRIDGE_API_KEY = process.env.BRIDGE_API_KEY;
 const BRIDGE_BASE_URL = 'https://api.bridgedataoutput.com/api/v2';
@@ -111,6 +112,8 @@ export async function analyzeBridgeProperty(params: {
   history?: any[];
   debug?: any;
   error?: string;
+  /** True when Bridge rejected our credentials (401/403) — distinct from "address not found". */
+  authFailed?: boolean;
 }> {
   const { street: rawStreet, city: rawCity, state, zip, lat, lng, zpid: zpidParam } = params;
   const city = cleanCityName(rawCity || '');
@@ -122,6 +125,9 @@ export async function analyzeBridgeProperty(params: {
 
   let valuation = null;
   let successfulVariation = null;
+  // Tripped by the first 401/403. Every fallback below reuses the same credential, so once it is
+  // rejected there is nothing left to try — bail instead of firing ~7 more doomed requests.
+  let authFailed = false;
 
   // Try address variations
   for (const street of streetVariations) {
@@ -157,12 +163,16 @@ export async function analyzeBridgeProperty(params: {
         break;
       }
     } catch (err) {
-      console.log(`❌ API error for: ${street}`);
+      console.log(`❌ Bridge API error for "${street}": ${describeBridgeError(err)}`);
+      if (classifyBridgeError(err).isAuthFailure) {
+        authFailed = true;
+        break;
+      }
     }
   }
 
   // If no valuation found by address, try coordinate search as fallback
-  if (!valuation && lat && lng) {
+  if (!valuation && !authFailed && lat && lng) {
     console.log('🌍 Trying coordinate-based search as fallback...');
     const radii = ['0.0005', '0.001', '0.002']; // ~55m, ~110m, ~220m
     for (const radius of radii) {
@@ -195,13 +205,17 @@ export async function analyzeBridgeProperty(params: {
           break;
         }
       } catch (err) {
-        console.log(`❌ Coordinate search failed for radius ${radius}`);
+        console.log(`❌ Coordinate search failed for radius ${radius}: ${describeBridgeError(err)}`);
+        if (classifyBridgeError(err).isAuthFailure) {
+          authFailed = true;
+          break;
+        }
       }
     }
   }
 
   // If address and coordinate searches failed but we have a zpid, try direct zpid lookup
-  if (!valuation && zpidParam) {
+  if (!valuation && !authFailed && zpidParam) {
     console.log(`🔗 Trying zpid-based lookup as final fallback: ${zpidParam}`);
     try {
       const res = await bridgeClient.get('/zestimates_v2/zestimates', {
@@ -214,11 +228,25 @@ export async function analyzeBridgeProperty(params: {
         console.log(`✅ Found via zpid: $${valuation.zestimate}`);
       }
     } catch (err) {
-      console.log('❌ zpid-based lookup failed');
+      console.log(`❌ zpid-based lookup failed: ${describeBridgeError(err)}`);
+      if (classifyBridgeError(err).isAuthFailure) authFailed = true;
     }
   }
 
   if (!valuation) {
+    // Distinguish "this address isn't in Bridge" from "our credential is dead" — the first is
+    // normal and per-address, the second means every lead in the run will fail the same way.
+    if (authFailed) {
+      console.error(
+        `🔑 Bridge API credentials rejected — skipping remaining lookups for "${rawStreet}". ` +
+          'Zestimates are unavailable until BRIDGE_API_KEY is renewed.'
+      );
+      return {
+        success: false,
+        error: 'Bridge API credentials were rejected. Zestimate data is unavailable.',
+        authFailed: true,
+      };
+    }
     console.log('❌ No property found for address');
     console.log('🔍 Search details:', { rawStreet, city, state, zip, lat, lng, zpid: zpidParam });
     console.log('📝 Tried variations:', streetVariations);
@@ -237,10 +265,13 @@ export async function analyzeBridgeProperty(params: {
         params: { zpid, limit: 1, 'address.state': targetState },
       });
       assessment = res.data.bundle?.[0];
-    } catch (err) {}
+    } catch (err) {
+      console.log(`❌ Assessment lookup by zpid ${zpid} failed: ${describeBridgeError(err)}`);
+      if (classifyBridgeError(err).isAuthFailure) authFailed = true;
+    }
   }
 
-  if (!assessment && streetVariations.length > 0) {
+  if (!assessment && !authFailed && streetVariations.length > 0) {
     for (const street of streetVariations) {
       try {
         const res = await bridgeClient.get('/pub/assessments', {
@@ -251,7 +282,13 @@ export async function analyzeBridgeProperty(params: {
           assessment = stateMatch;
           break;
         }
-      } catch (err) {}
+      } catch (err) {
+        console.log(`❌ Assessment lookup for "${street}" failed: ${describeBridgeError(err)}`);
+        if (classifyBridgeError(err).isAuthFailure) {
+          authFailed = true;
+          break;
+        }
+      }
     }
   }
 
@@ -268,17 +305,7 @@ export async function analyzeBridgeProperty(params: {
   };
 }
 
-/**
- * Simplified wrapper for CSV upload - returns just the Zestimate data
- */
-export async function fetchBestZestimate(params: {
-  lat?: number;
-  lng?: number;
-  street: string;
-  city: string;
-  state: string;
-  zip: string;
-}): Promise<{
+export type ZestimateResult = {
   zpid: string;
   zestimate: number;
   rentZestimate?: number;
@@ -290,25 +317,65 @@ export async function fetchBestZestimate(params: {
   postalCode: string;
   latitude?: number;
   longitude?: number;
-} | null> {
+};
+
+/**
+ * Fetch a Zestimate, preserving *why* it failed.
+ *
+ * `fetchBestZestimate` collapses "no match for this address" and "our credential is dead" into the
+ * same `null`, which is fine for one-off lookups but not for a bulk import: a caller looping over
+ * hundreds of rows needs to stop after the first auth failure instead of retrying each one. Callers
+ * that don't care can keep using `fetchBestZestimate`.
+ *
+ * Used by: uploadCsvHandler (per-invocation circuit breaker).
+ */
+export async function fetchBestZestimateResult(params: {
+  lat?: number;
+  lng?: number;
+  street: string;
+  city: string;
+  state: string;
+  zip: string;
+}): Promise<{ data: ZestimateResult | null; authFailed: boolean }> {
   const result = await analyzeBridgeProperty(params);
-  
+
   if (!result.success || !result.valuation) {
-    return null;
+    return { data: null, authFailed: result.authFailed === true };
   }
 
   const best = result.valuation;
   return {
-    zpid: best.zpid,
-    zestimate: best.zestimate,
-    rentZestimate: best.rentalZestimate,
-    url: best.zillowUrl || `https://www.zillow.com/homes/${best.zpid}_zpid/`,
-    lastUpdated: best.timestamp,
-    address: best.address,
-    city: best.city,
-    state: best.state,
-    postalCode: best.postalCode,
-    latitude: best.Latitude,
-    longitude: best.Longitude,
+    data: {
+      zpid: best.zpid,
+      zestimate: best.zestimate,
+      rentZestimate: best.rentalZestimate,
+      url: best.zillowUrl || `https://www.zillow.com/homes/${best.zpid}_zpid/`,
+      lastUpdated: best.timestamp,
+      address: best.address,
+      city: best.city,
+      state: best.state,
+      postalCode: best.postalCode,
+      latitude: best.Latitude,
+      longitude: best.Longitude,
+    },
+    authFailed: false,
   };
+}
+
+/**
+ * Simplified wrapper — returns just the Zestimate data, or null on any failure.
+ *
+ * Delegates to `fetchBestZestimateResult` and drops the failure reason. Use that instead when the
+ * caller needs to distinguish a credential outage from a per-address miss.
+ */
+export async function fetchBestZestimate(params: {
+  lat?: number;
+  lng?: number;
+  street: string;
+  city: string;
+  state: string;
+  zip: string;
+}): Promise<ZestimateResult | null> {
+  const { data } = await fetchBestZestimateResult(params);
+  return data;
 }

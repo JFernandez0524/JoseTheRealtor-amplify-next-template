@@ -9,7 +9,15 @@ export default function UploadLeadsPage() {
         <h1 className='text-2xl font-semibold text-blue-600'>
           Lead Management
         </h1>
-        <NotificationCenter />
+        <div className='flex items-center gap-4'>
+          <a
+            href='/uploads'
+            className='text-sm text-blue-600 underline hover:text-blue-800'
+          >
+            Upload History
+          </a>
+          <NotificationCenter />
+        </div>
       </div>
 
       <div className='bg-white rounded-lg shadow-md p-6'>

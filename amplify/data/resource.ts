@@ -17,6 +17,10 @@ const schema = a.schema({
       duplicateCount: a.integer().default(0),
       errorCount: a.integer().default(0),
       errorMessage: a.string(),
+      // Non-fatal problems on a job that still COMPLETED — e.g. the Bridge/Zillow API rejected our
+      // credentials, so leads imported without Zestimates. Distinct from errorMessage, which
+      // describes why a job FAILED outright.
+      warnings: a.string().array(),
       duplicateLeads: a.json().array(), // Array of {csvData: {ownerName, address, city, state, zip}, existingLeadId: string, existingLeadData: {ownerName, address, zestimate}}
       // User's column mapping from the upload UI: { [canonicalField]: sourceHeader }. Lets any CSV
       // layout be imported — the Lambda resolves each canonical field through this (falling back to
