@@ -93,6 +93,12 @@ export async function syncToGoHighLevel(
       // 📧 Additional emails
       email_2: lead.emails?.[1] || undefined,
       email_3: lead.emails?.[2] || undefined,
+      // ☎️ Non-DNC landlines, on the primary contact only. Deliberately NOT fed through the
+      // per-phone contact loop in manualGhlSync/handler.ts (which iterates `lead.phones`), so a
+      // landline never spawns a sibling contact. Call/mail reach only — landlines cannot receive
+      // SMS, which is why they live outside `phones` in the first place.
+      phone_2: isPrimary ? lead.landlinePhones?.[0] || undefined : undefined,
+      phone_3: isPrimary ? lead.landlinePhones?.[1] || undefined : undefined,
       // 🆕 APP CONTROL FIELDS
       // NOTE: app_plan / app_account_status are DISPLAY-ONLY mirrors of Cognito groups.
       // They are never read back as an entitlement source — editing them in GHL cannot
@@ -117,6 +123,12 @@ export async function syncToGoHighLevel(
     // 🆕 APP CONTROL TAGS (source of truth)
     tags.push('App:Synced');
     if (isAIPlan) tags.push('App:AI-Enabled');
+
+    // ☎️ Channel marker so GHL workflows can route landline-only leads to the dialer and direct
+    // mail while excluding them from anything that texts. Only set when the lead has no mobile —
+    // `phones` empty is exactly the condition under which landlinePhones is populated.
+    const isLandlineOnly = !specificPhone && (lead.landlinePhones?.length ?? 0) > 0;
+    if (isLandlineOnly) tags.push('channel:landline');
     
     // 📊 DATA SOURCE TRACKING
     if (lead.skipTraceStatus === 'COMPLETED') {

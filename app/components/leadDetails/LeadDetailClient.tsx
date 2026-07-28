@@ -619,6 +619,32 @@ function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
                     )}
                   </div>
                 </div>
+                {/* Landlines are stored apart from `phones` because they cannot receive SMS.
+                    Shown as their own group so the channel is obvious before anyone dials or
+                    tries to text. Only populated when the skip trace found no usable mobile. */}
+                {(lead.landlinePhones?.length ?? 0) > 0 && (
+                  <div>
+                    <h4 className='text-[10px] font-black uppercase text-slate-400 mb-3 flex items-center gap-2'>
+                      <HiOutlinePhone className='text-lg text-amber-500' />{' '}
+                      Landlines — call only, no SMS
+                    </h4>
+                    <div className='space-y-2'>
+                      {lead.landlinePhones?.map((p: any, idx: number) => (
+                        <div
+                          key={idx}
+                          className='flex items-center justify-between p-3 bg-amber-50 rounded-xl border border-amber-100'
+                        >
+                          <span className='font-mono font-bold text-slate-700'>
+                            {formatPhone(p)}
+                          </span>
+                          <span className='text-[9px] font-black bg-amber-100 text-amber-800 px-2 py-0.5 rounded uppercase'>
+                            Landline
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 <div>
                   <h4 className='text-[10px] font-black uppercase text-slate-400 mb-3 flex items-center gap-2'>
                     <HiOutlineEnvelope className='text-lg text-indigo-500' />{' '}

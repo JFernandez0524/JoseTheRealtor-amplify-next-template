@@ -263,8 +263,14 @@ const schema = a.schema({
       longitude: a.float(),
 
       // Contact Info (From Skip Trace V3)
+      // SMS-capable mobiles only. Everything that texts or runs AI outreach reads this field, so a
+      // landline must never be added here — see landlinePhones below.
       phones: a.string().array(),
       emails: a.string().array(),
+      // Non-DNC landlines, kept deliberately separate from `phones`: they are callable and
+      // mailable but cannot receive SMS. Populated only when a skip trace yields no usable mobile,
+      // so a lead that would otherwise be unreachable by phone still gets a number for the dialer.
+      landlinePhones: a.string().array(),
 
       // --- 🟢 Financials (Market Intel) ---
       estimatedValue: a.float(),

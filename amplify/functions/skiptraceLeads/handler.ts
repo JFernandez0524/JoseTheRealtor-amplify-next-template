@@ -3,7 +3,7 @@ import { randomUUID } from 'crypto';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand, PutCommand, UpdateCommand, ScanCommand } from '@aws-sdk/lib-dynamodb';
 import { filterValidEmails } from '../shared/emailValidator';
-import { rankMobilePhones } from '../shared/sanitize';
+import { rankMobilePhones, rankLandlinePhones } from '../shared/sanitize';
 import { billableSkipCount, SKIPTRACE_CREDITS_PER_MATCH, creditsFor, dollarsFor } from '../shared/skiptraceBilling';
 
 const dynamoClient = new DynamoDBClient({ region: process.env.AWS_REGION });
@@ -39,7 +39,10 @@ type MailingAddressData = {
 
 type BatchDataResult = {
   status: 'SUCCESS' | 'NO_MATCH' | 'INVALID_GEO' | 'ERROR' | 'NO_QUALITY_CONTACTS';
+  /** SMS-capable mobiles only — never landlines. Stored on the lead as `phones`. */
   foundPhones: string[];
+  /** Non-DNC landlines, populated only when there is no usable mobile. Stored as `landlinePhones`. */
+  foundLandlines?: string[];
   foundEmails: string[];
   mailingData?: MailingAddressData | null;
   rawPersonData?: any;
@@ -196,14 +199,26 @@ async function callBatchDataBulk(leads: any[]): Promise<{ resultMap: Map<string,
         // highest-quality number → the GHL primary phone contact the dialer uses.
         foundPhones.push(...rankMobilePhones(person.phoneNumbers || []));
 
+        // Fall back to non-DNC landlines only when there is no usable mobile. These are kept in a
+        // separate field, never merged into phones: a landline is callable and mailable but cannot
+        // receive SMS, and everything that texts reads `phones`. Without this, a lead whose trace
+        // returns only landlines stays unreachable by phone despite the match being paid for.
+        const foundLandlines = foundPhones.length === 0
+          ? rankLandlinePhones(person.phoneNumbers || [])
+          : [];
+
         person.emails?.forEach((e: any) => {
           if (e.tested && e.email) foundEmails.push(e.email);
         });
 
+        // Status is unchanged by landlines on purpose: it reflects whether the trace produced a
+        // *quality* contact for SMS/email outreach. A landline is additive dialer reach, not a
+        // reclassification of the trace result.
         const status = foundPhones.length > 0 || foundEmails.length > 0 ? 'SUCCESS' : 'NO_QUALITY_CONTACTS';
         resultMap.set(leadId, {
           status,
           foundPhones,
+          foundLandlines,
           foundEmails,
           mailingData,
           rawPersonData: person,
@@ -508,15 +523,20 @@ export const handler: Handler = async (event) => {
           responseTime: batchMeta.responseTime,
         }];
         
+        // This is the bucket where landlines matter most: BatchData matched (and billed) but
+        // returned no usable mobile, so without this the lead has no callable number at all.
+        const newLandlines = [...new Set([...(lead.landlinePhones || []), ...(enrichedData.foundLandlines || [])])];
+
         const updateExpression = lead.type?.toUpperCase() === 'PROBATE'
-          ? 'SET skipTraceStatus = :status, skipTraceCompletedAt = :completedAt, skipTraceHistory = :history, leadLabels = :labels, rawSkipTraceData = :rawData'
-          : 'SET ownerFirstName = :firstName, ownerLastName = :lastName, mailingAddress = :mailingAddress, mailingCity = :mailingCity, mailingState = :mailingState, mailingZip = :mailingZip, skipTraceStatus = :status, skipTraceCompletedAt = :completedAt, skipTraceHistory = :history, leadLabels = :labels, rawSkipTraceData = :rawData';
-        
+          ? 'SET landlinePhones = :landlines, skipTraceStatus = :status, skipTraceCompletedAt = :completedAt, skipTraceHistory = :history, leadLabels = :labels, rawSkipTraceData = :rawData'
+          : 'SET ownerFirstName = :firstName, ownerLastName = :lastName, landlinePhones = :landlines, mailingAddress = :mailingAddress, mailingCity = :mailingCity, mailingState = :mailingState, mailingZip = :mailingZip, skipTraceStatus = :status, skipTraceCompletedAt = :completedAt, skipTraceHistory = :history, leadLabels = :labels, rawSkipTraceData = :rawData';
+
         await docClient.send(new UpdateCommand({
           TableName: propertyLeadTableName,
           Key: { id: lead.id },
           UpdateExpression: updateExpression,
           ExpressionAttributeValues: {
+            ':landlines': newLandlines,
             ...(lead.type?.toUpperCase() !== 'PROBATE' && {
               ':firstName': enrichedData.firstName || null,
               ':lastName': enrichedData.lastName || null,
@@ -553,9 +573,14 @@ export const handler: Handler = async (event) => {
         responseTime: batchMeta.responseTime,
       }];
 
+      // Landlines are stored apart from `phones` so nothing that texts can reach them. Populated
+      // only when the trace found no usable mobile — e.g. a lead with a valid email but no mobile
+      // still lands here as SUCCESS.
+      const newLandlines = [...new Set([...(lead.landlinePhones || []), ...(enrichedData.foundLandlines || [])])];
+
       const updateExpression = lead.type?.toUpperCase() === 'PROBATE'
-        ? 'SET phones = :phones, emails = :emails, skipTraceStatus = :status, skipTraceCompletedAt = :completedAt, skipTraceHistory = :history, rawSkipTraceData = :rawData'
-        : 'SET ownerFirstName = :firstName, ownerLastName = :lastName, phones = :phones, emails = :emails, mailingAddress = :mailingAddress, mailingCity = :mailingCity, mailingState = :mailingState, mailingZip = :mailingZip, skipTraceStatus = :status, skipTraceCompletedAt = :completedAt, skipTraceHistory = :history, rawSkipTraceData = :rawData';
+        ? 'SET phones = :phones, landlinePhones = :landlines, emails = :emails, skipTraceStatus = :status, skipTraceCompletedAt = :completedAt, skipTraceHistory = :history, rawSkipTraceData = :rawData'
+        : 'SET ownerFirstName = :firstName, ownerLastName = :lastName, phones = :phones, landlinePhones = :landlines, emails = :emails, mailingAddress = :mailingAddress, mailingCity = :mailingCity, mailingState = :mailingState, mailingZip = :mailingZip, skipTraceStatus = :status, skipTraceCompletedAt = :completedAt, skipTraceHistory = :history, rawSkipTraceData = :rawData';
 
       await docClient.send(new UpdateCommand({
         TableName: propertyLeadTableName,
@@ -563,6 +588,7 @@ export const handler: Handler = async (event) => {
         UpdateExpression: updateExpression,
         ExpressionAttributeValues: {
           ':phones': newPhones,
+          ':landlines': newLandlines,
           ':emails': newEmails,
           ...(lead.type?.toUpperCase() !== 'PROBATE' && {
             ':firstName': enrichedData.firstName || null,
