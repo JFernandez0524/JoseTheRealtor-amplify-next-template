@@ -268,8 +268,17 @@ export async function syncToGoHighLevel(
         console.log(`📭 Skipping duplicate check for direct mail contact (no phone/email)`);
       }
     } catch (searchError: any) {
+      // A failed search is "unknown", NOT "no match". Falling through to create would silently
+      // duplicate a contact whenever the dedupe lookup is rate-limited — which is exactly what
+      // happened on 2026-07-28 (76 × 429 on /contacts/search). The client already retries
+      // transient failures with backoff (see shared/ghlClient.ts), so reaching here means the
+      // search is genuinely unresolvable. Fail the lead instead: a retryable FAILED is cheaper to
+      // fix than a duplicate the user has to find and merge in GHL.
+      const detail = searchError.response?.data?.message || searchError.message;
       console.error(`⚠️ Contact search failed:`, searchError.response?.data || searchError.message);
-      // Continue to create new contact if search fails
+      throw new Error(
+        `Contact lookup failed, so the sync was stopped to avoid creating a duplicate contact: ${detail}`
+      );
     }
 
     if (existingContact) return await performUpdate(existingContact.id);

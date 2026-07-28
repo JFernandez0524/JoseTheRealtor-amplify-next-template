@@ -185,6 +185,7 @@ async function processGhlSync(lead: any, groups: string[] = [], ownerId: string 
       }
       
       // No contactId saved yet, mark as FAILED
+      console.error(`❌ [GHL_SYNC] Lead ${lead.id} failed (phone path): ${error.message}`);
       await updateLeadSyncStatus(docClient, propertyLeadTableName!, lead.id, 'FAILED');
       return { status: 'FAILED', message: error.message };
     }
@@ -217,6 +218,7 @@ async function processGhlSync(lead: any, groups: string[] = [], ownerId: string 
       ghlContactId: ghlContactId,
     };
   } catch (error: any) {
+    console.error(`❌ [GHL_SYNC] Lead ${lead.id} failed (email-only path): ${error.message}`);
     await updateLeadSyncStatus(docClient, propertyLeadTableName!, lead.id, 'FAILED');
     return { status: 'FAILED', message: error.message };
   }

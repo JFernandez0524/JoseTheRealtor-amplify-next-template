@@ -11,13 +11,33 @@
  * BASE URL: https://services.leadconnectorhq.com
  * TIMEOUT: 10 seconds per request
  */
-import axios, { AxiosInstance } from 'axios';
+import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'axios';
+import {
+  GHL_MAX_RETRIES,
+  getGhlRetryDelayMs,
+  isRetryableGhlStatus,
+} from './ghlRetry';
 
 const GHL_BASE_URL = 'https://services.leadconnectorhq.com';
 const GHL_VERSION = '2021-07-28';
 
+/** Per-request retry bookkeeping, carried on the axios config across interceptor passes. */
+type RetryableConfig = InternalAxiosRequestConfig & { __ghlRetryCount?: number };
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * Creates an axios instance for the GHL API with automatic retry on transient failures.
+ *
+ * The retry lives in a response interceptor rather than in the named helpers below because callers
+ * (notably `manualGhlSync/integrations/gohighlevel.ts`) use the returned instance directly —
+ * `ghl.post('/contacts/search', …)`, `ghl.put(…)`. Putting it here means every GHL call in every
+ * Lambda inherits backoff from one place.
+ *
+ * See `ghlRetry.ts` for which statuses retry and how the delay is chosen.
+ */
 export function createGhlClient(token: string): AxiosInstance {
-  return axios.create({
+  const client = axios.create({
     baseURL: GHL_BASE_URL,
     timeout: 10000,
     headers: {
@@ -27,6 +47,40 @@ export function createGhlClient(token: string): AxiosInstance {
       Version: GHL_VERSION,
     },
   });
+
+  client.interceptors.response.use(undefined, async (error: AxiosError) => {
+    const config = error.config as RetryableConfig | undefined;
+    const status = error.response?.status ?? null;
+
+    // No config means the request was never dispatched — nothing to replay.
+    if (!config || !isRetryableGhlStatus(status)) {
+      return Promise.reject(error);
+    }
+
+    const attempt = config.__ghlRetryCount ?? 0;
+    if (attempt >= GHL_MAX_RETRIES) {
+      console.error(
+        `❌ [GHL] ${config.method?.toUpperCase()} ${config.url} still failing with ${status} ` +
+          `after ${GHL_MAX_RETRIES} retries — giving up.`
+      );
+      return Promise.reject(error);
+    }
+
+    const retryAfter =
+      (error.response?.headers?.['retry-after'] as string | undefined) ?? null;
+    const delay = getGhlRetryDelayMs(attempt, retryAfter);
+
+    console.warn(
+      `⏳ [GHL] ${status} on ${config.method?.toUpperCase()} ${config.url} — ` +
+        `retry ${attempt + 1}/${GHL_MAX_RETRIES} in ${delay}ms`
+    );
+
+    config.__ghlRetryCount = attempt + 1;
+    await sleep(delay);
+    return client.request(config);
+  });
+
+  return client;
 }
 
 export async function ghlGetContact(token: string, contactId: string): Promise<any> {

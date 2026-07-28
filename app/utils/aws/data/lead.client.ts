@@ -246,78 +246,112 @@ export async function skipTraceLeads(leadIds: string[]): Promise<any> {
  */
 export async function syncToGHL(leadIds: string[], onProgress?: (current: number, total: number, message: string) => void): Promise<{ successful: number; failed: number; skipped: number; failedIds: string[]; skippedIds: string[]; isAsync?: boolean }> {
   try {
-    const BATCH_SIZE = 10;
-    const DELAY_MS = 250;
+    // Each sync invocation makes several sequential GHL calls, so concurrency here multiplies into
+    // GHL's per-location burst limit. On 2026-07-28 a run at BATCH_SIZE 10 / 250ms produced 76
+    // `429 Too Many Requests` across 79 failed leads. The Lambda's GHL client now retries with
+    // backoff (amplify/functions/shared/ghlRetry.ts); these values keep us off the limit to begin
+    // with so that retry is the exception rather than the norm.
+    const BATCH_SIZE = 5;
+    const DELAY_MS = 1000;
+    /** Extra passes over whatever is still failing, so the user doesn't hand-click "Retry Sync". */
+    const RETRY_ROUNDS = 3;
 
     let successful = 0;
-    let failed = 0;
     let skipped = 0;
-    const failedIds: string[] = [];
     const skippedIds: string[] = [];
-    
-    console.log(`🔄 Syncing ${leadIds.length} leads in batches of ${BATCH_SIZE}...`);
-    
-    // Process leads in batches
-    for (let i = 0; i < leadIds.length; i += BATCH_SIZE) {
-      const batch = leadIds.slice(i, i + BATCH_SIZE);
-      const batchNum = Math.floor(i / BATCH_SIZE) + 1;
-      const totalBatches = Math.ceil(leadIds.length / BATCH_SIZE);
-      
-      console.log(`📦 Processing batch ${batchNum}/${totalBatches} (${batch.length} leads)`);
-      
-      // Update progress
-      if (onProgress) {
-        onProgress(i, leadIds.length, `Processing batch ${batchNum}/${totalBatches}...`);
-      }
-      
-      const results = await Promise.allSettled(
-        batch.map((id) => client.mutations.manualGhlSync({ leadId: id }))
-      );
-      
-      results.forEach((result, index) => {
-        if (result.status === 'fulfilled') {
-          const response = result.value as any;
-          
-          // Extract the actual Lambda response from GraphQL wrapper
-          const lambdaResult = response?.data;
-          
-          // Parse if it's a JSON string
-          let syncData = lambdaResult;
-          if (typeof lambdaResult === 'string') {
-            try {
-              syncData = JSON.parse(lambdaResult);
-            } catch {
-              syncData = { status: lambdaResult };
-            }
-          }
-          
-          const status = syncData?.status;
-          console.log(`🔍 Lead ${batch[index]} - Status: ${status}, Message: ${syncData?.message || 'N/A'}`);
-          
-          if (status === 'SUCCESS') {
-            successful++;
-            console.log(`✅ Lead ${batch[index]} synced successfully`);
-          } else if (status === 'SKIPPED') {
-            skipped++;
-            skippedIds.push(batch[index]);
-            console.log(`⏭️ Lead ${batch[index]} skipped: ${syncData?.message}`);
-          } else {
-            failed++;
-            failedIds.push(batch[index]);
-            console.log(`❌ Lead ${batch[index]} failed - Status: ${status}, Message: ${syncData?.message}`);
-          }
-        } else {
-          failed++;
-          failedIds.push(batch[index]);
-          console.log(`❌ Lead ${batch[index]} Lambda execution failed: ${result.reason}`);
+    let pending = [...leadIds];
+    let failedIds: string[] = [];
+
+    /** Run one full pass over `ids`, returning the ones that failed. Tallies land in the closure. */
+    const runPass = async (ids: string[], passLabel: string): Promise<string[]> => {
+      const stillFailing: string[] = [];
+
+      for (let i = 0; i < ids.length; i += BATCH_SIZE) {
+        const batch = ids.slice(i, i + BATCH_SIZE);
+        const batchNum = Math.floor(i / BATCH_SIZE) + 1;
+        const totalBatches = Math.ceil(ids.length / BATCH_SIZE);
+
+        console.log(`📦 ${passLabel}: batch ${batchNum}/${totalBatches} (${batch.length} leads)`);
+
+        if (onProgress) {
+          onProgress(
+            leadIds.length - (ids.length - i),
+            leadIds.length,
+            `${passLabel}: batch ${batchNum}/${totalBatches}...`
+          );
         }
-      });
-      
-      // Short pause between batches to avoid hammering the Lambda concurrency limit
-      if (i + BATCH_SIZE < leadIds.length) {
-        await new Promise(resolve => setTimeout(resolve, DELAY_MS));
+
+        const results = await Promise.allSettled(
+          batch.map((id) => client.mutations.manualGhlSync({ leadId: id }))
+        );
+
+        results.forEach((result, index) => {
+          if (result.status === 'fulfilled') {
+            const response = result.value as any;
+
+            // Extract the actual Lambda response from GraphQL wrapper
+            const lambdaResult = response?.data;
+
+            // Parse if it's a JSON string
+            let syncData = lambdaResult;
+            if (typeof lambdaResult === 'string') {
+              try {
+                syncData = JSON.parse(lambdaResult);
+              } catch {
+                syncData = { status: lambdaResult };
+              }
+            }
+
+            const status = syncData?.status;
+            console.log(`🔍 Lead ${batch[index]} - Status: ${status}, Message: ${syncData?.message || 'N/A'}`);
+
+            if (status === 'SUCCESS') {
+              successful++;
+              console.log(`✅ Lead ${batch[index]} synced successfully`);
+            } else if (status === 'SKIPPED') {
+              // Terminal: the lead is missing data the sync requires, so retrying can't help.
+              skipped++;
+              skippedIds.push(batch[index]);
+              console.log(`⏭️ Lead ${batch[index]} skipped: ${syncData?.message}`);
+            } else {
+              stillFailing.push(batch[index]);
+              console.log(`❌ Lead ${batch[index]} failed - Status: ${status}, Message: ${syncData?.message}`);
+            }
+          } else {
+            stillFailing.push(batch[index]);
+            console.log(`❌ Lead ${batch[index]} Lambda execution failed: ${result.reason}`);
+          }
+        });
+
+        // Short pause between batches to stay under GHL's burst limit
+        if (i + BATCH_SIZE < ids.length) {
+          await new Promise(resolve => setTimeout(resolve, DELAY_MS));
+        }
       }
+
+      return stillFailing;
+    };
+
+    console.log(`🔄 Syncing ${leadIds.length} leads in batches of ${BATCH_SIZE}...`);
+    failedIds = await runPass(pending, 'Syncing');
+
+    // Automatically re-run whatever is still failing. Most failures at this scale are transient
+    // rate limiting, which clears on its own — so back off between rounds rather than hammering.
+    for (let round = 1; round <= RETRY_ROUNDS && failedIds.length > 0; round++) {
+      const backoffMs = 2000 * 2 ** (round - 1); // 2s, 4s, 8s
+      const label = `Retrying ${failedIds.length} lead${failedIds.length === 1 ? '' : 's'} (round ${round} of ${RETRY_ROUNDS})`;
+
+      console.log(`⏳ ${label} after ${backoffMs}ms...`);
+      if (onProgress) {
+        onProgress(leadIds.length - failedIds.length, leadIds.length, `${label}...`);
+      }
+      await new Promise(resolve => setTimeout(resolve, backoffMs));
+
+      pending = failedIds;
+      failedIds = await runPass(pending, label);
     }
+
+    const failed = failedIds.length;
 
     if (onProgress) {
       onProgress(leadIds.length, leadIds.length, `Complete! ${successful} successful, ${skipped} skipped, ${failed} failed`);
