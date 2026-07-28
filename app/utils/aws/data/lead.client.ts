@@ -67,7 +67,16 @@ export type Lead = Schema['PropertyLead']['type'] & {
 };
 
 /**
- * Fetch all leads for the current user (with automatic pagination)
+ * Fetch all leads for the current user (with automatic pagination).
+ *
+ * Uses the `leadsByDate` secondary index (`index('owner').sortKeys(['createdAt'])` in
+ * amplify/data/resource.ts) rather than `.list({ filter: { owner } })`. A filtered `list` is a
+ * DynamoDB **Scan** — every page scans up to 1MB of the whole table and then discards non-matching
+ * rows — whereas this is a Query against the owner's partition. With ~3k leads that is the
+ * difference between dozens of sequential round trips and a handful.
+ *
+ * Callers that only need a few known leads should use `fetchLeadsByIds` instead of re-fetching
+ * everything.
  */
 export async function fetchLeads(): Promise<Lead[]> {
   try {
@@ -76,10 +85,10 @@ export async function fetchLeads(): Promise<Lead[]> {
     let nextToken: string | null | undefined;
 
     do {
-      const result = await client.models.PropertyLead.list({
-        filter: { owner: { eq: userId } },
-        nextToken: nextToken ?? undefined,
-      });
+      const result = await client.models.PropertyLead.leadsByDate(
+        { owner: userId },
+        { nextToken: nextToken ?? undefined }
+      );
       allLeads.push(...(result.data || []));
       nextToken = result.nextToken;
     } while (nextToken);
@@ -90,6 +99,34 @@ export async function fetchLeads(): Promise<Lead[]> {
     console.error('Failed to fetch leads:', err);
     throw err;
   }
+}
+
+/**
+ * Fetch a known set of leads by id, for patching the dashboard list after a mutation whose
+ * affected rows are already known (bulk status update, sync, skip trace…).
+ *
+ * Bounded by the caller's selection, so this is always far cheaper than `fetchLeads()`. Requests
+ * are chunked so a 100-lead selection doesn't fire 100 simultaneous queries; leads that no longer
+ * exist are dropped rather than returned as nulls.
+ */
+export async function fetchLeadsByIds(ids: string[]): Promise<Lead[]> {
+  const unique = Array.from(new Set((ids || []).filter(Boolean)));
+  if (unique.length === 0) return [];
+
+  const CHUNK_SIZE = 25;
+  const leads: Lead[] = [];
+
+  for (let i = 0; i < unique.length; i += CHUNK_SIZE) {
+    const chunk = unique.slice(i, i + CHUNK_SIZE);
+    const results = await Promise.all(
+      chunk.map((id) => client.models.PropertyLead.get({ id }))
+    );
+    for (const { data } of results) {
+      if (data) leads.push(data as Lead);
+    }
+  }
+
+  return leads;
 }
 
 /**

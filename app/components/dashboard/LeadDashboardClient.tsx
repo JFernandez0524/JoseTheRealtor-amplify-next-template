@@ -3,13 +3,15 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { client } from '@/app/utils/aws/data/frontEndClient';
-import { 
-  fetchLeads, 
-  bulkDeleteLeads, 
-  bulkUpdateStatus, 
-  skipTraceLeads, 
+import {
+  fetchLeads,
+  fetchLeadsByIds,
+  bulkDeleteLeads,
+  bulkUpdateStatus,
+  skipTraceLeads,
   syncToGHL
 } from '@/app/utils/aws/data/lead.client';
+import { mergeLeadsById } from '@/app/utils/leadState';
 import { useAccess } from '@/app/context/AccessContext';
 import { useGhl } from '@/app/context/GhlContext';
 import { useToast } from '@/app/components/leadDetails/ToastProvider';
@@ -159,13 +161,36 @@ export default function LeadDashboardClient({}: Props) {
 
 
 
-  // Manual refresh function for immediate updates
+  // Full re-fetch of every lead. Expensive (paginates the owner's whole partition) — only use it
+  // when the set of changed rows isn't known. Prefer patchLeads / applyLeadUpdates.
   const refreshLeads = async () => {
     try {
       const data = await fetchLeads();
       setLeads([...data]);
     } catch (err) {
       console.error('Failed to refresh leads:', err);
+    }
+  };
+
+  /** Patch already-loaded rows from leads the caller already has (no network). */
+  const applyLeadUpdates = (updated: Lead[]) => {
+    if (!updated?.length) return;
+    setLeads((current) => mergeLeadsById(current, updated));
+  };
+
+  /**
+   * Re-read a known set of leads and patch them in. For actions whose affected rows are known
+   * (bulk status update, sync, skip trace, enrichment) this replaces a full re-list with a handful
+   * of gets bounded by the selection size.
+   */
+  const patchLeads = async (ids: string[]) => {
+    if (!ids?.length) return;
+    try {
+      const updated = await fetchLeadsByIds(ids);
+      applyLeadUpdates(updated);
+    } catch (err) {
+      console.error('Failed to patch leads, falling back to full refresh:', err);
+      await refreshLeads();
     }
   };
 
@@ -562,7 +587,9 @@ export default function LeadDashboardClient({}: Props) {
         duration: 8000,
       });
 
-      await refreshLeads();
+      // Only the synced leads changed (ghlSyncStatus/ghlContactId) — `ids` was captured before
+      // setSelectedIds([]) above, so it's still the full set.
+      await patchLeads(ids);
 
     } catch (err) {
       console.error('Sync error:', err);
@@ -654,8 +681,9 @@ export default function LeadDashboardClient({}: Props) {
 
       setSelectedIds([]);
 
-      // Refresh data in place — a hard reload would wipe the toast before it can be read.
-      await refreshLeads();
+      // Refresh in place — a hard reload would wipe the toast before it can be read. Only the
+      // traced leads changed, and `idsToProcess` survives the setSelectedIds([]) above.
+      await patchLeads(idsToProcess);
     } catch (err: any) {
       console.error('Skip-trace error:', err);
       addToast({ type: 'error', title: 'Skip-trace Error', message: err.message || 'Check your network connection' });
@@ -698,22 +726,25 @@ export default function LeadDashboardClient({}: Props) {
 
     if (!confirm(`Set ${selectedIds.length} leads to ${status}?`)) return;
 
+    // Capture before setSelectedIds([]) below — otherwise there's nothing left to patch.
+    const ids = [...selectedIds];
+
     setIsProcessing(true);
     try {
       await bulkUpdateStatus(
-        selectedIds,
+        ids,
         status as 'off_market' | 'active' | 'sold' | 'pending' | 'fsbo' | 'auction' | 'skip' | 'door_knock'
       );
-      addToast({ type: 'success', title: 'Status Updated', message: `Successfully updated ${selectedIds.length} leads to ${status}` });
+      addToast({ type: 'success', title: 'Status Updated', message: `Successfully updated ${ids.length} leads to ${status}` });
       setSelectedIds([]);
-      await refreshLeads();
+      // Patch in place. The previous hard reload in `finally` made the refresh above pointless and
+      // wiped the toast it had just raised — the same trap the skip-trace handler calls out.
+      await patchLeads(ids);
     } catch (err) {
       console.error('Bulk status update error:', err);
       addToast({ type: 'error', title: 'Update Failed', message: 'Error updating lead statuses' });
     } finally {
       setIsProcessing(false);
-      // Force page refresh to ensure all data is updated
-      window.location.reload();
     }
   };
 
@@ -754,12 +785,15 @@ export default function LeadDashboardClient({}: Props) {
   };
 
   const executeEnrich = async () => {
+    // Capture before setSelectedIds(result.noMatchIds) below narrows the selection.
+    const enrichIds = [...selectedIds];
+
     setIsProcessing(true);
     try {
       const response = await fetch('/api/v1/enrich-leads', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ leadIds: selectedIds }),
+        body: JSON.stringify({ leadIds: enrichIds }),
       });
 
       const result = await response.json();
@@ -783,7 +817,8 @@ export default function LeadDashboardClient({}: Props) {
       // matched leads drop out of the selection.
       setSelectedIds(result.noMatchIds ?? []);
       // Refresh data in place — do NOT hard-reload (a reload wipes the toast before it can be read).
-      await refreshLeads();
+      // Only the enriched leads changed; `enrichIds` was captured before the selection was reset.
+      await patchLeads(enrichIds);
     } catch (err) {
       console.error('Enrichment error:', err);
       addToast({ type: 'error', title: 'Enrichment Failed', message: err instanceof Error ? err.message : String(err) });
@@ -803,13 +838,16 @@ export default function LeadDashboardClient({}: Props) {
     )
       return;
 
+    // Capture before setSelectedIds([]) below.
+    const mailIds = [...selectedIds];
+
     setIsProcessing(true);
     try {
       const response = await fetch('/api/v1/ai/generate-bulk-letters', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          leadIds: selectedIds,
+          leadIds: mailIds,
           options: {
             includeListingOption: true,
             includeCashOption: true,
@@ -829,13 +867,15 @@ export default function LeadDashboardClient({}: Props) {
       addToast({ type: 'success', title: 'Direct Mail Campaign Complete!', message: `Sent ${sent}/${result.generated} letters | Failed: ${failed} | Delivery: 3-5 business days`, duration: 10000 });
 
       setSelectedIds([]);
+      // Patch in place instead of the previous window.location.reload(), which fired in `finally`
+      // and wiped the success toast raised immediately above — the trap the skip-trace and
+      // enrichment handlers already comment on and avoid.
+      await patchLeads(mailIds);
     } catch (err) {
       console.error('Direct mail generation error:', err);
       addToast({ type: 'error', title: 'Direct Mail Failed', message: 'Error sending letters via Click2Mail' });
     } finally {
       setIsProcessing(false);
-      // Force page refresh to ensure all data is updated
-      window.location.reload();
     }
   };
 
@@ -1290,6 +1330,7 @@ export default function LeadDashboardClient({}: Props) {
         isLoading={isLoading}
         totalFilteredCount={filteredLeads.length}
         onRefresh={refreshLeads}
+        onLeadUpdated={applyLeadUpdates}
         onToggleAll={() => {
           const newSelection = selectedIds.length === paginatedLeads.length
             ? []

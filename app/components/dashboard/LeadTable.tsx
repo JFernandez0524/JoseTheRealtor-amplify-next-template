@@ -4,7 +4,7 @@
 import React, { useState } from 'react';
 import { StatusBadge } from '../shared/StatusBadge';
 import { formatDate } from '@/app/utils/formatters';
-import { updateLead } from '@/app/utils/aws/data/lead.client';
+import { updateLead, fetchLead } from '@/app/utils/aws/data/lead.client';
 import { AddressAutocomplete, ParsedAddress } from '@/app/components/address/AddressAutocomplete';
 import { type Schema } from '@/amplify/data/resource';
 
@@ -31,7 +31,14 @@ type Props = {
   totalFilteredCount: number;
   onToggleOne: (id: string) => void;
   onRowClick: (id: string) => void;
+  /** Full re-fetch of every lead. Expensive — prefer `onLeadUpdated` when the changed rows are known. */
   onRefresh?: () => Promise<void>;
+  /**
+   * Patch already-loaded rows in place after an inline edit, so the change renders immediately
+   * without re-downloading the whole list. Most call sites can pass the `Lead` that `updateLead`
+   * already returned, costing no extra request.
+   */
+  onLeadUpdated?: (leads: Lead[]) => void;
   sortField: string;
   sortDirection: 'asc' | 'desc';
   onSort: (field: string) => void;
@@ -105,10 +112,25 @@ export function LeadTable({
   onToggleOne,
   onRowClick,
   onRefresh,
+  onLeadUpdated,
   sortField,
   sortDirection,
   onSort,
 }: Props) {
+
+  /**
+   * Re-read one lead and patch it into the table. Used where the server response doesn't carry the
+   * updated row (e.g. /api/v1/refresh-zestimate returns only the valuation fields). One `get`
+   * instead of re-listing every lead.
+   */
+  const patchLeadById = async (leadId: string) => {
+    if (!onLeadUpdated) {
+      if (onRefresh) await onRefresh();
+      return;
+    }
+    const fresh = await fetchLead(leadId);
+    if (fresh) onLeadUpdated([fresh as Lead]);
+  };
   const tableRef = React.useRef<HTMLDivElement>(null);
   const modalRef = React.useRef<HTMLDivElement>(null);
   const [editingLead, setEditingLead] = useState<Lead | null>(null);
@@ -161,14 +183,16 @@ export function LeadTable({
         zpid = m[1];
       }
       try {
-        await updateLead(lead.id, {
+        const updated = await updateLead(lead.id, {
           zestimate: amount,
           zestimateSource: 'MANUAL',
           zestimateDate: new Date().toISOString(),
           ...(hasUrl ? { zillowUrl: urlRaw, zillowZpid: zpid } : {}),
         });
         closeZestimateEditor();
-        if (onRefresh) await onRefresh();
+        // updateLead already returned the new row — no follow-up request needed.
+        if (onLeadUpdated && updated) onLeadUpdated([updated]);
+        else if (onRefresh) await onRefresh();
       } catch (err: any) {
         setZestimateError(err.message || 'Failed to save value');
       }
@@ -193,11 +217,13 @@ export function LeadTable({
       if (data.partial || !data.zillowData) {
         setZestimateError('');
         setZestimateNotice(data.message || 'Zillow has no value for this property. Enter a dollar amount below.');
-        if (onRefresh) await onRefresh();
+        // The link was still saved server-side, so patch the row to reflect it.
+        await patchLeadById(lead.id);
         return;
       }
       closeZestimateEditor();
-      if (onRefresh) await onRefresh();
+      // The route returns only {zestimate, zpid, zillowUrl}, not the row — re-read just this lead.
+      await patchLeadById(lead.id);
     } catch (err: any) {
       setZestimateError(err.message);
     }
@@ -301,8 +327,13 @@ export function LeadTable({
         alert(`Address updated but Zestimate refresh failed: ${error.error}`);
       }
 
+      const savedLeadId = editingLead.id;
       setEditingLead(null);
-      if (onRefresh) {
+      // The Zestimate refresh above wrote to the row server-side, so re-read this one lead rather
+      // than trusting the local updateLead response (which predates it).
+      if (onLeadUpdated) {
+        await patchLeadById(savedLeadId);
+      } else if (onRefresh) {
         await onRefresh();
       } else {
         window.location.reload();
@@ -691,7 +722,7 @@ export function LeadTable({
                                     button.textContent = '✓';
                                     button.className = 'text-green-600 font-bold select-none';
                                     await new Promise(resolve => setTimeout(resolve, 1000));
-                                    if (onRefresh) await onRefresh();
+                                    await patchLeadById(lead.id);
                                     button.textContent = '↻';
                                     button.className = 'text-gray-400 hover:text-green-600 select-none';
                                     button.disabled = false;
@@ -699,7 +730,7 @@ export function LeadTable({
                                     // Saved, but Zillow has no value for this property.
                                     button.textContent = '↻';
                                     button.disabled = false;
-                                    if (onRefresh) await onRefresh();
+                                    await patchLeadById(lead.id);
                                     alert(data.message || 'Zillow has no value for this property. Use ✏️ to enter a dollar amount manually.');
                                   } else {
                                     button.textContent = '↻';
@@ -736,7 +767,12 @@ export function LeadTable({
                           } else if ((!newStatus || newStatus === 'off_market') && lead.skipTraceStatus === 'NOT_ELIGIBLE') {
                             updates.skipTraceStatus = 'PENDING';
                           }
-                          await updateLead(lead.id, updates);
+                          const updated = await updateLead(lead.id, updates);
+                          // Required, not an optimisation: this <select> is controlled by
+                          // `lead.listingStatus`, so without patching state React re-renders from
+                          // unchanged props and the chosen option snaps back to the old value.
+                          // Passing the whole row also surfaces the skipTraceStatus flip above.
+                          if (onLeadUpdated && updated) onLeadUpdated([updated]);
                         } catch (err) {
                           console.error('Failed to update status:', err);
                         }
