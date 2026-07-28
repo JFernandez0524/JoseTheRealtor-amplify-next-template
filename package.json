@@ -14,7 +14,8 @@
     "validate-emails": "tsx scripts/validate-existing-emails.ts",
     "validate-ghl-emails": "tsx scripts/validate-ghl-emails.ts",
     "remove-invalid-emails": "tsx scripts/remove-known-invalid-emails.ts",
-    "backfill-county": "tsx scripts/backfill-county.ts"
+    "backfill-county": "tsx scripts/backfill-county.ts",
+    "backfill-landlines": "tsx scripts/backfill-landlines.ts"
   },
   "dependencies": {
     "@aws-amplify/adapter-nextjs": "^1.6.10",
