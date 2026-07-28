@@ -1,5 +1,6 @@
 import { type AxiosInstance } from 'axios';
 import { createGhlClient } from '../../shared/ghlClient';
+import { AI_OUTREACH_TAG, shouldQueueForOutreach } from '../../shared/outreachGate';
 import { DBLead } from '../../../../app/utils/aws/data/lead.server';
 
 // 🎯 Updated parameters for "1 Phone = 1 Contact" strategy
@@ -124,7 +125,7 @@ export async function syncToGoHighLevel(
       // 🤖 AI OUTREACH - Only skip traced leads with EMAIL addresses (AI plan users or admins)
       const isAllowedUser = isAIPlan || isAdmin;
       if (isAllowedUser && primaryEmail) {
-        tags.push('ai outreach'); // Enable AI email outreach (EMAIL ONLY - requires email address)
+        tags.push(AI_OUTREACH_TAG); // Enable AI email outreach (EMAIL ONLY - requires email address)
       }
     } else if (specificPhone) {
       tags.push('Data:OriginalUpload'); // Phone was in original upload
@@ -281,51 +282,62 @@ export async function syncToGoHighLevel(
       );
     }
 
-    if (existingContact) return await performUpdate(existingContact.id);
+    const createContact = async () => {
+      console.info(
+        `🆕 Creating new contact${specificPhone ? ` for phone ${phoneIndex}: ${specificPhone}` : ' for direct mail workflow'}`
+      );
+      const res = await ghl.post('/contacts/', {
+        ...basePayload,
+        locationId: ghlLocationId,
+      });
+      return res.data?.contact?.id;
+    };
 
-    console.info(
-      `🆕 Creating new contact${specificPhone ? ` for phone ${phoneIndex}: ${specificPhone}` : ' for direct mail workflow'}`
-    );
-    const res = await ghl.post('/contacts/', {
-      ...basePayload,
-      locationId: ghlLocationId,
-    });
-    const contactId = res.data?.contact?.id;
-    
-    // 📋 Add to outreach queue if contact has "ai outreach" tag
-    if (contactId && tags.includes('ai outreach')) {
+    // Both paths converge here. Enrolment used to live inside the create branch only, so a lead
+    // whose GHL contact already existed was synced but never queued for email outreach — see the
+    // 2026-07-28 sync where 1 of 106 silently missed the queue for exactly this reason.
+    const contactId = existingContact
+      ? await performUpdate(existingContact.id)
+      : await createContact();
+
+    // 📋 Add to outreach queue if contact has "ai outreach" tag.
+    // Safe to run on every sync, including updates: addToOutreachQueue is idempotent (keyed
+    // `${userId}_${contactId}`) and returns early when a row exists, preserving outreach progress.
+    if (shouldQueueForOutreach(contactId, tags, primaryEmail)) {
       try {
         const { addToOutreachQueue } = await import('../../shared/outreachQueue');
 
         // SMS outreach disabled - EMAIL ONLY.
         // One queue row per contact, using the single best email (lead.emails is ranked
         // best-first by filterValidEmails). Emailing every address 2-3x'd volume and bounces.
-        if (primaryEmail) {
-          await addToOutreachQueue({
-            userId,
-            locationId: ghlLocationId,
-            contactId,
-            leadId: lead.id,
-            contactName: `${basePayload.firstName} ${basePayload.lastName}`,
-            contactPhone: undefined, // Email only
-            contactEmail: primaryEmail,
-            propertyAddress: lead.ownerAddress,
-            propertyCity: lead.ownerCity,
-            propertyState: lead.ownerState,
-            leadType: lead.type,
-          });
-          console.log(`✅ Added best email ${primaryEmail} to outreach queue`);
-        }
-
+        await addToOutreachQueue({
+          userId,
+          locationId: ghlLocationId,
+          contactId,
+          leadId: lead.id,
+          contactName: `${basePayload.firstName} ${basePayload.lastName}`,
+          contactPhone: undefined, // Email only
+          // shouldQueueForOutreach already guarantees this is a non-empty string, but TypeScript
+          // can't narrow through a boolean-returning call, and OutreachQueueItem takes
+          // `string | undefined`. Coerce rather than making the gate a type predicate — it also
+          // returns false when contactId or the tag is missing, so narrowing on the false branch
+          // would be unsound.
+          contactEmail: primaryEmail ?? undefined,
+          propertyAddress: lead.ownerAddress,
+          propertyCity: lead.ownerCity,
+          propertyState: lead.ownerState,
+          leadType: lead.type,
+        });
+        console.log(`✅ Added best email ${primaryEmail} to outreach queue`);
       } catch (queueError) {
         console.error(`⚠️ Failed to add to outreach queue:`, queueError);
         // Don't fail the sync if queue add fails
       }
     }
-    
+
     // Email outreach is handled by dailyEmailAgent (7-touch cadence over 28 days)
     // No initial email sent during sync
-    
+
     return contactId;
   } catch (error: any) {
     throw new Error(

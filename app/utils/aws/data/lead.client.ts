@@ -286,7 +286,7 @@ export async function syncToGHL(leadIds: string[], onProgress?: (current: number
     // Each sync invocation makes several sequential GHL calls, so concurrency here multiplies into
     // GHL's per-location burst limit. On 2026-07-28 a run at BATCH_SIZE 10 / 250ms produced 76
     // `429 Too Many Requests` across 79 failed leads. The Lambda's GHL client now retries with
-    // backoff (amplify/functions/shared/ghlRetry.ts); these values keep us off the limit to begin
+    // backoff (amplify/functions/shared/apiRetry.ts); these values keep us off the limit to begin
     // with so that retry is the exception rather than the norm.
     const BATCH_SIZE = 5;
     const DELAY_MS = 1000;

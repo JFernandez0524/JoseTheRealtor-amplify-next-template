@@ -1,39 +1,42 @@
 /**
- * GHL RETRY POLICY
+ * HTTP RETRY POLICY
  *
- * Pure decision helpers for retrying GoHighLevel API requests. Kept side-effect free and separate
- * from `ghlClient.ts` so they can be unit-tested without constructing an axios instance
- * (`__tests__/shared/ghlRetry.test.ts`).
+ * Pure decision helpers for retrying outbound third-party API requests. Side-effect free and
+ * separate from the clients that use them so they can be unit-tested without constructing an axios
+ * instance (`__tests__/shared/apiRetry.test.ts`).
  *
- * WHY THIS EXISTS: a bulk sync fans out many concurrent Lambdas, each making several sequential GHL
- * calls. That reliably trips GHL's per-location burst limit and returns 429s. Without retry those
- * surface to the user as failed leads that succeed on a manual retry — see the 2026-07-28 incident
- * (76 × `429 Too Many Requests` across 79 failed syncs).
+ * WHY THIS EXISTS: a bulk sync fans out many concurrent Lambdas, each making several sequential
+ * third-party calls. That reliably trips per-account burst limits and returns 429s. Without retry
+ * those surface to the user as failed leads that succeed on a manual retry — see the 2026-07-28
+ * incident (76 × `429 Too Many Requests` across 79 failed GHL syncs, and 142 × 429 from DeBounce
+ * in a later run).
  *
- * USED BY: `createGhlClient` in `amplify/functions/shared/ghlClient.ts` (response interceptor).
+ * USED BY:
+ * - `createGhlClient` in `amplify/functions/shared/ghlClient.ts` (response interceptor)
+ * - `validateEmail` in `amplify/functions/shared/emailValidator.ts`
  */
 
-/** Max retry attempts after the initial request. */
-export const GHL_MAX_RETRIES = 3;
+/** Max retry attempts after the initial request. Callers may use fewer. */
+export const MAX_RETRIES = 3;
 
 /** Base for exponential backoff, in ms. */
-export const GHL_RETRY_BASE_MS = 500;
+export const RETRY_BASE_MS = 500;
 
 /**
- * Ceiling for any single sleep. `manualGhlSync` runs with `timeoutSeconds: 30` and each request
- * carries a 10s axios timeout, so retry sleep must stay well clear of the Lambda budget — a
+ * Ceiling for any single sleep. `manualGhlSync` runs with `timeoutSeconds: 30` and its requests
+ * carry their own timeouts, so retry sleep must stay well clear of the Lambda budget — a function
  * timeout is a worse outcome than surfacing the 429.
  */
-export const GHL_RETRY_MAX_DELAY_MS = 5000;
+export const RETRY_MAX_DELAY_MS = 5000;
 
 /**
- * Whether a failed GHL request is worth retrying.
+ * Whether a failed request is worth retrying.
  *
  * Only transient server-side conditions qualify. A 4xx other than 429 means the request itself is
  * wrong (bad payload, revoked token, missing contact) and retrying just burns the Lambda's budget
  * before failing anyway.
  */
-export function isRetryableGhlStatus(status: number | null | undefined): boolean {
+export function isRetryableStatus(status: number | null | undefined): boolean {
   if (status == null) return false;
   return status === 429 || status === 500 || status === 502 || status === 503 || status === 504;
 }
@@ -67,18 +70,18 @@ function parseRetryAfterMs(header: string | null | undefined, now: number): numb
  *
  * Prefers the server's `Retry-After` when present. Otherwise exponential backoff with **full
  * jitter** — concurrent Lambdas that were all rate-limited in the same burst would otherwise retry
- * in lockstep and collide again. Always clamped to `GHL_RETRY_MAX_DELAY_MS`.
+ * in lockstep and collide again. Always clamped to `RETRY_MAX_DELAY_MS`.
  */
-export function getGhlRetryDelayMs(
+export function getRetryDelayMs(
   attempt: number,
   retryAfterHeader?: string | null,
   now: number = Date.now()
 ): number {
   const fromHeader = parseRetryAfterMs(retryAfterHeader, now);
-  if (fromHeader !== null) return Math.min(fromHeader, GHL_RETRY_MAX_DELAY_MS);
+  if (fromHeader !== null) return Math.min(fromHeader, RETRY_MAX_DELAY_MS);
 
   const safeAttempt = Math.max(0, attempt);
-  const ceiling = Math.min(GHL_RETRY_BASE_MS * 2 ** safeAttempt, GHL_RETRY_MAX_DELAY_MS);
+  const ceiling = Math.min(RETRY_BASE_MS * 2 ** safeAttempt, RETRY_MAX_DELAY_MS);
   // Full jitter: uniformly random in [ceiling/2, ceiling]. Keeps a useful minimum wait while still
   // spreading concurrent retries apart.
   const floor = ceiling / 2;

@@ -13,10 +13,10 @@
  */
 import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'axios';
 import {
-  GHL_MAX_RETRIES,
-  getGhlRetryDelayMs,
-  isRetryableGhlStatus,
-} from './ghlRetry';
+  MAX_RETRIES,
+  getRetryDelayMs,
+  isRetryableStatus,
+} from './apiRetry';
 
 const GHL_BASE_URL = 'https://services.leadconnectorhq.com';
 const GHL_VERSION = '2021-07-28';
@@ -34,7 +34,7 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
  * `ghl.post('/contacts/search', …)`, `ghl.put(…)`. Putting it here means every GHL call in every
  * Lambda inherits backoff from one place.
  *
- * See `ghlRetry.ts` for which statuses retry and how the delay is chosen.
+ * See `apiRetry.ts` for which statuses retry and how the delay is chosen.
  */
 export function createGhlClient(token: string): AxiosInstance {
   const client = axios.create({
@@ -53,26 +53,26 @@ export function createGhlClient(token: string): AxiosInstance {
     const status = error.response?.status ?? null;
 
     // No config means the request was never dispatched — nothing to replay.
-    if (!config || !isRetryableGhlStatus(status)) {
+    if (!config || !isRetryableStatus(status)) {
       return Promise.reject(error);
     }
 
     const attempt = config.__ghlRetryCount ?? 0;
-    if (attempt >= GHL_MAX_RETRIES) {
+    if (attempt >= MAX_RETRIES) {
       console.error(
         `❌ [GHL] ${config.method?.toUpperCase()} ${config.url} still failing with ${status} ` +
-          `after ${GHL_MAX_RETRIES} retries — giving up.`
+          `after ${MAX_RETRIES} retries — giving up.`
       );
       return Promise.reject(error);
     }
 
     const retryAfter =
       (error.response?.headers?.['retry-after'] as string | undefined) ?? null;
-    const delay = getGhlRetryDelayMs(attempt, retryAfter);
+    const delay = getRetryDelayMs(attempt, retryAfter);
 
     console.warn(
       `⏳ [GHL] ${status} on ${config.method?.toUpperCase()} ${config.url} — ` +
-        `retry ${attempt + 1}/${GHL_MAX_RETRIES} in ${delay}ms`
+        `retry ${attempt + 1}/${MAX_RETRIES} in ${delay}ms`
     );
 
     config.__ghlRetryCount = attempt + 1;
