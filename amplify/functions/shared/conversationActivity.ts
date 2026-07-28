@@ -6,6 +6,7 @@
  */
 
 import { ghlGetContact, ghlUpdateContact, createGhlClient } from './ghlClient';
+import { extractGhlMessages, isHumanOutbound } from './ghlMessages';
 
 export interface ActivityResult {
   hasRecentOutbound: boolean;
@@ -33,8 +34,8 @@ export async function checkRecentActivity(
     // Fetch recent messages
     const ghl = createGhlClient(token);
     const messagesRes = await ghl.get(`/conversations/${conversationId}/messages`, { params: { limit: 20 } });
-    const messages = messagesRes.data?.messages || [];
-    
+    const messages = extractGhlMessages(messagesRes.data);
+
     console.log(`📊 [ACTIVITY] Found ${messages.length} messages`);
 
     // Calculate time threshold
@@ -44,25 +45,27 @@ export async function checkRecentActivity(
     let lastOutboundTime: string | null = null;
     let hasRecentOutbound = false;
 
-    // Check messages for recent outbound activity
+    // Check messages for recent *human* outbound activity.
+    // Only human-sent messages count: this app's own AI replies and GHL workflow sends are also
+    // outbound, and counting them would make the agent read its own message from seconds earlier as
+    // a manual takeover and pause itself on every conversation. See isHumanOutbound.
     for (const msg of messages) {
+      if (!msg.dateAdded) continue;
       const messageTime = new Date(msg.dateAdded).getTime();
-      const isOutbound = msg.direction === 'outbound';
-      
-      // Track last activity (any direction)
+
+      // Track last activity (any direction, any sender)
       if (!lastActivityTime || messageTime > new Date(lastActivityTime).getTime()) {
         lastActivityTime = msg.dateAdded;
       }
-      
-      // Check for recent outbound messages
-      if (isOutbound && messageTime > thresholdTime) {
+
+      if (isHumanOutbound(msg) && messageTime > thresholdTime) {
         hasRecentOutbound = true;
-        
+
         if (!lastOutboundTime || messageTime > new Date(lastOutboundTime).getTime()) {
           lastOutboundTime = msg.dateAdded;
         }
-        
-        console.log(`📤 [ACTIVITY] Found recent outbound message at ${msg.dateAdded}`);
+
+        console.log(`📤 [ACTIVITY] Found recent human outbound message at ${msg.dateAdded}`);
       }
     }
 

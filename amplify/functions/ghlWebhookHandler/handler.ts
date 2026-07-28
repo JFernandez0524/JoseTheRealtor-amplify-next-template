@@ -27,6 +27,7 @@ import { claimProcessing, extractWebhookId } from '../shared/idempotency';
 import { logError, logWarning } from '../shared/logger';
 import { sanitizeId } from '../shared/sanitize';
 import { ghlGetContact, ghlUpdateContact, createGhlClient } from '../shared/ghlClient';
+import { extractGhlMessages, isSystemMessage } from '../shared/ghlMessages';
 
 // Validate environment at module load time
 validateEnv('ghlWebhookHandler');
@@ -311,7 +312,7 @@ export const handler = async (event: any) => {
       console.log('🔍 [WEBHOOK_LAMBDA] Fetching latest message from conversation API...');
       try {
         const messagesRes = await ghl.get(`/conversations/${conversationId}/messages`, { params: { limit: 1 } });
-        const latestMessage = messagesRes.data?.messages?.[0];
+        const latestMessage = extractGhlMessages(messagesRes.data)[0];
         if (latestMessage?.body) {
           messageBody = latestMessage.body;
           console.log('✅ [WEBHOOK_LAMBDA] Fetched message body from conversation:', messageBody);
@@ -325,7 +326,7 @@ export const handler = async (event: any) => {
     if (conversationId) {
       try {
         const messagesRes = await ghl.get(`/conversations/${conversationId}/messages`, { params: { limit: 1 } });
-        const latestMessage = messagesRes.data?.messages?.[0];
+        const latestMessage = extractGhlMessages(messagesRes.data)[0];
         if (latestMessage?.contentType && latestMessage.contentType !== 'text/plain') {
           console.log('⏭️ [WEBHOOK_LAMBDA] Skipping media message:', latestMessage.contentType);
           return {
@@ -437,32 +438,10 @@ export const handler = async (event: any) => {
       };
     }
 
-    // AUTO-DETECT: Check for recent manual activity (120-minute window)
-    // Widened from 30 → 120 min so a human touch within ~2 hours auto-pauses the AI
-    // (e.g. a manual call/text 66 min before the lead's reply). Complements the
-    // deliberate `AI State = paused` field switch; this is the automatic catch.
-    if (conversationId) {
-      const { checkRecentActivity, activateManualMode } = await import('../shared/conversationActivity');
-
-      const activity = await checkRecentActivity(conversationId, token, 120);
-      
-      if (activity.hasRecentOutbound) {
-        console.log('🚫 [WEBHOOK_LAMBDA] Detected recent manual activity - activating manual mode');
-        
-        await activateManualMode(contactId, token, 'Recent manual activity detected', fieldIds);
-        
-        return {
-          statusCode: 200,
-          body: JSON.stringify({ 
-            message: 'Manual mode activated - AI paused',
-            contactId,
-            lastOutboundTime: activity.lastOutboundTime
-          })
-        };
-      }
-    }
-
-    // Fetch conversation ID from GHL if not provided
+    // Fetch conversation ID from GHL if not provided.
+    // MUST stay ahead of the manual-activity check below: that check is guarded on conversationId,
+    // and when the webhook payload omits it (the common case) running the check first meant it was
+    // silently skipped on every message — a human takeover never paused the AI.
     console.log('🔍 [WEBHOOK_LAMBDA] Fetching conversations for contact...');
     if (!conversationId) {
       try {
@@ -471,6 +450,31 @@ export const handler = async (event: any) => {
         console.log('✅ [WEBHOOK_LAMBDA] Found conversation:', conversationId);
       } catch (error) {
         console.error('⚠️ [WEBHOOK_LAMBDA] Failed to fetch conversation ID:', error);
+      }
+    }
+
+    // AUTO-DETECT: Check for recent manual activity (120-minute window)
+    // Widened from 30 → 120 min so a human touch within ~2 hours auto-pauses the AI
+    // (e.g. a manual call/text 66 min before the lead's reply). Complements the
+    // deliberate `AI State = paused` field switch; this is the automatic catch.
+    if (conversationId) {
+      const { checkRecentActivity, activateManualMode } = await import('../shared/conversationActivity');
+
+      const activity = await checkRecentActivity(conversationId, token, 120);
+
+      if (activity.hasRecentOutbound) {
+        console.log('🚫 [WEBHOOK_LAMBDA] Detected recent manual activity - activating manual mode');
+
+        await activateManualMode(contactId, token, 'Recent manual activity detected', fieldIds);
+
+        return {
+          statusCode: 200,
+          body: JSON.stringify({
+            message: 'Manual mode activated - AI paused',
+            contactId,
+            lastOutboundTime: activity.lastOutboundTime
+          })
+        };
       }
     }
 
@@ -483,21 +487,30 @@ export const handler = async (event: any) => {
       try {
         console.log('📜 [WEBHOOK_LAMBDA] Fetching conversation history...');
         const historyRes = await ghl.get(`/conversations/${conversationId}/messages`, { params: { limit: 20 } });
-        const historyData = historyRes.data;
+        // The array is nested at data.messages.messages — reading data.messages yields the wrapper
+        // object, which silently produced an empty history on every turn. See shared/ghlMessages.ts.
+        const rawMessages = extractGhlMessages(historyRes.data);
 
-        if (historyData?.messages && Array.isArray(historyData.messages)) {
-          // Filter out system messages and map to OpenAI format
-          // GHL returns newest first, so reverse for chronological order
-          conversationHistory = historyData.messages
-            .filter((msg: any) => msg.body && msg.type !== 'TYPE_SYSTEM')
-            .reverse()
-            .map((msg: any) => ({
-              role: msg.direction === 'outbound' ? 'assistant' as const : 'user' as const,
-              content: msg.body
-            }))
-            .slice(-20); // Keep last 20 messages
-          
+        // Drop system/activity entries and map to OpenAI format.
+        // GHL returns newest first, so reverse for chronological order.
+        conversationHistory = rawMessages
+          .filter((msg) => msg.body && !isSystemMessage(msg))
+          .reverse()
+          .map((msg) => ({
+            role: msg.direction === 'outbound' ? 'assistant' as const : 'user' as const,
+            content: msg.body as string
+          }))
+          .slice(-20); // Keep last 20 messages
+
+        if (conversationHistory.length > 0) {
           console.log(`✅ [WEBHOOK_LAMBDA] Loaded ${conversationHistory.length} messages for context`);
+        } else {
+          // An agent replying with no history repeats itself and ignores what the lead just said.
+          // That is a degraded state, so say so loudly rather than failing silently as before.
+          console.warn(
+            `⚠️ [WEBHOOK_LAMBDA] No conversation history recovered for ${conversationId} ` +
+              `(${rawMessages.length} raw messages) — the AI will reply without context.`
+          );
         }
       } catch (error) {
         console.error('⚠️ [WEBHOOK_LAMBDA] Failed to fetch conversation history:', error);
