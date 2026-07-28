@@ -245,9 +245,39 @@ export async function syncToGoHighLevel(
 
     // 🎯 SEARCH: Find existing contact with multiple fallback strategies
     let existingContact: any = null;
-    
+
     try {
-      if (dialablePhone) {
+      // 0️⃣ The contact id we already recorded wins over any search. We wrote it on a previous
+      // sync, so it is authoritative — searching is only for leads we have never synced.
+      //
+      // Skipping this is what duplicated contacts on 2026-07-28: a landline-only lead was looked
+      // up by its landline, but the contact created *before* that landline existed carries no
+      // phone at all, so nothing matched and the sync created a second contact. GHL workflows
+      // picked the duplicate up and dialed it within a minute.
+      if (lead.ghlContactId) {
+        console.log(`🔗 Lead already linked to GHL contact ${lead.ghlContactId} — skipping search`);
+        try {
+          const known = await ghl.get(`/contacts/${lead.ghlContactId}`);
+          if (known.data?.contact?.id) {
+            existingContact = known.data.contact;
+          } else {
+            console.warn(`⚠️ Stored contact ${lead.ghlContactId} returned no contact — falling back to search`);
+          }
+        } catch (lookupError: any) {
+          // A 404 means the contact was deleted in GHL; anything else is unresolvable. Only the
+          // 404 is safe to recover from by searching — on any other error, stop rather than risk
+          // creating a duplicate of a contact that is actually still there.
+          if (lookupError.response?.status === 404) {
+            console.warn(`⚠️ Stored contact ${lead.ghlContactId} no longer exists in GHL — falling back to search`);
+          } else {
+            throw lookupError;
+          }
+        }
+      }
+
+      if (existingContact) {
+        // Already resolved above.
+      } else if (dialablePhone) {
         // Search on whichever number this contact will carry — mobile or promoted landline.
         // Using specificPhone alone meant a landline-only lead was looked up by email or not at
         // all, so an existing GHL contact holding that landline went unmatched and was duplicated.
@@ -278,8 +308,14 @@ export async function syncToGoHighLevel(
         if (!existingContact) {
           console.log(`📭 No existing contact found by any phone variation`);
         }
-      } else if (primaryEmail) {
-        // Search by email (case-insensitive)
+      }
+
+      // 2️⃣ Email is a second, independent identity key — try it even when a phone search already
+      // ran and missed. GHL refuses to create a contact whose email belongs to another contact
+      // ("This location does not allow duplicated contacts"), so treating phone and email as
+      // alternatives rather than fallbacks turned two landline leads into hard sync failures on
+      // 2026-07-28: their landline matched nothing, and their email was never tried.
+      if (!existingContact && primaryEmail) {
         console.log(`🔍 Searching for existing contact by email: ${primaryEmail}`);
         const searchBody = {
           locationId: ghlLocationId,
@@ -293,8 +329,10 @@ export async function syncToGoHighLevel(
         } else {
           console.log(`📭 No existing contact found by email`);
         }
-      } else if (basePayload.firstName && basePayload.lastName) {
-        // Skip duplicate check for direct mail contacts (no phone/email to search by)
+      }
+
+      if (!existingContact && !dialablePhone && !primaryEmail) {
+        // Nothing to search on — a mail-only lead identified by name and address alone.
         console.log(`📭 Skipping duplicate check for direct mail contact (no phone/email)`);
       }
     } catch (searchError: any) {
