@@ -21,6 +21,40 @@
 /** Skip-trace states that mean a trace actually ran and reached a conclusion. */
 const CONCLUDED_TRACE_STATUSES = new Set(['COMPLETED', 'NO_MATCH', 'NO_QUALITY_CONTACTS']);
 
+/**
+ * The tag a mail-eligible contact carries. GHL lowercases every tag, so this must be written
+ * lowercase here or two spellings become the same tag in GHL and silently overwrite each other.
+ */
+export const DIRECT_MAIL_TAG = 'direct-mail-only';
+
+/**
+ * Every tag that can put a contact into a Thanks.io campaign, across the tag names this app has
+ * used over time. Removed together when a lead stops being mail-eligible.
+ *
+ * Deliberately excludes delivery-tracking tags (`mail:delivered`, `mail:touch2`, …): those record
+ * what was already sent and are history, not eligibility.
+ */
+export const DIRECT_MAIL_TAGS = [
+  DIRECT_MAIL_TAG,
+  'thanks_io_eligible',
+  'probate_mail', // superseded by DIRECT_MAIL_TAG, still present on contacts synced before that
+  'direct_mail_only', // the DIRECT_MAIL_ONLY lead label, lowercased by GHL
+] as const;
+
+/**
+ * A stored lead label asserting direct-mail status, written by the skip tracer before landlines
+ * counted as contact. It is a cached verdict, not an input: the live rule below supersedes it, so
+ * it must never be shipped to GHL as a tag or it would re-mail a lead we can now call.
+ */
+const STALE_DIRECT_MAIL_LABEL = 'DIRECT_MAIL_ONLY';
+
+/** Lead labels minus any stale direct-mail verdict, ready to be sent to GHL as tags. */
+export function labelsForSync(labels: (string | null)[] | null | undefined): string[] {
+  return (labels ?? []).filter(
+    (l): l is string => typeof l === 'string' && l !== STALE_DIRECT_MAIL_LABEL
+  );
+}
+
 export interface LeadChannels {
   /** SMS-capable mobiles. */
   phones?: (string | null)[] | null;

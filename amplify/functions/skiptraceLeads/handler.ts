@@ -508,24 +508,36 @@ export const handler: Handler = async (event) => {
       const timestamp = new Date().toISOString();
       
       if (!hasQualityContacts) {
-        const currentLabels = lead.leadLabels || [];
-        const updatedLabels = [...new Set([...currentLabels, 'DIRECT_MAIL_ONLY'])];
-        
+        // This is the bucket where landlines matter most: BatchData matched (and billed) but
+        // returned no usable mobile, so without this the lead has no callable number at all.
+        const newLandlines = [...new Set([...(lead.landlinePhones || []), ...(enrichedData.foundLandlines || [])])];
+
+        // "No quality contacts" means no *mobile* and no verified email — it does not mean no way
+        // to reach this person. A non-DNC landline is a phone number, and direct mail is the last
+        // resort only when nothing else turned up. Labelling a landline-reachable lead
+        // DIRECT_MAIL_ONLY is what put 112 callable leads into mail campaigns, so the label is
+        // applied only when the landline list is genuinely empty — and cleared when it is not,
+        // since a re-trace that finally finds a landline must undo the earlier verdict.
+        const currentLabels = (lead.leadLabels || []).filter((l: string | null) => l !== null);
+        const updatedLabels = newLandlines.length > 0
+          ? currentLabels.filter((l: string) => l !== 'DIRECT_MAIL_ONLY')
+          : [...new Set([...currentLabels, 'DIRECT_MAIL_ONLY'])];
+
+        const reason = newLandlines.length > 0
+          ? `Owner found but no mobile scoring 90+ and no verified email. ${newLandlines.length} non-DNC landline(s) kept — this lead is callable, not direct mail.`
+          : 'Owner found but no qualifying contacts — no mobile numbers scoring 90+, no verified emails and no non-DNC landline. This lead has been marked for direct mail only.';
+
         // Get existing history
         const existingHistory = lead.skipTraceHistory || [];
         const newHistory = [...existingHistory, {
           timestamp,
           status: 'NO_QUALITY_CONTACTS',
-          reason: 'Owner found but no qualifying contacts — no mobile numbers scoring 90+ or verified emails. This lead has been marked for direct mail only.',
+          reason,
           phonesFound: enrichedData.rawPersonData?.phoneNumbers?.length || 0,
           emailsFound: enrichedData.rawPersonData?.emails?.length || 0,
           batchRequestId: batchMeta.requestId,
           responseTime: batchMeta.responseTime,
         }];
-        
-        // This is the bucket where landlines matter most: BatchData matched (and billed) but
-        // returned no usable mobile, so without this the lead has no callable number at all.
-        const newLandlines = [...new Set([...(lead.landlinePhones || []), ...(enrichedData.foundLandlines || [])])];
 
         const updateExpression = lead.type?.toUpperCase() === 'PROBATE'
           ? 'SET landlinePhones = :landlines, skipTraceStatus = :status, skipTraceCompletedAt = :completedAt, skipTraceHistory = :history, leadLabels = :labels, rawSkipTraceData = :rawData'

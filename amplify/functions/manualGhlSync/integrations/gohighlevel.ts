@@ -1,7 +1,13 @@
 import { type AxiosInstance } from 'axios';
-import { createGhlClient } from '../../shared/ghlClient';
+import { createGhlClient, ghlRemoveTags } from '../../shared/ghlClient';
 import { AI_OUTREACH_TAG, shouldQueueForOutreach } from '../../shared/outreachGate';
-import { isDirectMailOnlyLead, resolveDialablePhone } from '../../shared/contactChannels';
+import {
+  DIRECT_MAIL_TAG,
+  DIRECT_MAIL_TAGS,
+  isDirectMailOnlyLead,
+  labelsForSync,
+  resolveDialablePhone,
+} from '../../shared/contactChannels';
 import { DBLead } from '../../../../app/utils/aws/data/lead.server';
 
 // 🎯 Updated parameters for "1 Phone = 1 Contact" strategy
@@ -130,8 +136,11 @@ export async function syncToGoHighLevel(
         value: String(customFieldValues[key]),
       }));
 
-    // 🎯 Define Tags based on primary status and phone eligibility
-    const tags = [...(lead.leadLabels || [])];
+    // 🎯 Define Tags based on primary status and phone eligibility.
+    // `labelsForSync` drops a stale stored DIRECT_MAIL_ONLY verdict: 555 leads carry that label
+    // from a skip trace run before landlines counted as contact, and 112 of them are callable
+    // today. Shipping it verbatim re-mailed exactly the leads this rule is meant to stop mailing.
+    const tags = [...labelsForSync(lead.leadLabels)];
     
     // 🆕 APP CONTROL TAGS (source of truth)
     tags.push('App:Synced');
@@ -175,22 +184,27 @@ export async function syncToGoHighLevel(
       .filter((tag: any) => tag !== null)
       .some((tag: any) => ['DNC', 'Not_Interested', 'Do_Not_Call'].includes(tag));
 
+    // 🛡️ DIRECT MAIL ELIGIBILITY — mail is the last resort, only once a skip trace has concluded
+    // and turned up no mobile, no landline and no email. See shared/contactChannels.ts for the
+    // rule and why the previous version had it backwards (it mailed leads *because* they had an
+    // email, and mailed landline-reachable leads).
+    //
+    // `isPrimary` keeps a lead with several contacts from being mailed once per sibling.
+    const isDirectMailOnly = isDirectMailOnlyLead(lead);
+    const qualifiesForMail = isPrimary && isDirectMailEligible && isDirectMailOnly;
+
     // 🎯 DIALER CAMPAIGN LOGIC
-    // A lead we can dial — on a mobile or a landline — is never routed to mail. Mail is the last
-    // resort for leads with no way to reach them at all, which is what isDirectMailOnlyLead
-    // encodes. Previously this branch mailed any lead lacking a *mobile*, which sent mailers to
-    // people who were perfectly callable on a landline.
+    // A lead we can dial — on a mobile or a landline — is never routed to mail.
     if (dialablePhone && !hasDoNotCallLabel) {
       if (hasMultiplePhones) {
         tags.push('Multi-Phone-Lead');
       }
       // Routing is handled by the GHL workflow off the App:Synced tag.
-    } else if (isDirectMailEligible) {
-      tags.push('Direct-Mail-Only'); // Route to mail for $300k-$850k properties
-    } else {
-      tags.push('Digital-Only'); // Outside $300k-$850k range - no direct mail
+    } else if (!qualifiesForMail) {
+      // Not callable and not mailable — reachable by email, or outside the mail value window.
+      tags.push('Digital-Only');
     }
-    
+
     // 🛡️ Probate leads MUST have admin info
     if (lead.type?.toUpperCase() === 'PROBATE' && (!lead.adminFirstName || !lead.adminLastName)) {
       console.warn(`⚠️ Probate lead ${lead.id} missing admin info - using owner info as fallback`);
@@ -200,20 +214,13 @@ export async function syncToGoHighLevel(
       }
     }
 
-    // 🛡️ DIRECT MAIL ELIGIBILITY — mail is the last resort, only once a skip trace has concluded
-    // and turned up no mobile, no landline and no email. See shared/contactChannels.ts for the
-    // rule and why the previous version had it backwards (it mailed leads *because* they had an
-    // email, and mailed landline-reachable leads).
-    const isDirectMailOnly = isDirectMailOnlyLead(lead);
-    
-    // 🛡️ DIRECT MAIL PROTECTION - Only ONE sibling gets mail eligibility (and only if direct mail criteria met)
-    if (isPrimary && isDirectMailEligible && isDirectMailOnly) {
+    // 🛡️ DIRECT MAIL PROTECTION - Only ONE sibling gets mail eligibility
+    if (qualifiesForMail) {
       tags.push('Thanks_IO_Eligible'); // Updated for Thanks.io
+      tags.push(DIRECT_MAIL_TAG);
+    }
+    if (isPrimary) {
       tags.push('Primary_Contact');
-      tags.push('direct-mail-only'); // Replace probate_mail tag
-    } else if (isPrimary) {
-      tags.push('Primary_Contact');
-      // No Thanks_IO_Eligible tag - either has phone or outside value range
     }
 
     const basePayload = {
@@ -321,6 +328,25 @@ export async function syncToGoHighLevel(
     const contactId = existingContact
       ? await performUpdate(existingContact.id)
       : await createContact();
+
+    // 🚫 STOP MAIL FOR LEADS THAT NO LONGER QUALIFY.
+    // GHL's contact update *merges* tags — a tag dropped from the payload stays on the contact.
+    // Without this, a lead that just gained a callable landline keeps `thanks_io_eligible` /
+    // `probate_mail` and carries on receiving mailers forever, so correcting the rule above would
+    // change nothing for the contacts already tagged. Delivery-tracking tags (`mail:delivered`,
+    // `mail:touch2`) are history and are deliberately left alone.
+    if (!qualifiesForMail) {
+      try {
+        await ghlRemoveTags(ghlToken, contactId, [...DIRECT_MAIL_TAGS]);
+      } catch (tagError: any) {
+        // Never fail a sync over this: the contact is already correct in every other respect, and
+        // a stale mail tag is recoverable on the next sync. Log loudly so it is not silent.
+        console.error(
+          `⚠️ Could not remove direct-mail tags from ${contactId} — it may still be in a mail campaign:`,
+          tagError.response?.data || tagError.message
+        );
+      }
+    }
 
     // 📋 Add to outreach queue if contact has "ai outreach" tag.
     // Safe to run on every sync, including updates: addToOutreachQueue is idempotent (keyed

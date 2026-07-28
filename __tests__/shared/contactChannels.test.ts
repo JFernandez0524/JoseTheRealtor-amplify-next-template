@@ -1,9 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import {
+  DIRECT_MAIL_TAG,
+  DIRECT_MAIL_TAGS,
   isDirectMailOnlyLead,
   isCallableLead,
   hasAnyContactChannel,
   hasConcludedSkipTrace,
+  labelsForSync,
   resolveDialablePhone,
 } from '../../amplify/functions/shared/contactChannels';
 
@@ -117,6 +120,48 @@ describe('isDirectMailOnlyLead', () => {
 
   it('treats blank-only arrays as no contact', () => {
     expect(isDirectMailOnlyLead(lead({ phones: [''], landlinePhones: [null], emails: ['  '] }))).toBe(true);
+  });
+});
+
+describe('labelsForSync', () => {
+  it('drops a stale DIRECT_MAIL_ONLY verdict', () => {
+    // 555 leads carry this label from a trace run before landlines counted as contact. Shipping it
+    // to GHL re-mails leads the live rule says are callable.
+    expect(labelsForSync(['PROBATE', 'DIRECT_MAIL_ONLY', 'ABSENTEE'])).toEqual(['PROBATE', 'ABSENTEE']);
+  });
+
+  it('keeps every other label, including the do-not-call ones', () => {
+    expect(labelsForSync(['DNC', 'Not_Interested', 'PROBATE'])).toEqual(['DNC', 'Not_Interested', 'PROBATE']);
+  });
+
+  it('strips nulls and tolerates an absent list', () => {
+    expect(labelsForSync(['PROBATE', null])).toEqual(['PROBATE']);
+    expect(labelsForSync(null)).toEqual([]);
+    expect(labelsForSync(undefined)).toEqual([]);
+  });
+});
+
+describe('DIRECT_MAIL_TAGS', () => {
+  it('is entirely lowercase', () => {
+    // GHL lowercases every tag it stores. A mixed-case entry here would never match the tag on the
+    // contact, so the removal call would silently no-op and the lead would stay in the campaign.
+    for (const tag of DIRECT_MAIL_TAGS) expect(tag).toBe(tag.toLowerCase());
+  });
+
+  it('includes the tag we apply, so applying and removing stay in sync', () => {
+    expect(DIRECT_MAIL_TAGS).toContain(DIRECT_MAIL_TAG);
+  });
+
+  it('covers the older tag spellings still sitting on live contacts', () => {
+    expect(DIRECT_MAIL_TAGS).toContain('probate_mail');
+    expect(DIRECT_MAIL_TAGS).toContain('thanks_io_eligible');
+    expect(DIRECT_MAIL_TAGS).toContain('direct_mail_only');
+  });
+
+  it('does not touch delivery-tracking tags', () => {
+    // mail:delivered / mail:touch2 record what was already sent. Removing them would erase history
+    // and could restart a campaign from touch 1.
+    for (const tag of DIRECT_MAIL_TAGS) expect(tag.startsWith('mail:')).toBe(false);
   });
 });
 
