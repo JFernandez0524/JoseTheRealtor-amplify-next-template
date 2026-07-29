@@ -1,7 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import {
   shouldQueueForOutreach,
+  tagsForSync,
   AI_OUTREACH_TAG,
+  CADENCE_COMPLETE_TAG,
 } from '../../amplify/functions/shared/outreachGate';
 
 // Gate for enrolling a synced GHL contact into the email outreach queue. A false negative silently
@@ -51,5 +53,50 @@ describe('shouldQueueForOutreach', () => {
     // Guards against a `contactId && ...` style rewrite leaking the id out of the predicate.
     expect(shouldQueueForOutreach('abc', TAGS, 'a@b.com')).toStrictEqual(true);
     expect(shouldQueueForOutreach('abc', [], 'a@b.com')).toStrictEqual(false);
+  });
+});
+
+// A synced lead keeps `skipTraceStatus === 'COMPLETED'` and its email forever, so the sync happily
+// re-derives `ai outreach` long after the 7 touches are done — and GHL drops the tag on completion,
+// so nothing else stops it. Without this guard every re-sync restarts the cadence.
+describe('tagsForSync', () => {
+  const tags = () => ['probate', AI_OUTREACH_TAG, 'app:synced'];
+
+  it('withholds ai outreach when the contact already completed its cadence', () => {
+    expect(tagsForSync(tags(), ['app:synced', CADENCE_COMPLETE_TAG])).toEqual([
+      'probate',
+      'app:synced',
+    ]);
+  });
+
+  it('leaves the tag alone when the cadence has not completed', () => {
+    expect(tagsForSync(tags(), ['app:synced'])).toEqual(tags());
+  });
+
+  it('leaves the tag alone for a brand-new contact', () => {
+    // No existing contact means no history to preserve — these should start a cadence.
+    expect(tagsForSync(tags(), undefined)).toEqual(tags());
+    expect(tagsForSync(tags(), null)).toEqual(tags());
+    expect(tagsForSync(tags(), [])).toEqual(tags());
+  });
+
+  it('matches the completion tag regardless of case or padding', () => {
+    // GHL lowercases tags, but the value arrives from an API response we do not control.
+    expect(tagsForSync(tags(), ['  Email-Cadence-Complete '])).not.toContain(AI_OUTREACH_TAG);
+  });
+
+  it('tolerates nulls in the existing tag list', () => {
+    expect(tagsForSync(tags(), [null, undefined, CADENCE_COMPLETE_TAG])).not.toContain(
+      AI_OUTREACH_TAG
+    );
+  });
+
+  it('keeps every other tag untouched when it strips', () => {
+    const out = tagsForSync(['a', AI_OUTREACH_TAG, 'b'], [CADENCE_COMPLETE_TAG]);
+    expect(out).toEqual(['a', 'b']);
+  });
+
+  it('is a no-op when ai outreach was never going to be applied', () => {
+    expect(tagsForSync(['probate'], [CADENCE_COMPLETE_TAG])).toEqual(['probate']);
   });
 });

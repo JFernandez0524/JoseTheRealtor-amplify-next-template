@@ -13,6 +13,31 @@
 /** The GHL tag that marks a contact as eligible for AI email outreach. */
 export const AI_OUTREACH_TAG = 'ai outreach';
 
+/** Applied by the GHL cadence when a contact has received all 7 email touches. */
+export const CADENCE_COMPLETE_TAG = 'email-cadence-complete';
+
+/**
+ * Drop `ai outreach` from an outgoing tag list when the contact has already completed its email
+ * cadence.
+ *
+ * The sync re-derives `ai outreach` from `skipTraceStatus === 'COMPLETED'` plus an email, which are
+ * both still true long after the 7 touches are done — and GHL removes the tag on completion. So
+ * without this, every re-sync silently resurrects the tag and starts the whole cadence again on
+ * someone who already received 7 emails and never replied. Found 2026-07-29, where 10 of a 25-lead
+ * sample were about to be re-enrolled that way.
+ *
+ * Only applies to contacts that already exist; a brand-new contact has no history to preserve.
+ */
+export function tagsForSync(
+  tags: string[],
+  existingContactTags: (string | null | undefined)[] | null | undefined
+): string[] {
+  const completed = (existingContactTags ?? []).some(
+    (t) => typeof t === 'string' && t.trim().toLowerCase() === CADENCE_COMPLETE_TAG
+  );
+  return completed ? tags.filter((t) => t !== AI_OUTREACH_TAG) : tags;
+}
+
 /**
  * True only when all three requirements hold:
  * - a contact id came back from GHL (create or update),

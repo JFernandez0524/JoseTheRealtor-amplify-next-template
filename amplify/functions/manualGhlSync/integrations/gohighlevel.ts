@@ -1,6 +1,6 @@
 import { type AxiosInstance } from 'axios';
 import { createGhlClient, ghlRemoveTags } from '../../shared/ghlClient';
-import { AI_OUTREACH_TAG, shouldQueueForOutreach } from '../../shared/outreachGate';
+import { AI_OUTREACH_TAG, shouldQueueForOutreach, tagsForSync } from '../../shared/outreachGate';
 import {
   DIRECT_MAIL_TAG,
   DIRECT_MAIL_TAGS,
@@ -237,9 +237,11 @@ export async function syncToGoHighLevel(
       customFields,
     };
 
-    const performUpdate = async (ghlId: string) => {
+    // Tags are passed in rather than read off basePayload: whether `ai outreach` survives depends
+    // on the *existing* contact's tags, which aren't known until the search below has run.
+    const performUpdate = async (ghlId: string, payloadTags: string[]) => {
       console.info(`🔄 Updating contact ${ghlId}${dialablePhone ? ` with phone ${dialablePhone}` : ' (no phone)'}`);
-      const res = await ghl.put(`/contacts/${ghlId}`, basePayload);
+      const res = await ghl.put(`/contacts/${ghlId}`, { ...basePayload, tags: payloadTags });
       return res.data?.contact?.id || ghlId;
     };
 
@@ -363,8 +365,16 @@ export async function syncToGoHighLevel(
     // Both paths converge here. Enrolment used to live inside the create branch only, so a lead
     // whose GHL contact already existed was synced but never queued for email outreach — see the
     // 2026-07-28 sync where 1 of 106 silently missed the queue for exactly this reason.
+    // A contact that already finished its email cadence must not be re-tagged into a new one.
+    const finalTags = tagsForSync(tags, existingContact?.tags);
+    if (finalTags.length !== tags.length) {
+      console.info(
+        `📭 Contact ${existingContact?.id} already completed its email cadence — not re-enrolling`
+      );
+    }
+
     const contactId = existingContact
-      ? await performUpdate(existingContact.id)
+      ? await performUpdate(existingContact.id, finalTags)
       : await createContact();
 
     // 🚫 STOP MAIL FOR LEADS THAT NO LONGER QUALIFY.
@@ -389,7 +399,9 @@ export async function syncToGoHighLevel(
     // 📋 Add to outreach queue if contact has "ai outreach" tag.
     // Safe to run on every sync, including updates: addToOutreachQueue is idempotent (keyed
     // `${userId}_${contactId}`) and returns early when a row exists, preserving outreach progress.
-    if (shouldQueueForOutreach(contactId, tags, primaryEmail)) {
+    // finalTags, not tags — a contact whose `ai outreach` tag was withheld above must not be
+    // enrolled in the queue either, or the cadence restarts through the back door.
+    if (shouldQueueForOutreach(contactId, finalTags, primaryEmail)) {
       try {
         const { addToOutreachQueue } = await import('../../shared/outreachQueue');
 
