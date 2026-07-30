@@ -15,22 +15,21 @@ export default function GhlSettingsCard() {
   };
 
   const handleDisconnect = async () => {
-    if (!integrationId) return;
-
     if (!confirm('Are you sure you want to disconnect your Launch AI system?'))
       return;
 
     setDisconnecting(true);
     try {
-      await client.models.GhlIntegration.update({
-        id: integrationId,
-        isActive: false,
-      });
-      alert('✅ Launch AI system disconnected');
+      const res = await fetch('/api/v1/ghl/disconnect', { method: 'POST' });
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || 'Disconnect failed');
+      }
+      alert('✅ Launch AI system disconnected and pending outreach safely paused.');
       window.location.reload(); // Refresh to update context
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error disconnecting GHL:', error);
-      alert('Failed to disconnect Launch AI system');
+      alert(`Failed to disconnect Launch AI system: ${error.message}`);
     } finally {
       setDisconnecting(false);
     }
