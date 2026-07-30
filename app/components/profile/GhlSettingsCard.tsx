@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useGhl } from '@/app/context/GhlContext';
 import { useAccess } from '@/app/context/AccessContext';
 import { client } from '@/app/utils/aws/data/frontEndClient';
@@ -35,6 +35,27 @@ export default function GhlSettingsCard() {
     }
   };
 
+  const [healthState, setHealthState] = useState<{
+    status: 'LOADING' | 'HEALTHY' | 'REAUTH_REQUIRED' | 'DISCONNECTED';
+    recovered?: boolean;
+    message?: string;
+  }>({ status: 'LOADING' });
+
+  useEffect(() => {
+    if (isConnected) {
+      fetch('/api/v1/ghl/health')
+        .then((res) => res.json())
+        .then((data) => {
+          setHealthState({
+            status: data.status || 'HEALTHY',
+            recovered: data.recovered,
+            message: data.message,
+          });
+        })
+        .catch(() => setHealthState({ status: 'HEALTHY' }));
+    }
+  }, [isConnected]);
+
   return (
     <div className='bg-white border border-slate-200 rounded-[2rem] p-8 shadow-sm'>
       <div className='flex items-center justify-between mb-4'>
@@ -42,7 +63,13 @@ export default function GhlSettingsCard() {
           ⚙️ Launch AI Connection
         </h3>
         <div
-          className={`w-3 h-3 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`}
+          className={`w-3 h-3 rounded-full ${
+            healthState.status === 'REAUTH_REQUIRED'
+              ? 'bg-amber-500 animate-ping'
+              : isConnected
+              ? 'bg-green-500'
+              : 'bg-red-500'
+          }`}
         ></div>
       </div>
 
@@ -53,14 +80,31 @@ export default function GhlSettingsCard() {
         </div>
       ) : isConnected ? (
         <>
-          <div className='bg-green-50 border border-green-200 rounded-xl p-4 mb-6'>
-            <p className='text-xs font-bold text-green-900 mb-1'>
-              ✅ Connected
-            </p>
-            <p className='text-xs text-green-700'>
-              Location ID: <span className='font-mono'>{locationId}</span>
-            </p>
-          </div>
+          {healthState.status === 'REAUTH_REQUIRED' ? (
+            <div className='bg-amber-50 border border-amber-200 rounded-xl p-4 mb-6'>
+              <p className='text-xs font-bold text-amber-900 mb-1'>
+                ⚠️ Re-authorization Needed
+              </p>
+              <p className='text-xs text-amber-700 mb-3'>
+                {healthState.message || 'Your GoHighLevel session needs to be re-authorized.'}
+              </p>
+              <button
+                onClick={handleConnect}
+                className='px-4 py-2 bg-amber-600 text-white rounded-lg text-xs font-bold hover:bg-amber-700 transition-colors'
+              >
+                ⚡ Reconnect Launch AI
+              </button>
+            </div>
+          ) : (
+            <div className='bg-green-50 border border-green-200 rounded-xl p-4 mb-6'>
+              <p className='text-xs font-bold text-green-900 mb-1'>
+                ✅ Connected & Active {healthState.recovered && '(Auto-Recovered ⚡)'}
+              </p>
+              <p className='text-xs text-green-700'>
+                Location ID: <span className='font-mono'>{locationId}</span>
+              </p>
+            </div>
+          )}
 
           <p className='text-sm text-slate-600 mb-6'>
             Configure your campaign phone number and email address for automated
