@@ -264,13 +264,28 @@ export default function LeadDashboardClient({}: Props) {
             ? !lead.ghlSyncStatus
             : lead.ghlSyncStatus === filterCrmStatus);
 
-        const matchesPhone =
-          !filterHasPhone ||
-          (filterHasPhone === 'HAS_PHONE'
-            ? lead.phones && lead.phones.length > 0
-            : filterHasPhone === 'NO_PHONE'
-              ? !lead.phones || lead.phones.length === 0
-              : true);
+        const matchesPhone = (() => {
+          if (!filterHasPhone) return true;
+          const hasMobile = Boolean(lead.phones && lead.phones.length > 0);
+          const hasLandline = Boolean(lead.landlinePhones && lead.landlinePhones.length > 0);
+
+          if (filterHasPhone === 'HAS_PHONE' || filterHasPhone === 'HAS_ANY_PHONE') {
+            return hasMobile || hasLandline;
+          }
+          if (filterHasPhone === 'HAS_MOBILE') {
+            return hasMobile;
+          }
+          if (filterHasPhone === 'HAS_LANDLINE') {
+            return hasLandline;
+          }
+          if (filterHasPhone === 'LANDLINE_ONLY') {
+            return !hasMobile && hasLandline;
+          }
+          if (filterHasPhone === 'NO_PHONE') {
+            return !hasMobile && !hasLandline;
+          }
+          return true;
+        })();
 
         const matchesListingStatus =
           !filterListingStatus ||
