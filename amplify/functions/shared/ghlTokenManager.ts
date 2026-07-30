@@ -58,8 +58,8 @@ export type GhlTokenResult = {
  * Gets a valid GHL access token for a user, refreshing if expired.
  * Lambda-optimized version using DynamoDB client.
  */
-export async function getValidGhlToken(userId: string): Promise<GhlTokenResult | null> {
-  console.log(`🔑 [TOKEN_MANAGER] Getting token for user: ${userId}`);
+export async function getValidGhlToken(userId: string, forceRefresh: boolean = false): Promise<GhlTokenResult | null> {
+  console.log(`🔑 [TOKEN_MANAGER] Getting token for user: ${userId}${forceRefresh ? ' (forceRefresh=true)' : ''}`);
   console.log(`🔑 [TOKEN_MANAGER] Table name: ${GHL_INTEGRATION_TABLE}`);
   console.log(`🔑 [TOKEN_MANAGER] Region: ${process.env.AWS_REGION}`);
   
@@ -87,8 +87,8 @@ export async function getValidGhlToken(userId: string): Promise<GhlTokenResult |
     console.log(`🔍 [TOKEN_MANAGER] Token expires at: ${expiresAt.toISOString()}`);
     console.log(`🔍 [TOKEN_MANAGER] Current time: ${now.toISOString()}`);
 
-    // Token still valid
-    if (expiresAt > now) {
+    // Token still valid (unless forceRefresh is true)
+    if (!forceRefresh && expiresAt > now) {
       console.log(`✅ [TOKEN_MANAGER] Token valid for user ${userId}`);
       return {
         token: integration.accessToken,
