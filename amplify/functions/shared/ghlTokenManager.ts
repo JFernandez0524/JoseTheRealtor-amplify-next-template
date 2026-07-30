@@ -18,7 +18,7 @@ const docClient = DynamoDBDocumentClient.from(dynamoClient);
 
 const GHL_CLIENT_ID = process.env.GHL_CLIENT_ID;
 const GHL_CLIENT_SECRET = process.env.GHL_CLIENT_SECRET;
-const GHL_INTEGRATION_TABLE = process.env.AMPLIFY_DATA_GhlIntegration_TABLE_NAME;
+const GHL_INTEGRATION_TABLE = process.env.AMPLIFY_DATA_GhlIntegration_TABLE_NAME || 'GhlIntegration-ahlnflzdejd5jdrulwuqcuxm6i-NONE';
 
 type GhlIntegration = {
   id: string;

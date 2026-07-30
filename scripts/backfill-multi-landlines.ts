@@ -3,7 +3,7 @@
  *
  * 1. Updates DynamoDB `skipTraceStatus` from 'NO_QUALITY_CONTACTS' to 'COMPLETED' for all leads
  *    that possess non-DNC landlines.
- * 2. Invokes `manualGhlSync` Lambda for multi-landline leads to ensure 1 GHL contact per landline line.
+ * 2. Syncs multi-landline leads directly to GoHighLevel ensuring 1 GHL contact per landline line.
  *
  * Usage:
  *   npx tsx scripts/backfill-multi-landlines.ts --owner <id>                    # dry run
@@ -11,40 +11,51 @@
  *   npx tsx scripts/backfill-multi-landlines.ts --owner <id> --apply --limit 25
  */
 
-import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, ScanCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
-import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda';
 import * as dotenv from 'dotenv';
 import * as fs from 'fs';
 import * as path from 'path';
 
 dotenv.config({ path: path.resolve(process.cwd(), '.env.local') });
 
+process.env.AWS_REGION = process.env.AWS_REGION || 'us-east-1';
+process.env.AMPLIFY_DATA_PropertyLead_TABLE_NAME =
+  process.env.AMPLIFY_DATA_PropertyLead_TABLE_NAME || 'PropertyLead-ahlnflzdejd5jdrulwuqcuxm6i-NONE';
+process.env.AMPLIFY_DATA_GhlIntegration_TABLE_NAME =
+  process.env.AMPLIFY_DATA_GhlIntegration_TABLE_NAME || 'GhlIntegration-ahlnflzdejd5jdrulwuqcuxm6i-NONE';
+process.env.AMPLIFY_DATA_OutreachQueue_TABLE_NAME =
+  process.env.AMPLIFY_DATA_OutreachQueue_TABLE_NAME || 'OutreachQueue-ahlnflzdejd5jdrulwuqcuxm6i-NONE';
+
+import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import { DynamoDBDocumentClient, ScanCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
+import { syncToGoHighLevel } from '../amplify/functions/manualGhlSync/integrations/gohighlevel';
+import { getValidGhlToken } from '../amplify/functions/shared/ghlTokenManager';
+import { updateLeadSyncStatus } from '../amplify/functions/shared/syncUtils';
+
 const REGION = 'us-east-1';
 const docClient = DynamoDBDocumentClient.from(new DynamoDBClient({ region: REGION }));
-const lambda = new LambdaClient({ region: REGION });
 
-const PROPERTY_LEAD_TABLE = 'PropertyLead-ahlnflzdejd5jdrulwuqcuxm6i-NONE';
-const SYNC_FUNCTION = 'amplify-d127hbsjypuuhr-ma-manualGhlSynclambda03415-uAM4KcABsXse';
+const PROPERTY_LEAD_TABLE = process.env.AMPLIFY_DATA_PropertyLead_TABLE_NAME;
 const PROGRESS_FILE = path.resolve(process.cwd(), '.sync-multi-landline-progress.jsonl');
 
-const DELAY_MS = 3000;
+const DELAY_MS = 2500;
 const CONSECUTIVE_FAILURE_LIMIT = 5;
 
 function parseArgs(argv: string[]) {
   let owner = '';
   let apply = false;
   let limit = Infinity;
+  let leadId = '';
 
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === '--owner' && argv[i + 1]) owner = argv[++i];
     else if (argv[i] === '--apply') apply = true;
     else if (argv[i] === '--limit' && argv[i + 1]) limit = parseInt(argv[++i], 10);
+    else if (argv[i] === '--lead-id' && argv[i + 1]) leadId = argv[++i];
   }
-  return { owner, apply, limit };
+  return { owner, apply, limit, leadId };
 }
 
-const { owner, apply, limit } = parseArgs(process.argv.slice(2));
+const { owner, apply, limit, leadId } = parseArgs(process.argv.slice(2));
 
 if (!owner) {
   console.error('Usage: npx tsx scripts/backfill-multi-landlines.ts --owner <id> [--apply] [--limit N]');
@@ -107,7 +118,7 @@ function appendProgress(rec: Record<string, any>) {
 
 async function main() {
   console.log(`🔍 Environment: Region=${REGION}`);
-  console.log(`🔍 Mode: ${apply ? '🚀 APPLY (Live Sync)' : '🧪 DRY RUN'}`);
+  console.log(`🔍 Mode: ${apply ? '🚀 APPLY (Live Direct Sync)' : '🧪 DRY RUN'}`);
   console.log(`🔍 Owner: ${owner}`);
   console.log(`🔍 Progress file: ${PROGRESS_FILE}\n`);
 
@@ -115,8 +126,9 @@ async function main() {
   console.log(`📋 Found ${completedIds.size} previously completed lead syncs in progress log.`);
 
   console.log(`📥 Scanning ${PROPERTY_LEAD_TABLE}...`);
-  const allLeads = await scanAll(PROPERTY_LEAD_TABLE);
-  console.log(`✅ Loaded ${allLeads.length} leads for owner ${owner}.`);
+  const scannedLeads = await scanAll(PROPERTY_LEAD_TABLE);
+  const allLeads = leadId ? scannedLeads.filter((l) => l.id === leadId) : scannedLeads;
+  console.log(`✅ Loaded ${allLeads.length} leads for owner ${owner}${leadId ? ` (filtered to leadId: ${leadId})` : ''}.`);
 
   // 1. Leads needing status update
   const statusUpdateLeads = allLeads.filter((l) => {
@@ -162,53 +174,71 @@ async function main() {
     console.log(`✅ Status updates completed: ${updatedCount}/${statusUpdateLeads.length}`);
   }
 
-  // --- Step 2: Re-Sync Multi-Landline Leads to GHL ---
+  // --- Step 2: Fetch GHL Token ---
+  console.log(`\n🔑 Fetching GHL token for owner...`);
+  const ghlData = await getValidGhlToken(owner);
+  if (!ghlData) {
+    throw new Error(`GHL token not found for owner ${owner}. Please connect GHL.`);
+  }
+
+  const { token: ghlToken, locationId: ghlLocationId } = ghlData;
+  const assignedUserId = ghlData.dialerUserId || '';
+  const fieldIds = ghlData.customFieldIds || {};
+  const oppFieldIds = ghlData.opportunityFieldIds || {};
+
+  // --- Step 3: Re-Sync Multi-Landline Leads to GHL ---
   const toSync = multiLandlineLeads.slice(0, limit);
-  console.log(`\n🚀 Processing ${toSync.length} multi-landline GHL syncs...`);
+  console.log(`\n🚀 Direct-syncing ${toSync.length} multi-landline leads to GHL...`);
 
   let consecutiveFailures = 0;
   let successCount = 0;
 
   for (let i = 0; i < toSync.length; i++) {
     const lead = toSync[i];
-    console.log(`\n[${i + 1}/${toSync.length}] Syncing Lead ${lead.id} (${lead.landlinePhones?.length} landlines)...`);
+    const landlines = lead.landlinePhones || [];
+    console.log(`\n[${i + 1}/${toSync.length}] Direct-syncing Lead ${lead.id} (${landlines.length} landlines)...`);
 
     try {
-      const payload = { arguments: { leadId: lead.id }, identity: { sub: owner, groups: ['ADMINS'] } };
-      const command = new InvokeCommand({
-        FunctionName: SYNC_FUNCTION,
-        Payload: Buffer.from(JSON.stringify(payload)),
-      });
+      const contactIds: string[] = [];
+      for (let j = 0; j < landlines.length; j++) {
+        const phone = landlines[j];
+        console.log(`  📞 Syncing landline ${j + 1}/${landlines.length}: ${phone}`);
+        const ghlContactId = await syncToGoHighLevel(
+          lead as any,
+          phone,
+          j + 1,
+          j === 0, // primary contact
+          ['ADMINS'],
+          owner,
+          ghlToken,
+          ghlLocationId,
+          fieldIds,
+          oppFieldIds,
+          assignedUserId
+        );
+        contactIds.push(ghlContactId);
 
-      const res = await lambda.send(command);
-      const responsePayload = res.Payload ? JSON.parse(Buffer.from(res.Payload).toString('utf8')) : null;
-
-      if (responsePayload?.status === 'SUCCESS') {
-        consecutiveFailures = 0;
-        successCount++;
-        console.log(`  ✅ SUCCESS: ${responsePayload.message} (Primary Contact: ${responsePayload.ghlContactId})`);
-        appendProgress({
-          leadId: lead.id,
-          status: 'SUCCESS',
-          ghlContactId: responsePayload.ghlContactId,
-          landlineCount: lead.landlinePhones?.length,
-          message: responsePayload.message,
-        });
-      } else {
-        consecutiveFailures++;
-        console.error(`  ❌ FAILED: ${responsePayload?.message || 'Unknown Lambda error'}`);
-        appendProgress({
-          leadId: lead.id,
-          status: 'FAILED',
-          error: responsePayload?.message || 'Lambda returned non-success',
-        });
+        if (j === 0) {
+          await updateLeadSyncStatus(docClient, PROPERTY_LEAD_TABLE, lead.id, 'SUCCESS', ghlContactId);
+        }
       }
-    } catch (err: any) {
-      consecutiveFailures++;
-      console.error(`  ❌ EXCEPTION invoking Lambda for lead ${lead.id}: ${err.message}`);
+
+      consecutiveFailures = 0;
+      successCount++;
+      console.log(`  ✅ SUCCESS: Synced ${landlines.length} contacts for lead ${lead.id} (Primary GHL ID: ${contactIds[0]})`);
       appendProgress({
         leadId: lead.id,
-        status: 'ERROR',
+        status: 'SUCCESS',
+        ghlContactId: contactIds[0],
+        allContactIds: contactIds,
+        landlineCount: landlines.length,
+      });
+    } catch (err: any) {
+      consecutiveFailures++;
+      console.error(`  ❌ EXCEPTION syncing lead ${lead.id}: ${err.message}`);
+      appendProgress({
+        leadId: lead.id,
+        status: 'FAILED',
         error: err.message,
       });
     }
@@ -223,7 +253,7 @@ async function main() {
     }
   }
 
-  console.log(`\n🎉 DONE! Synced ${successCount} leads.`);
+  console.log(`\n🎉 DONE! Direct-synced ${successCount} multi-landline leads.`);
 }
 
 main().catch((err) => {
