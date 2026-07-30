@@ -239,7 +239,7 @@ export const handler: Handler = async (event) => {
   // 🛡️ 1. Extract Identity FIRST (Fixes the logic error)
   if (identity && 'sub' in identity) {
     ownerId = identity.sub;
-    groups = (identity as any).claims?.['cognito:groups'] || [];
+    groups = (identity as any).claims?.['cognito:groups'] || (identity as any).groups || [];
   }
 
   // 🛡️ 2. Identity Guard
