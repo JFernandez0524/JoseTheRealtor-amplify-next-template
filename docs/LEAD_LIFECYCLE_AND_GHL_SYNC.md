@@ -41,13 +41,14 @@ Skip tracing calls **BatchData** for each selected lead. From the returned perso
 
 | Data | Source | Notes |
 |---|---|---|
-| **Cell phones** | `person.phoneNumbers` | Only **mobiles** kept (see filters below). Landlines are dropped. |
+| **Cell phones** | `person.phoneNumbers` | High-quality SMS-capable **mobiles** kept (score ≥ 90, not DNC). |
+| **Landlines** | `person.phoneNumbers` | Non-DNC **landlines** kept for cold calling via GHL Power Dialer when no mobile is present. |
 | **Emails** | `person.emails` | Only Debounce-deliverable kept (see §3). |
 | **Mailing address** | `person.mailingAddress` → fallback `property.owner.mailingAddress` | Used for direct mail. |
 | **Owner name** | `person.name` | Fills first/last when missing (non-probate). |
 
 Leads marked **SOLD** or **SKIP** are excluded from skip tracing to avoid wasting credits. A skip trace
-that finds no qualifying phone or email is stored as `NO_QUALITY_CONTACTS` (still valid — routed to
+that finds no qualifying mobile, landline, or email is stored as `NO_QUALITY_CONTACTS` (still valid — routed to
 direct mail).
 
 ---
@@ -60,9 +61,7 @@ and sender reputation and to respect consumer choice:
 - **DNC (Do Not Call) is filtered out.** Phones flagged `dnc` by BatchData are never captured
   (`skiptraceLeads/handler.ts`). Leads/contacts tagged `dnc` / `not_interested` / `do_not_call` are
   excluded from the dialer campaign (see `isCallable`, §6).
-- **Mobiles only, score ≥ 90.** We keep only `type === 'Mobile'` numbers with a BatchData quality
-  `score >= 90`. Landlines and low-confidence numbers are dropped — the AI/dialer only ever works
-  high-quality cell numbers.
+- **Mobiles & Landlines.** We keep mobile numbers (score ≥ 90) for SMS and voice, and non-DNC landlines for voice dialer calls. Landline contacts are tagged `channel:landline` and set to `Phone Contact` status for the Power Dialer while bypassing automated SMS drips.
 - **Emails are Debounce-validated.** Every candidate email runs through Debounce.io; we keep only
   `send_transactional === "1"` (safe to send) addresses (`filterValidEmails`). Invalid/undeliverable
   addresses are removed at ingest to keep bounce rates low.
@@ -82,22 +81,20 @@ and sender reputation and to respect consumer choice:
 BatchData/Debounce return **multiple** phones and emails in arbitrary order. We rank them so the
 **primary** contact info the dialer/outreach uses is the highest quality:
 
-- **Phones — `rankMobilePhones()` (`shared/sanitize.ts`).** Keeps qualifying mobiles (Mobile, score ≥ 90,
-  not DNC) and sorts them **highest-score first**. `lead.phones[0]` becomes the GHL **primary phone**.
-  (Ranking only — we still create a contact per good mobile so the dialer can try them all; see §5.)
+- **Phones — `rankMobilePhones()` & `rankLandlinePhones()` (`shared/sanitize.ts`).** Keeps qualifying mobiles
+  and non-DNC landlines, sorting them **highest-score first**. `lead.phones[0]` (or `lead.landlinePhones[0]`) becomes the GHL **primary phone**.
 - **Emails — `filterValidEmails()` + `debounceQualityRank()` (`shared/emailValidator.ts`).** Keeps
   Debounce-safe emails and sorts them **best-first** (Deliverable > Accept-All > Role > unknown).
   `emails[0]` becomes the GHL **primary email** and the single address AI outreach uses.
 
-Secondary phones/emails are still stored (in `Phone 2..5` / `Email 2..3` custom fields) for reference,
-but only the best drives automation.
+Secondary phones/emails are stored in custom fields for reference, and each dialable number spawns its own GHL contact (§5).
 
 ---
 
 ## 5. GHL sync — "1 Phone = 1 Contact"
 
 `manualGhlSync` writes leads to GHL using a deliberate **one-contact-per-phone** model so the dialer can
-work each number as its own contact:
+work each number as its own contact (for both mobiles and landlines):
 
 - A lead with N qualifying mobiles → N GHL contacts. The first (best) phone is the **primary**
   (`Primary_Contact`); secondaries get `(2)`, `(3)`… appended to the last name and are tagged

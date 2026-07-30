@@ -246,9 +246,10 @@ export default function DocsPage() {
                 <h3 className="text-lg font-medium text-gray-900 mb-2">What We Capture</h3>
                 <p className="text-gray-700 mb-2">For each lead we pull the owner&apos;s contact and mailing details from our data provider:</p>
                 <ul className="list-disc list-inside space-y-1 text-gray-700">
-                  <li><strong>Cell phone numbers</strong> (mobiles only — landlines are dropped)</li>
-                  <li><strong>Email addresses</strong></li>
-                  <li><strong>Mailing address</strong> (used for direct mail)</li>
+                  <li><strong>Cell phone numbers</strong> (high-quality SMS-capable mobiles)</li>
+                  <li><strong>Landline numbers</strong> (non-DNC landlines for cold calling via GHL Power Dialer)</li>
+                  <li><strong>Email addresses</strong> (validated for AI outreach)</li>
+                  <li><strong>Mailing address</strong> (standardized USPS mailing address)</li>
                   <li><strong>Owner name</strong> (fills in missing names)</li>
                 </ul>
               </div>
@@ -258,7 +259,8 @@ export default function DocsPage() {
                 <p className="text-sm text-green-700 mb-2">We deliberately drop low-quality and non-compliant contact info at the source — this protects your dialer, your sender reputation, and respects consumer choice:</p>
                 <ul className="list-disc list-inside space-y-1 text-green-700 text-sm">
                   <li><strong>Do-Not-Call numbers are removed</strong> — DNC-flagged phones are never captured, and DNC contacts are kept out of the dialer campaign.</li>
-                  <li><strong>Only high-quality mobiles</strong> — we keep mobile numbers that score 90+ for reachability; landlines and low-confidence numbers are discarded.</li>
+                  <li><strong>High-quality mobiles &amp; landlines</strong> — we capture mobile numbers (score 90+) for SMS/calls, and verified landlines for cold calling.</li>
+                  <li><strong>Landline Protection (<code className="bg-green-100 px-1 rounded text-xs">channel:landline</code>)</strong> — landlines are tagged <code className="bg-green-100 px-1 rounded text-xs">channel:landline</code> and set to <code className="bg-green-100 px-1 rounded text-xs">Phone Contact</code> status for the Power Dialer while bypassing automated SMS drips.</li>
                   <li><strong>Emails are validated (Debounce)</strong> — every address is checked for deliverability; undeliverable ones are dropped so bounces stay low.</li>
                   <li><strong>Business hours enforced</strong> — automated email only sends Mon–Fri 9a–7p and Sat 9a–12p (no Sundays).</li>
                   <li><strong>Opt-outs are honored</strong> — an unsubscribe or a terminal call outcome (Listed With Realtor, DNC, Not Interested, Sold) stops all outreach and sets Do-Not-Disturb.</li>
@@ -266,12 +268,13 @@ export default function DocsPage() {
               </div>
 
               <div className="bg-blue-50 p-4 rounded-lg">
-                <h4 className="font-medium text-blue-800 mb-2">🎯 We Sync Only the Best Result</h4>
-                <p className="text-sm text-blue-700 mb-2">A person often has several phones and emails. We rank them and put the best one front-and-center so your dialer and AI outreach always start with the strongest contact:</p>
+                <h4 className="font-medium text-blue-800 mb-2">🎯 1 Phone = 1 GHL Contact Strategy</h4>
+                <p className="text-sm text-blue-700 mb-2">A person often has several phones and emails. We rank them and create individual GHL contacts for each dialable line so every number can be dialed independently:</p>
                 <ul className="list-disc list-inside space-y-1 text-blue-700 text-sm">
-                  <li><strong>Best phone first</strong> — mobiles are ordered by quality score; the highest becomes the contact&apos;s <strong>primary phone</strong>. (Additional good mobiles still create their own dialer contacts.)</li>
+                  <li><strong>Best phone first</strong> — mobiles and landlines are ordered by quality score; the highest becomes the contact&apos;s <strong>primary phone</strong>.</li>
+                  <li><strong>Separate GHL contacts per line</strong> — additional mobiles and landlines spawn sibling GHL contacts (tagged <code className="bg-blue-100 px-1 rounded text-xs">Multi-Phone-Lead</code>) so power dialers can log outcomes for each line separately.</li>
                   <li><strong>Best email first</strong> — validated emails are ranked (Deliverable &gt; catch-all &gt; role); the best becomes the <strong>primary email</strong> and the single address AI outreach uses.</li>
-                  <li><strong>Extras are kept for reference</strong> in <code className="bg-blue-100 px-1 rounded text-xs">Phone 2–5</code> and <code className="bg-blue-100 px-1 rounded text-xs">Email 2–3</code>, but only the best drives automation — so a contact is never emailed at 3 addresses.</li>
+                  <li><strong>Direct Mail as Last Resort</strong> — direct mail (<code className="bg-blue-100 px-1 rounded text-xs">direct-mail-only</code>) is reserved strictly for leads with NO mobile, NO landline, and NO email.</li>
                 </ul>
               </div>
 

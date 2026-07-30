@@ -45,3 +45,5 @@ google-service-account-key.json
 
 # Scripts (contain hardcoded tokens/table names)
 scripts/
+*.jsonl
+*.progress.jsonl
