@@ -211,10 +211,8 @@ async function callBatchDataBulk(leads: any[]): Promise<{ resultMap: Map<string,
           if (e.tested && e.email) foundEmails.push(e.email);
         });
 
-        // Status is unchanged by landlines on purpose: it reflects whether the trace produced a
-        // *quality* contact for SMS/email outreach. A landline is additive dialer reach, not a
-        // reclassification of the trace result.
-        const status = foundPhones.length > 0 || foundEmails.length > 0 ? 'SUCCESS' : 'NO_QUALITY_CONTACTS';
+        // Status is SUCCESS if we have any dialable mobile, landline, or email.
+        const status = foundPhones.length > 0 || foundEmails.length > 0 || foundLandlines.length > 0 ? 'SUCCESS' : 'NO_QUALITY_CONTACTS';
         resultMap.set(leadId, {
           status,
           foundPhones,

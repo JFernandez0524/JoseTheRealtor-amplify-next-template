@@ -1,6 +1,6 @@
 import { type AxiosInstance } from 'axios';
-import { createGhlClient, ghlRemoveTags } from '../../shared/ghlClient';
-import { AI_OUTREACH_TAG, shouldQueueForOutreach, tagsForSync } from '../../shared/outreachGate';
+import { createGhlClient } from '../../shared/ghlClient';
+import { AI_OUTREACH_TAG, mergeTagsForSync, shouldQueueForOutreach } from '../../shared/outreachGate';
 import {
   DIRECT_MAIL_TAG,
   DIRECT_MAIL_TAGS,
@@ -351,12 +351,13 @@ export async function syncToGoHighLevel(
       );
     }
 
-    const createContact = async () => {
+    const createContact = async (payloadTags: string[]) => {
       console.info(
         `🆕 Creating new contact${dialablePhone ? ` for phone ${phoneIndex}: ${dialablePhone}` : ' with no phone (direct mail)'}`
       );
       const res = await ghl.post('/contacts/', {
         ...basePayload,
+        tags: payloadTags,
         locationId: ghlLocationId,
       });
       return res.data?.contact?.id;
@@ -365,36 +366,20 @@ export async function syncToGoHighLevel(
     // Both paths converge here. Enrolment used to live inside the create branch only, so a lead
     // whose GHL contact already existed was synced but never queued for email outreach — see the
     // 2026-07-28 sync where 1 of 106 silently missed the queue for exactly this reason.
-    // A contact that already finished its email cadence must not be re-tagged into a new one.
-    const finalTags = tagsForSync(tags, existingContact?.tags);
-    if (finalTags.length !== tags.length) {
-      console.info(
-        `📭 Contact ${existingContact?.id} already completed its email cadence — not re-enrolling`
-      );
-    }
+    // The PUT below REPLACES the contact's tags, so this list must carry everything the contact
+    // should still have afterwards — including GHL-owned tags the app never computes (`mail:*`
+    // delivery tracking, `conversation:*`, `email-cadence-complete`). Dropping the direct-mail tags
+    // here is also what un-mails a lead that no longer qualifies; no separate removal call is
+    // needed, and one was removed from this path because it duplicated the effect.
+    const finalTags = mergeTagsForSync(
+      tags,
+      existingContact?.tags,
+      qualifiesForMail ? [] : DIRECT_MAIL_TAGS
+    );
 
     const contactId = existingContact
       ? await performUpdate(existingContact.id, finalTags)
-      : await createContact();
-
-    // 🚫 STOP MAIL FOR LEADS THAT NO LONGER QUALIFY.
-    // GHL's contact update *merges* tags — a tag dropped from the payload stays on the contact.
-    // Without this, a lead that just gained a callable landline keeps `thanks_io_eligible` /
-    // `probate_mail` and carries on receiving mailers forever, so correcting the rule above would
-    // change nothing for the contacts already tagged. Delivery-tracking tags (`mail:delivered`,
-    // `mail:touch2`) are history and are deliberately left alone.
-    if (!qualifiesForMail) {
-      try {
-        await ghlRemoveTags(ghlToken, contactId, [...DIRECT_MAIL_TAGS]);
-      } catch (tagError: any) {
-        // Never fail a sync over this: the contact is already correct in every other respect, and
-        // a stale mail tag is recoverable on the next sync. Log loudly so it is not silent.
-        console.error(
-          `⚠️ Could not remove direct-mail tags from ${contactId} — it may still be in a mail campaign:`,
-          tagError.response?.data || tagError.message
-        );
-      }
-    }
+      : await createContact(finalTags);
 
     // 📋 Add to outreach queue if contact has "ai outreach" tag.
     // Safe to run on every sync, including updates: addToOutreachQueue is idempotent (keyed

@@ -126,7 +126,9 @@ async function processGhlSync(lead: any, groups: string[] = [], ownerId: string 
     console.error('Rate limit check failed (non-critical):', err);
   }
 
-  const phones = lead.phones || [];
+  const mobilePhones = lead.phones || [];
+  const landlinePhones = lead.landlinePhones || [];
+  const targetPhones = mobilePhones.length > 0 ? mobilePhones : landlinePhones;
   let emails = lead.emails || [];
 
   const debounceKey = process.env.DEBOUNCE_API_KEY;
@@ -134,19 +136,19 @@ async function processGhlSync(lead: any, groups: string[] = [], ownerId: string 
     emails = await filterValidEmails(emails, debounceKey);
   }
 
-  console.log(`📞 Found ${phones.length} phones, ${emails.length} emails:`, { phones, emails });
+  console.log(`📞 Found ${mobilePhones.length} mobile phones, ${landlinePhones.length} landlines, ${emails.length} emails:`, { mobilePhones, landlinePhones, emails });
   
-  // ✅ SYNC LEADS WITH PHONES (multiple contacts for multiple phones)
-  if (phones.length > 0) {
-    console.log(`📞 Syncing ${phones.length} phone contacts`);
+  // ✅ SYNC LEADS WITH PHONES / LANDLINES (multiple contacts for multiple phone lines)
+  if (targetPhones.length > 0) {
+    console.log(`📞 Syncing ${targetPhones.length} phone contact(s)`);
     const syncResults: string[] = [];
     let primaryGhlId: string | null = null;
     
     try {
-      for (let i = 0; i < phones.length; i++) {
+      for (let i = 0; i < targetPhones.length; i++) {
         const ghlContactId = await syncToGoHighLevel(
           lead,
-          phones[i],
+          targetPhones[i],
           i + 1,
           i === 0, // First phone is primary
           groups,
@@ -170,7 +172,7 @@ async function processGhlSync(lead: any, groups: string[] = [], ownerId: string 
       // All phones synced successfully
       return {
         status: 'SUCCESS',
-        message: `Synced ${phones.length} phone contact(s).`,
+        message: `Synced ${targetPhones.length} phone contact(s).`,
         ghlContactId: primaryGhlId || syncResults[0],
       };
     } catch (error: any) {

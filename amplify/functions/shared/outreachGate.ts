@@ -17,25 +17,53 @@ export const AI_OUTREACH_TAG = 'ai outreach';
 export const CADENCE_COMPLETE_TAG = 'email-cadence-complete';
 
 /**
- * Drop `ai outreach` from an outgoing tag list when the contact has already completed its email
- * cadence.
+ * Build the tag list to send to GHL for a contact.
  *
- * The sync re-derives `ai outreach` from `skipTraceStatus === 'COMPLETED'` plus an email, which are
- * both still true long after the 7 touches are done — and GHL removes the tag on completion. So
- * without this, every re-sync silently resurrects the tag and starts the whole cadence again on
- * someone who already received 7 emails and never replied. Found 2026-07-29, where 10 of a 25-lead
- * sample were about to be re-enrolled that way.
+ * **`PUT /contacts/{id}` REPLACES the tag array — it does not merge.** Verified 2026-07-29: a
+ * contact carrying `mail:delivered` and `mail:touch2` came back with neither after a sync that
+ * never mentioned them. So whatever this returns is the contact's complete tag list afterwards,
+ * and anything omitted is destroyed — including tags the app knows nothing about: `mail:*`
+ * delivery tracking, `conversation:manual`, `conversation:active`, `max_attempts_reached`,
+ * `email-cadence-complete`, and anything applied by hand.
  *
- * Only applies to contacts that already exist; a brand-new contact has no history to preserve.
+ * Hence: start from what the contact already has, add what the app computed, and remove only the
+ * tags the caller explicitly asks to drop. The app corrects what it owns and preserves the rest.
+ *
+ * Two subtleties:
+ * - Dedupe is case-insensitive because GHL lowercases every tag it stores, so `App:Synced` and
+ *   `app:synced` are the same tag and sending both would be meaningless.
+ * - `ai outreach` is not *added* to a contact already tagged `email-cadence-complete`. The sync
+ *   re-derives that tag from `skipTraceStatus === 'COMPLETED'` plus an email — both permanently
+ *   true — while GHL removes it on completion, so without this every re-sync restarts the whole
+ *   7-touch cadence on someone who already got 7 emails and never replied. An existing
+ *   `ai outreach` is left alone: removing it would halt a cadence that is genuinely running.
  */
-export function tagsForSync(
-  tags: string[],
-  existingContactTags: (string | null | undefined)[] | null | undefined
+export function mergeTagsForSync(
+  computed: string[],
+  existingContactTags: (string | null | undefined)[] | null | undefined,
+  removeTags: readonly string[] = []
 ): string[] {
-  const completed = (existingContactTags ?? []).some(
+  const existing = existingContactTags ?? [];
+  const remove = new Set(removeTags.map((t) => t.toLowerCase()));
+  const completedCadence = existing.some(
     (t) => typeof t === 'string' && t.trim().toLowerCase() === CADENCE_COMPLETE_TAG
   );
-  return completed ? tags.filter((t) => t !== AI_OUTREACH_TAG) : tags;
+
+  const out: string[] = [];
+  const seen = new Set<string>();
+  const add = (tag: string) => {
+    const key = tag.trim().toLowerCase();
+    if (!key || seen.has(key) || remove.has(key)) return;
+    seen.add(key);
+    out.push(tag);
+  };
+
+  for (const t of existing) if (typeof t === 'string') add(t);
+  for (const t of computed) {
+    if (completedCadence && t === AI_OUTREACH_TAG) continue;
+    add(t);
+  }
+  return out;
 }
 
 /**

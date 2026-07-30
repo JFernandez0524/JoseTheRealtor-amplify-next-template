@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   shouldQueueForOutreach,
-  tagsForSync,
+  mergeTagsForSync,
   AI_OUTREACH_TAG,
   CADENCE_COMPLETE_TAG,
 } from '../../amplify/functions/shared/outreachGate';
@@ -56,47 +56,62 @@ describe('shouldQueueForOutreach', () => {
   });
 });
 
-// A synced lead keeps `skipTraceStatus === 'COMPLETED'` and its email forever, so the sync happily
-// re-derives `ai outreach` long after the 7 touches are done — and GHL drops the tag on completion,
-// so nothing else stops it. Without this guard every re-sync restarts the cadence.
-describe('tagsForSync', () => {
-  const tags = () => ['probate', AI_OUTREACH_TAG, 'app:synced'];
+// GHL's PUT /contacts/{id} REPLACES the tag array rather than merging it — verified 2026-07-29 when
+// a contact carrying mail:delivered and mail:touch2 came back with neither. Whatever this function
+// returns IS the contact's tag list afterwards, so anything it omits is destroyed.
+describe('mergeTagsForSync', () => {
+  const computed = () => ['App:Synced', 'ai outreach', 'probate'];
 
-  it('withholds ai outreach when the contact already completed its cadence', () => {
-    expect(tagsForSync(tags(), ['app:synced', CADENCE_COMPLETE_TAG])).toEqual([
-      'probate',
-      'app:synced',
+  it('preserves GHL-owned tags the app knows nothing about', () => {
+    // The whole point: mail delivery tracking and conversation state are not ours to delete.
+    const out = mergeTagsForSync(computed(), [
+      'mail:delivered',
+      'mail:touch2',
+      'conversation:manual',
     ]);
+    expect(out).toEqual(expect.arrayContaining(['mail:delivered', 'mail:touch2', 'conversation:manual']));
+    expect(out).toEqual(expect.arrayContaining(computed()));
   });
 
-  it('leaves the tag alone when the cadence has not completed', () => {
-    expect(tagsForSync(tags(), ['app:synced'])).toEqual(tags());
+  it('removes only what the caller asks to remove', () => {
+    const out = mergeTagsForSync(computed(), ['thanks_io_eligible', 'mail:delivered'], [
+      'thanks_io_eligible',
+    ]);
+    expect(out).not.toContain('thanks_io_eligible');
+    expect(out).toContain('mail:delivered');
   });
 
-  it('leaves the tag alone for a brand-new contact', () => {
-    // No existing contact means no history to preserve — these should start a cadence.
-    expect(tagsForSync(tags(), undefined)).toEqual(tags());
-    expect(tagsForSync(tags(), null)).toEqual(tags());
-    expect(tagsForSync(tags(), [])).toEqual(tags());
+  it('removes case-insensitively, since GHL lowercases stored tags', () => {
+    expect(mergeTagsForSync([], ['Thanks_IO_Eligible'], ['thanks_io_eligible'])).toEqual([]);
+    expect(mergeTagsForSync(['Direct-Mail-Only'], [], ['direct-mail-only'])).toEqual([]);
   });
 
-  it('matches the completion tag regardless of case or padding', () => {
-    // GHL lowercases tags, but the value arrives from an API response we do not control.
-    expect(tagsForSync(tags(), ['  Email-Cadence-Complete '])).not.toContain(AI_OUTREACH_TAG);
+  it('does not duplicate a tag that differs only by case', () => {
+    expect(mergeTagsForSync(['App:Synced'], ['app:synced'])).toEqual(['app:synced']);
   });
 
-  it('tolerates nulls in the existing tag list', () => {
-    expect(tagsForSync(tags(), [null, undefined, CADENCE_COMPLETE_TAG])).not.toContain(
-      AI_OUTREACH_TAG
-    );
+  it('withholds ai outreach when the cadence already completed', () => {
+    const out = mergeTagsForSync(computed(), ['email-cadence-complete']);
+    expect(out).not.toContain(AI_OUTREACH_TAG);
+    expect(out).toContain('email-cadence-complete'); // and the marker itself survives
+    expect(out).toContain('probate');
   });
 
-  it('keeps every other tag untouched when it strips', () => {
-    const out = tagsForSync(['a', AI_OUTREACH_TAG, 'b'], [CADENCE_COMPLETE_TAG]);
-    expect(out).toEqual(['a', 'b']);
+  it('keeps an existing ai outreach tag even when cadence-complete is present', () => {
+    // Contradictory state, but removing it would halt a cadence that is genuinely running.
+    expect(mergeTagsForSync([], [AI_OUTREACH_TAG, CADENCE_COMPLETE_TAG])).toContain(AI_OUTREACH_TAG);
   });
 
-  it('is a no-op when ai outreach was never going to be applied', () => {
-    expect(tagsForSync(['probate'], [CADENCE_COMPLETE_TAG])).toEqual(['probate']);
+  it('applies the app tags for a brand-new contact', () => {
+    expect(mergeTagsForSync(computed(), undefined)).toEqual(computed());
+    expect(mergeTagsForSync(computed(), null)).toEqual(computed());
+  });
+
+  it('ignores nulls and blanks in the existing list', () => {
+    expect(mergeTagsForSync(['a'], [null, undefined, '  ', 'b'])).toEqual(['b', 'a']);
+  });
+
+  it('never returns an empty-string tag', () => {
+    expect(mergeTagsForSync([''], ['   '])).toEqual([]);
   });
 });
