@@ -10,6 +10,7 @@ import {
 import GhlSettingsCard from '@/app/components/profile/GhlSettingsCard';
 import GhlProfileSettings from '@/app/components/profile/GhlProfileSettings';
 import EmailTemplateSettings from '@/app/components/profile/EmailTemplateSettings';
+import AccountDataManagement from '@/app/components/profile/AccountDataManagement';
 
 import {
   HiOutlineUserCircle,
@@ -166,6 +167,9 @@ export default async function ProfilePage() {
               integrationId={ghlIntegration.id}
             />
           )}
+
+          {/* Account Data Privacy, Export & Danger Zone Deletion */}
+          <AccountDataManagement />
         </div>
 
         {/* --- RIGHT COLUMN: SUBSCRIPTION & WALLET --- */}

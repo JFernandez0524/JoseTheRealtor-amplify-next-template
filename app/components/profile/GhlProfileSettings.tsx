@@ -25,6 +25,8 @@ export default function GhlProfileSettings() {
   const [agentCalendarEmail, setAgentCalendarEmail] = useState('');
   const [aiPersona, setAiPersona] = useState('');
   const [aiExamples, setAiExamples] = useState('');
+  const [openAiApiKey, setOpenAiApiKey] = useState('');
+  const [showOpenAiKey, setShowOpenAiKey] = useState(false);
 
   // Campaign / GHL resources
   const [dialerUserId, setDialerUserId] = useState('');
@@ -82,6 +84,7 @@ export default function GhlProfileSettings() {
         setAgentCalendarEmail(i.agentCalendarEmail || '');
         setAiPersona(i.aiPersona || '');
         setAiExamples(i.aiExamples || '');
+        setOpenAiApiKey(i.openAiApiKey || '');
         setDialerUserId(i.dialerUserId || '');
         setCampaignPhone(i.campaignPhone || '');
         setCampaignEmail(i.campaignEmail || '');
@@ -106,9 +109,9 @@ export default function GhlProfileSettings() {
     }
   };
 
-  // A purchased GHL phone number is required for every account (skip tracing is phone-first).
+  // A purchased GHL phone number and OpenAI API Key (BYOK) are required for every account.
   const noPhoneNumbers = phonesLoaded && phoneNumbers.length === 0;
-  const requiredComplete = !!agentName && !!agentBrokerage && !!dialerUserId && !!campaignPhone && !noPhoneNumbers;
+  const requiredComplete = !!agentName && !!agentBrokerage && !!dialerUserId && !!campaignPhone && !!openAiApiKey && !noPhoneNumbers;
 
   const saveSettings = async () => {
     if (!integration) return;
@@ -121,6 +124,7 @@ export default function GhlProfileSettings() {
         agentCalendarEmail: agentCalendarEmail || null,
         aiPersona: aiPersona || null,
         aiExamples: aiExamples || null,
+        openAiApiKey: openAiApiKey || null,
         dialerUserId: dialerUserId || null,
         campaignPhone: campaignPhone || null,
         campaignEmail: campaignEmail || null,
@@ -233,11 +237,38 @@ export default function GhlProfileSettings() {
             <Check done={!!agentBrokerage} label="Brokerage" />
             <Check done={!noPhoneNumbers && !!campaignPhone} label="Phone number" />
             <Check done={!!dialerUserId} label="Assigned user" />
+            <Check done={!!openAiApiKey} label="OpenAI API Key" />
           </div>
         </div>
       )}
 
       <div className="space-y-6">
+        {/* OpenAI API Key (BYOK) */}
+        <div className="bg-purple-50/50 border border-purple-200 rounded-xl p-4">
+          <label className="block text-sm font-semibold text-purple-900 mb-1">
+            OpenAI API Key (BYOK) <span className="text-red-500">*</span>
+          </label>
+          <p className="text-xs text-purple-700 mb-3">
+            Required for automated AI email &amp; SMS conversations. Enter your personal OpenAI key (starts with <code>sk-</code>).
+          </p>
+          <div className="relative">
+            <input
+              type={showOpenAiKey ? 'text' : 'password'}
+              value={openAiApiKey}
+              onChange={(e) => setOpenAiApiKey(e.target.value)}
+              placeholder="sk-proj-..."
+              className={inputCls}
+            />
+            <button
+              type="button"
+              onClick={() => setShowOpenAiKey(!showOpenAiKey)}
+              className="absolute right-3 top-3 text-xs font-semibold text-indigo-600 hover:text-indigo-800"
+            >
+              {showOpenAiKey ? 'Hide' : 'Show'}
+            </button>
+          </div>
+        </div>
+
         {/* Agent identity */}
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-2">

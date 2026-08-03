@@ -354,9 +354,20 @@ export default function DocsPage() {
                 </ol>
               </div>
 
+              {/* OpenAI API Key (BYOK) */}
+              <div className="border-l-4 border-purple-500 pl-4">
+                <h3 className="text-lg font-medium text-gray-900 mb-2">3. Add OpenAI API Key (BYOK)</h3>
+                <ol className="list-decimal list-inside space-y-1 text-gray-700 text-sm">
+                  <li>Go to <strong>Profile → Launch AI Settings</strong></li>
+                  <li>Locate the <strong>OpenAI API Key (BYOK)</strong> section</li>
+                  <li>Enter your personal OpenAI API key (starts with <code className="bg-gray-100 px-1 rounded">sk-</code>)</li>
+                  <li>Click <strong>Save Settings</strong> to activate automated AI email &amp; SMS replies</li>
+                </ol>
+              </div>
+
               {/* Pipeline */}
               <div className="border-l-4 border-purple-500 pl-4">
-                <h3 className="text-lg font-medium text-gray-900 mb-2">3. Create Your Lead Pipeline</h3>
+                <h3 className="text-lg font-medium text-gray-900 mb-2">4. Create Your Lead Pipeline</h3>
                 <ol className="list-decimal list-inside space-y-1 text-gray-700 text-sm">
                   <li>Go to <strong>CRM → Pipelines → + Add Pipeline</strong></li>
                   <li>Name it <strong>Lead Manager</strong></li>

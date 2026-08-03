@@ -79,10 +79,10 @@ Visit `http://localhost:3000` to access the application.
 ### Getting Started
 
 1. **Sign Up**: Create an account or sign in with Google OAuth
-2. **Upload Leads**: Import property leads via CSV upload
-3. **Analyze Properties**: Use the property analyzer for market insights
-4. **Skip Trace**: Discover contact information for property owners
-5. **Sync to CRM**: Connect GoHighLevel and sync qualified leads
+2. **Connect GoHighLevel & Set Up OpenAI Key**: Connect your GHL location and enter your personal OpenAI API Key (BYOK model) in Profile → Launch AI Settings
+3. **Upload Leads**: Import property leads via CSV upload using canonical header mapping
+4. **Skip Trace**: Discover contact information for property owners ($0.10 per matched result; NO_MATCH is free)
+5. **Sync to CRM**: Sync qualified leads directly to GoHighLevel for automated AI outreach
 
 ### Lead Import Format
 
@@ -94,10 +94,12 @@ Your CSV should include these columns:
 
 ### Pricing Structure
 
-- **FREE**: 5 starter credits + ability to purchase more at $0.10/skip
-- **SYNC PLAN**: $97/month for GHL integration with manual outreach workflows
-- **AI OUTREACH PLAN**: $250/month for automated AI text agent + all SYNC features
-- **Skip Credits**: Available to all users at $0.10 per skip (packages: 100/$10, 250/$25, 500/$50)
+- **LAUNCH AI SYNC BETA**: $39/month for GHL integration and manual lead sync
+- **AI OUTREACH PLAN**: $149/month for full multi-channel AI outreach automation
+- **Skip Tracing Credits**: $0.10 per matched result (Match-Only billing; `NO_MATCH` results are 100% free)
+  - **Starter Pack**: $10 (100 credits → 100 matched skip traces)
+  - **Growth Pack**: $25 (250 credits → 250 matched skip traces)
+  - **Pro Pack**: $50 (500 credits → 500 matched skip traces)
 
 ## Deployment to Production
 

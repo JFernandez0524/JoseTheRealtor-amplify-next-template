@@ -549,6 +549,7 @@ export const handler = async (event: any) => {
       opportunityFieldIds,
       agentProfile,
       campaignCalendarId: tokenResult.campaignCalendarId || undefined,
+      openAiApiKey: tokenResult.openAiApiKey || undefined,
     });
 
     // PHASE 3: OUTBOUND LOGGING (We just sent AI response)

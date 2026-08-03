@@ -42,6 +42,7 @@ interface ConversationContext {
   testMode?: boolean; // If true, don't send messages to GHL
   fromNumber?: string; // Phone number to send SMS from
   accessToken?: string; // GHL OAuth token for API calls
+  openAiApiKey?: string; // User's personal OpenAI API key (BYOK model)
   messageType?: 'SMS' | 'FB' | 'IG' | 'WhatsApp'; // Message channel type
   existingZestimate?: number; // Zestimate from database (skip API call)
   existingCashOffer?: number; // Cash offer from database (skip calculation)
@@ -783,7 +784,7 @@ Respond to their message:`;
       },
       {
         headers: {
-          'Authorization': `Bearer ${OPENAI_API_KEY}`,
+          'Authorization': `Bearer ${context.openAiApiKey || OPENAI_API_KEY}`,
           'Content-Type': 'application/json'
         }
       }
