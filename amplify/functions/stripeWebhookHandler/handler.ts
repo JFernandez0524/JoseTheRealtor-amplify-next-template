@@ -42,19 +42,30 @@ function verifyStripeSignature(payload: string, header: string, secret: string):
   return JSON.parse(payload);
 }
 
-async function getUserAccounts(userId: string) {
-  const { Items } = await docClient.send(new ScanCommand({
+async function getUserAccounts(userId: string, email?: string) {
+  let { Items } = await docClient.send(new ScanCommand({
     TableName: USER_ACCOUNT_TABLE,
     FilterExpression: 'begins_with(#owner, :userId)',
     ExpressionAttributeNames: { '#owner': 'owner' },
     ExpressionAttributeValues: { ':userId': userId },
   }));
+
+  if ((!Items || Items.length === 0) && email) {
+    const emailResult = await docClient.send(new ScanCommand({
+      TableName: USER_ACCOUNT_TABLE,
+      FilterExpression: '#email = :email',
+      ExpressionAttributeNames: { '#email': 'email' },
+      ExpressionAttributeValues: { ':email': email },
+    }));
+    Items = emailResult.Items || [];
+  }
+
   return Items || [];
 }
 
-async function addCreditsToUser(userId: string, credits: number) {
-  const accounts = await getUserAccounts(userId);
-  if (accounts.length === 0) throw new Error(`No account found for user ${userId}`);
+async function addCreditsToUser(userId: string, credits: number, email?: string) {
+  const accounts = await getUserAccounts(userId, email);
+  if (accounts.length === 0) throw new Error(`No account found for user ${userId} (${email || ''})`);
 
   await Promise.all(accounts.map((account) =>
     docClient.send(new UpdateCommand({
@@ -68,9 +79,9 @@ async function addCreditsToUser(userId: string, credits: number) {
   console.log(`✅ Added ${credits} credits to ${accounts.length} record(s) for user ${userId}`);
 }
 
-async function updateUserAccountForPlan(userId: string, plan: string) {
-  const accounts = await getUserAccounts(userId);
-  if (accounts.length === 0) throw new Error(`No account found for user ${userId}`);
+async function updateUserAccountForPlan(userId: string, plan: string, email?: string) {
+  const accounts = await getUserAccounts(userId, email);
+  if (accounts.length === 0) throw new Error(`No account found for user ${userId} (${email || ''})`);
 
   await Promise.all(accounts.map((account) =>
     docClient.send(new UpdateCommand({
@@ -125,13 +136,14 @@ async function revokeSubscriptionAccess(userId: string, plan: string) {
 }
 
 async function handleCheckoutCompleted(session: any) {
-  const { metadata } = session;
-  const { userId, plan, credits, type } = metadata;
+  const { metadata, customer_email, customer_details } = session;
+  const { userId, plan, credits, type } = metadata || {};
+  const email = customer_email || customer_details?.email;
 
   if (type === 'credits') {
-    await addCreditsToUser(userId, parseInt(credits));
+    await addCreditsToUser(userId, parseInt(credits), email);
   } else if (plan === 'sync-plan' || plan === 'ai-outreach') {
-    await updateUserAccountForPlan(userId, plan);
+    await updateUserAccountForPlan(userId, plan, email);
     await grantSubscriptionAccess(userId, plan);
   }
 }
