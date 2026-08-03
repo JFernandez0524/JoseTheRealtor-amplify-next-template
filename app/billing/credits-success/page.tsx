@@ -14,9 +14,15 @@ export default function CreditsSuccessPage() {
       try {
         const user = await getFrontEndUser();
         if (!user) return;
-        const { data: accounts } = await client.models.UserAccount.list({
+        let { data: accounts } = await client.models.UserAccount.list({
           filter: { owner: { eq: user.userId } },
         });
+        if (accounts.length === 0 && user.signInDetails?.loginId) {
+          const { data: emailAccounts } = await client.models.UserAccount.list({
+            filter: { email: { eq: user.signInDetails.loginId } },
+          });
+          accounts = emailAccounts;
+        }
         if (accounts.length > 0) {
           setCredits(accounts[0].credits ?? 0);
         }

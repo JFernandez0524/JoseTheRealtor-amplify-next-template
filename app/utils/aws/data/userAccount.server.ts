@@ -40,17 +40,26 @@ export type UserAccount = Schema['UserAccount']['type'];
  *   console.log(`User has ${account.credits} credits`);
  * }
  */
-export async function getUserAccount(ownerId: string): Promise<UserAccount | null> {
+export async function getUserAccount(ownerId: string, email?: string): Promise<UserAccount | null> {
   try {
-    const { data: accounts, errors } = await cookiesClient.models.UserAccount.list({
+    const { data: accounts } = await cookiesClient.models.UserAccount.list({
       filter: { owner: { eq: ownerId } },
     });
 
-    if (errors || !accounts || accounts.length === 0) {
-      return null;
+    if (accounts && accounts.length > 0) {
+      return accounts[0];
     }
 
-    return accounts[0];
+    if (email) {
+      const { data: emailAccounts } = await cookiesClient.models.UserAccount.list({
+        filter: { email: { eq: email } },
+      });
+      if (emailAccounts && emailAccounts.length > 0) {
+        return emailAccounts[0];
+      }
+    }
+
+    return null;
   } catch (error: any) {
     console.error('❌ getUserAccount error:', error.message);
     return null;

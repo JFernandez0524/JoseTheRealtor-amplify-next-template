@@ -1,5 +1,4 @@
-import { cookiesClient } from '@/app/utils/aws/auth/amplifyServerUtils.server';
-import { AuthGetCurrentUserServer } from '@/app/utils/aws/auth/amplifyServerUtils.server';
+import { cookiesClient, AuthGetCurrentUserServer, AuthGetUserAttributesServer } from '@/app/utils/aws/auth/amplifyServerUtils.server';
 import { redirect } from 'next/navigation';
 import { HiOutlineCreditCard, HiOutlineChartBar, HiOutlineArrowRight } from 'react-icons/hi2';
 
@@ -9,10 +8,22 @@ export default async function AccountPage() {
   const currentUser = await AuthGetCurrentUserServer();
   if (!currentUser) redirect('/');
 
-  const { data: userAccounts } = await cookiesClient.models.UserAccount.list({
+  const attributes = await AuthGetUserAttributesServer();
+
+  const { data: accountsByOwner } = await cookiesClient.models.UserAccount.list({
     filter: { owner: { eq: currentUser.userId } },
   });
-  const userAccount = userAccounts?.[0];
+
+  let userAccount = accountsByOwner?.[0];
+
+  // Fallback: find by email if owner query returned nothing (handles Google/OAuth login owner format differences)
+  if (!userAccount && attributes?.email) {
+    const { data: accountsByEmail } = await cookiesClient.models.UserAccount.list({
+      filter: { email: { eq: attributes.email } },
+    });
+    userAccount = accountsByEmail?.[0];
+  }
+
   const credits = userAccount?.credits ?? 0;
   const totalSkips = userAccount?.totalSkipsPerformed ?? 0;
   const totalSynced = userAccount?.totalLeadsSynced ?? 0;
