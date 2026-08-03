@@ -41,6 +41,74 @@ export default function AdminDashboard({
       .catch(console.error);
   }, []);
 
+  const changeUserPlan = async (user: UserAccount, targetGroup: string) => {
+    if (!user.owner) return;
+    if (!confirm(`Change plan for ${user.email} to ${targetGroup}?`)) return;
+
+    setLoading(true);
+    try {
+      const appGroups = ['FREE', 'PRO', 'AI_PLAN', 'ADMINS'];
+      for (const g of appGroups) {
+        if (g !== targetGroup) {
+          try {
+            await client.mutations.removeUserFromGroup({
+              userId: user.owner,
+              groupName: g,
+            });
+          } catch {
+            // User may not be in this group
+          }
+        }
+      }
+
+      const { errors } = await client.mutations.addUserToGroup({
+        userId: user.owner,
+        groupName: targetGroup,
+      });
+
+      if (errors) {
+        alert(`Plan update failed: ${errors[0].message}`);
+      } else {
+        alert(`Successfully changed ${user.email}'s plan to ${targetGroup}!`);
+        window.location.reload();
+      }
+    } catch (err: any) {
+      alert(`Error updating plan: ${err.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const adjustUserCredits = async (user: UserAccount) => {
+    const current = user.credits || 0;
+    const input = prompt(`Adjust credit balance for ${user.email} (Current: ${current} credits):`, current.toString());
+    if (input === null) return;
+    const newCredits = parseInt(input.trim(), 10);
+    if (isNaN(newCredits) || newCredits < 0) {
+      alert('Please enter a valid non-negative number for credits.');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const { errors } = await client.models.UserAccount.update({
+        id: user.id,
+        credits: newCredits,
+      });
+
+      if (errors) {
+        alert(`Failed to update credits: ${errors[0].message}`);
+      } else {
+        setUsers(prev => prev.map(u => u.id === user.id ? { ...u, credits: newCredits } : u));
+        alert(`Updated ${user.email}'s wallet balance to ${newCredits} credits!`);
+      }
+    } catch (err: any) {
+      alert(`Error updating credits: ${err.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const promoteUser = async (userId: string, email: string) => {
     if (!confirm(`Promote ${email} to ADMINS group?`)) return;
 
@@ -161,7 +229,7 @@ export default function AdminDashboard({
 
         <div className='bg-white p-6 rounded-lg shadow-sm border'>
           <div className='flex items-center'>
-            <HiOutlineChartBar className='h-8 w-8 text-purple-500' />
+            <HiOutlineChartBar className='text-purple-500 h-8 w-8' />
             <div className='ml-4'>
               <p className='text-sm font-medium text-gray-500'>Total Credits</p>
               <p className='text-2xl font-bold text-gray-900'>{totalCredits}</p>
@@ -428,34 +496,6 @@ export default function AdminDashboard({
         </div>
       )}
 
-      {/* Skip Trace Failures Section */}
-      {(() => {
-        const oldFailedLeads = leads.filter(
-          (lead) =>
-            lead.skipTraceStatus === 'FAILED' ||
-            lead.skipTraceStatus === 'NO_MATCH',
-        );
-
-        // Get today's failures from history
-        const today = new Date().toISOString().split('T')[0];
-        const todayFailures = oldFailedLeads.filter((lead) => {
-          if (!lead.skipTraceHistory) return false;
-          const history =
-            typeof lead.skipTraceHistory === 'string'
-              ? JSON.parse(lead.skipTraceHistory)
-              : lead.skipTraceHistory;
-          return history.some(
-            (attempt: any) =>
-              attempt.timestamp.startsWith(today) &&
-              (attempt.status === 'FAILED' || attempt.status === 'NO_MATCH'),
-          );
-        });
-
-        if (oldFailedLeads.length === 0) return null;
-
-        return null; // Replaced by detailed failure analysis above
-      })()}
-
       {/* Invalid Leads Section */}
       {invalidLeads.length > 0 && (
         <div className='bg-red-50 border border-red-200 rounded-lg p-6'>
@@ -592,28 +632,34 @@ export default function AdminDashboard({
 
       {/* User Management */}
       <div className='bg-white rounded-lg shadow-sm border'>
-        <div className='px-6 py-4 border-b'>
+        <div className='px-6 py-4 border-b flex items-center justify-between'>
           <h2 className='text-lg font-semibold text-gray-900'>
-            User Management
+            User Management & Subscription Control
           </h2>
+          <span className='text-xs text-slate-500 font-medium'>
+            Manage user group membership and credit balances
+          </span>
         </div>
         <div className='overflow-x-auto'>
           <table className='min-w-full divide-y divide-gray-200'>
             <thead className='bg-gray-50'>
               <tr>
                 <th className='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>
-                  User
+                  User Email
                 </th>
                 <th className='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>
-                  Credits
+                  Wallet Credits
                 </th>
                 <th className='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>
-                  Skips Performed
+                  Skips
                 </th>
                 <th className='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>
-                  Leads Synced
+                  Syncs
                 </th>
                 <th className='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>
+                  Set Subscription Plan
+                </th>
+                <th className='px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider'>
                   Actions
                 </th>
               </tr>
@@ -625,12 +671,21 @@ export default function AdminDashboard({
                     <div className='text-sm font-medium text-gray-900'>
                       {user.email}
                     </div>
-                    <div className='text-sm text-gray-500'>
-                      ID: {user.owner?.slice(0, 8)}...
+                    <div className='text-xs text-gray-400 font-mono'>
+                      {user.owner}
                     </div>
                   </td>
                   <td className='px-6 py-4 whitespace-nowrap text-sm text-gray-900'>
-                    {user.credits || 0}
+                    <div className='flex items-center gap-2'>
+                      <span className='font-bold text-slate-900'>{user.credits || 0}</span>
+                      <button
+                        onClick={() => adjustUserCredits(user)}
+                        disabled={loading}
+                        className='text-xs text-indigo-600 hover:text-indigo-900 font-semibold underline disabled:opacity-50'
+                      >
+                        Edit
+                      </button>
+                    </div>
                   </td>
                   <td className='px-6 py-4 whitespace-nowrap text-sm text-gray-900'>
                     {user.totalSkipsPerformed || 0}
@@ -638,20 +693,45 @@ export default function AdminDashboard({
                   <td className='px-6 py-4 whitespace-nowrap text-sm text-gray-900'>
                     {user.totalLeadsSynced || 0}
                   </td>
-                  <td className='px-6 py-4 whitespace-nowrap text-sm font-medium'>
+                  <td className='px-6 py-4 whitespace-nowrap text-sm text-gray-900'>
+                    <div className='flex items-center gap-2'>
+                      <select
+                        id={`plan-select-${user.id}`}
+                        defaultValue='FREE'
+                        className='text-xs border border-slate-300 rounded-lg px-2.5 py-1.5 bg-slate-50 font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500'
+                        disabled={loading}
+                      >
+                        <option value='FREE'>Free Tier (FREE)</option>
+                        <option value='PRO'>Launch AI Sync Beta (PRO)</option>
+                        <option value='AI_PLAN'>AI Outreach Pro (AI_PLAN)</option>
+                        <option value='ADMINS'>Admin (ADMINS)</option>
+                      </select>
+                      <button
+                        onClick={() => {
+                          const selectEl = document.getElementById(`plan-select-${user.id}`) as HTMLSelectElement;
+                          if (selectEl) {
+                            changeUserPlan(user, selectEl.value);
+                          }
+                        }}
+                        disabled={loading}
+                        className='px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg transition-colors disabled:opacity-50'
+                      >
+                        Save Plan
+                      </button>
+                    </div>
+                  </td>
+                  <td className='px-6 py-4 whitespace-nowrap text-sm font-medium text-right'>
                     {user.owner === currentUserId ? (
-                      <span className='text-gray-500 text-sm'>
-                        Current User
+                      <span className='text-xs bg-slate-100 text-slate-600 font-bold px-2.5 py-1 rounded-md'>
+                        You (Current Admin)
                       </span>
                     ) : (
                       <button
-                        onClick={() =>
-                          promoteUser(user.owner || '', user.email)
-                        }
+                        onClick={() => promoteUser(user.owner || '', user.email)}
                         disabled={loading}
-                        className='text-blue-600 hover:text-blue-900 mr-4 disabled:opacity-50'
+                        className='text-xs text-purple-600 hover:text-purple-900 font-bold border border-purple-200 bg-purple-50 px-2.5 py-1 rounded-md transition-colors disabled:opacity-50'
                       >
-                        Promote to Admin
+                        Quick Promote Admin
                       </button>
                     )}
                   </td>
