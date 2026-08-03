@@ -168,7 +168,7 @@ export default function AccountDataManagement() {
 
             <div className='space-y-4 my-6 text-sm text-slate-600'>
               <p>
-                Deleting your account will permanently purge all your leads, contacts, integration settings, and history from our database and remove your login from AWS Cognito.
+                Deleting your account will permanently purge all your leads, contacts, integration settings, and history from our servers and permanently deactivate your login account.
               </p>
 
               {/* STRICT NO REFUNDS & BILLING RENEWAL CYCLE NOTICE */}
