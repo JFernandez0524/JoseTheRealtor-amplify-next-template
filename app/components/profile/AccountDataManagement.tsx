@@ -96,8 +96,8 @@ export default function AccountDataManagement() {
   return (
     <div className='space-y-6'>
       {/* DATA EXPORT CARD */}
-      <div className='bg-white border border-slate-200 rounded-[2rem] p-8 shadow-sm'>
-        <div className='flex items-start justify-between gap-4'>
+      <div className='bg-white border border-slate-200 rounded-[2rem] p-6 sm:p-8 shadow-sm'>
+        <div className='flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4'>
           <div>
             <div className='flex items-center gap-2 mb-2'>
               <HiOutlineShieldCheck className='text-xl text-indigo-600' />
@@ -110,7 +110,7 @@ export default function AccountDataManagement() {
           <button
             onClick={handleExportData}
             disabled={isExporting}
-            className='px-5 py-3 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold rounded-xl transition-colors flex items-center gap-2 shrink-0 disabled:opacity-50'
+            className='px-5 py-3 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold rounded-xl transition-colors flex items-center justify-center gap-2 w-full sm:w-auto shrink-0 disabled:opacity-50'
           >
             <HiOutlineArrowDownTray className='text-base' />
             {isExporting ? 'Preparing CSV...' : 'Download Data (CSV)'}
@@ -119,8 +119,8 @@ export default function AccountDataManagement() {
       </div>
 
       {/* DANGER ZONE / ACCOUNT DELETION */}
-      <div className='bg-rose-50/50 border border-rose-200 rounded-[2rem] p-8 shadow-sm'>
-        <div className='flex items-start justify-between gap-4'>
+      <div className='bg-rose-50/50 border border-rose-200 rounded-[2rem] p-6 sm:p-8 shadow-sm'>
+        <div className='flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4'>
           <div>
             <div className='flex items-center gap-2 mb-2 text-rose-700'>
               <HiOutlineExclamationTriangle className='text-xl' />
@@ -136,7 +136,7 @@ export default function AccountDataManagement() {
               setErrorMsg(null);
               setIsModalOpen(true);
             }}
-            className='px-5 py-3 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl transition-colors flex items-center gap-2 shrink-0 shadow-sm shadow-rose-200'
+            className='px-5 py-3 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl transition-colors flex items-center justify-center gap-2 w-full sm:w-auto shrink-0 shadow-sm shadow-rose-200'
           >
             <HiOutlineTrash className='text-base' />
             Delete Account

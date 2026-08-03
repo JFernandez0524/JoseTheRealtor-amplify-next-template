@@ -233,7 +233,8 @@ const Navbar = () => {
         <div className='flex md:hidden items-center space-x-4 z-[60]'>
           <button
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-            className='text-gray-600 text-3xl p-2'
+            aria-label='Toggle navigation menu'
+            className='text-gray-600 text-3xl p-2 focus:outline-none'
           >
             {isMobileMenuOpen ? <HiX /> : <HiMenu />}
           </button>
@@ -242,7 +243,7 @@ const Navbar = () => {
 
       {/* --- MOBILE OVERLAY --- */}
       <div
-        className={`fixed inset-0 bg-white z-[55] flex flex-col items-center justify-center px-6 transition-transform duration-300 md:hidden ${isMobileMenuOpen ? 'translate-x-0' : 'translate-x-full'}`}
+        className={`fixed inset-0 bg-white z-[55] flex flex-col items-center justify-start pt-20 pb-12 px-6 overflow-y-auto transition-transform duration-300 md:hidden ${isMobileMenuOpen ? 'translate-x-0' : 'translate-x-full'}`}
       >
         <div className='flex flex-col items-center w-full max-w-sm space-y-2'>
           <Link
