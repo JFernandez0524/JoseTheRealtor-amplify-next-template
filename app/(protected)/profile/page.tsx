@@ -7,6 +7,7 @@ import {
   AuthGetUserGroupsServer,
   cookiesClient,
 } from '@/app/utils/aws/auth/amplifyServerUtils.server';
+import { getUserAccount } from '@/app/utils/aws/data/userAccount.server';
 import GhlSettingsCard from '@/app/components/profile/GhlSettingsCard';
 import GhlProfileSettings from '@/app/components/profile/GhlProfileSettings';
 import EmailTemplateSettings from '@/app/components/profile/EmailTemplateSettings';
@@ -35,20 +36,8 @@ export default async function ProfilePage() {
     AuthGetUserGroupsServer(),
   ]);
 
-  // 2. Fetch User Account (Wallet/Stats) from DB - Filter by current user
-  const { data: accountsByOwner } = await cookiesClient.models.UserAccount.list({
-    filter: { owner: { eq: user.userId } },
-  });
-
-  let userAccount = accountsByOwner?.[0];
-
-  // Fallback: find by email if owner query returned nothing (handles Google login owner mismatch)
-  if (!userAccount && attributes?.email) {
-    const { data: accountsByEmail } = await cookiesClient.models.UserAccount.list({
-      filter: { email: { eq: attributes.email } },
-    });
-    userAccount = accountsByEmail?.[0];
-  }
+  // 2. Fetch User Account (Wallet/Stats) using data access layer
+  const userAccount = await getUserAccount(user.userId, attributes?.email);
 
   // 3. Fetch GHL Integration for email templates
   const { data: ghlIntegrations } = await cookiesClient.models.GhlIntegration.list({

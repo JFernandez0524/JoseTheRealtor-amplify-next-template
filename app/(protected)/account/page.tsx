@@ -1,9 +1,9 @@
 import {
-  cookiesClient,
   AuthGetCurrentUserServer,
   AuthGetUserAttributesServer,
   AuthGetUserGroupsServer,
 } from '@/app/utils/aws/auth/amplifyServerUtils.server';
+import { getUserAccount } from '@/app/utils/aws/data/userAccount.server';
 import { redirect } from 'next/navigation';
 import { HiOutlineIdentification, HiOutlineCreditCard, HiOutlineChartBar, HiOutlineArrowRight } from 'react-icons/hi2';
 
@@ -26,19 +26,7 @@ export default async function AccountPage() {
         ? 'Sync Pro'
         : 'Free Tier';
 
-  const { data: accountsByOwner } = await cookiesClient.models.UserAccount.list({
-    filter: { owner: { eq: currentUser.userId } },
-  });
-
-  let userAccount = accountsByOwner?.[0];
-
-  // Fallback: find by email if owner query returned nothing (handles Google/OAuth login owner format differences)
-  if (!userAccount && attributes?.email) {
-    const { data: accountsByEmail } = await cookiesClient.models.UserAccount.list({
-      filter: { email: { eq: attributes.email } },
-    });
-    userAccount = accountsByEmail?.[0];
-  }
+  const userAccount = await getUserAccount(currentUser.userId, attributes?.email);
 
   const credits = userAccount?.credits ?? 0;
   const totalSkips = userAccount?.totalSkipsPerformed ?? 0;
