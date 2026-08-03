@@ -50,11 +50,38 @@ This is a **real estate lead management and automated outreach platform** built 
 - `OutreachQueue` — Queue entries with SMS/email status GSIs (reduces GHL API calls by ~90%)
 - `WebhookIdempotency` — Dedup table with 24h TTL to prevent duplicate webhook processing
 
-### Data Access Pattern
+### Data Access Layer (DAL) Standards (MUST USE — NO DUPLICATE INLINE QUERIES)
 
-Two files handle DynamoDB access per entity:
-- `app/utils/aws/lead.client.ts` — Client-side (React components, uses Amplify Data Client)
-- `app/utils/aws/lead.server.ts` — Server-side (API routes, uses AWS SDK directly)
+Always use the centralized helper modules under `app/utils/aws/` and `app/utils/billing/` for database, auth, and user operations instead of writing duplicate inline queries:
+
+1. **User Account Helpers (`app/utils/aws/data/userAccount.server.ts`)**:
+   - `getUserAccount(ownerId, email?)`: Fetches `UserAccount` record with owner & email fallback.
+   - `updateUserAccount(accountId, updates)`: Updates account attributes.
+   - `addCredits(ownerId, credits)` & `deductCredits(ownerId, credits)`: Safe credit balance updates.
+   - `hasCredits(ownerId, required)`: Verifies if a user has sufficient credits before skip tracing.
+   - `updateGhlRateLimits(ownerId, increment)`: Tracks hourly (100/hr) and daily (1000/day) message counters.
+
+2. **Lead Data Helpers (`lead.server.ts` & `lead.client.ts`)**:
+   - `createLead`, `getLeadById`, `updateLead`, `deleteLead`
+   - `getLeadsByOwner`, `getLeadsByStatus`, `getLeadsByEquity`
+   - Client-side hooks and frontend queries (`lead.client.ts`)
+
+3. **GoHighLevel Integration Helpers (`ghlIntegration.server.ts`)**:
+   - `getGhlIntegration(userId)`: Retrieves active GHL OAuth tokens and campaign settings.
+   - `updateGhlIntegration(integrationId, updates)`
+   - `saveGhlTokens(...)` & `disconnectGhlIntegration(userId)`
+
+4. **Server Auth & User Attributes (`amplifyServerUtils.server.ts`)**:
+   - `AuthGetCurrentUserServer()`: Fetches current authenticated user (sub & username).
+   - `AuthGetUserAttributesServer()`: Fetches email, name, picture, and profile claims.
+   - `AuthGetUserGroupsServer()`: Fetches Cognito groups (`ADMINS`, `AI_PLAN`, `PRO`, `FREE`).
+   - `AuthGetUserEmailServer()`: Safely extracts email from JWT payload for OAuth logins.
+   - `cookiesClient`: Server-side GraphQL data client.
+
+5. **Subscription & Billing (`subscriptionManager.ts`)**:
+   - `grantSubscriptionAccess(userId, plan)`: Adds user to `PRO` or `AI_PLAN` group.
+   - `revokeSubscriptionAccess(userId, plan)`: Removes paid tier and returns user to `FREE`.
+   - `addCreditsToUser(userId, credits)`
 
 Lambdas use the AWS SDK directly (`DynamoDBDocumentClient`), not the Amplify client.
 
