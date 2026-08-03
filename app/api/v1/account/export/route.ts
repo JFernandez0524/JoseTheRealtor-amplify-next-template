@@ -20,8 +20,8 @@ function escapeCsvCell(cell: any): string {
 /**
  * GET /api/v1/account/export
  *
- * Export all user account data, property leads, contacts, and outreach queues
- * in standard CSV format (.csv) for GDPR/CCPA data portability.
+ * Export 100% of user account data, property leads, contacts, door knock queues,
+ * outreach queues, job histories, and notifications in standard CSV format (.csv).
  */
 export async function GET() {
   try {
@@ -32,23 +32,38 @@ export async function GET() {
 
     const userId = currentUser.userId;
 
-    // Fetch user-owned data across models concurrently
+    // Fetch user-owned data across ALL models concurrently
     const [
       userAccountRes,
       leadsRes,
+      contactsRes,
+      doorKnockRes,
       outreachQueueRes,
       ghlIntegrationRes,
+      batchJobsRes,
+      csvJobsRes,
+      notificationsRes,
     ] = await Promise.all([
       cookiesClient.models.UserAccount.list({ filter: { owner: { eq: userId } } }),
       cookiesClient.models.PropertyLead.list({ filter: { owner: { eq: userId } } }),
+      cookiesClient.models.Contact.list({ filter: { owner: { eq: userId } } }),
+      cookiesClient.models.DoorKnockQueue.list({ filter: { userId: { eq: userId } } }),
       cookiesClient.models.OutreachQueue.list({ filter: { userId: { eq: userId } } }),
       cookiesClient.models.GhlIntegration.list({ filter: { userId: { eq: userId } } }),
+      cookiesClient.models.BatchDataJob.list({ filter: { userId: { eq: userId } } }),
+      cookiesClient.models.CsvUploadJob.list({ filter: { userId: { eq: userId } } }),
+      cookiesClient.models.Notification.list({ filter: { owner: { eq: userId } } }),
     ]);
 
     const leads = leadsRes.data || [];
+    const contacts = contactsRes.data || [];
+    const doorKnocks = doorKnockRes.data || [];
     const outreachItems = outreachQueueRes.data || [];
     const accounts = userAccountRes.data || [];
     const integrations = ghlIntegrationRes.data || [];
+    const batchJobs = batchJobsRes.data || [];
+    const csvJobs = csvJobsRes.data || [];
+    const notifications = notificationsRes.data || [];
 
     const csvLines: string[] = [];
 
@@ -146,9 +161,34 @@ export async function GET() {
       csvLines.push(row.map(escapeCsvCell).join(','));
     }
 
-    csvLines.push(''); // Blank line separator
+    csvLines.push('');
 
-    // --- SECTION 2: OUTREACH QUEUE ---
+    // --- SECTION 2: CONTACTS ---
+    csvLines.push('=== CONTACTS ===');
+    const contactHeaders = ['Contact ID', 'Lead ID', 'First Name', 'Last Name', 'Middle Name', 'Phones', 'Emails', 'Addresses', 'Litigator', 'Deceased', 'Created At'];
+    csvLines.push(contactHeaders.map(escapeCsvCell).join(','));
+
+    for (const c of contacts) {
+      const row = [c.id, c.leadId, c.firstName, c.lastName, c.middleName, c.phones, c.emails, c.addresses, c.litigator ? 'Yes' : 'No', c.deceased ? 'Yes' : 'No', c.createdAt];
+      csvLines.push(row.map(escapeCsvCell).join(','));
+    }
+
+    csvLines.push('');
+
+    // --- SECTION 3: DOOR KNOCK QUEUE ---
+    csvLines.push('=== DOOR KNOCK QUEUE ===');
+    const doorKnockHeaders = ['Queue ID', 'Lead ID', 'Owner Name', 'Property Address', 'City', 'State', 'Zip', 'Lead Type', 'Status', 'Visited At', 'Priority', 'Notes'];
+    csvLines.push(doorKnockHeaders.map(escapeCsvCell).join(','));
+
+    for (const dk of doorKnocks) {
+      const ownerName = [dk.ownerFirstName, dk.ownerLastName].filter(Boolean).join(' ');
+      const row = [dk.id, dk.leadId, ownerName, dk.propertyAddress, dk.propertyCity, dk.propertyState, dk.propertyZip, dk.leadType, dk.status, dk.visitedAt, dk.priority, dk.notes];
+      csvLines.push(row.map(escapeCsvCell).join(','));
+    }
+
+    csvLines.push('');
+
+    // --- SECTION 4: OUTREACH QUEUE ---
     csvLines.push('=== OUTREACH QUEUE ===');
     const queueHeaders = [
       'Queue Item ID',
@@ -188,9 +228,33 @@ export async function GET() {
       csvLines.push(row.map(escapeCsvCell).join(','));
     }
 
-    csvLines.push(''); // Blank line separator
+    csvLines.push('');
 
-    // --- SECTION 3: USER ACCOUNT & INTEGRATIONS ---
+    // --- SECTION 5: BATCHDATA & SKIP TRACE JOBS ---
+    csvLines.push('=== BATCHDATA JOBS ===');
+    const batchJobHeaders = ['Job ID', 'Job Type', 'Leads Sent', 'Matched', 'No Match', 'No Quality', 'Failed', 'Skipped', 'Credits Charged', 'Dollars Charged'];
+    csvLines.push(batchJobHeaders.map(escapeCsvCell).join(','));
+
+    for (const bj of batchJobs) {
+      const row = [bj.id, bj.jobType, bj.leadsSent, bj.matched, bj.noMatch, bj.noQuality, bj.failed, bj.skipped, bj.creditsCharged, bj.dollarsCharged];
+      csvLines.push(row.map(escapeCsvCell).join(','));
+    }
+
+    csvLines.push('');
+
+    // --- SECTION 6: CSV UPLOAD JOBS ---
+    csvLines.push('=== CSV UPLOAD JOBS ===');
+    const csvJobHeaders = ['Job ID', 'File Name', 'Lead Type', 'Status', 'Total Rows', 'Processed Rows', 'Success Count', 'Duplicate Count', 'Error Count', 'Started At', 'Completed At'];
+    csvLines.push(csvJobHeaders.map(escapeCsvCell).join(','));
+
+    for (const cj of csvJobs) {
+      const row = [cj.id, cj.fileName, cj.leadType, cj.status, cj.totalRows, cj.processedRows, cj.successCount, cj.duplicateCount, cj.errorCount, cj.startedAt, cj.completedAt];
+      csvLines.push(row.map(escapeCsvCell).join(','));
+    }
+
+    csvLines.push('');
+
+    // --- SECTION 7: USER ACCOUNT & INTEGRATIONS ---
     csvLines.push('=== USER ACCOUNT & INTEGRATIONS ===');
     const accountHeaders = [
       'User ID / Owner',
@@ -201,6 +265,8 @@ export async function GET() {
       'GHL Location ID',
       'GHL Integration Type',
       'Sub-Account Status',
+      'Agent Name',
+      'Agent Brokerage',
     ];
     csvLines.push(accountHeaders.map(escapeCsvCell).join(','));
 
@@ -215,7 +281,21 @@ export async function GET() {
         intg?.locationId || acc.crmLocationId,
         acc.ghlIntegrationType,
         acc.ghlSubAccountStatus,
+        intg?.agentName || '',
+        intg?.agentBrokerage || '',
       ];
+      csvLines.push(row.map(escapeCsvCell).join(','));
+    }
+
+    csvLines.push('');
+
+    // --- SECTION 8: NOTIFICATIONS ---
+    csvLines.push('=== NOTIFICATIONS ===');
+    const notifHeaders = ['Notification ID', 'Title', 'Message', 'Type', 'Is Read'];
+    csvLines.push(notifHeaders.map(escapeCsvCell).join(','));
+
+    for (const n of notifications) {
+      const row = [n.id, n.title, n.message, n.type, n.isRead ? 'Yes' : 'No'];
       csvLines.push(row.map(escapeCsvCell).join(','));
     }
 
