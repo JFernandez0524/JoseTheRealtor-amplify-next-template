@@ -18,13 +18,13 @@ export default async function AdminPage() {
   // Get current user info
   const currentUser = await AuthGetCurrentUserServer();
 
-  // Fetch admin data using server client to avoid triggering AccessContext
+  // Fetch admin data using server client with limit params for fast instant rendering
   const [
     { data: users, errors: userErrors },
-    { data: allLeads, errors: leadErrors },
+    { data: leadsData, errors: leadErrors },
   ] = await Promise.all([
-    cookiesClient.models.UserAccount.list(),
-    fetchAllLeads((params) => cookiesClient.models.PropertyLead.list(params)),
+    cookiesClient.models.UserAccount.list({ limit: 250 }),
+    cookiesClient.models.PropertyLead.list({ limit: 500 }),
   ]);
 
   if (userErrors) console.error('User Fetch Error:', userErrors);
@@ -42,7 +42,7 @@ export default async function AdminPage() {
 
   // Serialize for client component
   const initialUsers: UserAccount[] = JSON.parse(JSON.stringify(deduplicatedUsers));
-  const initialLeads: PropertyLead[] = JSON.parse(JSON.stringify(allLeads));
+  const initialLeads: PropertyLead[] = JSON.parse(JSON.stringify(leadsData || []));
 
   return (
     <div className="p-6">

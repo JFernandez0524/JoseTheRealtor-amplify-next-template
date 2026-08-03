@@ -34,6 +34,17 @@ export default function AdminDashboard({
     byStatus: Record<string, number>;
   } | null>(null);
 
+  const [userSearchQuery, setUserSearchQuery] = useState('');
+
+  const filteredUsers = users.filter((u) => {
+    if (!userSearchQuery.trim()) return true;
+    const q = userSearchQuery.toLowerCase().trim();
+    return (
+      u.email.toLowerCase().includes(q) ||
+      (u.owner && u.owner.toLowerCase().includes(q))
+    );
+  });
+
   useEffect(() => {
     fetch('/api/v1/admin/outreach-queue-stats')
       .then(r => r.json())
@@ -632,13 +643,32 @@ export default function AdminDashboard({
 
       {/* User Management */}
       <div className='bg-white rounded-lg shadow-sm border'>
-        <div className='px-6 py-4 border-b flex items-center justify-between'>
-          <h2 className='text-lg font-semibold text-gray-900'>
-            User Management & Subscription Control
-          </h2>
-          <span className='text-xs text-slate-500 font-medium'>
-            Manage user group membership and credit balances
-          </span>
+        <div className='px-6 py-4 border-b flex flex-col md:flex-row md:items-center justify-between gap-3'>
+          <div>
+            <h2 className='text-lg font-semibold text-gray-900'>
+              User Management & Subscription Control
+            </h2>
+            <span className='text-xs text-slate-500 font-medium'>
+              Manage user group membership and credit balances ({filteredUsers.length} of {users.length} users)
+            </span>
+          </div>
+          <div className='relative w-full md:w-72'>
+            <input
+              type='text'
+              placeholder='Search user by email or ID...'
+              value={userSearchQuery}
+              onChange={(e) => setUserSearchQuery(e.target.value)}
+              className='w-full border border-slate-300 rounded-xl px-3 py-1.5 text-xs font-medium text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500'
+            />
+            {userSearchQuery && (
+              <button
+                onClick={() => setUserSearchQuery('')}
+                className='absolute right-2.5 top-1.5 text-slate-400 hover:text-slate-600 text-xs font-bold'
+              >
+                ✕
+              </button>
+            )}
+          </div>
         </div>
         <div className='overflow-x-auto'>
           <table className='min-w-full divide-y divide-gray-200'>
@@ -665,7 +695,7 @@ export default function AdminDashboard({
               </tr>
             </thead>
             <tbody className='bg-white divide-y divide-gray-200'>
-              {users.map((user) => (
+              {filteredUsers.map((user) => (
                 <tr key={user.id}>
                   <td className='px-6 py-4 whitespace-nowrap'>
                     <div className='text-sm font-medium text-gray-900'>
