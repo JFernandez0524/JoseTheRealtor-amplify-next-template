@@ -172,7 +172,7 @@ export default async function ProfilePage() {
           <AccountDataManagement />
         </div>
 
-        {/* --- RIGHT COLUMN: SUBSCRIPTION & WALLET --- */}
+        {/* --- RIGHT COLUMN: SUBSCRIPTION --- */}
         <div className='space-y-6'>
           {/* Subscription Card */}
           <div className='bg-indigo-600 text-white rounded-[2rem] p-8 shadow-lg shadow-indigo-100 relative overflow-hidden'>
@@ -191,30 +191,6 @@ export default async function ProfilePage() {
                 </a>
               )}
             </div>
-          </div>
-
-          {/* Wallet Card */}
-          <div className='bg-white border border-slate-200 rounded-[2rem] p-8 shadow-sm'>
-            <p className='text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1'>
-              Wallet Balance
-            </p>
-            <div className='flex items-center gap-3 mb-6'>
-              <HiOutlineCreditCard className='text-3xl text-indigo-500' />
-              <span className='text-4xl font-black text-slate-900'>
-                {userAccount?.credits || 0}
-              </span>
-              <span className='text-slate-400 font-bold text-xs uppercase'>
-                Credits
-              </span>
-            </div>
-            {!groups.includes('ADMINS') && (
-              <a
-                href='/pricing'
-                className='block text-center bg-slate-900 text-white py-3 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-800 transition-colors'
-              >
-                Add Credits
-              </a>
-            )}
           </div>
         </div>
       </div>
