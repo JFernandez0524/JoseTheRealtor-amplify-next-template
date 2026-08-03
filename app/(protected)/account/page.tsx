@@ -1,6 +1,11 @@
-import { cookiesClient, AuthGetCurrentUserServer, AuthGetUserAttributesServer } from '@/app/utils/aws/auth/amplifyServerUtils.server';
+import {
+  cookiesClient,
+  AuthGetCurrentUserServer,
+  AuthGetUserAttributesServer,
+  AuthGetUserGroupsServer,
+} from '@/app/utils/aws/auth/amplifyServerUtils.server';
 import { redirect } from 'next/navigation';
-import { HiOutlineCreditCard, HiOutlineChartBar, HiOutlineArrowRight } from 'react-icons/hi2';
+import { HiOutlineIdentification, HiOutlineCreditCard, HiOutlineChartBar, HiOutlineArrowRight } from 'react-icons/hi2';
 
 export const dynamic = 'force-dynamic';
 
@@ -8,7 +13,18 @@ export default async function AccountPage() {
   const currentUser = await AuthGetCurrentUserServer();
   if (!currentUser) redirect('/');
 
-  const attributes = await AuthGetUserAttributesServer();
+  const [attributes, groups] = await Promise.all([
+    AuthGetUserAttributesServer(),
+    AuthGetUserGroupsServer(),
+  ]);
+
+  const subscriptionTier = groups.includes('ADMINS')
+    ? 'Admin (Full Access)'
+    : groups.includes('AI_PLAN')
+      ? 'AI Outreach Pro'
+      : groups.includes('PRO')
+        ? 'Sync Pro'
+        : 'Free Tier';
 
   const { data: accountsByOwner } = await cookiesClient.models.UserAccount.list({
     filter: { owner: { eq: currentUser.userId } },
@@ -32,10 +48,28 @@ export default async function AccountPage() {
     <div className='p-6 max-w-2xl mx-auto'>
       <div className='mb-6 text-center'>
         <h1 className='text-3xl font-black text-slate-900 tracking-tight'>My Account</h1>
-        <p className='text-slate-500 font-medium'>Credits and usage overview.</p>
+        <p className='text-slate-500 font-medium'>Subscription, credits, and usage overview.</p>
       </div>
 
       <div className='space-y-4'>
+        {/* Subscription Plan Card */}
+        <div className='bg-indigo-600 text-white rounded-xl p-6 flex items-center justify-between shadow-lg shadow-indigo-100 relative overflow-hidden'>
+          <HiOutlineIdentification className='absolute -bottom-6 -right-6 text-9xl text-indigo-500 opacity-30 pointer-events-none' />
+          <div className='relative z-10'>
+            <p className='text-xs font-black uppercase tracking-widest text-indigo-200 mb-1'>
+              Current Plan
+            </p>
+            <h3 className='text-2xl font-black'>{subscriptionTier}</h3>
+          </div>
+          {!groups.includes('ADMINS') && (
+            <a
+              href='/pricing'
+              className='relative z-10 bg-white text-indigo-600 px-5 py-2.5 rounded-lg text-xs font-black uppercase tracking-widest hover:bg-indigo-50 transition-colors shadow-sm'
+            >
+              Upgrade Plan
+            </a>
+          )}
+        </div>
         {/* Credits Card */}
         <div className='bg-white border border-slate-200 rounded-xl p-6 flex items-center justify-between'>
           <div className='flex items-center gap-4'>
