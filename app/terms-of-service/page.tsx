@@ -100,9 +100,12 @@ export default function TermsOfService() {
                 a successful result and will be charged accordingly.
               </p>
 
-              <h3 className="text-lg font-semibold text-gray-800 mb-3">3.3 Refunds and Account Deletion</h3>
+              <h3 className="text-lg font-semibold text-gray-800 mb-3">3.3 Strict No-Refund Policy & Subscription Renewals</h3>
               <p className="mb-4">
-                Subscription fees and skip trace credits are non-refundable. Upon account deletion, all unused wallet and skip trace credits are permanently forfeited. No prorated refunds will be issued for unused days remaining in an active subscription billing period.
+                There are strictly <strong>NO REFUNDS OF ANY KIND</strong> (including full refunds, partial refunds, skip trace credit refunds, or prorated subscription refunds). All purchases, credit top-ups, and subscription charges are non-refundable under any circumstances.
+              </p>
+              <p className="mb-4">
+                Subscriptions automatically renew on a monthly basis. Customers who do not wish to be billed for a new subscription month must cancel or delete their account prior to the end of their current monthly billing cycle. Account deletion or cancellation mid-cycle immediately revokes access without refund or credit for remaining days.
               </p>
             </section>
 

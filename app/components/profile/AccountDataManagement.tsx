@@ -9,6 +9,7 @@ import {
   HiOutlineShieldCheck,
   HiOutlineXMark,
   HiOutlineInformationCircle,
+  HiOutlineCalendarDays,
 } from 'react-icons/hi2';
 
 export default function AccountDataManagement() {
@@ -17,6 +18,15 @@ export default function AccountDataManagement() {
   const [confirmInput, setConfirmInput] = useState('');
   const [isDeleting, setIsDeleting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // Calculate current monthly billing cycle end date
+  const now = new Date();
+  const cycleEndDate = new Date(now.getFullYear(), now.getMonth() + 1, now.getDate());
+  const formattedCycleEndDate = cycleEndDate.toLocaleDateString('en-US', {
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+  });
 
   const handleExportData = async () => {
     try {
@@ -137,7 +147,7 @@ export default function AccountDataManagement() {
       {/* CONFIRMATION & EXPORT MODAL */}
       {isModalOpen && (
         <div className='fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4'>
-          <div className='bg-white rounded-3xl max-w-lg w-full p-8 shadow-2xl border border-slate-100 relative animate-in fade-in zoom-in duration-150'>
+          <div className='bg-white rounded-3xl max-w-lg w-full p-8 shadow-2xl border border-slate-100 relative animate-in fade-in zoom-in duration-150 max-h-[90vh] overflow-y-auto'>
             <button
               onClick={() => !isDeleting && setIsModalOpen(false)}
               className='absolute top-6 right-6 text-slate-400 hover:text-slate-600 transition-colors'
@@ -161,18 +171,25 @@ export default function AccountDataManagement() {
                 Deleting your account will permanently purge all your leads, contacts, integration settings, and history from our database and remove your login from AWS Cognito.
               </p>
 
-              {/* NO REFUND / NO PRORATION NOTICE */}
-              <div className='p-4 bg-amber-50 border border-amber-200 rounded-2xl text-amber-900 text-xs space-y-1.5'>
-                <div className='flex items-center gap-1.5 font-extrabold text-amber-900'>
+              {/* STRICT NO REFUNDS & BILLING RENEWAL CYCLE NOTICE */}
+              <div className='p-4 bg-amber-50 border border-amber-200 rounded-2xl text-amber-900 text-xs space-y-2'>
+                <div className='flex items-center gap-1.5 font-extrabold text-amber-950 uppercase tracking-wider text-[11px]'>
                   <HiOutlineInformationCircle className='text-base text-amber-700 shrink-0' />
-                  <span>Important Refund Policy Terms</span>
+                  <span>Strict Refund & Subscription Renewal Terms</span>
                 </div>
-                <ul className='list-disc pl-5 space-y-1 text-amber-800 font-medium'>
+                
+                <ul className='list-disc pl-5 space-y-1.5 text-amber-900 font-medium leading-relaxed'>
                   <li>
-                    <strong>No Credit Refunds:</strong> Any unused skip trace or wallet credits remaining on your account are strictly non-refundable and will be permanently forfeited.
+                    <strong className='text-amber-950 font-black'>NO REFUNDS OF ANY KIND:</strong> All purchases, subscription fees, skip trace charges, and wallet credit top-ups are strictly non-refundable under any circumstances. No full, partial, or credit refunds will be issued.
                   </li>
                   <li>
-                    <strong>No Prorated Subscription Refunds:</strong> Subscriptions are non-refundable and will not be prorated for unused days remaining in the current billing cycle.
+                    <strong className='text-amber-950 font-black'>NO PRORATED REFUNDS:</strong> If you delete your account or cancel mid-month, no prorated refunds will be granted for remaining days in the billing period.
+                  </li>
+                  <li className='flex items-start gap-1 pt-1 border-t border-amber-200/60'>
+                    <HiOutlineCalendarDays className='text-amber-800 text-base shrink-0 mt-0.5' />
+                    <span>
+                      <strong className='text-amber-950 font-black'>Subscription Renewal Cycle:</strong> Your current monthly billing cycle ends on <span className='underline font-bold text-amber-950'>{formattedCycleEndDate}</span>. To avoid being charged for a new subscription month, you must cancel or delete your account <strong>before {formattedCycleEndDate}</strong>. Account deletion immediately terminates your access.
+                    </span>
                   </li>
                 </ul>
               </div>
