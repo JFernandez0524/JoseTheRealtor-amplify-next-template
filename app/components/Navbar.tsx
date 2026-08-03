@@ -17,7 +17,7 @@ const Navbar = () => {
   /** * 🛡️ CONSOLIDATED ACCESS HOOK
    * Now includes isLoading to prevent UI flickering during session checks
    */
-  const { hasPaidPlan, isAdmin, isLoading } = useAccess();
+  const { hasPaidPlan, isAdmin, credits, isLoading } = useAccess();
 
   /** * 👤 PROFILE DATA
    * We keep useUserProfile for the 'picture' and 'name' attributes
@@ -169,41 +169,53 @@ const Navbar = () => {
           )}
 
           {isAuthenticated ? (
-            <div ref={dropdownRef} className='relative ml-4'>
-              <button
-                onClick={() => setMenuOpen(!menuOpen)}
-                className='flex items-center space-x-2 focus:outline-none'
+            <div className='flex items-center gap-3 ml-2'>
+              {/* GLOBAL CREDIT COUNTER BADGE */}
+              <Link
+                href='/pricing'
+                className='flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 hover:bg-amber-100 border border-amber-200/80 rounded-full text-xs font-extrabold text-amber-900 transition-all shadow-sm group'
+                title='Click to buy skip tracing credits'
               >
-                <img
-                  src={profilePic}
-                  className='w-8 h-8 rounded-full border border-gray-200'
-                  alt='Profile'
-                />
-                <span className='text-sm font-medium text-gray-700'>
-                  {displayName}
-                </span>
-              </button>
-              {menuOpen && (
-                <div className='absolute right-0 mt-2 w-48 bg-white shadow-xl rounded-xl py-2 z-50 border border-gray-100'>
-                  <Link
-                    href='/account'
-                    className='block px-4 py-2 text-sm text-gray-700 hover:bg-blue-50'
-                    onClick={() => setMenuOpen(false)}
-                  >
-                    My Account
-                  </Link>
-                  <Link
-                    href='/profile'
-                    className='block px-4 py-2 text-sm text-gray-700 hover:bg-blue-50'
-                    onClick={() => setMenuOpen(false)}
-                  >
-                    Profile Settings
-                  </Link>
-                  <div className='border-t border-gray-100 mt-1 pt-1'>
-                    <Logout />
+                <span className='text-sm group-hover:scale-110 transition-transform'>💳</span>
+                <span>{credits.toLocaleString()} Credits</span>
+              </Link>
+
+              <div ref={dropdownRef} className='relative'>
+                <button
+                  onClick={() => setMenuOpen(!menuOpen)}
+                  className='flex items-center space-x-2 focus:outline-none'
+                >
+                  <img
+                    src={profilePic}
+                    className='w-8 h-8 rounded-full border border-gray-200'
+                    alt='Profile'
+                  />
+                  <span className='text-sm font-medium text-gray-700'>
+                    {displayName}
+                  </span>
+                </button>
+                {menuOpen && (
+                  <div className='absolute right-0 mt-2 w-48 bg-white shadow-xl rounded-xl py-2 z-50 border border-gray-100'>
+                    <Link
+                      href='/account'
+                      className='block px-4 py-2 text-sm text-gray-700 hover:bg-blue-50'
+                      onClick={() => setMenuOpen(false)}
+                    >
+                      My Account
+                    </Link>
+                    <Link
+                      href='/profile'
+                      className='block px-4 py-2 text-sm text-gray-700 hover:bg-blue-50'
+                      onClick={() => setMenuOpen(false)}
+                    >
+                      Profile Settings
+                    </Link>
+                    <div className='border-t border-gray-100 mt-1 pt-1'>
+                      <Logout />
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
+              </div>
             </div>
           ) : (
             !isLoading && pathname !== '/login' && (
@@ -322,6 +334,13 @@ const Navbar = () => {
                   Admin Panel
                 </Link>
               )}
+              <Link
+                href='/pricing'
+                className='flex items-center justify-center gap-2 py-3.5 bg-amber-50 border border-amber-200 rounded-2xl font-black text-amber-900 text-lg w-full my-3 shadow-sm'
+              >
+                <span className='text-xl'>💳</span>
+                <span>{credits.toLocaleString()} Credits</span>
+              </Link>
               <Link
                 href='/profile'
                 className='text-gray-700 py-4 text-2xl w-full text-center border-b border-gray-50'

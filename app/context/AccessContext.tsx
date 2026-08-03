@@ -18,6 +18,7 @@ interface AccessContextType {
   isAdmin: boolean;
   isAI: boolean;
   hasPaidPlan: boolean;
+  credits: number;
   isLoading: boolean;
 }
 
@@ -26,6 +27,7 @@ const defaultAccess: AccessContextType = {
   isAdmin: false,
   isAI: false,
   hasPaidPlan: false,
+  credits: 0,
   isLoading: true,
 };
 
@@ -105,6 +107,7 @@ export function AccessProvider({ children }: { children: ReactNode }) {
               isAdmin: groups.includes('ADMINS'),
               isAI: groups.includes('AI_PLAN'),
               hasPaidPlan: groups.some(g => ['PRO', 'AI_PLAN', 'ADMINS'].includes(g)),
+              credits: updatedAccounts[0]?.credits ?? existingAccountByEmail.credits ?? 0,
               isLoading: false,
             });
             return;
@@ -192,6 +195,9 @@ export function AccessProvider({ children }: { children: ReactNode }) {
         }
       }
 
+      const activeAccount = accounts?.[0] || existingAccountByEmail;
+      const userCredits = activeAccount?.credits ?? 0;
+
       // 3. 🛡️ Identity Fail-Safe: Add to FREE group if not in any app groups
       // We check if they have NO app-specific groups (ignores the system Google group)
       const appGroups = ['ADMINS', 'PRO', 'AI_PLAN', 'FREE'];
@@ -218,6 +224,7 @@ export function AccessProvider({ children }: { children: ReactNode }) {
           groups.includes('PRO') ||
           groups.includes('AI_PLAN') ||
           groups.includes('ADMINS'),
+        credits: userCredits,
         isLoading: false,
       });
     } catch (error) {
