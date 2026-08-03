@@ -23,7 +23,7 @@ export default async function AccountPage() {
     : groups.includes('AI_PLAN')
       ? 'AI Outreach Pro'
       : groups.includes('PRO')
-        ? 'Sync Pro'
+        ? 'Launch AI Sync Beta'
         : 'Free Tier';
 
   const userAccount = await getUserAccount(currentUser.userId, attributes?.email);

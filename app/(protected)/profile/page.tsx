@@ -52,7 +52,7 @@ export default async function ProfilePage() {
     : groups.includes('AI_PLAN')
       ? 'AI Outreach Pro'
       : groups.includes('PRO')
-        ? 'Sync Pro'
+        ? 'Launch AI Sync Beta'
         : 'Free Tier';
 
   return (

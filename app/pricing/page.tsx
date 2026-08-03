@@ -20,7 +20,7 @@ export default function PricingPage() {
       ]
     },
     {
-      title: 'LAYNCH AI SYNC BETA',
+      title: 'LAUNCH AI SYNC BETA',
       price: '$39',
       planId: 'sync-plan',
       popular: true,
