@@ -31,8 +31,9 @@ export default function AccountDataManagement() {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
+
       const contentDisposition = response.headers.get('Content-Disposition');
-      let filename = 'account-data-export.json';
+      let filename = 'account-data-export.csv';
       if (contentDisposition) {
         const match = contentDisposition.match(/filename="?([^"]+)"?/);
         if (match && match[1]) filename = match[1];
@@ -92,7 +93,7 @@ export default function AccountDataManagement() {
               <h3 className='text-lg font-black text-slate-900'>Data Privacy & Export</h3>
             </div>
             <p className='text-sm text-slate-500 font-medium leading-relaxed max-w-xl'>
-              Under GDPR and CCPA data portability guidelines, you can download a complete copy of all your leads, contacts, integration settings, and history at any time in JSON format.
+              Under GDPR and CCPA data portability guidelines, you can download a complete copy of all your leads, contacts, outreach queues, and account details at any time as a standard CSV file (.csv).
             </p>
           </div>
           <button
@@ -101,7 +102,7 @@ export default function AccountDataManagement() {
             className='px-5 py-3 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold rounded-xl transition-colors flex items-center gap-2 shrink-0 disabled:opacity-50'
           >
             <HiOutlineArrowDownTray className='text-base' />
-            {isExporting ? 'Preparing Export...' : 'Download Data (JSON)'}
+            {isExporting ? 'Preparing CSV...' : 'Download Data (CSV)'}
           </button>
         </div>
       </div>
@@ -162,8 +163,8 @@ export default function AccountDataManagement() {
               {/* DATA DOWNLOAD PROMPT IN MODAL */}
               <div className='p-4 bg-indigo-50/70 border border-indigo-100 rounded-2xl flex items-center justify-between gap-3'>
                 <div>
-                  <p className='font-bold text-slate-800 text-xs'>Want a backup first?</p>
-                  <p className='text-[11px] text-slate-500'>Download all your data before deleting.</p>
+                  <p className='font-bold text-slate-800 text-xs'>Want a CSV backup first?</p>
+                  <p className='text-[11px] text-slate-500'>Download all your data as a CSV file before deleting.</p>
                 </div>
                 <button
                   type='button'
@@ -172,7 +173,7 @@ export default function AccountDataManagement() {
                   className='px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 shrink-0'
                 >
                   <HiOutlineArrowDownTray />
-                  {isExporting ? 'Exporting...' : 'Save Copy'}
+                  {isExporting ? 'Exporting CSV...' : 'Save CSV Copy'}
                 </button>
               </div>
 
