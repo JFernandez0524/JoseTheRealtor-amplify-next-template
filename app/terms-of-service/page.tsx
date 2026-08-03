@@ -100,9 +100,9 @@ export default function TermsOfService() {
                 a successful result and will be charged accordingly.
               </p>
 
-              <h3 className="text-lg font-semibold text-gray-800 mb-3">3.3 Refunds</h3>
+              <h3 className="text-lg font-semibold text-gray-800 mb-3">3.3 Refunds and Account Deletion</h3>
               <p className="mb-4">
-                Subscription fees and skip trace credits are non-refundable. Unused credits expire after 12 months of account inactivity.
+                Subscription fees and skip trace credits are non-refundable. Upon account deletion, all unused wallet and skip trace credits are permanently forfeited. No prorated refunds will be issued for unused days remaining in an active subscription billing period.
               </p>
             </section>
 

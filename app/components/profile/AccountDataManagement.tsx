@@ -8,6 +8,7 @@ import {
   HiOutlineTrash,
   HiOutlineShieldCheck,
   HiOutlineXMark,
+  HiOutlineInformationCircle,
 } from 'react-icons/hi2';
 
 export default function AccountDataManagement() {
@@ -159,6 +160,22 @@ export default function AccountDataManagement() {
               <p>
                 Deleting your account will permanently purge all your leads, contacts, integration settings, and history from our database and remove your login from AWS Cognito.
               </p>
+
+              {/* NO REFUND / NO PRORATION NOTICE */}
+              <div className='p-4 bg-amber-50 border border-amber-200 rounded-2xl text-amber-900 text-xs space-y-1.5'>
+                <div className='flex items-center gap-1.5 font-extrabold text-amber-900'>
+                  <HiOutlineInformationCircle className='text-base text-amber-700 shrink-0' />
+                  <span>Important Refund Policy Terms</span>
+                </div>
+                <ul className='list-disc pl-5 space-y-1 text-amber-800 font-medium'>
+                  <li>
+                    <strong>No Credit Refunds:</strong> Any unused skip trace or wallet credits remaining on your account are strictly non-refundable and will be permanently forfeited.
+                  </li>
+                  <li>
+                    <strong>No Prorated Subscription Refunds:</strong> Subscriptions are non-refundable and will not be prorated for unused days remaining in the current billing cycle.
+                  </li>
+                </ul>
+              </div>
 
               {/* DATA DOWNLOAD PROMPT IN MODAL */}
               <div className='p-4 bg-indigo-50/70 border border-indigo-100 rounded-2xl flex items-center justify-between gap-3'>
