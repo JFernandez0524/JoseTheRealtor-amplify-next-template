@@ -44,6 +44,8 @@ const EMAIL_STATUS_STYLES: Record<string, string> = {
   BOUNCED:   'bg-red-100 text-red-800',
   FAILED:    'bg-red-100 text-red-800',
   OPTED_OUT: 'bg-gray-100 text-gray-700',
+  NURTURE:   'bg-purple-100 text-purple-800',
+  COMPLETED: 'bg-gray-100 text-gray-800',
 };
 
 const LEAD_TYPE_LABELS: Record<string, string> = {

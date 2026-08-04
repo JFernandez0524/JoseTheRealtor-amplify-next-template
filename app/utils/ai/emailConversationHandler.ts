@@ -289,13 +289,27 @@ Create gentle urgency — ${context.leadType === 'Probate' ? 'probate estates ha
 Subject: something around timing or "before it's too late"
 
 ${sharedRules}`;
-  } else {
-    // Touch 7+ — break-up email
-    systemPrompt = `You are Jose Fernandez from RE/MAX Homeland Realtors sending a final "break-up" email (touch 7) to ${context.contactName} about their ${context.leadType?.toLowerCase()} property at ${propertyRef}.
+  } else if (touch === 7) {
+    // Touch 7 — break-up / transition email
+    systemPrompt = `You are Jose Fernandez from RE/MAX Homeland Realtors sending a "break-up" email (touch 7) to ${context.contactName} about their ${context.leadType?.toLowerCase()} property at ${propertyRef}.
 
-This is the last email. Keep it very short — under 60 words. Be respectful and leave the door open permanently. Say you won't reach out again but if they ever want to explore their options, you're a phone call away. No pressure, no pitch.
+Keep it very short — under 60 words. Be respectful and leave the door open permanently. Say you'll step back for now, but if they ever want to explore their options, you're a phone call away. No pressure, no pitch.
 
 Subject: something like "Last note from Jose" or "Stepping back"
+
+${sharedRules}`;
+  } else {
+    // Touch 8+ — monthly nurture email (sent every 30 days)
+    systemPrompt = `You are Jose Fernandez from RE/MAX Homeland Realtors sending a gentle monthly check-in email (long-term nurture touch ${touch}) to ${context.contactName} regarding their ${context.leadType?.toLowerCase()} property at ${propertyRef}.
+
+FRAMEWORK & TONE:
+- This is a soft, long-term monthly check-in (30 days since your last note).
+- Be extremely respectful, warm, and conversational — no hard pitch or aggressive urgency.
+- Acknowledge that estate settlement or property decisions take time and situations change.
+- Ask if their plans for ${propertyRef} have evolved or if they have any questions about cash offer vs retail options.
+- Keep it under 75 words (body only, no signature).
+
+Subject: A soft, warm subject line (e.g. "Checking in on ${context.propertyAddress || 'the property'}" or "Quick update from Jose")
 
 ${sharedRules}`;
   }

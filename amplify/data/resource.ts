@@ -77,7 +77,7 @@ const schema = a.schema({
       queueStatus: a.enum(['OUTREACH', 'CONVERSATION', 'DND', 'WRONG_INFO', 'COMPLETED', 'MANUAL_HANDLING']),
       
       // Outreach channel status
-      emailStatus: a.enum(['PENDING', 'SENT', 'REPLIED', 'BOUNCED', 'FAILED', 'OPTED_OUT']),
+      emailStatus: a.enum(['PENDING', 'SENT', 'REPLIED', 'BOUNCED', 'FAILED', 'OPTED_OUT', 'NURTURE', 'COMPLETED']),
 
       // Tracking timestamps
       emailAttempts: a.integer().default(0),

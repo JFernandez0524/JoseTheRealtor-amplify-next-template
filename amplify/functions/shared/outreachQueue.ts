@@ -41,7 +41,7 @@ interface OutreachQueueItem {
   contactPhone?: string;
   contactEmail?: string;
   queueStatus?: 'OUTREACH' | 'CONVERSATION' | 'DND' | 'WRONG_INFO' | 'COMPLETED';
-  emailStatus?: 'PENDING' | 'SENT' | 'REPLIED' | 'BOUNCED' | 'FAILED' | 'OPTED_OUT';
+  emailStatus?: 'PENDING' | 'SENT' | 'REPLIED' | 'BOUNCED' | 'FAILED' | 'OPTED_OUT' | 'NURTURE' | 'COMPLETED';
   emailAttempts?: number;
   lastEmailSent?: string;
   nextEmailDate?: string; // Scheduled date for next email
@@ -123,28 +123,32 @@ export async function addToOutreachQueue(item: OutreachQueueItem): Promise<strin
  * @returns Array of pending contacts ready for next touch
  */
 export async function getPendingEmailContacts(userId: string, limit: number = 50): Promise<OutreachQueueItem[]> {
-  // Paginate through ALL pending email contacts (not just first 1000)
+  // Query both PENDING (high-priority initial sequence) and NURTURE (monthly long-term sequence)
   let items: OutreachQueueItem[] = [];
-  let lastEvaluatedKey: any = undefined;
-  
-  do {
-    const params: any = {
-      TableName: OUTREACH_QUEUE_TABLE,
-      IndexName: 'outreachQueuesByUserIdAndEmailStatus',
-      KeyConditionExpression: 'userId = :userId AND emailStatus = :status',
-      ExpressionAttributeValues: {
-        ':userId': userId,
-        ':status': 'PENDING',
-      },
-      Limit: 1000,
-    };
-    if (lastEvaluatedKey) {
-      params.ExclusiveStartKey = lastEvaluatedKey;
-    }
-    const result = await docClient.send(new QueryCommand(params));
-    items.push(...(result.Items || []) as OutreachQueueItem[]);
-    lastEvaluatedKey = result.LastEvaluatedKey;
-  } while (lastEvaluatedKey);
+  const statuses: ('PENDING' | 'NURTURE')[] = ['PENDING', 'NURTURE'];
+
+  for (const statusVal of statuses) {
+    if (items.length >= limit) break;
+    let lastEvaluatedKey: any = undefined;
+    do {
+      const params: any = {
+        TableName: OUTREACH_QUEUE_TABLE,
+        IndexName: 'outreachQueuesByUserIdAndEmailStatus',
+        KeyConditionExpression: 'userId = :userId AND emailStatus = :status',
+        ExpressionAttributeValues: {
+          ':userId': userId,
+          ':status': statusVal,
+        },
+        Limit: 1000,
+      };
+      if (lastEvaluatedKey) {
+        params.ExclusiveStartKey = lastEvaluatedKey;
+      }
+      const result = await docClient.send(new QueryCommand(params));
+      items.push(...((result.Items || []) as OutreachQueueItem[]));
+      lastEvaluatedKey = result.LastEvaluatedKey;
+    } while (lastEvaluatedKey && items.length < limit);
+  }
 
   const now = new Date();
   const today = new Date();
@@ -205,11 +209,13 @@ export async function getPendingEmailContacts(userId: string, limit: number = 50
  */
 export async function updateEmailStatus(
   id: string,
-  status: 'SENT' | 'REPLIED' | 'BOUNCED' | 'FAILED' | 'OPTED_OUT',
+  status: 'SENT' | 'REPLIED' | 'BOUNCED' | 'FAILED' | 'OPTED_OUT' | 'NURTURE' | 'COMPLETED',
   attempts?: number
 ): Promise<void> {
-  // Keep as PENDING if under 7 attempts and not replied/bounced/opted out
-  const finalStatus = (status === 'SENT' && attempts && attempts < 7) ? 'PENDING' : status;
+  // Keep as PENDING if under 7 attempts; transition to NURTURE if 7 or more
+  const finalStatus = (status === 'SENT' && attempts) 
+    ? (attempts >= 7 ? 'NURTURE' : 'PENDING') 
+    : status;
   
   const updateExpression = attempts !== undefined
     ? 'SET emailStatus = :status, emailAttempts = :attempts, lastEmailSent = :now, updatedAt = :now'
@@ -300,13 +306,16 @@ export async function updateEmailSent(id: string): Promise<void> {
   const currentAttempts = (result.Item?.emailAttempts as number) || 0;
   const newAttempts = currentAttempts + 1;
 
-  // Cap at 7 touches — mark COMPLETED after final touch
-  const MAX_EMAIL_TOUCHES = 7;
-  const finalStatus = newAttempts >= MAX_EMAIL_TOUCHES ? 'COMPLETED' : 'PENDING';
+  // Touches 1-7: PENDING sequence (every 4 days)
+  // Touch 8+: NURTURE long-term sequence (every 30 days)
+  const MAX_PRIMARY_TOUCHES = 7;
+  const isNurturePhase = newAttempts >= MAX_PRIMARY_TOUCHES;
+  const finalStatus = isNurturePhase ? 'NURTURE' : 'PENDING';
 
-  // Calculate next email date (4 days from now) — only relevant if still PENDING
+  // Calculate next email date: 4 days for initial PENDING sequence, 30 days for monthly NURTURE sequence
   const nextDate = new Date();
-  nextDate.setDate(nextDate.getDate() + 4);
+  const daysToAdd = isNurturePhase ? 30 : 4;
+  nextDate.setDate(nextDate.getDate() + daysToAdd);
   nextDate.setHours(0, 0, 0, 0);
 
   await docClient.send(new UpdateCommand({
@@ -322,7 +331,7 @@ export async function updateEmailSent(id: string): Promise<void> {
     },
   }));
 
-  console.log(`✅ Updated email for queue item ${id} - attempt ${newAttempts}/${MAX_EMAIL_TOUCHES}, status: ${finalStatus}, next: ${nextDate.toDateString()}`);
+  console.log(`✅ Updated email for queue item ${id} - attempt ${newAttempts} (${finalStatus}), next: ${nextDate.toDateString()}`);
 }
 
 /**
