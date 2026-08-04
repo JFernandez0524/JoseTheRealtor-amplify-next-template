@@ -709,10 +709,7 @@ export default function LeadDashboardClient({}: Props) {
     }
   };
   const handleDeleteLeads = async () => {
-    if (!isAdmin) {
-      addToast({ type: 'error', title: 'Unauthorized', message: 'Only Admins can bulk delete leads.' });
-      return;
-    }
+    if (selectedIds.length === 0) return;
     setShowDeleteModal(true);
   };
 
