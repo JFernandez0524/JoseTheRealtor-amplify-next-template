@@ -1,3 +1,4 @@
+
 /**
  * CSV COLUMN MAPPING (shared client + Lambda)
  *
@@ -141,28 +142,44 @@ export function formatName(val: string | null | undefined): string {
   if (!val || typeof val !== 'string') return '';
   const s = val.replace(/<[^>]*>?/gm, '').replace(/\0/g, '').trim().slice(0, 50);
   if (!s) return '';
-  return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
+  return s
+    .split(/\s+/)
+    .map((w) => (w ? w.charAt(0).toUpperCase() + w.slice(1).toLowerCase() : ''))
+    .join(' ');
 }
 
 /**
  * Parse a combined owner/ownership string into first + last name. Handles "LAST, FIRST", "FIRST
- * MIDDLE LAST", multiple people joined by "&", and common suffixes. (Moved verbatim from the Lambda.)
+ * MIDDLE LAST", multiple people joined by "&", "+", or "AND", parentheticals, and deed abbreviations.
  */
 export function parseOwnershipName(ownership: string): { firstName: string; lastName: string } {
   if (!ownership) return { firstName: '', lastName: '' };
 
-  const cleaned = ownership
-    .replace(/\b(ESTATE|TRUST|TRUSTEE|EXEC|EXECUTOR|ETAL|ET AL|C\/O|%)\b/gi, '')
+  // 1. Strip parentheticals like (DECEASED), (DECEASED HUSBAND), (DEC), (WIFE), (HUSBAND), (), etc.
+  let cleaned = ownership.replace(/\([^)]*\)/g, ' ');
+
+  // 2. Normalize joiners (+ or AND -> &) and strip real estate deed noise
+  cleaned = cleaned
+    .replace(/\s*\+\s*/g, ' & ')
+    .replace(/\bAND\b/gi, '&')
+    .replace(/\bET\s*UX\b/gi, '')
+    .replace(/\bET\s*VIR\b/gi, '')
+    .replace(/\bET\s*AL(S)?\b/gi, '')
+    .replace(/&\s*(WF|WIFE|HW|HUSBAND)\b/gi, '')
+    .replace(/\b(WF|WIFE|HW|HUSBAND)\b/gi, '')
+    .replace(/\b(ESTATE|TRUST|TRUSTEE|EXEC|EXECUTOR|C\/O|%)\b/gi, '')
+    .replace(/\s+/g, ' ')
     .trim();
 
   if (!cleaned) return { firstName: '', lastName: '' };
 
   if (cleaned.includes('&')) {
-    const people = cleaned.split('&').map((p) => p.trim());
+    const people = cleaned.split('&').map((p) => p.trim()).filter(Boolean);
     const firstNames: string[] = [];
     const lastNames: string[] = [];
 
-    for (const person of people) {
+    for (let i = 0; i < people.length; i++) {
+      const person = people[i];
       if (person.includes(',')) {
         const parts = person.split(',').map((s) => s.trim());
         lastNames.push(formatName(parts[0]));
@@ -170,20 +187,44 @@ export function parseOwnershipName(ownership: string): { firstName: string; last
       } else {
         const words = person.split(/\s+/).filter((w) => w.length > 0);
         if (words.length === 1) {
-          lastNames.push(formatName(words[0]));
+          if (i < people.length - 1) {
+            firstNames.push(formatName(words[0]));
+          } else {
+            lastNames.push(formatName(words[0]));
+          }
         } else {
           const suffixes = ['JR', 'SR', 'II', 'III', 'IV', 'V'];
-          const lastWord = words[words.length - 1].toUpperCase().replace(/\./g, '');
-          const lastNameIndex = suffixes.includes(lastWord) ? words.length - 2 : words.length - 1;
-          firstNames.push(words.slice(0, lastNameIndex).map((w) => formatName(w)).join(' '));
-          lastNames.push(formatName(words[lastNameIndex]));
+          const lastWordRaw = words[words.length - 1].replace(/\./g, '');
+          const lastWord = lastWordRaw.toUpperCase();
+
+          const isMiddleInitial = lastWordRaw.length === 1 && i < people.length - 1;
+
+          if (isMiddleInitial) {
+            firstNames.push(words.map((w) => formatName(w)).join(' '));
+          } else {
+            const lastNameIndex = suffixes.includes(lastWord) ? words.length - 2 : words.length - 1;
+            if (lastNameIndex <= 0) {
+              firstNames.push(words.map((w) => formatName(w)).join(' '));
+            } else {
+              firstNames.push(words.slice(0, lastNameIndex).map((w) => formatName(w)).join(' '));
+              lastNames.push(formatName(words[lastNameIndex]));
+            }
+          }
         }
       }
     }
 
+    let finalFirst = firstNames.filter(Boolean).join(' & ');
+    let finalLast = lastNames.filter(Boolean).join(' & ');
+
+    if (!finalFirst && finalLast) {
+      finalFirst = finalLast;
+      finalLast = '';
+    }
+
     return {
-      firstName: firstNames.filter((f) => f).join(' & '),
-      lastName: lastNames.filter((l) => l).join(' & '),
+      firstName: finalFirst,
+      lastName: finalLast,
     };
   }
 

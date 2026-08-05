@@ -114,7 +114,7 @@ describe('resolveOwnerName', () => {
   });
 
   it('prefers split first/last when provided', () => {
-    expect(resolveOwnerName({ first: 'ANNE MARIE', last: 'GRADY' })).toEqual({ firstName: 'Anne marie', lastName: 'Grady', isEntity: false });
+    expect(resolveOwnerName({ first: 'ANNE MARIE', last: 'GRADY' })).toEqual({ firstName: 'Anne Marie', lastName: 'Grady', isEntity: false });
   });
 
   it('flags entities and keeps the legal name intact', () => {
@@ -134,9 +134,27 @@ describe('resolveOwnerName', () => {
   });
 });
 
-describe('parseOwnershipName (LAST, FIRST)', () => {
+describe('parseOwnershipName', () => {
   it('handles comma order', () => {
     expect(parseOwnershipName('MOONEY, KELLY')).toEqual({ firstName: 'Kelly', lastName: 'Mooney' });
+  });
+
+  it('cleans empty parentheticals and noisy deed text (Jacqueline () Koslowski)', () => {
+    expect(parseOwnershipName('Jacqueline () Koslowski')).toEqual({ firstName: 'Jacqueline', lastName: 'Koslowski' });
+  });
+
+  it('strips (deceased husband) and & Wf deed noise (Roman & (deceased husband) Bienvenido & Wf)', () => {
+    expect(parseOwnershipName('Roman & (deceased husband) Bienvenido & Wf')).toEqual({
+      firstName: 'Roman',
+      lastName: 'Bienvenido',
+    });
+  });
+
+  it('handles + joiners and title-cases multi-word names (Donnie a. + neesa jarrett Campbell)', () => {
+    expect(parseOwnershipName('Donnie a. + neesa jarrett Campbell')).toEqual({
+      firstName: 'Donnie A. & Neesa Jarrett',
+      lastName: 'Campbell',
+    });
   });
 });
 
