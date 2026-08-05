@@ -137,6 +137,11 @@ export function LeadTable({
   const [isSaving, setIsSaving] = useState(false);
   // The corrected address the user picked from the Google autocomplete (null until they select one).
   const [selectedAddress, setSelectedAddress] = useState<ParsedAddress | null>(null);
+  const [manualStreet, setManualStreet] = useState('');
+  const [manualCity, setManualCity] = useState('');
+  const [manualState, setManualState] = useState('');
+  const [manualZip, setManualZip] = useState('');
+  const [showManualFields, setShowManualFields] = useState(false);
   const [editingZestimateLead, setEditingZestimateLead] = useState<Lead | null>(null);
   const [zestimateUrlInput, setZestimateUrlInput] = useState('');
   const [zestimateValueInput, setZestimateValueInput] = useState('');
@@ -277,60 +282,72 @@ export function LeadTable({
 
   const handleEditAddress = (lead: Lead) => {
     setEditingLead(lead);
-    setSelectedAddress(null); // user must pick a fresh address from the dropdown
-    setIsSaving(false); // Reset saving state when opening modal
+    setSelectedAddress(null);
+    setManualStreet(lead.ownerAddress || '');
+    setManualCity(lead.ownerCity || '');
+    setManualState(lead.ownerState || '');
+    setManualZip(lead.ownerZip || '');
+    setShowManualFields(false);
+    setIsSaving(false);
   };
 
   const handleSaveAddress = async () => {
-    // Require a Google-picked address — it's validated by construction, so we can safely clear the
-    // INVALID flag (same trust model as the manual lead form + /api/v1/create-manual-lead).
-    if (!editingLead || !selectedAddress) return;
-    const addr = selectedAddress;
+    if (!editingLead) return;
+
+    const street = (selectedAddress?.street || manualStreet).trim();
+    const city = (selectedAddress?.city || manualCity).trim();
+    const state = (selectedAddress?.state || manualState).trim();
+    const zip = (selectedAddress?.zip || manualZip).trim();
+
+    if (!street || !city || !state) {
+      alert('Please enter street address, city, and state.');
+      return;
+    }
 
     setIsSaving(true);
     try {
       await updateLead(editingLead.id, {
-        ownerAddress: addr.street,
-        ownerCity: addr.city,
-        ownerState: addr.state,
-        ownerZip: addr.zip,
-        ownerCounty: addr.county || null,
-        latitude: addr.lat,
-        longitude: addr.lng,
+        ownerAddress: street,
+        ownerCity: city,
+        ownerState: state,
+        ownerZip: zip,
+        ownerCounty: selectedAddress?.county || editingLead.ownerCounty || null,
+        latitude: selectedAddress?.lat ?? editingLead.latitude ?? null,
+        longitude: selectedAddress?.lng ?? editingLead.longitude ?? null,
         standardizedAddress: {
-          street: addr.street,
-          city: addr.city,
-          state: addr.state,
-          zip: addr.zip,
-          county: addr.county,
+          street,
+          city,
+          state,
+          zip,
+          county: selectedAddress?.county || editingLead.ownerCounty,
         },
-        // Google confirmed this address — flip the lead back to VALID and clear the ⚠️ flag.
         validationStatus: 'VALID',
       });
 
-      // Refresh Zestimate with the corrected address
-      const res = await fetch('/api/v1/refresh-zestimate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          leadId: editingLead.id,
-          street: addr.street,
-          city: addr.city,
-          state: addr.state,
-          zip: addr.zip,
-        }),
-      });
+      // Attempt Zestimate refresh in background gracefully (do not fail the address save if Zestimate is unavailable)
+      try {
+        const res = await fetch('/api/v1/refresh-zestimate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            leadId: editingLead.id,
+            street,
+            city,
+            state,
+            zip,
+          }),
+        });
 
-      if (!res.ok) {
-        const error = await res.json();
-        console.error('Zestimate refresh failed:', error);
-        alert(`Address updated but Zestimate refresh failed: ${error.error}`);
+        if (!res.ok) {
+          const error = await res.json();
+          console.warn('Zestimate refresh note:', error?.error || error);
+        }
+      } catch (zErr) {
+        console.warn('Zestimate refresh network note:', zErr);
       }
 
       const savedLeadId = editingLead.id;
       setEditingLead(null);
-      // The Zestimate refresh above wrote to the row server-side, so re-read this one lead rather
-      // than trusting the local updateLead response (which predates it).
       if (onLeadUpdated) {
         await patchLeadById(savedLeadId);
       } else if (onRefresh) {
@@ -338,9 +355,9 @@ export function LeadTable({
       } else {
         window.location.reload();
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to update address:', err);
-      alert('Failed to update address');
+      alert(`Failed to update address: ${err?.message || 'Unknown error'}`);
     } finally {
       setIsSaving(false);
     }
@@ -936,7 +953,13 @@ export function LeadTable({
                 <label className='block text-sm font-medium text-gray-700 mb-1'>New address *</label>
                 <AddressAutocomplete
                   key={editingLead.id}
-                  onSelect={setSelectedAddress}
+                  onSelect={(addr) => {
+                    setSelectedAddress(addr);
+                    setManualStreet(addr.street);
+                    setManualCity(addr.city);
+                    setManualState(addr.state);
+                    setManualZip(addr.zip);
+                  }}
                   className='w-full'
                 />
                 {selectedAddress && (
@@ -945,12 +968,67 @@ export function LeadTable({
                       .filter(Boolean).join(', ')}
                   </p>
                 )}
+
+                <div className='pt-2 mt-2 border-t'>
+                  <button
+                    type='button'
+                    onClick={() => setShowManualFields(!showManualFields)}
+                    className='text-xs text-blue-600 hover:text-blue-800 underline'
+                  >
+                    {showManualFields ? 'Hide manual fields' : '✏️ Or edit address fields manually'}
+                  </button>
+
+                  {showManualFields && (
+                    <div className='grid grid-cols-2 gap-2 mt-2 bg-gray-50 p-3 rounded-md border text-xs'>
+                      <div className='col-span-2'>
+                        <label className='block text-gray-600 font-medium'>Street Address</label>
+                        <input
+                          type='text'
+                          value={manualStreet}
+                          onChange={(e) => setManualStreet(e.target.value)}
+                          className='w-full p-1.5 border rounded text-xs mt-0.5'
+                          placeholder='e.g. 123 Main St'
+                        />
+                      </div>
+                      <div>
+                        <label className='block text-gray-600 font-medium'>City</label>
+                        <input
+                          type='text'
+                          value={manualCity}
+                          onChange={(e) => setManualCity(e.target.value)}
+                          className='w-full p-1.5 border rounded text-xs mt-0.5'
+                          placeholder='e.g. Edison'
+                        />
+                      </div>
+                      <div>
+                        <label className='block text-gray-600 font-medium'>State</label>
+                        <input
+                          type='text'
+                          value={manualState}
+                          onChange={(e) => setManualState(e.target.value)}
+                          className='w-full p-1.5 border rounded text-xs mt-0.5'
+                          placeholder='e.g. NJ'
+                        />
+                      </div>
+                      <div className='col-span-2'>
+                        <label className='block text-gray-600 font-medium'>ZIP Code</label>
+                        <input
+                          type='text'
+                          value={manualZip}
+                          onChange={(e) => setManualZip(e.target.value)}
+                          className='w-full p-1.5 border rounded text-xs mt-0.5'
+                          placeholder='e.g. 08837'
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
             <div className='flex gap-3 mt-6'>
               <button
                 onClick={handleSaveAddress}
-                disabled={isSaving || !selectedAddress}
+                disabled={isSaving || (!selectedAddress && (!manualStreet || !manualCity || !manualState))}
                 className='flex-1 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2'
               >
                 {isSaving ? (
