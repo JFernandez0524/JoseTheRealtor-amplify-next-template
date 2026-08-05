@@ -348,9 +348,30 @@ export const handler = async (event: any) => {
       };
     }
 
-    // Fetch contact data from GHL
+    // Fetch contact data from GHL with auto-recovery on 401/403 token errors
     console.log('🔍 [WEBHOOK_LAMBDA] Fetching contact from GHL...');
-    const fullContact = await ghlGetContact(token, contactId);
+    let fullContact: any;
+    try {
+      fullContact = await ghlGetContact(token, contactId);
+    } catch (error: any) {
+      if (error?.response?.status === 401 || error?.response?.status === 403) {
+        console.warn(`⚠️ [WEBHOOK_LAMBDA] GHL API returned ${error.response.status}. Attempting auto-recovery token refresh for user ${userId}...`);
+        const refreshed = await getValidGhlToken(userId, true);
+        if (refreshed?.token) {
+          token = refreshed.token;
+          fullContact = await ghlGetContact(token, contactId);
+          console.log(`✅ [WEBHOOK_LAMBDA] Auto-recovery succeeded with refreshed GHL token!`);
+        } else {
+          console.error(`❌ [WEBHOOK_LAMBDA] Auto-recovery failed: GHL token could not be refreshed.`);
+          return {
+            statusCode: 403,
+            body: JSON.stringify({ error: 'GHL authorization failed (403). Please reconnect GoHighLevel in App Settings.' })
+          };
+        }
+      } else {
+        throw error;
+      }
+    }
 
     // Extract property data using dynamic field IDs
     const findField = (key: string) => {
