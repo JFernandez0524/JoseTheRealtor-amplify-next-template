@@ -56,7 +56,7 @@ export function DuplicateLeadList({
         {entries.map((dup, idx) => (
           <div key={dup?.existingLeadId ?? idx} className="text-xs bg-white p-2 rounded border">
             <div className="font-medium text-gray-900">
-              {dup?.csvData?.ownerName || '(no owner name)'}
+              {dup?.csvData?.ownerName || dup?.existingLeadData?.ownerName || '(Owner name not specified)'}
             </div>
             <div className="text-gray-600">
               {[dup?.csvData?.address, dup?.csvData?.city, dup?.csvData?.state]

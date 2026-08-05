@@ -612,7 +612,19 @@ export const handler: S3Handler = async (event) => {
             if (duplicateLeads.length < MAX_DUPLICATE_STORE) {
               const csvOwner = `${ownerFirstName || ''} ${ownerLastName || ''}`.trim();
               const csvAdmin = `${adminFirstName || ''} ${adminLastName || ''}`.trim();
-              const csvDisplayName = csvOwner && csvAdmin ? `${csvOwner} (Admin: ${csvAdmin})` : csvOwner || (csvAdmin ? `Admin: ${csvAdmin}` : '');
+              let fallbackName = '';
+              if (!csvOwner && !csvAdmin && row && typeof row === 'object') {
+                for (const [key, val] of Object.entries(row)) {
+                  if (typeof val === 'string' && val.trim() && !val.includes('@')) {
+                    const k = key.toLowerCase();
+                    if (k.includes('name') || k.includes('owner') || k.includes('decedent') || k.includes('admin') || k.includes('borrower') || k.includes('contact')) {
+                      fallbackName = val.trim();
+                      break;
+                    }
+                  }
+                }
+              }
+              const csvDisplayName = csvOwner && csvAdmin ? `${csvOwner} (Admin: ${csvAdmin})` : csvOwner || (csvAdmin ? `Admin: ${csvAdmin}` : fallbackName);
               duplicateLeads.push({
                 csvData: {
                   ownerName: csvDisplayName,
