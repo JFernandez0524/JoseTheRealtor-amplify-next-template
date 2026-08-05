@@ -118,12 +118,21 @@ export const handler = async (event: any) => {
 
     // Extract data from customData (workflow) or root level (system webhook)
     const { customData, message, contact, location } = body;
-    let userId = sanitizeId(customData?.userId || body.userId || '');
-    const contactId = sanitizeId(customData?.contactId || body.contactId || contact?.id || '');
-    let messageBody = customData?.messageBody || body.body || message?.body;
+    let userId = sanitizeId(customData?.userId || customData?.user_id || body.userId || body.user_id || '');
+    const contactId = sanitizeId(
+      customData?.contactId ||
+      customData?.contact_id ||
+      body.contactId ||
+      body.contact_id ||
+      contact?.id ||
+      (body.type === 'Contact' || body.object === 'contact' ? body.id : '') ||
+      body.id ||
+      ''
+    );
+    let messageBody = customData?.messageBody || customData?.message_body || body.body || message?.body;
     const messageType = customData?.type === 'InboundMessage' ? (message?.type || 1) : message?.type;
-    const locationId = sanitizeId(customData?.locationId || body.locationId || location?.id || '');
-    let conversationId = customData?.conversationId || body.conversationId || '';
+    const locationId = sanitizeId(customData?.locationId || customData?.location_id || body.locationId || body.location_id || location?.id || '');
+    let conversationId = customData?.conversationId || customData?.conversation_id || body.conversationId || body.conversation_id || '';
 
 
     console.log('📨 [WEBHOOK_LAMBDA] Extracted data:', { userId, contactId, messageBody, messageType, locationId, conversationId });
