@@ -34,8 +34,8 @@ console.log('🔧 [CSV_UPLOAD] Environment:', {
 // 🚦 RATE LIMITING
 // ---------------------------------------------------------
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-const BRIDGE_API_DELAY_MS = 200; // 334/min = ~180ms, use 200ms to be safe
-const GOOGLE_API_DELAY_MS = 60;  // ~16 QPS — well under Google's 100 QPS limit
+const BRIDGE_API_DELAY_MS = 50;  // Optimized for fast bulk processing without exceeding Bridge API limits
+const GOOGLE_API_DELAY_MS = 20;  // ~50 QPS — well under Google's 100 QPS limit
 const MAX_UPLOAD_ROWS = 500;     // hard cap: prevents Lambda timeout and API quota exhaustion
 const MAX_DUPLICATE_STORE = 100; // max duplicate entries to store in DynamoDB (400KB item limit)
 

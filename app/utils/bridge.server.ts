@@ -90,7 +90,8 @@ const generateAddressVariations = (street: string) => {
     variations.add(transform(street, config)); // Try original format too
   });
 
-  return Array.from(variations).filter((v) => v);
+  // Limit to top 3 variations to prevent API slowdowns and Lambda timeouts during bulk imports
+  return Array.from(variations).filter((v) => v).slice(0, 3);
 };
 
 /**
