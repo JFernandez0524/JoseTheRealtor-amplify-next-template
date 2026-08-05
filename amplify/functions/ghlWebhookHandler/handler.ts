@@ -483,28 +483,26 @@ export const handler = async (event: any) => {
       }
     }
 
-    // AUTO-DETECT: if the agent was the last one to message this lead, stand down.
-    // This is an ordering test, not a time window: a fixed lookback (previously 120 minutes)
-    // silently let the AI talk over the agent whenever the lead replied the next morning.
-    // isHumanOutbound excludes this app's own sends and GHL workflow sends, so the AI cannot
-    // mistake its own reply for a takeover and pause itself. Complements the deliberate
-    // `AI State = paused` field switch; this is the automatic catch.
+    // AUTO-DETECT: if there is ANY manual human communication (text, email, or phone call event) between agent and lead, stand down.
     if (conversationId) {
-      const { wasLastOutboundHuman, activateManualMode } = await import('../shared/conversationActivity');
+      const { wasLastOutboundHuman, hasManualCommunication, activateManualMode } = await import('../shared/conversationActivity');
 
+      const manualCheck = await hasManualCommunication(conversationId, token);
       const lastOutbound = await wasLastOutboundHuman(conversationId, token);
 
-      if (lastOutbound.isHuman) {
-        console.log('🚫 [WEBHOOK_LAMBDA] Agent sent the last message - activating manual mode');
+      if (manualCheck.hasManual || lastOutbound.isHuman) {
+        const reason = manualCheck.reason || 'Agent messaged the lead directly';
+        console.log(`🚫 [WEBHOOK_LAMBDA] Manual communication detected (${reason}) - activating manual mode & pausing AI`);
 
-        await activateManualMode(contactId, token, 'Agent messaged the lead directly', fieldIds);
+        await activateManualMode(contactId, token, reason, fieldIds);
 
         return {
           statusCode: 200,
           body: JSON.stringify({
             message: 'Manual mode activated - AI paused',
             contactId,
-            lastOutboundTime: lastOutbound.lastOutboundTime
+            reason,
+            lastOutboundTime: manualCheck.lastTime || lastOutbound.lastOutboundTime
           })
         };
       }

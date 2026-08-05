@@ -74,6 +74,49 @@ export async function wasLastOutboundHuman(
 }
 
 /**
+ * Checks whether ANY manual (human) communication (outbound text, email, or phone call event)
+ * exists between the agent and the lead in the conversation history.
+ */
+export async function hasManualCommunication(
+  conversationId: string,
+  token: string
+): Promise<{ hasManual: boolean; reason: string | null; lastTime: string | null }> {
+  try {
+    const ghl = createGhlClient(token);
+    const res = await ghl.get(`/conversations/${conversationId}/messages`, { params: { limit: 50 } });
+    const messages = extractGhlMessages(res.data);
+
+    for (const msg of messages) {
+      // 1. Human outbound message sent by agent directly
+      if (msg.direction === 'outbound' && isHumanOutbound(msg)) {
+        console.log(`🤚 [ACTIVITY] Found human outbound message at ${msg.dateAdded}`);
+        return {
+          hasManual: true,
+          reason: 'Manual agent message detected in conversation history',
+          lastTime: msg.dateAdded ?? null,
+        };
+      }
+
+      // 2. Phone call events (logged as TYPE_CALL, TYPE_INBOUND_CALL, TYPE_OUTBOUND_CALL, etc.)
+      const msgType = (msg.messageType || '').toString().toUpperCase();
+      if (msgType.includes('CALL') || msg.type === 6) {
+        console.log(`📞 [ACTIVITY] Found call event (${msgType}) at ${msg.dateAdded}`);
+        return {
+          hasManual: true,
+          reason: 'Phone call event detected in conversation history',
+          lastTime: msg.dateAdded ?? null,
+        };
+      }
+    }
+
+    return { hasManual: false, reason: null, lastTime: null };
+  } catch (error: any) {
+    console.error('❌ [ACTIVITY] Failed to check manual communication:', error.message);
+    return { hasManual: false, reason: null, lastTime: null };
+  }
+}
+
+/**
  * Check for recent outbound activity in a conversation
  * 
  * @param conversationId - GHL conversation ID
