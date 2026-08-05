@@ -80,6 +80,7 @@ type Props = {
   isGeneratingLetters: boolean;
   isEmailCampaigning: boolean;
   isPopulatingQueue: boolean;
+  hasUntracedSelectedLeads?: boolean;
 };
 
 export function DashboardFilters({
@@ -139,6 +140,7 @@ export function DashboardFilters({
   isGeneratingLetters,
   isEmailCampaigning,
   isPopulatingQueue,
+  hasUntracedSelectedLeads = true,
 }: Props) {
   const [showAdvanced, setShowAdvanced] = React.useState(false);
 
@@ -546,8 +548,8 @@ export function DashboardFilters({
               <option value='door_knock'>Door Knock</option>
             </select>
 
-            {/* Skip Trace Button - Only for PROBATE */}
-            {(!selectedLeadType || selectedLeadType === 'PROBATE') && (
+            {/* Skip Trace Button - Only for PROBATE when untraced leads are selected */}
+            {(!selectedLeadType || selectedLeadType === 'PROBATE') && hasUntracedSelectedLeads && (
               <button
                 onClick={handleBulkSkipTrace}
                 disabled={isSkipTracing || isGhlSyncing || selectedLeadsCount === 0}

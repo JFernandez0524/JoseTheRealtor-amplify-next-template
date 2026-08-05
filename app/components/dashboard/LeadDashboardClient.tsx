@@ -1206,6 +1206,12 @@ export default function LeadDashboardClient({}: Props) {
         selectedLeadsCount={selectedIds.length}
         selectedLeadTypes={leads.filter(l => selectedIds.includes(l.id)).map(l => l.type)}
         selectedLeadType={selectedLeadType}
+        hasUntracedSelectedLeads={
+          selectedIds.length > 0 &&
+          leads
+            .filter((l) => selectedIds.includes(l.id))
+            .some((l) => l.skipTraceStatus !== 'COMPLETED')
+        }
         hasPaidPlan={hasPaidPlan}
         isSkipTracing={isProcessing}
         isGhlSyncing={isProcessing}
