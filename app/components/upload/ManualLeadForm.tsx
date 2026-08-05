@@ -660,7 +660,7 @@ export function ManualLeadForm() {
       
       {/* Upload Progress Modal */}
       {showProgressModal && uploadJobId && (
-        <UploadProgressModal jobId={uploadJobId} />
+        <UploadProgressModal jobId={uploadJobId} onClose={() => setShowProgressModal(false)} />
       )}
     </div>
   );

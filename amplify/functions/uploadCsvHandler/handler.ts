@@ -128,8 +128,11 @@ type ExistingLeadSummary = {
 };
 
 function summarizeExistingLead(lead: Record<string, any>): ExistingLeadSummary {
+  const owner = `${lead.ownerFirstName || ''} ${lead.ownerLastName || ''}`.trim();
+  const admin = `${lead.adminFirstName || ''} ${lead.adminLastName || ''}`.trim();
+  const displayName = owner && admin ? `${owner} (Admin: ${admin})` : owner || (admin ? `Admin: ${admin}` : '');
   return {
-    ownerName: `${lead.ownerFirstName || ''} ${lead.ownerLastName || ''}`.trim(),
+    ownerName: displayName,
     address: [lead.ownerAddress, lead.ownerCity].filter(Boolean).join(', '),
     zestimate: typeof lead.zestimate === 'number' ? lead.zestimate : null,
   };
@@ -607,9 +610,12 @@ export const handler: S3Handler = async (event) => {
             console.log(`⏭️ Skipping duplicate lead for user ${ownerId}: ${duplicateCheckAddress}`);
 
             if (duplicateLeads.length < MAX_DUPLICATE_STORE) {
+              const csvOwner = `${ownerFirstName || ''} ${ownerLastName || ''}`.trim();
+              const csvAdmin = `${adminFirstName || ''} ${adminLastName || ''}`.trim();
+              const csvDisplayName = csvOwner && csvAdmin ? `${csvOwner} (Admin: ${csvAdmin})` : csvOwner || (csvAdmin ? `Admin: ${csvAdmin}` : '');
               duplicateLeads.push({
                 csvData: {
-                  ownerName: `${ownerFirstName || ''} ${ownerLastName || ''}`.trim(),
+                  ownerName: csvDisplayName,
                   address: finalPropAddr,
                   city: finalPropCity,
                   state: finalPropState,

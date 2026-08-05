@@ -8,14 +8,23 @@ import { UploadWarnings } from './UploadWarnings';
 
 interface UploadProgressModalProps {
   jobId: string;
+  onClose?: () => void;
 }
 
-export function UploadProgressModal({ jobId }: UploadProgressModalProps) {
+export function UploadProgressModal({ jobId, onClose }: UploadProgressModalProps) {
   const router = useRouter();
   const [job, setJob] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [retryCount, setRetryCount] = useState(0);
   const MAX_RETRIES = 5;
+
+  const handleClose = () => {
+    if (onClose) {
+      onClose();
+    } else {
+      router.push('/dashboard');
+    }
+  };
 
   useEffect(() => {
     if (!jobId) return;
@@ -64,7 +73,14 @@ export function UploadProgressModal({ jobId }: UploadProgressModalProps) {
   if (isLoading || !job || job.status === 'PENDING') {
     return (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-        <div className="bg-white rounded-lg p-8 max-w-md w-full mx-4">
+        <div className="bg-white rounded-lg p-8 max-w-md w-full mx-4 relative">
+          <button
+            onClick={handleClose}
+            className="absolute top-3 right-3 text-gray-400 hover:text-gray-600 text-xl p-1"
+            title="Close"
+          >
+            ✕
+          </button>
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
             <p className="text-gray-600">Initializing upload...</p>
@@ -83,10 +99,17 @@ export function UploadProgressModal({ jobId }: UploadProgressModalProps) {
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-8 max-w-md w-full mx-4">
+      <div className="bg-white rounded-lg p-8 max-w-md w-full mx-4 relative">
+        <button
+          onClick={handleClose}
+          className="absolute top-3 right-3 text-gray-400 hover:text-gray-600 text-xl p-1"
+          title="Close Modal"
+        >
+          ✕
+        </button>
         <div className="space-y-6">
           {/* Header */}
-          <div className="text-center">
+          <div className="text-center pr-4">
             <h2 className="text-2xl font-bold text-gray-900 mb-2">
               {job.status === 'PROCESSING' ? 'Processing Upload' : 
                job.status === 'COMPLETED' ? 'Upload Complete!' : 
@@ -142,9 +165,20 @@ export function UploadProgressModal({ jobId }: UploadProgressModalProps) {
                 fileName={job.fileName}
               />
 
-              {/* Loading Animation */}
-              <div className="flex justify-center">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+              {/* Dismiss / Dashboard Action */}
+              <div className="pt-2 flex flex-col space-y-2 text-center">
+                <button
+                  onClick={handleClose}
+                  className="w-full py-2 px-4 border border-gray-300 text-gray-700 text-sm rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  Dismiss & Continue in Background
+                </button>
+                <a
+                  href="/dashboard"
+                  className="text-xs text-blue-600 hover:text-blue-800 underline"
+                >
+                  Go to Dashboard →
+                </a>
               </div>
             </>
           )}
