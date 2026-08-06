@@ -15,6 +15,9 @@ vi.mock('@aws-sdk/lib-dynamodb', () => {
         send: mockDocClientSend,
       }),
     },
+    QueryCommand: class {
+      constructor(public input: any) {}
+    },
     ScanCommand: class {
       constructor(public input: any) {}
     },

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, ScanCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, QueryCommand, ScanCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { AuthGetCurrentUserServer } from '@/app/utils/aws/auth/amplifyServerUtils.server';
 
 const docClient = DynamoDBDocumentClient.from(
@@ -60,15 +60,16 @@ export async function POST() {
       updatedIntegrationsCount++;
     }
 
-    // 2. Scan for active OutreachQueue items for this user and pause them (MANUAL_HANDLING)
+    // 2. Query active OutreachQueue items for this user using GSI index and pause them (MANUAL_HANDLING)
     let queueItemsPaused = 0;
     let lastKey: Record<string, any> | undefined;
 
     do {
-      const queueScan = await docClient.send(
-        new ScanCommand({
+      const queueQuery = await docClient.send(
+        new QueryCommand({
           TableName: OUTREACH_QUEUE_TABLE,
-          FilterExpression: 'userId = :userId AND queueStatus = :outreachStatus',
+          IndexName: 'outreachQueuesByUserIdAndQueueStatus',
+          KeyConditionExpression: 'userId = :userId AND queueStatus = :outreachStatus',
           ExpressionAttributeValues: {
             ':userId': userId,
             ':outreachStatus': 'OUTREACH',
@@ -77,7 +78,7 @@ export async function POST() {
         })
       );
 
-      const items = queueScan.Items || [];
+      const items = queueQuery.Items || [];
       for (let i = 0; i < items.length; i += 25) {
         const batch = items.slice(i, i + 25);
         await Promise.all(
@@ -98,7 +99,7 @@ export async function POST() {
         queueItemsPaused += batch.length;
       }
 
-      lastKey = queueScan.LastEvaluatedKey;
+      lastKey = queueQuery.LastEvaluatedKey;
     } while (lastKey);
 
     console.log(
