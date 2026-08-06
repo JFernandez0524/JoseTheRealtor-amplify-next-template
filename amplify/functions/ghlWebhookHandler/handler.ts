@@ -275,7 +275,7 @@ export const handler = async (event: any) => {
       };
     }
     
-    const { token } = tokenResult;
+    let token = tokenResult.token;
     const fieldIds: Record<string, string> = tokenResult.customFieldIds || {};
     const opportunityFieldIds: Record<string, string> = tokenResult.opportunityFieldIds || {};
 
