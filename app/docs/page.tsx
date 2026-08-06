@@ -733,8 +733,8 @@ export default function DocsPage() {
             <h2 className="text-2xl font-semibold text-gray-900 mb-6">🤖 How the AI Handles Automatic Responses</h2>
 
             <p className="text-gray-700 mb-6">
-              When a lead replies to one of your text messages, GoHighLevel fires a <strong>&quot;Customer Replied&quot;</strong> webhook
-              to Launch AI. Before the AI writes a single word, that reply passes through a series of safety gates.
+              When a lead replies to one of your text messages, Launch AI fires a <strong>&quot;Customer Replied&quot;</strong> webhook
+              to the outreach agent. Before the AI writes a single word, that reply passes through a series of safety gates.
               The core rule: <strong>the AI only auto-responds to cold leads that no human is actively working.</strong> The
               moment you (or a workflow you control) touch a conversation, the AI steps aside.
             </p>

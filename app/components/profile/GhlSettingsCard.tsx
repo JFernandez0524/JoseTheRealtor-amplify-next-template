@@ -86,7 +86,7 @@ export default function GhlSettingsCard() {
                 ⚠️ Re-authorization Needed
               </p>
               <p className='text-xs text-amber-700 mb-3'>
-                {healthState.message || 'Your GoHighLevel session needs to be re-authorized.'}
+                {healthState.message || 'Your Launch AI session needs to be re-authorized.'}
               </p>
               <button
                 onClick={handleConnect}

@@ -59,7 +59,7 @@ export function DeleteConfirmModal({ isOpen, onClose, onConfirm, count }: Delete
               <span className="font-semibold">Associated Data Lost:</span> All notes, custom tags, door-knocking history, and skip-tracing data linked to {count === 1 ? 'this lead' : 'these leads'} will be deleted.
             </li>
             <li>
-              <span className="font-semibold">External CRMs Unaffected:</span> If synced to GoHighLevel (GHL) or exported previously, contacts in external tools will <span className="underline font-semibold">not</span> be deleted automatically.
+              <span className="font-semibold">External CRMs Unaffected:</span> If synced to Launch AI or exported previously, contacts in external tools will <span className="underline font-semibold">not</span> be deleted automatically.
             </li>
           </ul>
         </div>

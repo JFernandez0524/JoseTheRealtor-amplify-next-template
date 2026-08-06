@@ -151,9 +151,9 @@ export default function GhlProfileSettings() {
     return (
       <div className="bg-white border border-slate-200 rounded-[2rem] p-8 shadow-sm">
         <h3 className="text-lg font-black text-slate-900 mb-2 flex items-center gap-2">
-          <HiOutlineUserCircle className="text-indigo-500" /> GHL Profile &amp; Campaign
+          <HiOutlineUserCircle className="text-indigo-500" /> Launch AI Profile &amp; Campaign
         </h3>
-        <p className="text-slate-500 text-sm mb-4">A Sync Plan is required to configure your GHL profile and campaign settings.</p>
+        <p className="text-slate-500 text-sm mb-4">A Sync Plan is required to configure your Launch AI profile and campaign settings.</p>
         <Link href="/pricing" className="inline-block bg-indigo-600 text-white text-sm font-semibold px-5 py-2 rounded-xl hover:bg-indigo-700 transition-colors">
           Upgrade to Sync Plan
         </Link>
@@ -179,9 +179,9 @@ export default function GhlProfileSettings() {
     return (
       <div className="bg-white border border-slate-200 rounded-[2rem] p-8 shadow-sm">
         <h3 className="text-lg font-black text-slate-900 mb-4 flex items-center gap-2">
-          <HiOutlineUserCircle className="text-indigo-500" /> GHL Profile &amp; Campaign
+          <HiOutlineUserCircle className="text-indigo-500" /> Launch AI Profile &amp; Campaign
         </h3>
-        <p className="text-slate-600">Please connect your GoHighLevel account first.</p>
+        <p className="text-slate-600">Please connect your Launch AI system first.</p>
       </div>
     );
   }
@@ -198,20 +198,20 @@ export default function GhlProfileSettings() {
   return (
     <div className="bg-white border border-slate-200 rounded-[2rem] p-8 shadow-sm">
       <h3 className="text-lg font-black text-slate-900 mb-2 flex items-center gap-2">
-        <HiOutlineUserCircle className="text-indigo-500" /> GHL Profile &amp; Campaign
+        <HiOutlineUserCircle className="text-indigo-500" /> Launch AI Profile &amp; Campaign
       </h3>
       <p className="text-slate-500 text-sm mb-6">
-        Your identity for outreach plus the GHL resources the app uses. Pulled live from your connected account where possible.
+        Your identity for outreach plus the Launch AI resources the app uses. Pulled live from your connected account where possible.
       </p>
 
       {noPhoneNumbers && (
         <div className="mb-6 bg-red-50 border border-red-200 rounded-xl px-5 py-4">
           <p className="font-bold text-red-900 mb-1">A phone number is required</p>
           <p className="text-sm text-red-800 mb-3">
-            Your GoHighLevel account has no phone number. The app skip-traces and works leads by
-            phone, so you must <strong>purchase a phone number in GHL</strong> (Settings → Phone
+            Your Launch AI account has no phone number. The app skip-traces and works leads by
+            phone, so you must <strong>purchase a phone number in Launch AI</strong> (Settings → Phone
             Numbers, and complete A2P 10DLC registration) before you can finish setup.
-            {' '}<strong>Can&apos;t buy a number?</strong> Your GHL phone system may need to be
+            {' '}<strong>Can&apos;t buy a number?</strong> Your Launch AI phone system may need to be
             enabled first (Settings → Phone System) — if it says &ldquo;requires configuration,&rdquo;
             contact your provider/agency to activate it. Once you&apos;ve bought a number, click
             below to re-check (or reload this page).
@@ -228,7 +228,7 @@ export default function GhlProfileSettings() {
 
       {showSetup && (
         <div className="mb-6 bg-indigo-50 border border-indigo-200 rounded-xl px-5 py-4">
-          <p className="font-bold text-indigo-900 mb-1">Finish connecting your GHL info</p>
+          <p className="font-bold text-indigo-900 mb-1">Finish connecting your Launch AI info</p>
           <p className="text-sm text-indigo-800 mb-3">
             These are required for the app to run your outreach and route leads to the right person.
           </p>
@@ -292,13 +292,13 @@ export default function GhlProfileSettings() {
             Assign callable leads to <span className="text-red-500">*</span>
           </label>
           <select value={dialerUserId} onChange={(e) => setDialerUserId(e.target.value)} className={inputCls}>
-            <option value="">Select a GHL user…</option>
+            <option value="">Select a user…</option>
             {ghlUsers.map((u) => (
               <option key={u.id} value={u.id}>{u.name}{u.email ? ` (${u.email})` : ''}</option>
             ))}
           </select>
           <p className="text-xs text-slate-500 mt-1">
-            Synced leads with a phone are assigned to this GHL user for dialing.{' '}
+            Synced leads with a phone are assigned to this user for dialing.{' '}
             {usersError && <span className="text-amber-600">{usersError}</span>}
           </p>
         </div>
@@ -325,7 +325,7 @@ export default function GhlProfileSettings() {
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-2">GHL Calendar</label>
+          <label className="block text-sm font-medium text-slate-700 mb-2">Launch AI Calendar</label>
           <select value={campaignCalendarId} onChange={(e) => setCampaignCalendarId(e.target.value)} className={inputCls}>
             <option value="">Select a calendar…</option>
             {campaignCalendarId && !calendars.some((c) => c.id === campaignCalendarId) && (
@@ -335,7 +335,7 @@ export default function GhlProfileSettings() {
               <option key={c.id} value={c.id}>{c.name}</option>
             ))}
           </select>
-          <p className="text-xs text-slate-500 mt-1">GHL calendar for AI-booked appointments.</p>
+          <p className="text-xs text-slate-500 mt-1">Launch AI calendar for AI-booked appointments.</p>
         </div>
 
         <div>
