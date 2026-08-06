@@ -14,16 +14,28 @@ export function GhlConnection() {
   };
 
   const handleDisconnect = async () => {
-    if (!integrationId) return;
-    
     try {
-      await client.models.GhlIntegration.update({
-        id: integrationId,
-        isActive: false
-      });
-      window.location.reload(); // Refresh to update context
+      const res = await fetch('/api/v1/ghl/disconnect', { method: 'POST' });
+      if (!res.ok && integrationId) {
+        await client.models.GhlIntegration.update({
+          id: integrationId,
+          isActive: false,
+        });
+      }
+      window.location.reload();
     } catch (error) {
       console.error('Error disconnecting GHL:', error);
+      if (integrationId) {
+        try {
+          await client.models.GhlIntegration.update({
+            id: integrationId,
+            isActive: false,
+          });
+        } catch (fallbackError) {
+          console.error('Fallback disconnect error:', fallbackError);
+        }
+      }
+      window.location.reload();
     }
   };
 
