@@ -78,19 +78,24 @@ export async function POST() {
       );
 
       const items = queueScan.Items || [];
-      for (const item of items) {
-        await docClient.send(
-          new UpdateCommand({
-            TableName: OUTREACH_QUEUE_TABLE,
-            Key: { id: item.id },
-            UpdateExpression: 'SET queueStatus = :pausedStatus, updatedAt = :now',
-            ExpressionAttributeValues: {
-              ':pausedStatus': 'MANUAL_HANDLING',
-              ':now': new Date().toISOString(),
-            },
-          })
+      for (let i = 0; i < items.length; i += 25) {
+        const batch = items.slice(i, i + 25);
+        await Promise.all(
+          batch.map((item) =>
+            docClient.send(
+              new UpdateCommand({
+                TableName: OUTREACH_QUEUE_TABLE,
+                Key: { id: item.id },
+                UpdateExpression: 'SET queueStatus = :pausedStatus, updatedAt = :now',
+                ExpressionAttributeValues: {
+                  ':pausedStatus': 'MANUAL_HANDLING',
+                  ':now': new Date().toISOString(),
+                },
+              })
+            )
+          )
         );
-        queueItemsPaused++;
+        queueItemsPaused += batch.length;
       }
 
       lastKey = queueScan.LastEvaluatedKey;
