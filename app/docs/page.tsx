@@ -1,8 +1,8 @@
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'User Guide | JoseTheRealtor',
-  description: 'Complete guide to using the JoseTheRealtor lead management platform',
+  title: 'User Guide | DealFinder',
+  description: 'Complete guide to using the DealFinder lead management platform',
 };
 
 export default function DocsPage() {
@@ -10,7 +10,7 @@ export default function DocsPage() {
     <div className="min-h-screen bg-gray-50 py-8">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="bg-white rounded-lg shadow-lg p-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-8">User Guide</h1>
+          <h1 className="text-3xl font-bold text-gray-900 mb-8">DealFinder User Guide</h1>
 
           {/* Table of Contents */}
           <div className="bg-blue-50 p-6 rounded-lg mb-8">
@@ -18,11 +18,12 @@ export default function DocsPage() {
             <div className="grid md:grid-cols-2 gap-2 text-sm">
               <a href="#getting-started" className="text-blue-600 hover:underline">• Getting Started</a>
               <a href="#lead-import" className="text-blue-600 hover:underline">• Lead Import Process</a>
-              <a href="#dashboard" className="text-blue-600 hover:underline">• Dashboard Features</a>
-              <a href="#skip-tracing" className="text-blue-600 hover:underline">• Skip Tracing</a>
+              <a href="#dashboard" className="text-blue-600 hover:underline">• Dashboard Features & Filtering</a>
+              <a href="#out-of-state-admin" className="text-blue-600 hover:underline">• 🗺️ Out-of-State Admin Targeting</a>
+              <a href="#skip-tracing" className="text-blue-600 hover:underline">• Skip Tracing & Phone Channels</a>
               <a href="#launch-ai-setup" className="text-blue-600 hover:underline">• Launch AI Account Setup</a>
               <a href="#launch-ai-integration" className="text-blue-600 hover:underline">• Launch AI Integration</a>
-              <a href="#launch-ai-tags" className="text-blue-600 hover:underline">• Launch AI Tags Reference</a>
+              <a href="#launch-ai-tags" className="text-blue-600 hover:underline">• Launch AI Tags & Custom Fields</a>
               <a href="#ai-auto-response" className="text-blue-600 hover:underline">• How the AI Auto-Responds</a>
               <a href="#direct-mail" className="text-blue-600 hover:underline">• Direct Mail (Thanks.io)</a>
               <a href="#pricing" className="text-blue-600 hover:underline">• Pricing & Plans</a>
@@ -220,6 +221,26 @@ export default function DocsPage() {
                   <li>Use checkboxes for bulk operations (skip trace, sync, delete)</li>
                   <li>100 leads per page with pagination controls</li>
                   <li>Horizontal scroll for all table columns</li>
+                </ul>
+              </div>
+            </div>
+          </section>
+
+          {/* Out-of-State Admin Targeting */}
+          <section id="out-of-state-admin" className="mb-12">
+            <h2 className="text-2xl font-semibold text-gray-900 mb-6">🗺️ Out-of-State Admin Targeting (High ROI Mail)</h2>
+
+            <div className="space-y-6">
+              <div className="bg-amber-50 border-l-4 border-amber-500 p-4 rounded-lg">
+                <h3 className="text-lg font-medium text-amber-900 mb-2">Why Target Out-of-State Heirs & Admins?</h3>
+                <p className="text-amber-800 text-sm mb-3">
+                  Out-of-state administrators live in a different state from the inherited property. They face high logistical burdens (managing property maintenance, clear-outs, and repairs long-distance) and are significantly more likely to accept direct mail cash offers or listing requests.
+                </p>
+                <ul className="list-disc list-inside space-y-1 text-amber-800 text-sm">
+                  <li><strong>Automatic State Comparison</strong>: DealFinder compares property state vs. administrator/owner mailing state (<code className="bg-amber-100 px-1 rounded">mailingState != propertyState</code>).</li>
+                  <li><strong>GHL Custom Field</strong>: Passes <code className="bg-amber-100 px-1 rounded">Out of State Admin: YES</code> or <code className="bg-amber-100 px-1 rounded">NO</code> directly into GoHighLevel.</li>
+                  <li><strong>GHL Tag</strong>: Automatically applies tag <code className="bg-amber-100 px-1 rounded">out_of_state_admin</code> on sync.</li>
+                  <li><strong>Dashboard Filter</strong>: Use the <code className="bg-amber-100 px-1 rounded">🗺️ Out-of-State Admin</code> filter on the dashboard to select and launch high-ROI direct mail campaigns in seconds.</li>
                 </ul>
               </div>
             </div>
@@ -512,6 +533,8 @@ export default function DocsPage() {
                 <h4 className="font-medium text-blue-800 mb-2">📋 Recommended Smart Lists (optional)</h4>
                 <p className="text-sm text-blue-700 mb-3">Create these in <strong>Contacts → + Add Smart List</strong> for quick access to key segments:</p>
                 <div className="grid md:grid-cols-2 gap-2 text-sm text-blue-700 font-mono">
+                  <div>Field = <code className="bg-blue-100 px-1 rounded">Out of State Admin: YES</code> → "Out of State Admins"</div>
+                  <div>Tag = <code className="bg-blue-100 px-1 rounded">channel:landline</code> → "Landline-Only (Power Dialer)"</div>
                   <div>Tag = <code className="bg-blue-100 px-1 rounded">ai outreach</code> → "AI Outreach Active"</div>
                   <div>Tag = <code className="bg-blue-100 px-1 rounded">Ready-For-Human-Contact</code> → "Hot Leads"</div>
                   <div>Tag = <code className="bg-blue-100 px-1 rounded">conversation_ended</code> → "Conversation Ended"</div>

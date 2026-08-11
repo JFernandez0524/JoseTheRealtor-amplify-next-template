@@ -2,6 +2,29 @@
 
 All notable changes to the JoseTheRealtor platform.
 
+## [2026-08-11] - DealFinder Rebranding, Out-of-State Admin & Landline Filtering
+
+### Added
+- **🗺️ Out-of-State Admin Custom Field & Filter**:
+  - GHL Custom Field `Out of State Admin` (`YES` / `NO`) and tag `out_of_state_admin`.
+  - Automatic comparison of property state vs. administrator/owner mailing state (`mailingState != propertyState`).
+  - Added `🗺️ Out-of-State Admin (High ROI Mail)` select filter on the DealFinder Dashboard.
+  - Files: `amplify/functions/shared/ghlFieldProvisioner.ts`, `amplify/functions/manualGhlSync/integrations/gohighlevel.ts`, `DashboardFilters.tsx`, `LeadDashboardClient.tsx`.
+
+- **☎️ Strict Landline Channel Rule**:
+  - Enforced rule: `channel:landline` tag is added ONLY when a lead has **NO cell/mobile phone** (`Cell = 0`), but **DOES have landlines** (`Landlines > 0`).
+  - Mobile leads with valid cell phones stay assigned to SMS & AI outreach channels.
+  - File: `amplify/functions/manualGhlSync/integrations/gohighlevel.ts`.
+
+- **🎨 DealFinder Rebranding & Dual-Domain Support**:
+  - Rebranded application logo and documentation to **DealFinder**.
+  - Configured `dealfinder.yourailaunch.com` as primary user-facing domain with background support for `leads.josetherealtor.com` for webhooks and Cognito auth.
+  - Files: `Navbar.tsx`, `amplify/auth/resource.ts`, `app/docs/page.tsx`.
+
+- **📊 Dashboard Skip Trace & Outcome Filter Refactoring**:
+  - Separated process execution status (`COMPLETED`, `PENDING`, `FAILED`) from outcome channels (`LANDLINE_ONLY`, `DIRECT_MAIL_ONLY`, `NO_QUALITY_CONTACTS`, `NO_MATCH`).
+  - Files: `DashboardFilters.tsx`, `LeadDashboardClient.tsx`, `skiptraceLeads/handler.ts`.
+
 ---
 
 ## [2026-03-06] - Critical Production Fixes
