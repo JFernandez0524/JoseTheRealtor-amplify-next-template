@@ -13,6 +13,12 @@ const CONTACT_FIELDS: Array<{ key: string } & FieldDef> = [
   { key: 'mailing_state',        name: 'Mailing State',             dataType: 'TEXT' },
   { key: 'mailing_zipcode',      name: 'Mailing Zipcode',           dataType: 'TEXT' },
   {
+    key: 'is_out_of_state_admin',
+    name: 'Out of State Admin',
+    dataType: 'SINGLE_OPTIONS',
+    picklistOptions: ['YES', 'NO'],
+  },
+  {
     key: 'lead_type',
     name: 'Lead Type',
     dataType: 'SINGLE_OPTIONS',

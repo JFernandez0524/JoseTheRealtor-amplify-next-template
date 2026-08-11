@@ -52,6 +52,8 @@ type Props = {
   setFilterDataQuality: (val: string) => void;
   filterOwnerType: string;
   setFilterOwnerType: (val: string) => void;
+  filterOutOfStateAdmin?: string;
+  setFilterOutOfStateAdmin?: (val: string) => void;
   filterTaxForeclosure: boolean;
   setFilterTaxForeclosure: (val: boolean) => void;
   skipTraceFromDate: string;
@@ -120,6 +122,8 @@ export function DashboardFilters({
   setFilterDataQuality,
   filterOwnerType,
   setFilterOwnerType,
+  filterOutOfStateAdmin,
+  setFilterOutOfStateAdmin,
   filterTaxForeclosure,
   setFilterTaxForeclosure,
   skipTraceFromDate,
@@ -154,6 +158,10 @@ export function DashboardFilters({
 
   const activeFilters = [
     filterType && { label: `Type: ${filterType}`, reset: () => setFilterType('') },
+    filterOutOfStateAdmin && {
+      label: filterOutOfStateAdmin === 'YES' ? '🗺️ Out-of-State Admin' : '🏠 In-State Admin',
+      reset: () => setFilterOutOfStateAdmin?.(''),
+    },
     filterStatus && {
       label:
         filterStatus === 'PENDING'
@@ -322,6 +330,17 @@ export function DashboardFilters({
           <option value=''>🏠 All Lead Types</option>
           <option value='PREFORECLOSURE'>Pre-Foreclosure</option>
           <option value='PROBATE'>Probate</option>
+        </select>
+
+        {/* 🗺️ Out of State Admin Filter */}
+        <select
+          value={filterOutOfStateAdmin || ''}
+          onChange={(e) => setFilterOutOfStateAdmin?.(e.target.value)}
+          className='border border-slate-300 rounded-xl px-3 py-2 text-xs font-semibold focus:ring-2 focus:ring-amber-500 outline-none w-full bg-white text-slate-700'
+        >
+          <option value=''>🗺️ All Admin Locations</option>
+          <option value='YES'>🗺️ Out-of-State Admin (High ROI Mail)</option>
+          <option value='NO'>🏠 In-State Admin</option>
         </select>
 
         {/* 2. Phone / Channel Filter */}

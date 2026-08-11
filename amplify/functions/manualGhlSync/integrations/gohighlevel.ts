@@ -79,6 +79,11 @@ export async function syncToGoHighLevel(
     const propState   = (lead.standardizedAddress as any)?.state || lead.ownerState;
     const propZip     = (lead.standardizedAddress as any)?.zip   || lead.ownerZip;
 
+    // 🗺️ Calculate Out of State Admin status
+    const normPropState = (propState || '').trim().toUpperCase();
+    const normMailState = (mailingState || '').trim().toUpperCase();
+    const isOutOfStateAdmin = Boolean(normPropState && normMailState && normPropState !== normMailState);
+
     const customFieldValues: Record<string, any> = {
       property_address: propAddress,
       property_city:    propCity,
@@ -93,6 +98,7 @@ export async function syncToGoHighLevel(
       mailing_city: mailingCity,
       mailing_state: mailingState,
       mailing_zipcode: mailingZip,
+      is_out_of_state_admin: isOutOfStateAdmin ? 'YES' : 'NO',
       lead_type: lead.type === 'PROBATE' ? 'Probate' : lead.type === 'PREFORECLOSURE' ? 'Preforeclosure' : lead.type,
       // A landline makes this a phone contact. Keying only off `specificPhone` (the mobile) left
       // landline-only leads typed 'Direct Mail', so a dialer filtering on 'Phone Contact' never
@@ -145,6 +151,7 @@ export async function syncToGoHighLevel(
     // 🆕 APP CONTROL TAGS (source of truth)
     tags.push('App:Synced');
     if (isAIPlan) tags.push('App:AI-Enabled');
+    if (isOutOfStateAdmin) tags.push('out_of_state_admin');
 
     // ☎️ Channel marker so GHL workflows can route landline contacts to the dialer and direct
     // mail while excluding them from anything that texts. Applied ONLY when a lead has NO cell/mobile phone, but DOES have landlines.

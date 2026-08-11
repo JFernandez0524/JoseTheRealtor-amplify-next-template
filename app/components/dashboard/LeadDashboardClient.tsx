@@ -82,6 +82,7 @@ export default function LeadDashboardClient({}: Props) {
   const [filterDataQuality, setFilterDataQuality] = useState('');
   // Owner type: 'INDIVIDUALS' (default, hides entities), 'INCLUDE_ENTITIES', or 'ENTITIES_ONLY'.
   const [filterOwnerType, setFilterOwnerType] = useState('INDIVIDUALS');
+  const [filterOutOfStateAdmin, setFilterOutOfStateAdmin] = useState('');
   const [filterTaxForeclosure, setFilterTaxForeclosure] = useState(false);
   const [skipTraceFromDate, setSkipTraceFromDate] = useState('');
   const [skipTraceToDate, setSkipTraceToDate] = useState('');
@@ -257,6 +258,13 @@ export default function LeadDashboardClient({}: Props) {
             lead.customTags.some((tag) => tag?.toLowerCase().includes(search)));
 
         const matchesType = !filterType || lead.type === filterType;
+        const matchesOutOfStateAdmin = (() => {
+          if (!filterOutOfStateAdmin) return true;
+          const propState = (lead.propertyState || (lead.standardizedAddress as any)?.state || lead.ownerState || '').trim().toUpperCase();
+          const mailState = (lead.mailingState || (lead.batchDataMailingAddress as any)?.mailingState || '').trim().toUpperCase();
+          const isOutOfState = Boolean(propState && mailState && propState !== mailState);
+          return filterOutOfStateAdmin === 'YES' ? isOutOfState : !isOutOfState;
+        })();
         const matchesStatus = (() => {
           if (!filterStatus) return true;
           const statusUpper = (lead.skipTraceStatus || '').toUpperCase();
@@ -440,6 +448,7 @@ export default function LeadDashboardClient({}: Props) {
         return (
           matchesSearch &&
           matchesType &&
+          matchesOutOfStateAdmin &&
           matchesStatus &&
           matchesCrm &&
           matchesPhone &&
@@ -1259,6 +1268,8 @@ export default function LeadDashboardClient({}: Props) {
         setFilterDataQuality={setFilterDataQuality}
         filterOwnerType={filterOwnerType}
         setFilterOwnerType={setFilterOwnerType}
+        filterOutOfStateAdmin={filterOutOfStateAdmin}
+        setFilterOutOfStateAdmin={setFilterOutOfStateAdmin}
         filterTaxForeclosure={filterTaxForeclosure}
         setFilterTaxForeclosure={setFilterTaxForeclosure}
         skipTraceFromDate={skipTraceFromDate}
