@@ -196,7 +196,7 @@ backend.dailyEmailAgent.addEnvironment(
   backend.data.resources.tables['OutreachQueue'].tableName
 );
 
-backend.dailyEmailAgent.addEnvironment('APP_URL', process.env.NEXT_PUBLIC_APP_URL || 'https://leads.josetherealtor.com');
+backend.dailyEmailAgent.addEnvironment('APP_URL', process.env.NEXT_PUBLIC_APP_URL || 'https://dealfinder.yourailaunch.com');
 backend.dailyEmailAgent.addEnvironment('GHL_CLIENT_ID', process.env.GHL_CLIENT_ID || '');
 backend.dailyEmailAgent.addEnvironment('GHL_CLIENT_SECRET', process.env.GHL_CLIENT_SECRET || '');
 

@@ -1,12 +1,12 @@
 # GHL Account Setup Guide for New Users
 
-This guide covers everything a new user must configure in their GoHighLevel sub-account to work with Lead Manager. Some things are created automatically when you connect; everything else requires a one-time manual setup.
+This guide covers everything a new user must configure in their GoHighLevel sub-account to work with DealFinder. Some things are created automatically when you connect; everything else requires a one-time manual setup.
 
 ---
 
 ## 1. Connect Your GHL Account
 
-Go to **Lead Manager → Settings → GHL Integration** and click **Connect GoHighLevel**.
+Go to **DealFinder → Settings → GHL Integration** and click **Connect GoHighLevel**.
 
 When you authorize, the system automatically creates in your GHL account:
 

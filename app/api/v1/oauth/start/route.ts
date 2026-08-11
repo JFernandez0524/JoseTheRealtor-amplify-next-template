@@ -24,10 +24,11 @@ import { AuthGetCurrentUserServer, AuthGetUserGroupsServer } from '@/app/utils/a
 
 const GHL_CLIENT_ID = process.env.GHL_CLIENT_ID;
 const GHL_STATE_SECRET = process.env.GHL_STATE_SECRET!;
+const DEFAULT_APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://dealfinder.yourailaunch.com';
 const GHL_REDIRECT_URI = process.env.GHL_REDIRECT_URI || 
   (process.env.NODE_ENV === 'development' 
     ? 'http://localhost:3000/api/v1/oauth/callback'
-    : 'https://leads.josetherealtor.com/api/v1/oauth/callback');
+    : `${DEFAULT_APP_URL}/api/v1/oauth/callback`);
 
 const SCOPES = [
   'contacts.readonly',
@@ -72,14 +73,14 @@ export async function GET(req: Request) {
     // Get current user to include in state
     const user = await AuthGetCurrentUserServer();
     if (!user) {
-      return NextResponse.redirect('https://leads.josetherealtor.com/oauth/error?error=user_not_authenticated');
+      return NextResponse.redirect(`${DEFAULT_APP_URL}/oauth/error?error=user_not_authenticated`);
     }
 
     // Require a paid plan to connect GHL
     const groups = await AuthGetUserGroupsServer();
     const hasPaidPlan = groups.includes('PRO') || groups.includes('AI_PLAN') || groups.includes('ADMINS');
     if (!hasPaidPlan) {
-      return NextResponse.redirect('https://leads.josetherealtor.com/pricing');
+      return NextResponse.redirect(`${DEFAULT_APP_URL}/pricing`);
     }
 
     // Build a signed state token — prevents CSRF / account-takeover via crafted state.

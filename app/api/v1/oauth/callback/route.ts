@@ -32,10 +32,11 @@ const STATE_MAX_AGE_MS = 15 * 60 * 1000; // 15 minutes — enough time for a use
 
 const GHL_CLIENT_ID = process.env.GHL_CLIENT_ID;
 const GHL_CLIENT_SECRET = process.env.GHL_CLIENT_SECRET;
+const DEFAULT_APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://dealfinder.yourailaunch.com';
 const GHL_REDIRECT_URI = process.env.GHL_REDIRECT_URI || 
   (process.env.NODE_ENV === 'development' 
     ? 'http://localhost:3000/api/v1/oauth/callback'
-    : 'https://leads.josetherealtor.com/api/v1/oauth/callback');
+    : `${DEFAULT_APP_URL}/api/v1/oauth/callback`);
 
 export async function GET(req: Request) {
   try {
@@ -49,23 +50,23 @@ export async function GET(req: Request) {
     // Handle OAuth errors
     if (error) {
       console.error('OAuth error from GHL:', error);
-      return NextResponse.redirect('https://leads.josetherealtor.com/oauth/error?error=' + error);
+      return NextResponse.redirect(`${DEFAULT_APP_URL}/oauth/error?error=` + error);
     }
 
     if (!code) {
       console.error('No authorization code received');
-      return NextResponse.redirect('https://leads.josetherealtor.com/oauth/error?error=no_code');
+      return NextResponse.redirect(`${DEFAULT_APP_URL}/oauth/error?error=no_code`);
     }
 
     if (!GHL_CLIENT_ID || !GHL_CLIENT_SECRET) {
       console.error('Missing GHL credentials');
-      return NextResponse.redirect('https://leads.josetherealtor.com/oauth/error?error=missing_credentials');
+      return NextResponse.redirect(`${DEFAULT_APP_URL}/oauth/error?error=missing_credentials`);
     }
 
     // Extract user ID from state parameter
     if (!state) {
       console.error('No state parameter provided');
-      return NextResponse.redirect('https://leads.josetherealtor.com/oauth/error?error=invalid_state');
+      return NextResponse.redirect(`${DEFAULT_APP_URL}/oauth/error?error=invalid_state`);
     }
 
     let userId: string;
@@ -93,7 +94,7 @@ export async function GET(req: Request) {
       console.log('State verified for user:', userId);
     } catch (stateError) {
       console.error('State verification error:', stateError);
-      return NextResponse.redirect('https://leads.josetherealtor.com/oauth/error?error=invalid_state');
+      return NextResponse.redirect(`${DEFAULT_APP_URL}/oauth/error?error=invalid_state`);
     }
 
     console.log('Attempting token exchange with GHL...');
@@ -145,12 +146,12 @@ export async function GET(req: Request) {
       // Field provisioning happens lazily on first sync via manualGhlSync Lambda
     } catch (storageError) {
       console.error('Error storing tokens:', storageError);
-      return NextResponse.redirect('https://leads.josetherealtor.com/oauth/error?error=storage_error');
+      return NextResponse.redirect(`${DEFAULT_APP_URL}/oauth/error?error=storage_error`);
     }
 
     // Redirect into the guided profile setup so the user finishes the GHL-backed config
     // (agent identity + assignment user) the app needs to operate.
-    return NextResponse.redirect('https://leads.josetherealtor.com/profile?setup=1');
+    return NextResponse.redirect(`${DEFAULT_APP_URL}/profile?setup=1`);
 
   } catch (error: any) {
     console.error('OAuth callback error:', error);
@@ -166,6 +167,6 @@ export async function GET(req: Request) {
       console.error('GHL API Error:', error.response.status, error.response.data);
     }
 
-    return NextResponse.redirect('https://leads.josetherealtor.com/oauth/error?error=token_exchange_failed');
+    return NextResponse.redirect(`${DEFAULT_APP_URL}/oauth/error?error=token_exchange_failed`);
   }
 }

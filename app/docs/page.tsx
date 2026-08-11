@@ -338,7 +338,7 @@ export default function DocsPage() {
                   <li>Go to <strong>Settings → Phone Numbers</strong> in your GHL sub-account</li>
                   <li>Purchase a local number in your target market area</li>
                   <li>Complete <strong>A2P 10DLC registration</strong> — SMS outreach is blocked by carriers until this is done</li>
-                  <li>Once registered, select this number in Lead Manager → Profile → Launch AI Settings → Campaign Phone</li>
+                  <li>Once registered, select this number in DealFinder → Profile → Launch AI Settings → Campaign Phone</li>
                 </ol>
               </div>
 
@@ -350,7 +350,7 @@ export default function DocsPage() {
                   <li>Click "Add Domain" and enter your domain (e.g., <code className="bg-gray-100 px-1 rounded">mail.yourdomain.com</code>)</li>
                   <li>Add the DNS records shown to your domain registrar and click "Verify"</li>
                   <li>Go to <strong>Settings → Email Services</strong> and set your default From Name and From Email</li>
-                  <li>In Lead Manager → Profile → Launch AI Settings, set your Campaign Email to the verified address</li>
+                  <li>In DealFinder → Profile → Launch AI Settings, set your Campaign Email to the verified address</li>
                 </ol>
               </div>
 
@@ -370,7 +370,7 @@ export default function DocsPage() {
                 <h3 className="text-lg font-medium text-gray-900 mb-2">4. Create Your Lead Pipeline</h3>
                 <ol className="list-decimal list-inside space-y-1 text-gray-700 text-sm">
                   <li>Go to <strong>CRM → Pipelines → + Add Pipeline</strong></li>
-                  <li>Name it <strong>Lead Manager</strong></li>
+                  <li>Name it <strong>DealFinder</strong></li>
                   <li>Add the following stages in order:</li>
                 </ol>
                 <div className="mt-3 ml-4">
@@ -654,7 +654,7 @@ export default function DocsPage() {
               <div className="bg-gray-50 p-4 rounded-lg">
                 <h4 className="font-medium text-gray-800 mb-3">System Tags (added automatically on sync)</h4>
                 <div className="space-y-2 text-sm">
-                  <div className="flex gap-3 items-start"><code className="bg-gray-200 px-2 py-0.5 rounded text-xs whitespace-nowrap">App:Synced</code><span className="text-gray-700">Contact was synced from Lead Manager to Launch AI</span></div>
+                  <div className="flex gap-3 items-start"><code className="bg-gray-200 px-2 py-0.5 rounded text-xs whitespace-nowrap">App:Synced</code><span className="text-gray-700">Contact was synced from DealFinder to Launch AI</span></div>
                   <div className="flex gap-3 items-start"><code className="bg-purple-100 px-2 py-0.5 rounded text-xs whitespace-nowrap">App:AI-Enabled</code><span className="text-gray-700">User is on the AI Outreach plan</span></div>
                   <div className="flex gap-3 items-start"><code className="bg-red-100 px-2 py-0.5 rounded text-xs whitespace-nowrap">App:Billing-Hold</code><span className="text-gray-700">Billing issue on the account — outreach automatically paused</span></div>
                   <div className="flex gap-3 items-start"><code className="bg-green-100 px-2 py-0.5 rounded text-xs whitespace-nowrap">ai outreach</code><span className="text-gray-700">Master switch for automated AI <strong>email</strong> outreach (added to skip-traced contacts that have an email, on the AI plan). <strong>Remove this tag to stop all AI automation.</strong></span></div>

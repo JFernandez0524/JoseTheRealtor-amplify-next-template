@@ -1,6 +1,6 @@
-# Sharing Lead Manager Workflows with New Users (GHL Snapshot)
+# Sharing DealFinder Workflows with New Users (GHL Snapshot)
 
-This guide explains how to package the Lead Manager GHL setup (pipeline + workflows)
+This guide explains how to package the DealFinder GHL setup (pipeline + workflows)
 into a **snapshot** so every new user gets a working account, and how a new user
 loads it.
 
@@ -14,7 +14,7 @@ loads it.
 
 ## Why a snapshot works cleanly for this app
 
-The Lead Manager backend is multi-tenant with a **single shared backend**, so almost
+The DealFinder backend is multi-tenant with a **single shared backend**, so almost
 nothing in a workflow is account-specific:
 
 - **Webhook URLs are global.** Every account posts to the same Lambda URLs (below).

@@ -121,7 +121,7 @@ async function sendGHLEmail(
 
   // Add unsubscribe link to email body
   const unsubscribeLink = contactId
-    ? `${process.env.NEXT_PUBLIC_APP_URL || 'https://leads.josetherealtor.com'}/unsubscribe?contact=${contactId}`
+    ? `${process.env.NEXT_PUBLIC_APP_URL || 'https://dealfinder.yourailaunch.com'}/unsubscribe?contact=${contactId}`
     : '';
 
   const emailWithUnsubscribe = unsubscribeLink

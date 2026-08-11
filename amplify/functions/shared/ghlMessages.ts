@@ -63,7 +63,7 @@ export function extractGhlMessages(responseData: unknown): GhlMessage[] {
  * conversation. Inbound messages are never human-outbound.
  *
  * Observed markers on live payloads:
- * - this app's AI  → `meta.marketplace.appName` present (e.g. "Lead Manager")
+ * - this app's AI  → `meta.marketplace.appName` present (e.g. "DealFinder")
  * - GHL automation → `source: "workflow"`
  * - a human        → neither
  */

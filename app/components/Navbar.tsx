@@ -81,7 +81,7 @@ const Navbar = () => {
           href='/'
           className='text-gray-900 hover:text-blue-600 font-black text-xl tracking-tight z-[60]'
         >
-          LeadManager
+          DealFinder
         </Link>
 
         {/* --- DESKTOP NAV --- */}

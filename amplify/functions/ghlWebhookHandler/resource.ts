@@ -9,6 +9,6 @@ export const ghlWebhookHandler = defineFunction({
     GHL_CLIENT_SECRET: process.env.GHL_CLIENT_SECRET || '',
     OPENAI_API_KEY: process.env.OPENAI_API_KEY || '',
     BRIDGE_API_KEY: process.env.BRIDGE_API_KEY || '',
-    NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL || 'https://leads.josetherealtor.com',
+    NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL || 'https://dealfinder.yourailaunch.com',
   }
 });

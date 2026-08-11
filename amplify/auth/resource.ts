@@ -28,11 +28,11 @@ export const auth = defineAuth({
         },
       },
       callbackUrls: [
-        'https://leads.josetherealtor.com/login',
+        'https://dealfinder.yourailaunch.com/login',
         'http://localhost:3000/login',
       ],
       logoutUrls: [
-        'https://leads.josetherealtor.com/logout',
+        'https://dealfinder.yourailaunch.com/logout',
         'http://localhost:3000/logout',
       ],
     },

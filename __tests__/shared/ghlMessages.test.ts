@@ -35,7 +35,7 @@ const LIVE_RESPONSE = {
         contentType: 'text/plain',
         dateAdded: '2026-07-28T14:53:33.383Z',
         source: 'app',
-        meta: { marketplace: { appId: '6a36bd98f0df01764c99b25d', appName: 'Lead Manager' } },
+        meta: { marketplace: { appId: '6a36bd98f0df01764c99b25d', appName: 'DealFinder' } },
       },
       {
         id: '8tRvOn6ZNR4SYZgm7IUs',
