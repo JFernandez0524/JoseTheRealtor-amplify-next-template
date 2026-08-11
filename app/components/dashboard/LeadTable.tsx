@@ -554,12 +554,11 @@ export function LeadTable({
 
                   <td className='px-4 py-4 whitespace-nowrap text-sm'>
                     <div className='flex items-center gap-2'>
-                      <StatusBadge status={lead.skipTraceStatus} />
-                      {lead.leadLabels?.includes('DIRECT_MAIL_ONLY') && (
-                        <span className='px-2 py-0.5 rounded text-xs bg-blue-100 text-blue-800 font-medium'>
-                          📬 Mail Only
-                        </span>
-                      )}
+                      <StatusBadge
+                        status={lead.skipTraceStatus}
+                        hasLandlines={Array.isArray((lead as any).landlinePhones) && (lead as any).landlinePhones.length > 0}
+                        isDirectMailOnly={lead.leadLabels?.includes('DIRECT_MAIL_ONLY')}
+                      />
                     </div>
                   </td>
 
