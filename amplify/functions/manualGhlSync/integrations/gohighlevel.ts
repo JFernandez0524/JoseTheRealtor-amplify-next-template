@@ -147,13 +147,8 @@ export async function syncToGoHighLevel(
     if (isAIPlan) tags.push('App:AI-Enabled');
 
     // ☎️ Channel marker so GHL workflows can route landline contacts to the dialer and direct
-    // mail while excluding them from anything that texts. Set when this contact's main phone is a landline.
-    const isLandlineContact = Boolean(
-      dialablePhone &&
-        (lead.landlinePhones ?? []).some(
-          (lp) => lp && (lp === dialablePhone || lp.replace(/\D/g, '') === dialablePhone.replace(/\D/g, ''))
-        )
-    );
+    // mail while excluding them from anything that texts. Applied ONLY when a lead has NO cell/mobile phone, but DOES have landlines.
+    const isLandlineContact = !specificPhone && Boolean(lead.landlinePhones && lead.landlinePhones.length > 0);
     if (isLandlineContact) tags.push('channel:landline');
     
     // 📊 DATA SOURCE TRACKING
