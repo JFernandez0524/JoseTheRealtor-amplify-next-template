@@ -72,6 +72,8 @@ export default function LeadDashboardClient({}: Props) {
   const [filterForeclosureStage, setFilterForeclosureStage] = useState('');
   const [filterAuctionWindow, setFilterAuctionWindow] = useState('');
   const [filterMinEquity, setFilterMinEquity] = useState('');
+  const [filterMinValue, setFilterMinValue] = useState('');
+  const [filterMaxValue, setFilterMaxValue] = useState('');
   const [filterDateAdded, setFilterDateAdded] = useState('');
   const [filterDateAddedTo, setFilterDateAddedTo] = useState('');
   const [filterSource, setFilterSource] = useState('');
@@ -392,6 +394,18 @@ export default function LeadDashboardClient({}: Props) {
           return fromMatch && toMatch;
         })();
 
+        // Minimum & Maximum Property Value ($) filter
+        const matchesPropertyValue = (() => {
+          if (!filterMinValue && !filterMaxValue) return true;
+          const val = lead.zestimate || lead.estimatedValue || 0;
+          if (!val) return false;
+          const min = filterMinValue ? Number(filterMinValue) : null;
+          const max = filterMaxValue ? Number(filterMaxValue) : null;
+          if (min != null && val < min) return false;
+          if (max != null && val > max) return false;
+          return true;
+        })();
+
         return (
           matchesSearch &&
           matchesType &&
@@ -402,6 +416,7 @@ export default function LeadDashboardClient({}: Props) {
           matchesForeclosureStage &&
           matchesAuctionWindow &&
           matchesEquity &&
+          matchesPropertyValue &&
           matchesDateAdded &&
           matchesSource &&
           matchesDataQuality &&
@@ -1199,6 +1214,10 @@ export default function LeadDashboardClient({}: Props) {
         setFilterAuctionWindow={setFilterAuctionWindow}
         filterMinEquity={filterMinEquity}
         setFilterMinEquity={setFilterMinEquity}
+        filterMinValue={filterMinValue}
+        setFilterMinValue={setFilterMinValue}
+        filterMaxValue={filterMaxValue}
+        setFilterMaxValue={setFilterMaxValue}
         filterDateAdded={filterDateAdded}
         setFilterDateAdded={setFilterDateAdded}
         filterDateAddedTo={filterDateAddedTo}

@@ -38,6 +38,10 @@ type Props = {
   setFilterAuctionWindow: (val: string) => void;
   filterMinEquity: string;
   setFilterMinEquity: (val: string) => void;
+  filterMinValue: string;
+  setFilterMinValue: (val: string) => void;
+  filterMaxValue: string;
+  setFilterMaxValue: (val: string) => void;
   filterDateAdded: string;
   setFilterDateAdded: (val: string) => void;
   filterDateAddedTo: string;
@@ -102,6 +106,10 @@ export function DashboardFilters({
   setFilterAuctionWindow,
   filterMinEquity,
   setFilterMinEquity,
+  filterMinValue,
+  setFilterMinValue,
+  filterMaxValue,
+  setFilterMaxValue,
   filterDateAdded,
   setFilterDateAdded,
   filterDateAddedTo,
@@ -165,6 +173,10 @@ export function DashboardFilters({
     filterForeclosureStage && { label: `Stage: ${filterForeclosureStage}`, reset: () => setFilterForeclosureStage('') },
     filterAuctionWindow && { label: `Auction: Next ${filterAuctionWindow}d`, reset: () => setFilterAuctionWindow('') },
     filterMinEquity && { label: `Equity ≥ ${filterMinEquity}%`, reset: () => setFilterMinEquity('') },
+    (filterMinValue || filterMaxValue) && {
+      label: `Price: ${filterMinValue ? `$${(Number(filterMinValue)/1000).toFixed(0)}k` : '$0'} - ${filterMaxValue ? `$${(Number(filterMaxValue)/1000).toFixed(0)}k` : 'Any'}`,
+      reset: () => { setFilterMinValue(''); setFilterMaxValue(''); },
+    },
     filterDataQuality && { label: `Quality: ${filterDataQuality}`, reset: () => setFilterDataQuality('') },
     filterOwnerType !== 'INDIVIDUALS' && { label: `Owner: ${filterOwnerType}`, reset: () => setFilterOwnerType('INDIVIDUALS') },
     filterTaxForeclosure && { label: '🏛️ Tax Foreclosure', reset: () => setFilterTaxForeclosure(false) },
@@ -188,6 +200,8 @@ export function DashboardFilters({
     setFilterForeclosureStage('');
     setFilterAuctionWindow('');
     setFilterMinEquity('');
+    setFilterMinValue('');
+    setFilterMaxValue('');
     setFilterDateAdded('');
     setFilterDateAddedTo('');
     setFilterSource('');
@@ -220,7 +234,22 @@ export function DashboardFilters({
           )}
         </div>
 
-        <div className='flex items-center gap-2 justify-end'>
+        <div className='flex items-center gap-2 justify-end flex-wrap'>
+          <button
+            onClick={() => {
+              setFilterMinValue('300000');
+              setFilterMaxValue('850000');
+            }}
+            className={`px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 border ${
+              filterMinValue === '300000' && filterMaxValue === '850000'
+                ? 'bg-blue-600 text-white border-blue-700 shadow-sm'
+                : 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100'
+            }`}
+            title='Quick Filter: Property Value $300k - $850k Sweet Spot'
+          >
+            💵 $300k – $850k
+          </button>
+
           <button
             onClick={() => {
               setFilterMinEquity('30');
