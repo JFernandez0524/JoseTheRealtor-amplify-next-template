@@ -24,11 +24,15 @@ import { AuthGetCurrentUserServer, AuthGetUserGroupsServer } from '@/app/utils/a
 
 const GHL_CLIENT_ID = process.env.GHL_CLIENT_ID;
 const GHL_STATE_SECRET = process.env.GHL_STATE_SECRET!;
-const DEFAULT_APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://dealfinder.yourailaunch.com';
-const GHL_REDIRECT_URI = process.env.GHL_REDIRECT_URI || 
-  (process.env.NODE_ENV === 'development' 
-    ? 'http://localhost:3000/api/v1/oauth/callback'
-    : `${DEFAULT_APP_URL}/api/v1/oauth/callback`);
+
+function getRequestOrigin(req: Request): string {
+  const host = req.headers.get('x-forwarded-host') || req.headers.get('host');
+  const proto = req.headers.get('x-forwarded-proto') || (process.env.NODE_ENV === 'development' ? 'http' : 'https');
+  if (host) {
+    return `${proto}://${host}`;
+  }
+  return process.env.NEXT_PUBLIC_APP_URL || 'https://dealfinder.yourailaunch.com';
+}
 
 const SCOPES = [
   'contacts.readonly',
@@ -70,17 +74,20 @@ export async function GET(req: Request) {
       throw new Error('GHL_CLIENT_ID is missing');
     }
 
+    const origin = getRequestOrigin(req);
+    const redirectUri = process.env.GHL_REDIRECT_URI || `${origin}/api/v1/oauth/callback`;
+
     // Get current user to include in state
     const user = await AuthGetCurrentUserServer();
     if (!user) {
-      return NextResponse.redirect(`${DEFAULT_APP_URL}/oauth/error?error=user_not_authenticated`);
+      return NextResponse.redirect(`${origin}/oauth/error?error=user_not_authenticated`);
     }
 
     // Require a paid plan to connect GHL
     const groups = await AuthGetUserGroupsServer();
     const hasPaidPlan = groups.includes('PRO') || groups.includes('AI_PLAN') || groups.includes('ADMINS');
     if (!hasPaidPlan) {
-      return NextResponse.redirect(`${DEFAULT_APP_URL}/pricing`);
+      return NextResponse.redirect(`${origin}/pricing`);
     }
 
     // Build a signed state token — prevents CSRF / account-takeover via crafted state.
@@ -95,7 +102,7 @@ export async function GET(req: Request) {
     const authUrl = new URL('https://marketplace.gohighlevel.com/v2/oauth/chooselocation');
     authUrl.searchParams.set('response_type', 'code');
     authUrl.searchParams.set('client_id', GHL_CLIENT_ID);
-    authUrl.searchParams.set('redirect_uri', GHL_REDIRECT_URI);
+    authUrl.searchParams.set('redirect_uri', redirectUri);
     authUrl.searchParams.set('scope', SCOPES);
     authUrl.searchParams.set('state', state);
     // Automatically extract Version ID (24-char App ID before the hyphen in GHL_CLIENT_ID)
@@ -104,7 +111,7 @@ export async function GET(req: Request) {
 
     console.log('Redirecting to GHL OAuth for user:', user.userId);
     console.log('OAuth URL:', authUrl.toString());
-    console.log('Redirect URI being used:', GHL_REDIRECT_URI);
+    console.log('Redirect URI being used:', redirectUri);
 
     // Redirect user to GHL for authorization
     return NextResponse.redirect(authUrl.toString());
