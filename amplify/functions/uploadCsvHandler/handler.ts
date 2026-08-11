@@ -562,8 +562,6 @@ export const handler: S3Handler = async (event) => {
                   county: { S: aStd?.county || '' },
                 };
               }
-              
-              labels.push('ABSENTEE');
             }
           }
 

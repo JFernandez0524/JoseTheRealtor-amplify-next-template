@@ -146,7 +146,11 @@ export async function syncToGoHighLevel(
     // `labelsForSync` drops a stale stored DIRECT_MAIL_ONLY verdict: 555 leads carry that label
     // from a skip trace run before landlines counted as contact, and 112 of them are callable
     // today. Shipping it verbatim re-mailed exactly the leads this rule is meant to stop mailing.
-    const tags = [...labelsForSync(lead.leadLabels)];
+    const tags = [...labelsForSync(lead.leadLabels)].filter((t) => {
+      // Remove absentee tag for Probate leads ONLY — Pre-Foreclosure leads keep absentee tag
+      if (lead.type === 'PROBATE' && t.toLowerCase() === 'absentee') return false;
+      return true;
+    });
     
     // 🆕 APP CONTROL TAGS (source of truth)
     tags.push('App:Synced');
