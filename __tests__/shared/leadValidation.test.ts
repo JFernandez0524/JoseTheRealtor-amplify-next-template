@@ -7,6 +7,8 @@ import {
   NAME_MAX,
   isEntityName,
   isTaxForeclosureCase,
+  normalizeAddress,
+  addressesMatch,
 } from '@/app/utils/leadValidation';
 
 // All functions are pure — no AWS / network setup required.
@@ -125,3 +127,42 @@ describe('isTaxForeclosureCase', () => {
     expect(isTaxForeclosureCase(null)).toBe(false);
   });
 });
+
+describe('normalizeAddress', () => {
+  it('strips punctuation, normalizes suffixes, directions, and units', () => {
+    expect(normalizeAddress('123 North Main Street, Apt. 4B')).toBe('123 n main st apt 4b');
+    expect(normalizeAddress('456 S. Broadway Blvd, Suite #100')).toBe('456 s broadway blvd ste 100');
+  });
+
+  it('handles null/undefined gracefully', () => {
+    expect(normalizeAddress(null)).toBe('');
+    expect(normalizeAddress(undefined)).toBe('');
+  });
+});
+
+describe('addressesMatch', () => {
+  it('matches full Zillow address against street-only lead address', () => {
+    expect(addressesMatch('123 Main St, Newark, NJ 07102', '123 Main St')).toBe(true);
+    expect(addressesMatch('123 North Main Street, Newark, NJ 07102', '123 N Main St')).toBe(true);
+  });
+
+  it('matches addresses with punctuation and unit format variations', () => {
+    expect(addressesMatch('100 Ocean Ave, Apt 2B, Miami, FL', '100 Ocean Ave #2B')).toBe(true);
+    expect(addressesMatch('456 W. 5th St., Suite 10', '456 West 5th Street Ste 10')).toBe(true);
+  });
+
+  it('detects genuine house number mismatches', () => {
+    expect(addressesMatch('125 Main St, Newark, NJ 07102', '123 Main St')).toBe(false);
+    expect(addressesMatch('100 Main St', '102 Main St')).toBe(false);
+  });
+
+  it('detects genuine street name mismatches', () => {
+    expect(addressesMatch('123 Oak St, Newark, NJ 07102', '123 Main St')).toBe(false);
+  });
+
+  it('returns true when either address is missing', () => {
+    expect(addressesMatch(null, '123 Main St')).toBe(true);
+    expect(addressesMatch('123 Main St', undefined)).toBe(true);
+  });
+});
+

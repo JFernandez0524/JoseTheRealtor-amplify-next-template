@@ -7,6 +7,7 @@ import { formatDate } from '@/app/utils/formatters';
 import { updateLead, fetchLead } from '@/app/utils/aws/data/lead.client';
 import { AddressAutocomplete, ParsedAddress } from '@/app/components/address/AddressAutocomplete';
 import { type Schema } from '@/amplify/data/resource';
+import { addressesMatch } from '@/app/utils/leadValidation';
 
 // Format listing status for display
 const formatListingStatus = (status: string | null | undefined): string => {
@@ -232,40 +233,6 @@ export function LeadTable({
     } catch (err: any) {
       setZestimateError(err.message);
     }
-  };
-
-  // Normalize address for comparison (handles abbreviations and variations)
-  const normalizeAddress = (addr: string | undefined | null): string => {
-    if (!addr) return '';
-    return addr
-      .toLowerCase()
-      .trim()
-      // Remove common prefixes
-      .replace(/\b(city|town|borough|township|village)\s+of\s+/gi, '')
-      // Normalize street suffixes
-      .replace(/\bstreet\b/g, 'st')
-      .replace(/\bavenue\b/g, 'ave')
-      .replace(/\bboulevard\b/g, 'blvd')
-      .replace(/\bdrive\b/g, 'dr')
-      .replace(/\broad\b/g, 'rd')
-      .replace(/\blane\b/g, 'ln')
-      .replace(/\bcourt\b/g, 'ct')
-      .replace(/\bcircle\b/g, 'cir')
-      .replace(/\bplace\b/g, 'pl')
-      .replace(/\bterrace\b/g, 'ter')
-      .replace(/\bparkway\b/g, 'pkwy')
-      // Normalize directions
-      .replace(/\bnorth\b/g, 'n')
-      .replace(/\bsouth\b/g, 's')
-      .replace(/\beast\b/g, 'e')
-      .replace(/\bwest\b/g, 'w')
-      // Remove extra spaces
-      .replace(/\s+/g, ' ')
-      .trim();
-  };
-
-  const addressesMatch = (addr1: string | undefined | null, addr2: string | undefined | null): boolean => {
-    return normalizeAddress(addr1) === normalizeAddress(addr2);
   };
 
   const scrollLeft = () => {

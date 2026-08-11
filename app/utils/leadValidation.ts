@@ -127,3 +127,100 @@ export function isTaxForeclosureCase(caseNumber: string | null | undefined): boo
   if (!caseNumber || typeof caseNumber !== 'string') return false;
   return /tax[_\s-]?fore/i.test(caseNumber);
 }
+
+/**
+ * Normalizes an address string for comparison (strips punctuation, standardizes street suffixes & directions).
+ */
+export function normalizeAddress(addr: string | undefined | null): string {
+  if (!addr || typeof addr !== 'string') return '';
+  return addr
+    .toLowerCase()
+    .replace(/[.,#\-]/g, ' ') // Strip punctuation (commas, periods, hashes, hyphens)
+    .replace(/\b(city|town|borough|township|village)\s+of\s+/gi, '')
+    // Normalize street suffixes
+    .replace(/\bstreet\b/gi, 'st')
+    .replace(/\bavenue\b/gi, 'ave')
+    .replace(/\bboulevard\b/gi, 'blvd')
+    .replace(/\bdrive\b/gi, 'dr')
+    .replace(/\broad\b/gi, 'rd')
+    .replace(/\blane\b/gi, 'ln')
+    .replace(/\bcourt\b/gi, 'ct')
+    .replace(/\bcircle\b/gi, 'cir')
+    .replace(/\bplace\b/gi, 'pl')
+    .replace(/\bterrace\b/gi, 'ter')
+    .replace(/\bparkway\b/gi, 'pkwy')
+    // Normalize directions
+    .replace(/\bnorth\b/gi, 'n')
+    .replace(/\bsouth\b/gi, 's')
+    .replace(/\beast\b/gi, 'e')
+    .replace(/\bwest\b/gi, 'w')
+    // Normalize units
+    .replace(/\bapartment\b/gi, 'apt')
+    .replace(/\bsuite\b/gi, 'ste')
+    .replace(/\bunit\b/gi, 'unit')
+    // Collapse whitespace
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * Extracts leading numeric house number (e.g. "123", "123a", "464-466" -> "464").
+ */
+function extractHouseNumber(addr: string): string | null {
+  const match = addr.match(/^(\d+[a-z]?)/i);
+  return match ? match[1] : null;
+}
+
+/**
+ * Compares Zillow/Bridge API address against the lead's owner address.
+ * Robust against full address formats (street, city, state, zip vs street-only),
+ * punctuation differences, and minor directional or unit variations.
+ *
+ * Returns true if the addresses match or if either is missing.
+ * Returns false ONLY when there is a genuine house number or street mismatch.
+ */
+export function addressesMatch(
+  zillowAddr: string | undefined | null,
+  ownerAddr: string | undefined | null
+): boolean {
+  if (!zillowAddr || !ownerAddr) return true; // Missing data is not flagged as a mismatch
+
+  const normZillowFull = normalizeAddress(zillowAddr);
+  const normOwner = normalizeAddress(ownerAddr);
+
+  if (!normZillowFull || !normOwner) return true;
+
+  // 1. Exact normalized match
+  if (normZillowFull === normOwner) return true;
+
+  // 2. Extract street portion of zillowAddr (before first comma if present)
+  const zillowStreetRaw = zillowAddr.split(',')[0];
+  const normZillowStreet = normalizeAddress(zillowStreetRaw);
+
+  if (normZillowStreet === normOwner) return true;
+
+  // 3. House number check
+  const zillowNum = extractHouseNumber(normZillowStreet) || extractHouseNumber(normZillowFull);
+  const ownerNum = extractHouseNumber(normOwner);
+
+  if (zillowNum && ownerNum && zillowNum.toLowerCase() !== ownerNum.toLowerCase()) {
+    return false; // House numbers explicitly differ -> TRUE MISMATCH
+  }
+
+  // 4. Check prefix matching
+  if (normZillowFull.startsWith(normOwner) || normOwner.startsWith(normZillowStreet)) {
+    return true;
+  }
+
+  // 5. Token match: check if all owner street tokens are present in zillow address
+  const ownerTokens = normOwner.split(' ').filter((t) => t.length > 0);
+  const zillowTokens = normZillowFull.split(' ').filter((t) => t.length > 0);
+
+  if (ownerTokens.length > 0) {
+    const allOwnerTokensInZillow = ownerTokens.every((t) => zillowTokens.includes(t));
+    if (allOwnerTokensInZillow) return true;
+  }
+
+  return false;
+}
+
