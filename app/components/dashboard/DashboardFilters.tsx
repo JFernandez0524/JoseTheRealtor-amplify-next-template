@@ -154,7 +154,25 @@ export function DashboardFilters({
 
   const activeFilters = [
     filterType && { label: `Type: ${filterType}`, reset: () => setFilterType('') },
-    filterStatus && { label: `Trace: ${filterStatus}`, reset: () => setFilterStatus('') },
+    filterStatus && {
+      label:
+        filterStatus === 'PENDING'
+          ? '⏳ Pending Trace'
+          : filterStatus === 'COMPLETED'
+          ? '✅ Completed Trace (All)'
+          : filterStatus === 'LANDLINE_ONLY'
+          ? '☎️ Landline Only'
+          : filterStatus === 'DIRECT_MAIL_ONLY'
+          ? '📮 Direct Mail Only'
+          : filterStatus === 'NO_QUALITY_CONTACTS'
+          ? '⚠️ No Quality Contacts'
+          : filterStatus === 'NO_MATCH'
+          ? '❌ No Match'
+          : filterStatus === 'FAILED'
+          ? '🚫 Failed'
+          : `Trace: ${filterStatus}`,
+      reset: () => setFilterStatus(''),
+    },
     filterGhlStatus && { label: `Launch AI: ${filterGhlStatus}`, reset: () => setFilterGhlStatus('') },
     filterHasPhone && {
       label:
@@ -162,6 +180,8 @@ export function DashboardFilters({
           ? '📱 Mobile Only'
           : filterHasPhone === 'LANDLINE_ONLY'
           ? '☎️ Landlines Only'
+          : filterHasPhone === 'DIRECT_MAIL_ONLY'
+          ? '📮 Direct Mail Only'
           : filterHasPhone === 'HAS_LANDLINE'
           ? '☎️ Has Landline'
           : filterHasPhone === 'NO_PHONE'
@@ -304,32 +324,35 @@ export function DashboardFilters({
           <option value='PROBATE'>Probate</option>
         </select>
 
-        {/* 2. Phone Channel Filter */}
+        {/* 2. Phone / Channel Filter */}
         <select
           value={filterHasPhone}
           onChange={(e) => setFilterHasPhone(e.target.value)}
           className='border border-slate-300 rounded-xl px-3 py-2 text-xs font-semibold focus:ring-2 focus:ring-green-500 outline-none w-full bg-white text-slate-700'
         >
-          <option value=''>📱 All Phone Channels</option>
-          <option value='HAS_PHONE'>Has Any Phone (Mobile or Landline)</option>
-          <option value='HAS_MOBILE'>📱 Mobile Only (SMS-Capable)</option>
+          <option value=''>📱 All Channel Outcomes</option>
+          <option value='HAS_MOBILE'>📱 Mobile & Email (Quality Data)</option>
           <option value='LANDLINE_ONLY'>☎️ Landlines Only (Power Dialer)</option>
+          <option value='DIRECT_MAIL_ONLY'>📮 Direct Mail Only (No Phone/Email)</option>
+          <option value='HAS_PHONE'>Has Any Phone (Mobile or Landline)</option>
           <option value='HAS_LANDLINE'>☎️ Has Landline(s)</option>
           <option value='NO_PHONE'>🚫 No Phone Numbers</option>
         </select>
 
-        {/* 3. Skip Trace Status */}
+        {/* 3. Skip Trace Process & Outcome Status */}
         <select
           value={filterStatus}
           onChange={(e) => setFilterStatus(e.target.value)}
           className='border border-slate-300 rounded-xl px-3 py-2 text-xs font-semibold focus:ring-2 focus:ring-indigo-500 outline-none w-full bg-white text-slate-700'
         >
-          <option value=''>🔍 All Trace Statuses</option>
-          <option value='PENDING'>Pending Trace</option>
-          <option value='COMPLETED'>Completed Trace</option>
-          <option value='NO_QUALITY_CONTACTS'>No Quality Contacts</option>
-          <option value='FAILED'>Failed / Error</option>
-          <option value='NO_MATCH'>No Match</option>
+          <option value=''>🔍 All Skip Trace Statuses</option>
+          <option value='PENDING'>⏳ Pending Trace (Not Run)</option>
+          <option value='COMPLETED'>✅ Completed Trace (All Outcomes)</option>
+          <option value='LANDLINE_ONLY'>☎️ Completed - Landline Only</option>
+          <option value='DIRECT_MAIL_ONLY'>📮 Completed - Direct Mail Only</option>
+          <option value='NO_QUALITY_CONTACTS'>⚠️ Completed - No Quality Contacts</option>
+          <option value='NO_MATCH'>❌ Completed - No Match</option>
+          <option value='FAILED'>🚫 Failed / Error</option>
         </select>
 
         {/* 4. Launch AI Status */}

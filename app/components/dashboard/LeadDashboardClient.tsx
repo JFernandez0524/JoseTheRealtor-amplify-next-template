@@ -18,6 +18,7 @@ import { useToast } from '@/app/components/leadDetails/ToastProvider';
 import { LeadTable } from './LeadTable';
 import { DashboardFilters } from './DashboardFilters';
 import { classifyForeclosureStageWithRecency } from '@/app/utils/foreclosure';
+import { hasConcludedSkipTrace, isDirectMailOnlyLead } from '@/amplify/functions/shared/contactChannels';
 import { GhlConnection } from './GhlConnection';
 import { RouteExplanationModal } from './RouteExplanationModal';
 import { SyncConfirmModal } from './SyncConfirmModal';
@@ -256,9 +257,36 @@ export default function LeadDashboardClient({}: Props) {
             lead.customTags.some((tag) => tag?.toLowerCase().includes(search)));
 
         const matchesType = !filterType || lead.type === filterType;
-        const matchesStatus =
-          filterStatus === '' || 
-          lead.skipTraceStatus === filterStatus;
+        const matchesStatus = (() => {
+          if (!filterStatus) return true;
+          const statusUpper = (lead.skipTraceStatus || '').toUpperCase();
+          const hasMobile = Boolean(lead.phones && lead.phones.length > 0);
+          const hasLandline = Boolean(lead.landlinePhones && lead.landlinePhones.length > 0);
+          const hasEmail = Boolean(lead.emails && lead.emails.length > 0);
+
+          if (filterStatus === 'PENDING') {
+            return statusUpper === 'PENDING' || !lead.skipTraceStatus;
+          }
+          if (filterStatus === 'FAILED') {
+            return statusUpper === 'FAILED';
+          }
+          if (filterStatus === 'COMPLETED') {
+            return hasConcludedSkipTrace(lead.skipTraceStatus);
+          }
+          if (filterStatus === 'LANDLINE_ONLY') {
+            return hasConcludedSkipTrace(lead.skipTraceStatus) && !hasMobile && hasLandline;
+          }
+          if (filterStatus === 'DIRECT_MAIL_ONLY') {
+            return isDirectMailOnlyLead(lead);
+          }
+          if (filterStatus === 'NO_QUALITY_CONTACTS') {
+            return statusUpper === 'NO_QUALITY_CONTACTS' || (hasConcludedSkipTrace(lead.skipTraceStatus) && !hasMobile && !hasLandline && !hasEmail);
+          }
+          if (filterStatus === 'NO_MATCH') {
+            return statusUpper === 'NO_MATCH';
+          }
+          return statusUpper === filterStatus.toUpperCase();
+        })();
 
         const matchesCrm =
           !filterCrmStatus ||
@@ -282,6 +310,9 @@ export default function LeadDashboardClient({}: Props) {
           }
           if (filterHasPhone === 'LANDLINE_ONLY') {
             return !hasMobile && hasLandline;
+          }
+          if (filterHasPhone === 'DIRECT_MAIL_ONLY') {
+            return isDirectMailOnlyLead(lead);
           }
           if (filterHasPhone === 'NO_PHONE') {
             return !hasMobile && !hasLandline;

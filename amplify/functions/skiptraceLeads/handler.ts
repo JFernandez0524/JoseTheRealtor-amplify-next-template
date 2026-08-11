@@ -555,14 +555,14 @@ export const handler: Handler = async (event) => {
               ':mailingState': enrichedData.mailingData?.mailingState || null,
               ':mailingZip': enrichedData.mailingData?.mailingZip || null,
             }),
-            ':status': 'NO_QUALITY_CONTACTS',
+            ':status': 'COMPLETED',
             ':completedAt': timestamp,
             ':history': newHistory,
             ':labels': updatedLabels,
             ':rawData': rawData
           }
         }));
-        return { id: lead.id, status: 'NO_QUALITY_CONTACTS' };
+        return { id: lead.id, status: 'COMPLETED' };
       }
 
       const newPhones = [...new Set([...(lead.phones || []), ...enrichedData.foundPhones])];
