@@ -288,7 +288,14 @@ async function sendGHLMessage(conversationId: string, message: string, accessTok
     console.log('🧪 TEST MODE - Would send message:', message);
     return;
   }
-  
+
+  // Natural human delay for SMS responses (randomized 2 to 3 minutes: 120s – 180s)
+  if (messageType === 'SMS') {
+    const delayMs = Math.floor(Math.random() * (180000 - 120000 + 1)) + 120000;
+    console.log(`⏳ [NATURAL_DELAY] Waiting ${(delayMs / 1000).toFixed(0)}s (2-3 min) before sending SMS response...`);
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
+  }
+
   try {
     console.log(`📤 Sending ${messageType} message to GHL ${contactId ? `contact ${contactId}` : `conversation ${conversationId}`}`);
     

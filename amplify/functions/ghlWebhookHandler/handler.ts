@@ -100,6 +100,25 @@ export const handler = async (event: any) => {
       return result;
     }
     
+    // Check if this is a missed call / call status event
+    const isMissedCall =
+      body.type === 'MissedCall' ||
+      body.type === 'InboundCall' ||
+      body.type === 'CallStatus' ||
+      body.type === 'Call' ||
+      body.customData?.event === 'missed_call' ||
+      body.customData?.event === 'call_status' ||
+      body.customData?.callStatus === 'no-answer' ||
+      body.customData?.callStatus === 'missed' ||
+      body.callStatus === 'no-answer' ||
+      body.callStatus === 'missed';
+
+    if (isMissedCall) {
+      console.log('📞 [WEBHOOK_LAMBDA] Detected missed call event, routing to handleMissedCall');
+      const result = await handleMissedCall(body);
+      return result;
+    }
+
     // GHL Marketplace sends many system event types — acknowledge gracefully
     const ACKNOWLEDGED_EVENT_TYPES = new Set([
       'ContactCreate', 'ContactUpdate', 'ContactDelete', 'ContactTagUpdate', 'ContactDndUpdate',
@@ -114,7 +133,7 @@ export const handler = async (event: any) => {
       return { statusCode: 200, body: JSON.stringify({ message: `Event ${body.type} acknowledged` }) };
     }
 
-    console.log('📨 [WEBHOOK_LAMBDA] Not a task event, continuing with message handling');
+    console.log('📨 [WEBHOOK_LAMBDA] Not a task or missed call event, continuing with message handling');
 
     // Extract data from customData (workflow) or root level (system webhook)
     const { customData, message, contact, location } = body;
@@ -178,6 +197,18 @@ export const handler = async (event: any) => {
       };
     }
 
+    // For Instagram type 18 (story replies), message body might be empty in webhook
+    // We'll fetch it from the conversation API after getting the token
+    if (!messageBody && messageType === 18) {
+      console.log('⚠️ [WEBHOOK_LAMBDA] Empty message body for Instagram type 18 - will fetch from conversation API');
+    } else if (!messageBody) {
+      console.log('ℹ️ [WEBHOOK_LAMBDA] Webhook payload has no messageBody — skipping AI text analysis');
+      return {
+        statusCode: 200,
+        body: JSON.stringify({ message: 'No text message body to process' })
+      };
+    }
+
     // PHASE 1: INBOUND MESSAGE HANDLING (Lead replied to us)
     // This is always an inbound message since it's triggered by GHL workflow on customer reply
     console.log('📬 [INBOUND] Lead replied - analyzing intent...');
@@ -225,24 +256,6 @@ export const handler = async (event: any) => {
     
     // Intent is CONVERSATION - continue with AI response
     console.log('💬 [INBOUND] Lead is engaging - generating AI response...');
-
-    // For Instagram type 18 (story replies), message body might be empty in webhook
-    // We'll fetch it from the conversation API after getting the token
-    if (!messageBody && messageType === 18) {
-      console.log('⚠️ [WEBHOOK_LAMBDA] Empty message body for Instagram type 18 - will fetch from conversation API');
-    } else if (!messageBody) {
-      console.error('❌ [WEBHOOK_LAMBDA] Missing message body', { 
-        hasContactId: !!contactId, 
-        hasMessageBody: !!messageBody,
-        contactId,
-        messageBody,
-        messageType
-      });
-      return {
-        statusCode: 400,
-        body: JSON.stringify({ error: 'Missing required fields' })
-      };
-    }
 
     // Get GHL integration from DynamoDB
     console.log('🔍 [WEBHOOK_LAMBDA] Querying GhlIntegration table...');
@@ -913,4 +926,119 @@ async function handleTaskEvent(body: any) {
       body: JSON.stringify({ error: error.message })
     };
   }
+}
+
+/**
+ * Handle GHL Missed Call Events
+ * Tags contact with `call:missed`, checks DND status, and sends a personalized SMS follow-up after a natural 2-3 minute delay.
+ */
+async function handleMissedCall(body: any) {
+  console.log('📞 [MISSED_CALL] Processing missed call event...');
+  const { customData, contact, location } = body;
+
+  let userId = sanitizeId(customData?.userId || customData?.user_id || body.userId || body.user_id || '');
+  const contactId = sanitizeId(
+    customData?.contactId ||
+    customData?.contact_id ||
+    body.contactId ||
+    body.contact_id ||
+    contact?.id ||
+    (body.type === 'Contact' || body.object === 'contact' ? body.id : '') ||
+    body.id ||
+    ''
+  );
+  const locationId = sanitizeId(
+    customData?.locationId || customData?.location_id || body.locationId || body.location_id || location?.id || ''
+  );
+
+  if (!contactId) {
+    console.warn('⚠️ [MISSED_CALL] Missing contact ID — cannot process missed call');
+    return { statusCode: 200, body: JSON.stringify({ message: 'Missing contact ID' }) };
+  }
+
+  // Resolve tenant by locationId if userId is missing
+  const { getIntegrationByLocationId, getValidGhlToken } = await import('../shared/ghlTokenManager');
+  let integration = locationId ? await getIntegrationByLocationId(locationId) : null;
+  if (!userId && integration) {
+    userId = integration.userId;
+  }
+
+  if (!userId) {
+    console.warn('⚠️ [MISSED_CALL] Could not resolve tenant for locationId:', locationId);
+    return { statusCode: 200, body: JSON.stringify({ message: 'No tenant match for missed call' }) };
+  }
+
+  const tokenData = await getValidGhlToken(userId);
+  if (!tokenData?.token) {
+    console.error('❌ [MISSED_CALL] Failed to obtain valid token for user:', userId);
+    return { statusCode: 401, body: JSON.stringify({ error: 'Missing or expired GHL token' }) };
+  }
+
+  const token = tokenData.token;
+  const fieldIds: Record<string, string> = tokenData.customFieldIds || {};
+
+  // Fetch full contact details from GHL
+  const fullContact = await ghlGetContact(token, contactId);
+
+  // Check SMS DND status — respect opt-outs
+  const smsDndStatus = fullContact?.dndSettings?.SMS?.status;
+  const isSmsOptedOut = fullContact?.dnd === true || (!!smsDndStatus && smsDndStatus !== 'inactive');
+  if (isSmsOptedOut) {
+    console.log(`🛑 [MISSED_CALL] Contact ${contactId} has SMS DND enabled — skipping follow-up SMS`);
+    return { statusCode: 200, body: JSON.stringify({ message: 'Contact opted out of SMS — follow-up skipped' }) };
+  }
+
+  // Tag contact in GHL
+  const { ghlAddTags, ghlSendMessage } = await import('../shared/ghlClient');
+  await ghlAddTags(token, contactId, ['call:missed']).catch((err: any) =>
+    console.warn('⚠️ [MISSED_CALL] Failed to tag contact:', err.message)
+  );
+
+  // Build personalized SMS snippet
+  const firstName = fullContact?.firstName ? fullContact.firstName.trim() : 'there';
+  const agentName = tokenData.agentName || 'Jose Fernandez';
+  const agentBrokerage = tokenData.agentBrokerage || 'REMAX';
+
+  const findField = (key: string) => {
+    const id = fieldIds[key];
+    return id ? fullContact?.customFields?.find((f: any) => f.id === id)?.value : undefined;
+  };
+  const propertyCity = findField('property_city') || fullContact?.city || '';
+  const propertyState = findField('property_state') || fullContact?.state || '';
+
+  let propertyLocation = '';
+  if (propertyCity && propertyState) {
+    propertyLocation = `at ${propertyCity}, ${propertyState}`;
+  } else if (propertyCity || propertyState) {
+    propertyLocation = `in ${propertyCity || propertyState}`;
+  } else {
+    propertyLocation = `your property`;
+  }
+
+  const smsBody = `Hi ${firstName}, it's ${agentName} with ${agentBrokerage}. Sorry I missed your call, I called regarding the property ${propertyLocation}. Did I reach the right person?`;
+
+  // Natural human delay for SMS response (randomized 2 to 3 minutes: 120s – 180s)
+  const delayMs = Math.floor(Math.random() * (180000 - 120000 + 1)) + 120000;
+  console.log(`⏳ [NATURAL_DELAY] Waiting ${(delayMs / 1000).toFixed(0)}s (2-3 min) before sending missed call SMS follow-up...`);
+  await new Promise((resolve) => setTimeout(resolve, delayMs));
+
+  console.log(`📱 [MISSED_CALL] Sending SMS follow-up to contact ${contactId}: "${smsBody}"`);
+
+  await ghlSendMessage(token, {
+    type: 'SMS',
+    contactId,
+    body: smsBody,
+  });
+
+  console.log(`✅ [MISSED_CALL] Sent missed call SMS follow-up successfully to contact ${contactId}`);
+
+  return {
+    statusCode: 200,
+    body: JSON.stringify({
+      success: true,
+      message: 'Missed call follow-up SMS sent',
+      contactId,
+      smsBody,
+    }),
+  };
 }

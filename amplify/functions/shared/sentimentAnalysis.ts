@@ -32,8 +32,18 @@ export interface SentimentAnalysis {
  * @returns Sentiment analysis with intent classification
  */
 export async function analyzeLeadIntent(message: string): Promise<SentimentAnalysis> {
+  const safeMessage = typeof message === 'string' ? message : '';
+  if (!safeMessage.trim()) {
+    return {
+      intent: 'CONVERSATION',
+      sentiment: 'NEUTRAL',
+      confidence: 1.0,
+      reason: 'No message content provided'
+    };
+  }
+
   // Detect sentiment using existing logic
-  const sentiment = await detectSentiment(message);
+  const sentiment = await detectSentiment(safeMessage);
   
   // Map sentiment to intent
   let intent: LeadIntent = 'CONVERSATION';
@@ -45,7 +55,7 @@ export async function analyzeLeadIntent(message: string): Promise<SentimentAnaly
   } else {
     // Check for wrong info keywords
     const wrongInfoKeywords = ['wrong number', 'wrong email', 'wrong person', 'not me', 'incorrect', 'you have the wrong'];
-    const hasWrongInfo = wrongInfoKeywords.some(kw => message.toLowerCase().includes(kw));
+    const hasWrongInfo = wrongInfoKeywords.some(kw => safeMessage.toLowerCase().includes(kw));
     
     if (hasWrongInfo) {
       intent = 'WRONG_INFO';
@@ -71,17 +81,20 @@ export async function analyzeLeadIntent(message: string): Promise<SentimentAnaly
  * Classifies as: POSITIVE | NEUTRAL | FRUSTRATED | URGENT | DISENGAGING
  */
 async function detectSentiment(message: string): Promise<ConversationSentiment | null> {
+  const safeMessage = typeof message === 'string' ? message : '';
+  if (!safeMessage.trim()) return null;
+
   // Check for objection keywords first (fast, local). This MUST run before the short-message
   // guard below — otherwise literal opt-outs like "Stop" / "quit" (<= 10 chars) return null
   // and get misclassified as CONVERSATION, so the lead never gets marked DND and we attempt a
   // doomed AI reply to someone who just unsubscribed.
   const objectionKeywords = ['not interested', 'stop', 'remove', 'unsubscribe', 'leave me alone', 'busy', 'later'];
-  if (objectionKeywords.some(kw => message.toLowerCase().includes(kw))) {
+  if (objectionKeywords.some(kw => safeMessage.toLowerCase().includes(kw))) {
     return 'DISENGAGING';
   }
 
   // Skip the (paid) OpenAI classification for trivially short, non-objection messages.
-  if (message.length <= 10) return null;
+  if (safeMessage.length <= 10) return null;
 
   try {
     const response = await axios.post(
