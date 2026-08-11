@@ -69,19 +69,27 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Filter out leads that are not off_market (e.g. sold, active)
+    const nonOffMarketLeads = preforeclosureLeads.filter(
+      (lead) => lead.listingStatus && lead.listingStatus !== 'off_market'
+    );
+    const eligibleLeads = preforeclosureLeads.filter(
+      (lead) => !lead.listingStatus || lead.listingStatus === 'off_market'
+    );
+
     // Check for already enriched leads
-    const alreadyEnriched = preforeclosureLeads.filter(
+    const alreadyEnriched = eligibleLeads.filter(
       (lead) => lead.batchDataEnriched
     );
-    const toEnrich = preforeclosureLeads.filter(
+    const toEnrich = eligibleLeads.filter(
       (lead) => !lead.batchDataEnriched
     );
 
     if (toEnrich.length === 0) {
       return NextResponse.json({
-        message: 'All selected leads already enriched',
+        message: 'No eligible leads to enrich (leads must be off-market and not previously enriched)',
         enriched: 0,
-        skipped: alreadyEnriched.length,
+        skipped: alreadyEnriched.length + nonOffMarketLeads.length,
         cost: 0,
       });
     }

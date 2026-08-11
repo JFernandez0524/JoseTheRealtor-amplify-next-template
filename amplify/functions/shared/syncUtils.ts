@@ -55,6 +55,14 @@ export async function updateLeadSyncStatus(
 }
 
 export function validateLeadForSync(lead: any): { isValid: boolean; reason?: string } {
+  // Only off_market leads (or leads with no listing status set) are eligible for GHL sync
+  if (lead.listingStatus && lead.listingStatus !== 'off_market') {
+    return {
+      isValid: false,
+      reason: `Not eligible for CRM sync: listing status is '${lead.listingStatus}' (only off-market leads can be synced)`,
+    };
+  }
+
   const skipTraceStatus = lead.skipTraceStatus?.toUpperCase();
   const validStatuses = ['COMPLETED', 'NO_QUALITY_CONTACTS', 'NO_MATCH'];
 
