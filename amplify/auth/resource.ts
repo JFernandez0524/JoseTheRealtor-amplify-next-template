@@ -30,6 +30,8 @@ export const auth = defineAuth({
       callbackUrls: [
         'https://dealfinder.yourailaunch.com/login',
         'https://dealfinder.yourailaunch.com/',
+        'https://leads.josetherealtor.com/login',
+        'https://leads.josetherealtor.com/',
         'http://localhost:3000/login',
         'http://localhost:3000/',
       ],
@@ -37,6 +39,9 @@ export const auth = defineAuth({
         'https://dealfinder.yourailaunch.com/logout',
         'https://dealfinder.yourailaunch.com/login',
         'https://dealfinder.yourailaunch.com/',
+        'https://leads.josetherealtor.com/logout',
+        'https://leads.josetherealtor.com/login',
+        'https://leads.josetherealtor.com/',
         'http://localhost:3000/logout',
         'http://localhost:3000/login',
         'http://localhost:3000/',
