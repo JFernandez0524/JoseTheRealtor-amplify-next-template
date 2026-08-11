@@ -431,6 +431,18 @@ export default function LeadDashboardClient({}: Props) {
           bValue = parseFloat(bValue || 0);
         }
 
+        if (sortField === 'equityAmount' || sortField === 'equityPercent') {
+          const calcEq = (leadObj: Lead) => {
+            const val = leadObj.zestimate || leadObj.estimatedValue || 0;
+            const loan = leadObj.foreclosureAmount || 0;
+            const amt = val > 0 && loan > 0 ? val - loan : ((leadObj as any).equityAmount ?? (val > 0 ? val : 0));
+            const pct = val > 0 ? Math.round((amt / val) * 100) : ((leadObj as any).equityPercent ?? 0);
+            return sortField === 'equityAmount' ? amt : pct;
+          };
+          aValue = calcEq(a);
+          bValue = calcEq(b);
+        }
+
         // Handle array sorting (phones, emails)
         if (Array.isArray(aValue) || Array.isArray(bValue)) {
           aValue = (aValue || []).length;

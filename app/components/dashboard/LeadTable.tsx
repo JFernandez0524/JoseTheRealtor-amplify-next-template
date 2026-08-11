@@ -474,6 +474,7 @@ export function LeadTable({
               {renderSortableHeader('ownerCity', 'City/State/Zip', 'bg-blue-50')}
               {renderSortableHeader('ownerCounty', 'County', 'bg-blue-50')}
               {renderSortableHeader('zestimate', 'Zestimate', 'bg-yellow-50')}
+              {renderSortableHeader('equityAmount', 'Equity ($ / %)', 'bg-emerald-50')}
               {renderSortableHeader('listingStatus', 'Listing Status', 'bg-yellow-50')}
               {renderSortableHeader('adminLastName', 'Admin Name', 'bg-purple-50')}
               {renderSortableHeader('adminAddress', 'Admin Address', 'bg-purple-50')}
@@ -769,6 +770,47 @@ export function LeadTable({
                         </div>
                       </div>
                     )}
+                  </td>
+
+                  {/* Equity Column */}
+                  <td className='px-4 py-4 whitespace-nowrap text-sm bg-emerald-50/30'>
+                    {(() => {
+                      const val = lead.zestimate || lead.estimatedValue || 0;
+                      const loan = lead.foreclosureAmount || 0;
+                      const equityAmt = val > 0 && loan > 0 ? val - loan : ((lead as any).equityAmount ?? (val > 0 ? val : 0));
+                      const equityPct = val > 0 ? Math.round((equityAmt / val) * 100) : ((lead as any).equityPercent ?? null);
+
+                      if (!equityAmt && equityPct == null) {
+                        return <span className='text-gray-400'>-</span>;
+                      }
+
+                      let badgeClass = 'bg-slate-100 text-slate-700 border-slate-200';
+                      if (equityPct != null) {
+                        if (equityPct >= 40) badgeClass = 'bg-emerald-100 text-emerald-800 border-emerald-300 font-bold';
+                        else if (equityPct >= 20) badgeClass = 'bg-amber-100 text-amber-800 border-amber-300';
+                        else badgeClass = 'bg-rose-100 text-rose-800 border-rose-300';
+                      }
+
+                      return (
+                        <div className='flex flex-col gap-0.5'>
+                          <div className='flex items-center gap-1.5'>
+                            <span className='font-semibold text-emerald-900'>
+                              ${equityAmt.toLocaleString()}
+                            </span>
+                            {equityPct != null && (
+                              <span className={`px-1.5 py-0.5 text-[10px] rounded border ${badgeClass}`}>
+                                {equityPct}%
+                              </span>
+                            )}
+                          </div>
+                          {loan > 0 && (
+                            <span className='text-[10px] text-gray-500'>
+                              Debt: ${loan.toLocaleString()}
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </td>
 
                   {/* Listing Status Column */}

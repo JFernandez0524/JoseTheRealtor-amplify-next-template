@@ -222,6 +222,22 @@ export function DashboardFilters({
 
         <div className='flex items-center gap-2 justify-end'>
           <button
+            onClick={() => {
+              setFilterMinEquity('30');
+              setFilterListingStatus('off_market');
+              setFilterForeclosureStage('ACTIVE');
+            }}
+            className={`px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 border ${
+              filterMinEquity === '30' && filterListingStatus === 'off_market'
+                ? 'bg-emerald-600 text-white border-emerald-700 shadow-sm'
+                : 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
+            }`}
+            title='Quick Filter: Equity >= 30%, Active Foreclosure & Off-Market'
+          >
+            🔥 Top Deals (&gt;30% Equity)
+          </button>
+
+          <button
             onClick={() => setShowAdvanced(!showAdvanced)}
             className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 border ${
               showAdvanced || activeFilters.length > 0
