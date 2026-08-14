@@ -7,6 +7,9 @@ import {
   DOLLARS_PER_CREDIT,
   SKIPTRACE_CREDITS_PER_MATCH,
   ENRICHMENT_CREDITS_PER_MATCH,
+  isReviewerAccount,
+  validateReviewerQuota,
+  MAX_REVIEWER_SKIPS,
 } from '../../amplify/functions/shared/skiptraceBilling';
 
 // Pure billing rule — BatchData bills per matched record, never for NO_MATCH.
@@ -64,3 +67,55 @@ describe('credit charge math', () => {
     expect(dollarsFor(3)).toBe(0.3); // 1 enrich match = 3 credits = $0.30
   });
 });
+
+describe('Reviewer Account (ghl-reviewer@yourailaunch.com) Quota Rules', () => {
+  it('identifies ghl-reviewer@yourailaunch.com as a reviewer account regardless of case/whitespace', () => {
+    expect(isReviewerAccount('ghl-reviewer@yourailaunch.com')).toBe(true);
+    expect(isReviewerAccount(' GHL-REVIEWER@YOURAILAUNCH.COM ')).toBe(true);
+    expect(isReviewerAccount('user@example.com')).toBe(false);
+    expect(isReviewerAccount(null)).toBe(false);
+    expect(isReviewerAccount(undefined)).toBe(false);
+  });
+
+  it('MAX_REVIEWER_SKIPS is set to 5', () => {
+    expect(MAX_REVIEWER_SKIPS).toBe(5);
+  });
+
+  it('allows batch within remaining quota', () => {
+    // 0 skips performed, requesting 3
+    const q1 = validateReviewerQuota(0, 3);
+    expect(q1.allowed).toBe(true);
+    expect(q1.remaining).toBe(5);
+
+    // 2 skips performed, requesting 3 (exactly reaches 5)
+    const q2 = validateReviewerQuota(2, 3);
+    expect(q2.allowed).toBe(true);
+    expect(q2.remaining).toBe(3);
+  });
+
+  it('rejects batch when requesting more than remaining quota', () => {
+    // 4 skips performed, requesting 2
+    const q = validateReviewerQuota(4, 2);
+    expect(q.allowed).toBe(false);
+    expect(q.remaining).toBe(1);
+    expect(q.error).toContain('You can only skip trace 1 more lead(s)');
+  });
+
+  it('rejects all calls once 5 skips are reached', () => {
+    const q = validateReviewerQuota(5, 1);
+    expect(q.allowed).toBe(false);
+    expect(q.remaining).toBe(0);
+    expect(q.error).toContain('reached its testing allowance of 5 skip trace calls');
+  });
+
+  it('handles negative or oversized values gracefully', () => {
+    const q = validateReviewerQuota(-2, 1);
+    expect(q.allowed).toBe(true);
+    expect(q.remaining).toBe(5);
+
+    const qOver = validateReviewerQuota(10, 1);
+    expect(qOver.allowed).toBe(false);
+    expect(qOver.remaining).toBe(0);
+  });
+});
+

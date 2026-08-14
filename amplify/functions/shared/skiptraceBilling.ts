@@ -41,3 +41,50 @@ export function dollarsFor(credits: number): number {
 export function billableSkipCount(statuses: Array<string | null | undefined>): number {
   return statuses.filter((s): s is string => !!s && BILLABLE_SKIP_STATUSES.has(s)).length;
 }
+
+// ---- Marketplace App Reviewer Accounts (5 skip-trace trial cap) ----
+export const REVIEWER_EMAILS = new Set<string>([
+  'ghl-reviewer@yourailaunch.com',
+]);
+
+export const MAX_REVIEWER_SKIPS = 5;
+
+/** Checks if an email belongs to a GoHighLevel Marketplace app reviewer account. */
+export function isReviewerAccount(email?: string | null): boolean {
+  if (!email) return false;
+  return REVIEWER_EMAILS.has(email.trim().toLowerCase());
+}
+
+/**
+ * Validates whether a reviewer account has sufficient remaining quota for the requested batch.
+ *
+ * @param totalSkipsPerformed - cumulative skips executed so far
+ * @param requestedCount - number of leads requested in the current batch
+ * @returns validation verdict with remaining count and descriptive message
+ */
+export function validateReviewerQuota(
+  totalSkipsPerformed: number,
+  requestedCount: number
+): { allowed: boolean; remaining: number; error?: string } {
+  const current = Math.max(0, totalSkipsPerformed || 0);
+  const remaining = Math.max(0, MAX_REVIEWER_SKIPS - current);
+
+  if (remaining === 0) {
+    return {
+      allowed: false,
+      remaining: 0,
+      error: `Marketplace Review Limit: This test account has reached its testing allowance of ${MAX_REVIEWER_SKIPS} skip trace calls.`,
+    };
+  }
+
+  if (requestedCount > remaining) {
+    return {
+      allowed: false,
+      remaining,
+      error: `Marketplace Review Limit: You can only skip trace ${remaining} more lead(s) with this test account (maximum ${MAX_REVIEWER_SKIPS} total).`,
+    };
+  }
+
+  return { allowed: true, remaining };
+}
+

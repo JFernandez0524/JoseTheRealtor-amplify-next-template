@@ -2,8 +2,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { AuthGetCurrentUserServer, AuthGetUserGroupsServer, cookiesClient } from '@/app/utils/aws/auth/amplifyServerUtils.server';
 import { enrichPreforeclosureLeads } from '@/app/utils/batchdata/enrichment';
 import { getLeadsByIds, updateLead } from '@/app/utils/aws/data/lead.server';
-import { hasCredits, deductCredits } from '@/app/utils/aws/data/userAccount.server';
-import { ENRICHMENT_CREDITS_PER_MATCH, creditsFor, dollarsFor } from '@/amplify/functions/shared/skiptraceBilling';
+import { getUserAccount, updateUserAccount, hasCredits, deductCredits } from '@/app/utils/aws/data/userAccount.server';
+import {
+  ENRICHMENT_CREDITS_PER_MATCH,
+  creditsFor,
+  dollarsFor,
+  isReviewerAccount,
+  validateReviewerQuota,
+} from '@/amplify/functions/shared/skiptraceBilling';
 
 // Jose (agency owner) — unlimited, never charged. Mirrors the owner exemption in skiptraceLeads.
 const OWNER_USER_ID = '44d8f4c8-10c1-7038-744b-271103170819';
@@ -94,13 +100,26 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Billing: charge ENRICHMENT_CREDITS_PER_MATCH credits per matched lead. ADMINS + agency owner exempt.
+    // Billing & Reviewer checks
     const groups = await AuthGetUserGroupsServer();
+    const userAccount = await getUserAccount(userId);
+    const isReviewer = isReviewerAccount(userAccount?.email);
     const isExempt = groups.includes('ADMINS') || userId === OWNER_USER_ID;
+
+    // 🛡️ Reviewer test quota check (strictly capped at 5 lifetime skips)
+    if (isReviewer) {
+      const quota = validateReviewerQuota(userAccount?.totalSkipsPerformed || 0, toEnrich.length);
+      if (!quota.allowed) {
+        return NextResponse.json(
+          { error: quota.error },
+          { status: 403 }
+        );
+      }
+    }
 
     // Upfront credit gate (worst case = every attempted lead matches) so we never call BatchData —
     // and get billed — without the ability to charge the client. Mirrors the skip-trace gate.
-    if (!isExempt) {
+    if (!isExempt && !isReviewer) {
       const worstCase = toEnrich.length * ENRICHMENT_CREDITS_PER_MATCH;
       if (!(await hasCredits(userId, worstCase))) {
         return NextResponse.json(
@@ -124,13 +143,19 @@ export async function POST(request: NextRequest) {
     if (unmappedMatched > 0) {
       console.warn(`[ENRICH] ${unmappedMatched} lead(s) matched by BatchData but not mapped to a lead (address-join miss) — charged, needs review. requestIds=${batchMeta.requestIds.join(',')}`);
     }
-    const creditsCharged = isExempt ? 0 : creditsFor(matchedCount, ENRICHMENT_CREDITS_PER_MATCH);
+    const creditsCharged = isExempt || isReviewer ? 0 : creditsFor(matchedCount, ENRICHMENT_CREDITS_PER_MATCH);
     const totalCost = dollarsFor(creditsCharged); // $ charged for matched leads
 
-    // Deduct credits for matched leads only (non-atomic read-then-update; acceptable for low-volume
-    // enrichment — the SSR route has no DynamoDB IAM for a conditional decrement).
+    // Deduct credits for matched leads only
     if (creditsCharged > 0) {
       await deductCredits(userId, creditsCharged);
+    }
+
+    // Track skips performed for reviewer
+    if (isReviewer && userAccount && matchedCount > 0) {
+      await updateUserAccount(userAccount.id, {
+        totalSkipsPerformed: (userAccount.totalSkipsPerformed || 0) + matchedCount,
+      });
     }
 
     // Update leads in database

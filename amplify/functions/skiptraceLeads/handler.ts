@@ -4,7 +4,14 @@ import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand, PutCommand, UpdateCommand, ScanCommand } from '@aws-sdk/lib-dynamodb';
 import { filterValidEmails } from '../shared/emailValidator';
 import { rankMobilePhones, rankLandlinePhones } from '../shared/sanitize';
-import { billableSkipCount, SKIPTRACE_CREDITS_PER_MATCH, creditsFor, dollarsFor } from '../shared/skiptraceBilling';
+import {
+  billableSkipCount,
+  SKIPTRACE_CREDITS_PER_MATCH,
+  creditsFor,
+  dollarsFor,
+  isReviewerAccount,
+  validateReviewerQuota,
+} from '../shared/skiptraceBilling';
 
 const dynamoClient = new DynamoDBClient({ region: process.env.AWS_REGION });
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
@@ -358,6 +365,14 @@ export const handler: Handler = async (event) => {
     }));
     
     const userAccount = accounts?.[0];
+    const userEmail = (
+      (identity as any)?.claims?.['email'] ||
+      (identity as any)?.claims?.['username'] ||
+      userAccount?.email ||
+      ''
+    ).toLowerCase().trim();
+    const isReviewer = isReviewerAccount(userEmail);
+
     const isOwner = ownerId === '44d8f4c8-10c1-7038-744b-271103170819'; // Jose - unlimited credits
     const isAdmin = groups.includes('ADMINS');
     const isPro = groups.includes('PRO');
@@ -366,6 +381,7 @@ export const handler: Handler = async (event) => {
     console.log(`💰 Credits: ${userAccount?.credits || 0}`);
     console.log(`👑 Is Owner: ${isOwner}`);
     console.log(`🔧 Is Admin: ${isAdmin}`);
+    console.log(`🎯 Is Reviewer: ${isReviewer} (${userEmail})`);
 
     console.log('📥 Fetching leads...');
 
@@ -426,6 +442,16 @@ export const handler: Handler = async (event) => {
         reason: lead.skipTraceStatus === 'COMPLETED' ? 'Already skip traced' : `Not eligible: listing status is ${lead.listingStatus}`,
       };
     }));
+
+    // 🛡️ Reviewer test quota check (strictly capped at 5 lifetime skips)
+    if (isReviewer) {
+      const quota = validateReviewerQuota(userAccount?.totalSkipsPerformed || 0, leadsToProcess.length);
+      if (!quota.allowed) {
+        console.warn(`🛑 Reviewer quota check failed for ${userEmail}: ${quota.error}`);
+        throw new Error(quota.error);
+      }
+      console.log(`🎯 Reviewer quota check passed (${quota.remaining} remaining for ${userEmail})`);
+    }
 
     // 💰 Credit check against the filtered set — only leads that will actually be sent to BatchData
     if (!isOwner && !isAdmin) {
@@ -640,10 +666,11 @@ export const handler: Handler = async (event) => {
         await docClient.send(new UpdateCommand({
           TableName: userAccountTableName,
           Key: { id: userAccount.id },
-          UpdateExpression: 'SET credits = credits - :chargeableCount, totalSkipsPerformed = totalSkipsPerformed + :chargeableCount',
+          UpdateExpression: 'SET credits = credits - :chargeableCount, totalSkipsPerformed = if_not_exists(totalSkipsPerformed, :zero) + :chargeableCount',
           ConditionExpression: 'credits >= :chargeableCount',
           ExpressionAttributeValues: {
             ':chargeableCount': chargeableCount,
+            ':zero': 0,
           }
         }));
       } catch (deductErr: any) {
@@ -651,6 +678,21 @@ export const handler: Handler = async (event) => {
           throw new Error('Insufficient Credits: Your credit balance was too low to complete this batch. Please purchase more credits.');
         }
         throw deductErr;
+      }
+    } else if (isReviewer && userAccount && leadsToProcess.length > 0) {
+      // Always track lifetime skips performed for reviewer accounts
+      try {
+        await docClient.send(new UpdateCommand({
+          TableName: userAccountTableName,
+          Key: { id: userAccount.id },
+          UpdateExpression: 'SET totalSkipsPerformed = if_not_exists(totalSkipsPerformed, :zero) + :count',
+          ExpressionAttributeValues: {
+            ':count': leadsToProcess.length,
+            ':zero': 0,
+          }
+        }));
+      } catch (trackErr) {
+        console.error('Error tracking reviewer skips performed:', trackErr);
       }
     }
 

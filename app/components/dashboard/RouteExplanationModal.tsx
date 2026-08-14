@@ -97,17 +97,24 @@ export function RouteExplanationModal({
             </div>
           </div>
 
-          {/* Features */}
+          {/* Features & Requirements */}
           <div>
-            <h3 className="text-sm font-semibold text-gray-700 mb-3">What you'll get:</h3>
-            <ul className="space-y-2">
+            <h3 className="text-sm font-semibold text-gray-700 mb-2">What you&apos;ll get:</h3>
+            <ul className="space-y-1.5 text-xs text-gray-600 mb-4">
               {routeInfo.features.map((feature, index) => (
-                <li key={index} className="flex items-start gap-2 text-sm text-gray-600">
-                  <span className="text-green-500 mt-0.5">✓</span>
+                <li key={index} className="flex items-start gap-2">
+                  <span className="text-green-500 font-bold mt-0.5">✓</span>
                   <span>{feature}</span>
                 </li>
               ))}
             </ul>
+
+            <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 text-[11px] text-slate-600 space-y-1">
+              <p className="font-bold text-slate-800">🛡️ Compliance &amp; Accuracy:</p>
+              <p>• DNC numbers are automatically filtered out (TCPA compliant).</p>
+              <p>• Emails are verified via DeBounce to prevent bounces.</p>
+              <p>• Requires valid property address + owner name.</p>
+            </div>
           </div>
 
           {/* Actions */}

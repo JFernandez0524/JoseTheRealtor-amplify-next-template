@@ -23,6 +23,8 @@ import { GhlConnection } from './GhlConnection';
 import { RouteExplanationModal } from './RouteExplanationModal';
 import { SyncConfirmModal } from './SyncConfirmModal';
 import { DeleteConfirmModal } from './DeleteConfirmModal';
+import { SyncResultModal } from './SyncResultModal';
+import MarketplaceReviewerBanner from './MarketplaceReviewerBanner';
 import { getFrontEndUser } from '@/app/utils/aws/auth/amplifyFrontEndUser';
 import type { Schema } from '@/amplify/data/resource';
 
@@ -57,6 +59,8 @@ export default function LeadDashboardClient({}: Props) {
   const [syncProgress, setSyncProgress] = useState<{ current: number; total: number } | null>(null);
   const [failedSyncIds, setFailedSyncIds] = useState<string[]>([]);
   const [skippedSyncIds, setSkippedSyncIds] = useState<string[]>([]);
+  const [syncResultSummary, setSyncResultSummary] = useState<{ successful: number; skipped: number; failed: number } | null>(null);
+  const [showSyncResultModal, setShowSyncResultModal] = useState(false);
 
   const [isLoading, setIsLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
@@ -668,6 +672,11 @@ export default function LeadDashboardClient({}: Props) {
         message: parts.join(' · '),
         duration: 8000,
       });
+
+      if (skipped > 0 || failed > 0) {
+        setSyncResultSummary({ successful, skipped, failed });
+        setShowSyncResultModal(true);
+      }
 
       // Only the synced leads changed (ghlSyncStatus/ghlContactId) — `ids` was captured before
       // setSelectedIds([]) above, so it's still the full set.
@@ -1306,6 +1315,12 @@ export default function LeadDashboardClient({}: Props) {
         isPopulatingQueue={isPopulatingQueue}
       />
 
+      {/* GHL Marketplace Reviewer Banner (active for ghl-reviewer@yourailaunch.com) */}
+      <MarketplaceReviewerBanner
+        userEmail={userAccount?.email}
+        totalSkipsPerformed={userAccount?.totalSkipsPerformed || 0}
+      />
+
       {/* GHL Connection Status */}
       <GhlConnection />
 
@@ -1620,6 +1635,14 @@ export default function LeadDashboardClient({}: Props) {
           isLargeBatch={isLargeBatch}
         />
       )}
+
+      {/* Sync Result Breakdown Modal */}
+      <SyncResultModal
+        isOpen={showSyncResultModal}
+        onClose={() => setShowSyncResultModal(false)}
+        summary={syncResultSummary}
+        onRetryFailed={failedSyncIds.length > 0 ? () => executeBulkGHLSync(failedSyncIds) : undefined}
+      />
       </div>
     </div>
   );

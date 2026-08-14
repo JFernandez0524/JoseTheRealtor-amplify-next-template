@@ -108,6 +108,14 @@ export function SyncConfirmModal({
           ))}
         </div>
 
+        {/* Requirements notice */}
+        <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 mb-6 text-xs text-slate-600">
+          <p className="font-bold text-slate-800 mb-1">📋 GHL Sync Requirements:</p>
+          <p className="text-[11px] text-slate-500">
+            Contacts must have completed skip-tracing with verified contact info, an active GHL connection, and be off-market.
+          </p>
+        </div>
+
         {/* Actions */}
         <div className="flex gap-3">
           <button

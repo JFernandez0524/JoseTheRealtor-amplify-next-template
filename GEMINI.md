@@ -32,12 +32,17 @@
 
 ## Outreach Cadence & Compliance Rules
 
-1. **Business Hours Enforcement**:
+1. **No Automated Cold SMS Drips**:
+   - Automated cold outreach is strictly limited to **Cold Email** and **Direct Mail**.
+   - SMS is used exclusively for **conversational AI responses** to qualify incoming replies/leads and book appointments. No unsolicited bulk SMS drips.
+2. **Business Hours Enforcement**:
    - Automated outreach is strictly limited to **Mon–Fri 9 AM–7 PM EST** and **Sat 9 AM–12 PM EST**.
    - No automated outreach is permitted on Sundays.
-2. **Cadence & Rate Limits**:
+3. **Cadence & Rate Limits**:
    - Cold email outreach uses a 7-touch cadence over 28 days (every 4 days).
    - Hourly email sending is capped at 50 emails per hour per integration with bounce circuit-breaker protection.
+4. **Marketplace Reviewer Accounts**:
+   - The GoHighLevel reviewer account (`ghl-reviewer@yourailaunch.com`) is strictly limited to a lifetime trial cap of **5 skip trace calls**.
 
 ## AI Persona & Compliance Boundaries
 
