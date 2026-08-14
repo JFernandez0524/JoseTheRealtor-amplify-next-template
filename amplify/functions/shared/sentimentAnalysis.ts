@@ -53,8 +53,29 @@ export async function analyzeLeadIntent(message: string): Promise<SentimentAnaly
     intent = 'STOP';
     reason = 'Lead is disengaging - wants to stop communication';
   } else {
-    // Check for wrong info keywords
-    const wrongInfoKeywords = ['wrong number', 'wrong email', 'wrong person', 'not me', 'incorrect', 'you have the wrong'];
+    // Check for wrong info / authority mismatch keywords
+    const wrongInfoKeywords = [
+      'wrong number',
+      'wrong email',
+      'wrong person',
+      'not me',
+      'incorrect',
+      'you have the wrong',
+      'not my property',
+      'not my house',
+      'not my home',
+      'not the owner',
+      'not owner',
+      'dont own',
+      "don't own",
+      'do not own',
+      'not own',
+      'never owned',
+      'wrong contact',
+      "doesn't belong to me",
+      'does not belong to me',
+      'not mine'
+    ];
     const hasWrongInfo = wrongInfoKeywords.some(kw => safeMessage.toLowerCase().includes(kw));
     
     if (hasWrongInfo) {
@@ -88,7 +109,7 @@ async function detectSentiment(message: string): Promise<ConversationSentiment |
   // guard below — otherwise literal opt-outs like "Stop" / "quit" (<= 10 chars) return null
   // and get misclassified as CONVERSATION, so the lead never gets marked DND and we attempt a
   // doomed AI reply to someone who just unsubscribed.
-  const objectionKeywords = ['not interested', 'stop', 'remove', 'unsubscribe', 'leave me alone', 'busy', 'later'];
+  const objectionKeywords = ['not interested', 'stop', 'remove', 'unsubscribe', 'leave me alone', 'busy', 'later', 'not for sale', 'not selling', 'never selling'];
   if (objectionKeywords.some(kw => safeMessage.toLowerCase().includes(kw))) {
     return 'DISENGAGING';
   }

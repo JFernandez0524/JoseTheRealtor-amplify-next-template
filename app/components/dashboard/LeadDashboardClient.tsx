@@ -260,8 +260,8 @@ export default function LeadDashboardClient({}: Props) {
         const matchesType = !filterType || lead.type === filterType;
         const matchesOutOfStateAdmin = (() => {
           if (!filterOutOfStateAdmin) return true;
-          const propState = (lead.propertyState || (lead.standardizedAddress as any)?.state || lead.ownerState || '').trim().toUpperCase();
-          const mailState = (lead.mailingState || (lead.batchDataMailingAddress as any)?.mailingState || '').trim().toUpperCase();
+          const propState = (((lead as any).propertyState || (lead.standardizedAddress as any)?.state || lead.ownerState || '') as string).trim().toUpperCase();
+          const mailState = ((lead.mailingState || (lead as any).batchDataMailingAddress?.mailingState || '') as string).trim().toUpperCase();
           const isOutOfState = Boolean(propState && mailState && propState !== mailState);
           return filterOutOfStateAdmin === 'YES' ? isOutOfState : !isOutOfState;
         })();

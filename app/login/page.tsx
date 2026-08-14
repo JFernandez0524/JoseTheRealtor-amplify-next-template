@@ -1,7 +1,7 @@
 'use client';
 
 import { Authenticator, Text, View, useAuthenticator } from '@aws-amplify/ui-react';
-import { redirect } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 
 const components = {
@@ -37,12 +37,14 @@ const components = {
 
 function CustomAuthenticator() {
   const { user } = useAuthenticator((context) => [context.user]);
+  const router = useRouter();
 
   useEffect(() => {
     if (user) {
-      redirect('/dashboard');
+      router.push('/dashboard');
+      router.refresh();
     }
-  }, [user]);
+  }, [user, router]);
 
   return <Authenticator socialProviders={['google']} components={components} />;
 }

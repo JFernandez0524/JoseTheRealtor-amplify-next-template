@@ -35,13 +35,20 @@ import {
 import { analyzeBridgeProperty } from '@/app/utils/bridge.server';
 
 const ALLOWED_ORIGINS = [
+  'https://yourailaunch.com',
+  'https://www.yourailaunch.com',
+  'https://dealfinder.yourailaunch.com',
   'https://jose-fernandez.remax.com',
   'https://www.josetherealtor.com',
+  'https://leads.josetherealtor.com',
 ];
 
 const getCorsHeaders = (req: Request) => {
-  const origin = req.headers.get('origin') || '';
-  const allowedOrigin = ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
+  const origin = (req.headers.get('origin') || '').replace(/\/$/, '');
+  const isAllowed = ALLOWED_ORIGINS.some(
+    (allowed) => allowed.toLowerCase() === origin.toLowerCase()
+  );
+  const allowedOrigin = isAllowed ? origin : ALLOWED_ORIGINS[0];
   return {
     'Access-Control-Allow-Origin': allowedOrigin,
     'Access-Control-Allow-Methods': 'POST, OPTIONS',

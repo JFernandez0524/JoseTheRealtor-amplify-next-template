@@ -1,12 +1,13 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { client } from '@/app/utils/aws/data/frontEndClient';
 import { getFrontEndUser } from '@/app/utils/aws/auth/amplifyFrontEndUser';
 import { HiOutlineUserCircle, HiOutlineCheckCircle } from 'react-icons/hi2';
 import { useAccess } from '@/app/context/AccessContext';
 import Link from 'next/link';
+import GhlOnboardingModal from './GhlOnboardingModal';
 
 type GhlUser = { id: string; name: string; email: string };
 
@@ -14,6 +15,8 @@ export default function GhlProfileSettings() {
   const { hasPaidPlan } = useAccess();
   const searchParams = useSearchParams();
   const isSetupFlow = searchParams.get('setup') === '1';
+  const [showOnboardingModal, setShowOnboardingModal] = useState(isSetupFlow);
+  const settingsSectionRef = useRef<HTMLDivElement>(null);
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -163,14 +166,19 @@ export default function GhlProfileSettings() {
 
   if (loading) {
     return (
-      <div className="bg-white border border-slate-200 rounded-[2rem] p-8 shadow-sm">
-        <div className="animate-pulse">
-          <div className="h-6 bg-slate-200 rounded w-1/3 mb-4"></div>
-          <div className="space-y-3">
-            <div className="h-4 bg-slate-200 rounded"></div>
-            <div className="h-4 bg-slate-200 rounded w-2/3"></div>
-          </div>
+      <div className="bg-white border border-slate-200 rounded-[2rem] p-8 shadow-sm text-center py-12">
+        <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 mb-4 animate-spin">
+          <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          </svg>
         </div>
+        <h4 className="text-base font-bold text-slate-800 mb-1">
+          Loading GoHighLevel Resources...
+        </h4>
+        <p className="text-xs text-slate-500 max-w-sm mx-auto">
+          Fetching your phone numbers, team members, and calendar availability live from GoHighLevel.
+        </p>
       </div>
     );
   }
@@ -196,7 +204,16 @@ export default function GhlProfileSettings() {
   const inputCls = 'w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500';
 
   return (
-    <div className="bg-white border border-slate-200 rounded-[2rem] p-8 shadow-sm">
+    <>
+      <GhlOnboardingModal
+        isOpen={showOnboardingModal}
+        onClose={() => setShowOnboardingModal(false)}
+        locationId={integration?.locationId}
+        onStartSetup={() => {
+          settingsSectionRef.current?.scrollIntoView({ behavior: 'smooth' });
+        }}
+      />
+      <div ref={settingsSectionRef} id="ghl-campaign-settings" className="bg-white border border-slate-200 rounded-[2rem] p-8 shadow-sm">
       <h3 className="text-lg font-black text-slate-900 mb-2 flex items-center gap-2">
         <HiOutlineUserCircle className="text-indigo-500" /> Launch AI Profile &amp; Campaign
       </h3>
@@ -375,5 +392,6 @@ export default function GhlProfileSettings() {
         </button>
       </div>
     </div>
+    </>
   );
 }

@@ -2,6 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createHmac, timingSafeEqual } from 'crypto';
 import axios from 'axios';
 import { createGhlIntegration } from '@/app/utils/aws/data/ghlIntegration.server';
+import {
+  provisionCustomFields,
+  provisionOpportunityFields,
+  provisionTags,
+} from '../../../../../amplify/functions/shared/ghlFieldProvisioner';
 
 const GHL_STATE_SECRET = process.env.GHL_STATE_SECRET!;
 const STATE_MAX_AGE_MS = 15 * 60 * 1000; // 15 minutes — enough time for a user to complete OAuth
@@ -137,20 +142,38 @@ export async function GET(req: Request) {
 
     console.log('OAuth success for location:', locationId);
 
+    // Automatically provision custom fields and system tags immediately
+    let customFieldIds: Record<string, string> | undefined;
+    let opportunityFieldIds: Record<string, string> | undefined;
+    try {
+      console.log('🔧 Provisioning GHL custom fields & tags on connect...');
+      const [cFields, oFields] = await Promise.all([
+        provisionCustomFields(locationId, access_token),
+        provisionOpportunityFields(locationId, access_token),
+        provisionTags(locationId, access_token),
+      ]);
+      customFieldIds = cFields;
+      opportunityFieldIds = oFields;
+      console.log('✅ GHL custom fields and system tags provisioned successfully on connect');
+    } catch (provErr: any) {
+      console.error('⚠️ Non-fatal provisioning error during connect:', provErr.message);
+    }
+
     // Use user ID from state parameter instead of server auth
     try {
       console.log('Using user ID from state:', userId);
 
-      // Store tokens using utility function
+      // Store tokens and provisioned field IDs using utility function
       await createGhlIntegration(userId, {
         access_token,
         refresh_token,
         expires_in,
-        locationId
+        locationId,
+        customFieldIds,
+        opportunityFieldIds,
       });
 
-      console.log('✅ Tokens stored successfully for user:', userId);
-      // Field provisioning happens lazily on first sync via manualGhlSync Lambda
+      console.log('✅ Tokens and field mappings stored successfully for user:', userId);
     } catch (storageError) {
       console.error('Error storing tokens:', storageError);
       return NextResponse.redirect(`${origin}/oauth/error?error=storage_error`);

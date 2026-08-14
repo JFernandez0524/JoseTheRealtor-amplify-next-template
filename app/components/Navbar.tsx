@@ -7,6 +7,7 @@ import { usePathname } from 'next/navigation';
 import { useAccess } from '../context/AccessContext';
 import { useUserProfile } from '../hooks/useUserProfile';
 import { HiMenu, HiX } from 'react-icons/hi';
+import { Hub } from 'aws-amplify/utils';
 
 const Navbar = () => {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -54,6 +55,17 @@ const Navbar = () => {
   useEffect(() => {
     setIsMobileMenuOpen(false);
   }, [pathname]);
+
+  // 4. Automatically close menus on sign out
+  useEffect(() => {
+    const unsubscribe = Hub.listen('auth', ({ payload }) => {
+      if (payload.event === 'signedOut') {
+        setMenuOpen(false);
+        setIsMobileMenuOpen(false);
+      }
+    });
+    return () => unsubscribe();
+  }, []);
 
   const displayName = attributes?.name || 'User';
   const profilePic =
@@ -211,7 +223,7 @@ const Navbar = () => {
                       Profile Settings
                     </Link>
                     <div className='border-t border-gray-100 mt-1 pt-1'>
-                      <Logout />
+                      <Logout onLogout={() => setMenuOpen(false)} />
                     </div>
                   </div>
                 )}
@@ -349,7 +361,12 @@ const Navbar = () => {
                 Profile Settings
               </Link>
               <div className='w-full pt-6 flex justify-center'>
-                <Logout />
+                <Logout
+                  onLogout={() => {
+                    setMenuOpen(false);
+                    setIsMobileMenuOpen(false);
+                  }}
+                />
               </div>
             </>
           )}

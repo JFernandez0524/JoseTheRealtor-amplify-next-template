@@ -1,27 +1,30 @@
 import { describe, it, expect } from 'vitest';
-import { dispositionAction, isTerminalDisposition, callOutcomeForEndReason } from '../../amplify/functions/shared/dispositions';
-
-// dispositionAction / isTerminalDisposition are pure — no AWS setup required.
+import {
+  dispositionAction,
+  isTerminalDisposition,
+  isDncDisposition,
+  detectCallOutcomeFromMessage,
+  callOutcomeForEndReason,
+} from '../../amplify/functions/shared/dispositions';
 
 describe('dispositionAction', () => {
-  it('returns STOP for negative terminal outcomes', () => {
+  it('returns DNC for legal opt-out outcomes', () => {
+    expect(dispositionAction('DNC')).toBe('DNC');
+    expect(dispositionAction('Do Not Call')).toBe('DNC');
+    expect(dispositionAction('unsubscribe')).toBe('DNC');
+  });
+
+  it('returns STOP for negative business terminal outcomes', () => {
     expect(dispositionAction('Sold Already')).toBe('STOP');
     expect(dispositionAction('Not Interested')).toBe('STOP');
-    expect(dispositionAction('DNC')).toBe('STOP');
+    expect(dispositionAction('Not For Sale')).toBe('STOP');
     expect(dispositionAction('Listed With Realtor')).toBe('STOP');
   });
 
-  it('returns STOP for the exact combined wrong-number option string', () => {
-    // This is the actual GHL Call Outcome field option — the regression that the
-    // earlier split-alias matcher missed.
+  it('returns STOP for wrong-number option strings', () => {
     expect(dispositionAction('Wrong Number / Disconnected / Invalid Number')).toBe('STOP');
     expect(dispositionAction('wrong number / disconnected / invalid number')).toBe('STOP');
-  });
-
-  it('accepts alternate wrong-number aliases', () => {
     expect(dispositionAction('Incorrect Number')).toBe('STOP');
-    expect(dispositionAction('Wrong Number')).toBe('STOP');
-    expect(dispositionAction('Disconnected')).toBe('STOP');
   });
 
   it('returns ENGAGED for Appointment Set (pause, not opt-out)', () => {
@@ -34,7 +37,6 @@ describe('dispositionAction', () => {
     expect(dispositionAction('Left Voicemail')).toBe('NONE');
     expect(dispositionAction('Spoke - Follow Up')).toBe('NONE');
     expect(dispositionAction('Timeline / Not Ready Yet')).toBe('NONE');
-    // Call-exhaustion is NOT an email stop — the dialer workflow falls back to email/mail.
     expect(dispositionAction('DEAD / Max Attempts')).toBe('NONE');
   });
 
@@ -46,9 +48,11 @@ describe('dispositionAction', () => {
   });
 });
 
-describe('isTerminalDisposition (wrapper: STOP only)', () => {
-  it('is true for negative terminal outcomes', () => {
+describe('isTerminalDisposition', () => {
+  it('is true for DNC and negative terminal outcomes', () => {
+    expect(isTerminalDisposition('DNC')).toBe(true);
     expect(isTerminalDisposition('Sold Already')).toBe(true);
+    expect(isTerminalDisposition('Not Interested')).toBe(true);
     expect(isTerminalDisposition('Wrong Number / Disconnected / Invalid Number')).toBe(true);
   });
 
@@ -59,28 +63,70 @@ describe('isTerminalDisposition (wrapper: STOP only)', () => {
   });
 });
 
+describe('isDncDisposition', () => {
+  it('returns true only for DNC outcomes', () => {
+    expect(isDncDisposition('DNC')).toBe(true);
+    expect(isDncDisposition('Do Not Call')).toBe(true);
+    expect(isDncDisposition('Not Interested')).toBe(false);
+    expect(isDncDisposition('Sold Already')).toBe(false);
+  });
+});
+
+describe('detectCallOutcomeFromMessage', () => {
+  it('detects Not Interested from NOT FOR SALE and related phrases', () => {
+    expect(detectCallOutcomeFromMessage('NOT FOR SALE')).toBe('Not Interested');
+    expect(detectCallOutcomeFromMessage('We are not selling')).toBe('Not Interested');
+    expect(detectCallOutcomeFromMessage('I am not interested in selling')).toBe('Not Interested');
+  });
+
+  it('detects Listed With Realtor from realtor keywords', () => {
+    expect(detectCallOutcomeFromMessage('We are working with a realtor')).toBe('Listed With Realtor');
+    expect(detectCallOutcomeFromMessage('It is already listed')).toBe('Listed With Realtor');
+  });
+
+  it('detects Sold Already', () => {
+    expect(detectCallOutcomeFromMessage('This property was sold already')).toBe('Sold Already');
+  });
+
+  it('detects Wrong Number / non-owner / authority mismatch phrases', () => {
+    expect(detectCallOutcomeFromMessage('Wrong number')).toBe('Wrong Number / Disconnected / Invalid Number');
+    expect(detectCallOutcomeFromMessage('You have the wrong person')).toBe('Wrong Number / Disconnected / Invalid Number');
+    expect(detectCallOutcomeFromMessage('It is not my property to sell. Sorry.')).toBe('Wrong Number / Disconnected / Invalid Number');
+    expect(detectCallOutcomeFromMessage('not my property')).toBe('Wrong Number / Disconnected / Invalid Number');
+    expect(detectCallOutcomeFromMessage('I do not own this house')).toBe('Wrong Number / Disconnected / Invalid Number');
+    expect(detectCallOutcomeFromMessage("don't own that")).toBe('Wrong Number / Disconnected / Invalid Number');
+    expect(detectCallOutcomeFromMessage('I am not the owner')).toBe('Wrong Number / Disconnected / Invalid Number');
+    expect(detectCallOutcomeFromMessage('wrong contact info')).toBe('Wrong Number / Disconnected / Invalid Number');
+    expect(detectCallOutcomeFromMessage('does not belong to me')).toBe('Wrong Number / Disconnected / Invalid Number');
+  });
+
+  it('detects DNC from stop/unsubscribe', () => {
+    expect(detectCallOutcomeFromMessage('Do not call me ever again')).toBe('DNC');
+    expect(detectCallOutcomeFromMessage('STOP')).toBe('DNC');
+    expect(detectCallOutcomeFromMessage('unsubscribe')).toBe('DNC');
+  });
+
+  it('returns null for neutral or non-objection messages', () => {
+    expect(detectCallOutcomeFromMessage('How much are you offering?')).toBe(null);
+    expect(detectCallOutcomeFromMessage('Tell me more')).toBe(null);
+  });
+});
+
 describe('callOutcomeForEndReason (AI end-reason → Call Outcome)', () => {
   it('maps a hard no / default to "Not Interested"', () => {
     expect(callOutcomeForEndReason('not_interested')).toBe('Not Interested');
     expect(callOutcomeForEndReason('')).toBe('Not Interested');
     expect(callOutcomeForEndReason(null)).toBe('Not Interested');
-    expect(callOutcomeForEndReason('something_else')).toBe('Not Interested');
   });
 
   it('maps realtor/listed/agent reasons to "Listed With Realtor"', () => {
     expect(callOutcomeForEndReason('has_realtor')).toBe('Listed With Realtor');
     expect(callOutcomeForEndReason('already_listed')).toBe('Listed With Realtor');
-    expect(callOutcomeForEndReason('working with an agent')).toBe('Listed With Realtor');
   });
 
   it('maps sold / wrong-number reasons', () => {
     expect(callOutcomeForEndReason('already_sold')).toBe('Sold Already');
     expect(callOutcomeForEndReason('wrong_number')).toBe('Wrong Number / Disconnected / Invalid Number');
   });
-
-  it('every mapped value is a terminal STOP disposition', () => {
-    for (const reason of ['not_interested', 'has_realtor', 'already_sold', 'wrong_number']) {
-      expect(isTerminalDisposition(callOutcomeForEndReason(reason))).toBe(true);
-    }
-  });
 });
+

@@ -152,9 +152,9 @@ export const handler: Handler = async (event) => {
 
     console.log(`✅ [FIELD_SYNC] Updated PropertyLead ${lead.id}`);
 
-    // Call dispositions affect email outreach. STOP (negative) opts the contact out;
-    // ENGAGED (Appointment Set) pauses cold email as engaged. The email agent only sends
-    // to OUTREACH-status items, so both halt the cadence.
+    // Call dispositions affect email/SMS outreach. Terminal outcomes (DNC, Not Interested,
+    // Sold Already, Listed With Realtor, Wrong Number) set internal queueStatus to DND
+    // to stop all automated AI outreach. Only explicit DNC sets emailStatus = 'OPTED_OUT'.
     const action = dispositionAction(callOutcome);
     if (action !== 'NONE') {
       try {
@@ -168,10 +168,13 @@ export const handler: Handler = async (event) => {
 
         if (!queueItem?.id) {
           console.log(`ℹ️ [FIELD_SYNC] No queue item for ${contactId}; disposition "${callOutcome}" noted, nothing to stop`);
-        } else if (action === 'STOP' && queueItem.queueStatus !== 'DND') {
+        } else if (action === 'DNC' && queueItem.queueStatus !== 'DND') {
           await updateQueueStatus(queueItem.id, 'DND', `Disposition: ${callOutcome}`);
           await updateEmailStatus(queueItem.id, 'OPTED_OUT');
-          console.log(`🛑 [FIELD_SYNC] Stopped outreach for ${contactId} — disposition "${callOutcome}"`);
+          console.log(`🛑 [FIELD_SYNC] Opted out outreach for ${contactId} — legal DNC disposition "${callOutcome}"`);
+        } else if (action === 'STOP' && queueItem.queueStatus !== 'DND') {
+          await updateQueueStatus(queueItem.id, 'DND', `Disposition: ${callOutcome}`);
+          console.log(`🛑 [FIELD_SYNC] Stopped outreach for ${contactId} — terminal disposition "${callOutcome}"`);
         } else if (action === 'ENGAGED' && queueItem.queueStatus !== 'DND' && queueItem.queueStatus !== 'CONVERSATION') {
           // Engaged (appointment booked): pause cold email but don't opt out.
           await updateQueueStatus(queueItem.id, 'CONVERSATION', `Disposition: ${callOutcome}`);

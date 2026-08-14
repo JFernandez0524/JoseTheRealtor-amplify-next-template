@@ -187,9 +187,11 @@ export async function createGhlIntegration(userId: string, tokenData: {
   refresh_token: string;
   expires_in: number;
   locationId: string;
+  customFieldIds?: Record<string, string>;
+  opportunityFieldIds?: Record<string, string>;
 }) {
   try {
-    const { access_token, refresh_token, expires_in, locationId } = tokenData;
+    const { access_token, refresh_token, expires_in, locationId, customFieldIds, opportunityFieldIds } = tokenData;
 
     // 1. Delete any existing integrations for this user
     console.log(`🔄 Checking for existing integrations for user ${userId}...`);
@@ -220,6 +222,8 @@ export async function createGhlIntegration(userId: string, tokenData: {
       isActive: true,
       dailyMessageCount: 0,
       hourlyMessageCount: 0,
+      customFieldIds: customFieldIds ? JSON.stringify(customFieldIds) : undefined,
+      opportunityFieldIds: opportunityFieldIds ? JSON.stringify(opportunityFieldIds) : undefined,
     });
 
     console.log('✅ GHL integration created for user:', userId);

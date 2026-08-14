@@ -1,6 +1,6 @@
 import axios from 'axios';
 import { ghlAddTags, ghlUpdateContact, createGhlClient } from './ghlClient';
-import { callOutcomeForEndReason } from './dispositions';
+import { callOutcomeForEndReason, detectCallOutcomeFromMessage } from './dispositions';
 import { analyzeBridgeProperty } from '../../../app/utils/bridge.server';
 
 const GHL_API_KEY = process.env.GHL_API_KEY;
@@ -202,13 +202,23 @@ function isWrongPersonObjection(message: string): boolean {
   const wrongPersonPhrases = [
     'not my property',
     "that's not my property",
+    'not my house',
+    'not my home',
     'wrong property',
     'different property',
-    "don't own that",
+    "don't own",
+    'dont own',
+    'do not own',
+    'not own',
     "doesn't belong to me",
+    'does not belong to me',
     'never owned',
+    'not the owner',
+    'not owner',
     'wrong number',
     'wrong person',
+    'wrong contact',
+    'not mine',
     'who is this',
     "you have the wrong",
     "this isn't"
@@ -722,7 +732,7 @@ Respond to their message:`;
         type: 'function',
         function: {
           name: 'save_buyer_search',
-          description: 'Save buyer search criteria in kvCORE for automated property alerts. Use ONLY after asking about additional areas.',
+          description: 'Save buyer search criteria for automated property alerts. Use ONLY after asking about additional areas.',
           parameters: {
             type: 'object',
             properties: {
@@ -913,54 +923,22 @@ Respond to their message:`;
       }
 
       if (toolName === 'save_buyer_search') {
-        console.log('💾 Saving buyer search to kvCORE:', args);
+        console.log('💾 Saving buyer search criteria:', args);
         
         try {
-          const { createContact, addSearchAlert } = await import('../../../app/utils/kvcore.server');
-          
-          // Create contact in kvCORE with hashtag to trigger Smart Campaign
-          const kvContact = await createContact({
-            firstName: context.contactName.split(' ')[0] || 'Buyer',
-            lastName: context.contactName.split(' ').slice(1).join(' ') || 'Lead',
-            email: context.contact?.email,
-            phone: context.contact?.phone,
-            dealType: 'buyer',
-            source: 'AI Chat - Facebook',
-            notes: `Interested in ${args.beds}BR homes in ${args.cities.join(', ')}, ${args.state} under $${args.maxPrice.toLocaleString()}`,
-            tags: ['#fbbuyerleads'] // Triggers "Facebook Buyer Leads" Smart Campaign
-          });
-          
-          if (kvContact) {
-            // Create areas array from cities
-            const areas = args.cities.map((city: string) => ({
-              type: 'city',
-              name: city
-            }));
-            
-            // Add saved search
-            const searchCriteria = {
-              types: args.propertyTypes || (context.listingType ? [context.listingType] : ['Single Family', 'Condo']),
-              beds: args.beds || context.listingBeds || 3,
-              baths: args.baths || context.listingBaths || 2,
-              minPrice: args.minPrice || (context.listingPrice ? Math.round(context.listingPrice * 0.9) : undefined),
-              maxPrice: args.maxPrice || (context.listingPrice ? Math.round(context.listingPrice * 1.1) : undefined),
-              areas: areas,
-              frequency: 'daily'
-            };
-            
-            await addSearchAlert(kvContact.id, searchCriteria);
-            
-            console.log(`✅ Buyer saved in kvCORE with hashtag #fbbuyerleads and auto-alerts for:`, args.cities.join(', '));
-            
-            const cityList = args.cities.length > 1 
-              ? `${args.cities.slice(0, -1).join(', ')} and ${args.cities[args.cities.length - 1]}`
-              : args.cities[0];
-            
-            return `Perfect! I've saved your search for ${cityList}. You'll receive daily emails when new properties match your criteria. I'll also keep you updated via text. Looking forward to helping you find your dream home!`;
+          // Tag contact if GHL connection available
+          if (context.accessToken && context.contactId) {
+            await ghlAddTags(context.accessToken, context.contactId, ['buyer:search_saved']);
           }
+
+          const cityList = args.cities && args.cities.length > 1 
+            ? `${args.cities.slice(0, -1).join(', ')} and ${args.cities[args.cities.length - 1]}`
+            : (args.cities?.[0] || 'your desired area');
+          
+          return `Perfect! I've noted your search preferences for ${cityList}. You'll receive updates when new properties match your criteria. Looking forward to helping you find your dream home!`;
         } catch (error) {
           console.error('Failed to save buyer search:', error);
-          return `I've noted your preferences and will keep you updated on properties in ${args.cities.join(', ')}. Looking forward to helping you find your dream home!`;
+          return `I've noted your preferences and will keep you updated on properties in ${args.cities?.join(', ') || 'the area'}. Looking forward to helping you find your dream home!`;
         }
       }
 
@@ -1268,36 +1246,30 @@ export async function generateAIResponse(context: ConversationContext): Promise<
 
     // 🛑 HARD STOP: Check for wrong person/property objections
     if (isWrongPersonObjection(context.incomingMessage)) {
-      console.log('🛑 Wrong person/property objection detected');
-      
-      // Get fresh state to avoid type narrowing issues
-      const freshState = getCurrentState(context.contact, context.fieldIds);
-      
-      // If already in IDENTITY_CONFIRMATION state, they disputed again - exit
-      if (freshState === 'IDENTITY_CONFIRMATION') {
-        console.log('🛑 Second dispute - exiting conversation');
-        
-        if (!context.testMode && context.accessToken) {
-          await ghlAddTags(context.accessToken, context.contactId, ['not_for_sale', 'conversation_ended', 'data_error:persistent_dispute']);
-          await updateAIState(context.contactId, 'stopped', context.accessToken, context.fieldIds);
-        }
-        
-        const closeMessage = "I apologize for the confusion. I'll make sure this is corrected. Have a great day!";
-        await sendGHLMessage(context.conversationId, closeMessage, context.accessToken || '', context.testMode, context.fromNumber, context.contactId, context.messageType || 'SMS');
-        return closeMessage;
-      }
-      
-      // First dispute - ask for identity confirmation
-      console.log('❓ First dispute - confirming identity');
+      console.log('🛑 Wrong person/property objection detected - ending conversation gracefully');
       
       if (!context.testMode && context.accessToken) {
-        await updateAIState(context.contactId, 'IDENTITY_CONFIRMATION', context.accessToken, context.fieldIds);
+        await ghlAddTags(context.accessToken, context.contactId, ['not_for_sale', 'conversation_ended', 'data_error:wrong_contact']);
+        await updateAIState(context.contactId, 'stopped', context.accessToken, context.fieldIds);
+
+        // Mark terminal Call Outcome as Wrong Number / Disconnected / Invalid Number
+        const detectedOutcome = detectCallOutcomeFromMessage(context.incomingMessage) || 'Wrong Number / Disconnected / Invalid Number';
+        const callOutcomeFieldId = context.fieldIds?.call_outcome;
+        if (callOutcomeFieldId) {
+          try {
+            await ghlUpdateContact(context.accessToken, context.contactId, {
+              customFields: [{ id: callOutcomeFieldId, value: detectedOutcome }],
+            });
+            console.log(`✅ Set Call Outcome = "${detectedOutcome}" (wrong contact: "${context.incomingMessage}")`);
+          } catch (error) {
+            console.error('Failed to set Call Outcome:', error);
+          }
+        }
       }
       
-      const firstName = context.contactName.split(' ')[0];
-      const confirmMessage = `My apologies! Did we reach ${firstName}?`;
-      await sendGHLMessage(context.conversationId, confirmMessage, context.accessToken || '', context.testMode, context.fromNumber, context.contactId, context.messageType || 'SMS');
-      return confirmMessage;
+      const closeMessage = "My apologies for the confusion! I'll update our records immediately so you won't receive any further messages regarding this property. Have a great day!";
+      await sendGHLMessage(context.conversationId, closeMessage, context.accessToken || '', context.testMode, context.fromNumber, context.contactId, context.messageType || 'SMS');
+      return closeMessage;
     }
 
     // 🛑 HARD STOP: Check for other hard objections (keeping property, already sold, etc.)
@@ -1308,14 +1280,15 @@ export async function generateAIResponse(context: ConversationContext): Promise<
         await ghlAddTags(context.accessToken, context.contactId, ['not_for_sale', 'conversation_ended']);
         await updateAIState(context.contactId, 'stopped', context.accessToken, context.fieldIds);
 
-        // Mark terminal Call Outcome so the disposition→stop pipeline opts the contact out.
+        // Mark terminal Call Outcome matching message intent (e.g. Not Interested, Sold Already, Listed With Realtor, Wrong Number, DNC)
+        const detectedOutcome = detectCallOutcomeFromMessage(context.incomingMessage) || 'Not Interested';
         const callOutcomeFieldId = context.fieldIds?.call_outcome;
         if (callOutcomeFieldId) {
           try {
             await ghlUpdateContact(context.accessToken, context.contactId, {
-              customFields: [{ id: callOutcomeFieldId, value: 'Not Interested' }],
+              customFields: [{ id: callOutcomeFieldId, value: detectedOutcome }],
             });
-            console.log('✅ Set Call Outcome = "Not Interested" (hard objection)');
+            console.log(`✅ Set Call Outcome = "${detectedOutcome}" (hard objection: "${context.incomingMessage}")`);
           } catch (error) {
             console.error('Failed to set Call Outcome:', error);
           }

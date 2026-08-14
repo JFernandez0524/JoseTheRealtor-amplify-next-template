@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { ghlUpdateContact, ghlAddTags, createGhlClient } from '../../../amplify/functions/shared/ghlClient';
+import { detectCallOutcomeFromMessage } from '../../../amplify/functions/shared/dispositions';
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
@@ -495,6 +496,62 @@ export async function generateEmailAIResponse(
     // Update AI state to running
     if (!context.testMode && context.accessToken) {
       await updateAIState(context.contactId, 'running', context.accessToken);
+    }
+
+    // Check for wrong person / authority mismatch / terminal objections
+    const detectedOutcome = detectCallOutcomeFromMessage(context.incomingMessage);
+    if (detectedOutcome === 'Wrong Number / Disconnected / Invalid Number') {
+      if (!context.testMode && context.accessToken) {
+        await updateAIState(context.contactId, 'stopped', context.accessToken);
+        await ghlAddTags(context.accessToken, context.contactId, ['not_for_sale', 'conversation_ended', 'data_error:wrong_contact']);
+      }
+
+      const wrongContactEmail = {
+        subject: `Re: ${context.propertyAddress || 'Your Property'}`,
+        body: `${context.contactName},\n\nMy apologies for the confusion! I've updated our records so you won't receive any further emails regarding this property.\n\nHave a great day!\n\nJose Fernandez\nRE/MAX Homeland Realtors\n(732) 810-0182`,
+      };
+
+      if (context.accessToken) {
+        await sendGHLEmail(
+          context.conversationId,
+          wrongContactEmail.subject,
+          wrongContactEmail.body,
+          context.accessToken,
+          context.testMode,
+          context.fromEmail,
+          context.contactId,
+          context.toEmail,
+        );
+      }
+
+      return wrongContactEmail;
+    }
+
+    if (detectedOutcome === 'Not Interested' || detectedOutcome === 'Sold Already' || detectedOutcome === 'Listed With Realtor' || detectedOutcome === 'DNC') {
+      if (!context.testMode && context.accessToken) {
+        await updateAIState(context.contactId, 'stopped', context.accessToken);
+        await ghlAddTags(context.accessToken, context.contactId, ['not_for_sale', 'conversation_ended']);
+      }
+
+      const stopEmail = {
+        subject: `Re: ${context.propertyAddress || 'Your Property'}`,
+        body: `${context.contactName},\n\nThank you for letting me know. If you ever have questions or want to explore options in the future, feel free to reach out. Wishing you all the best!\n\nJose Fernandez\nRE/MAX Homeland Realtors\n(732) 810-0182`,
+      };
+
+      if (context.accessToken) {
+        await sendGHLEmail(
+          context.conversationId,
+          stopEmail.subject,
+          stopEmail.body,
+          context.accessToken,
+          context.testMode,
+          context.fromEmail,
+          context.contactId,
+          context.toEmail,
+        );
+      }
+
+      return stopEmail;
     }
 
     // Check if human handoff is needed

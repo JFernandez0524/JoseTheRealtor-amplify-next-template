@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { useGhl } from '@/app/context/GhlContext';
 import { useAccess } from '@/app/context/AccessContext';
 
@@ -14,6 +15,7 @@ import { useAccess } from '@/app/context/AccessContext';
 export default function GhlConnectionBanner() {
   const { isConnected, isLoading } = useGhl();
   const { hasPaidPlan } = useAccess();
+  const [connecting, setConnecting] = useState(false);
 
   // Only nag users who are supposed to have GHL connected.
   if (isLoading || isConnected || !hasPaidPlan) return null;
@@ -25,12 +27,22 @@ export default function GhlConnectionBanner() {
           ⚠️ <strong>Launch AI isn&apos;t connected.</strong>{' '}
           Your leads aren&apos;t syncing and outreach is paused — reconnect to resume.
         </p>
-        <a
-          href="/api/v1/oauth/start"
-          className="shrink-0 bg-white text-red-700 text-sm font-bold px-4 py-1.5 rounded-lg hover:bg-red-50 transition-colors"
+        <button
+          onClick={() => {
+            setConnecting(true);
+            window.location.href = '/api/v1/oauth/start';
+          }}
+          disabled={connecting}
+          className="shrink-0 inline-flex items-center gap-1.5 bg-white text-red-700 text-sm font-bold px-4 py-1.5 rounded-lg hover:bg-red-50 disabled:opacity-75 transition-colors"
         >
-          Connect Launch AI
-        </a>
+          {connecting && (
+            <svg className="w-3.5 h-3.5 animate-spin text-red-700" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+          )}
+          {connecting ? 'Redirecting...' : 'Connect Launch AI'}
+        </button>
       </div>
     </div>
   );
