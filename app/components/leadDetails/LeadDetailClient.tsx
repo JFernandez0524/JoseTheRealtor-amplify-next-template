@@ -24,6 +24,7 @@ import { EnrichmentDetails } from './EnrichmentDetails';
 import { GhlActions } from './GhlActions';
 import { LeadStatusBadge } from './LeadStatusBadge';
 import { CardWrapper } from './CardWrapper';
+import { PropertyMarketIntel } from './PropertyMarketIntel';
 import { OutreachStatus } from './OutreachStatus';
 import { SkipTraceHistory } from './SkipTraceHistory';
 import { ErrorBoundary } from './ErrorBoundary';
@@ -147,6 +148,48 @@ function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
       }
     } catch (err) {
       console.error('Failed to refresh lead data:', err);
+    }
+  };
+
+  const [isRefreshingMarketIntel, setIsRefreshingMarketIntel] = useState(false);
+
+  const handleRefreshMarketIntel = async () => {
+    if (!lead?.id) return;
+    setIsRefreshingMarketIntel(true);
+    try {
+      const res = await axios.post('/api/v1/refresh-zestimate', {
+        leadId: lead.id,
+        street: lead.ownerAddress,
+        city: lead.ownerCity,
+        state: lead.ownerState,
+        zip: lead.ownerZip,
+        latitude: lead.latitude,
+        longitude: lead.longitude,
+        zillowUrl: lead.zillowUrl,
+        zillowZpid: lead.zillowZpid,
+      });
+      if (res.data.success) {
+        addToast({
+          type: 'success',
+          title: 'Market Intel Refreshed',
+          message: 'Updated Zestimate and listing status from live MLS/Zillow records.',
+        });
+        await refreshLeadData();
+      } else {
+        addToast({
+          type: 'info',
+          title: 'Refresh Complete',
+          message: res.data.message || 'No new market data found.',
+        });
+      }
+    } catch (err: any) {
+      addToast({
+        type: 'error',
+        title: 'Refresh Failed',
+        message: err.response?.data?.error || err.message || 'Could not refresh market intel.',
+      });
+    } finally {
+      setIsRefreshingMarketIntel(false);
     }
   };
 
@@ -842,6 +885,13 @@ function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
               </div>
             </CardWrapper>
           </div>
+
+          {/* Property & Market Intelligence (MLS, Zestimate, HOA, Specs) */}
+          <PropertyMarketIntel
+            lead={lead}
+            onRefreshZestimate={handleRefreshMarketIntel}
+            isRefreshing={isRefreshingMarketIntel}
+          />
 
           {lead.type === 'PREFORECLOSURE' && lead.batchDataEnriched && (
             <CardWrapper title='Property Enrichment (BatchData)'>

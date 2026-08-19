@@ -17,6 +17,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { AuthGetCurrentUserServer } from '@/app/utils/aws/auth/amplifyServerUtils.server';
 import { validateAddressWithGoogle } from '@/app/utils/google.server';
 import { analyzeBridgeProperty } from '@/app/utils/bridge.server';
+import { resolvePropertyWithSerp } from '@/app/utils/serpPropertyResolver.server';
 
 export async function POST(request: NextRequest) {
   try {
@@ -48,7 +49,9 @@ export async function POST(request: NextRequest) {
 
     // 2. Fetch Zestimate
     let zestimate = null;
+    let rentZestimate = null;
     let zpid = null;
+    let zillowUrl = null;
 
     try {
       const propertyData = await analyzeBridgeProperty({
@@ -57,16 +60,41 @@ export async function POST(request: NextRequest) {
         state,
         zip,
         lat: validation.location.lat,
-        lng: validation.location.lng
+        lng: validation.location.lng,
       });
 
       if (propertyData.success && propertyData.valuation) {
         zestimate = propertyData.valuation.zestimate;
+        rentZestimate = propertyData.valuation.rentalZestimate;
         zpid = propertyData.valuation.zpid;
+        zillowUrl = propertyData.valuation.zillowUrl;
       }
     } catch (error) {
       console.error('Zestimate fetch failed:', error);
-      // Continue without Zestimate
+    }
+
+    // 3. Proactive SERP Property & Listing Status Fallback
+    let serpData = null;
+    if (process.env.SERPER_API_KEY) {
+      try {
+        const serpRes = await resolvePropertyWithSerp({
+          address,
+          city,
+          state,
+          zip,
+        });
+        if (serpRes.success && serpRes.data) {
+          serpData = serpRes.data;
+          if (!zestimate && serpRes.data.zpid) {
+            zestimate = serpRes.bridgeValuation?.zestimate || null;
+            rentZestimate = serpRes.bridgeValuation?.rentalZestimate || null;
+            zpid = serpRes.data.zpid;
+            zillowUrl = serpRes.data.zillowUrl || null;
+          }
+        }
+      } catch (serpErr: any) {
+        console.warn('⚠️ [ENRICH_MANUAL_LEAD] SERP resolver error:', serpErr.message);
+      }
     }
 
     return NextResponse.json({
@@ -76,7 +104,10 @@ export async function POST(request: NextRequest) {
       longitude: validation.location.lng,
       components: validation.components,
       zestimate,
+      rentZestimate,
       zpid,
+      zillowUrl,
+      serpData,
     });
   } catch (error) {
     console.error('Enrich lead error:', error);

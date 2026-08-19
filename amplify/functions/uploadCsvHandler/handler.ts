@@ -14,6 +14,7 @@ import { validateAddressWithGoogle, toTitleCase } from '../../../app/utils/googl
 import { fetchBestZestimateResult } from '../../../app/utils/bridge.server';
 import { isUsableAddress, isTaxForeclosureCase } from '../../../app/utils/leadValidation';
 import { resolveOwnerName, parseColumnMapping } from '../../../app/utils/csvMapping';
+import { resolvePropertyWithSerp } from '../../../app/utils/serpPropertyResolver.server';
 
 const s3 = new S3Client({ region: process.env.AWS_REGION });
 const dynamoClient = new DynamoDBClient({ region: process.env.AWS_REGION });
@@ -27,6 +28,7 @@ console.log('🔧 [CSV_UPLOAD] Environment:', {
   hasUserAccountTable: !!process.env.AMPLIFY_DATA_UserAccount_TABLE_NAME,
   hasGoogleApiKey: !!process.env.GOOGLE_MAPS_API_KEY,
   hasBridgeApiKey: !!process.env.BRIDGE_API_KEY,
+  hasSerperApiKey: !!process.env.SERPER_API_KEY,
   region: process.env.AWS_REGION
 });
 
@@ -693,7 +695,7 @@ export const handler: S3Handler = async (event) => {
               } else if (zillowData) {
                 console.log('✅ Zestimate fetched:', { zpid: zillowData.zpid, zestimate: zillowData.zestimate });
               } else {
-                console.log('❌ No Zestimate data for address:', { address: zestimateStreet, city: zestimateCity });
+                console.log('❌ No Zestimate data from Bridge address lookup:', { address: zestimateStreet, city: zestimateCity });
               }
             } catch (error: any) {
               console.log('Bridge API error:', error.message);
@@ -702,6 +704,61 @@ export const handler: S3Handler = async (event) => {
             // Breaker already tripped — no log here, it would repeat for every remaining row.
           } else {
             console.log(`⏭️ Skipping Zestimate for unconfirmed address (validationStatus=INVALID): ${fullPropString}`);
+          }
+
+          // 🔎 Proactive SERP Property & Listing Status Resolution (Serper.dev)
+          let serpData: any = null;
+          if (addressUsable && process.env.SERPER_API_KEY) {
+            try {
+              const zestimateStreet = standardizedAddress?.street || finalPropAddr;
+              const zestimateCity = standardizedAddress?.city || finalPropCity;
+              const zestimateZip = (standardizedAddress?.zip || finalPropZip)?.split('-')[0];
+
+              const serpRes = await resolvePropertyWithSerp({
+                address: zestimateStreet,
+                city: zestimateCity,
+                state: finalPropState,
+                zip: zestimateZip,
+              });
+
+              if (serpRes.success && serpRes.data) {
+                serpData = serpRes.data;
+                if (!zillowData && serpRes.data.zpid) {
+                  zillowData = {
+                    zpid: serpRes.data.zpid,
+                    zestimate: serpRes.bridgeValuation?.zestimate || csvEstimatedValue,
+                    rentZestimate: serpRes.bridgeValuation?.rentalZestimate,
+                    url: serpRes.data.zillowUrl || `https://www.zillow.com/homes/${serpRes.data.zpid}_zpid/`,
+                    address: serpRes.bridgeValuation?.address || finalPropAddr,
+                  };
+                  console.log('✅ [SERP_RESOLVER] Resolved Zestimate via SERP ZPID:', {
+                    zpid: zillowData.zpid,
+                    zestimate: zillowData.zestimate,
+                  });
+                }
+              }
+            } catch (serpErr: any) {
+              console.warn('⚠️ [SERP_RESOLVER] Serper resolution failed:', serpErr.message);
+            }
+          }
+
+          // Determine listing status and update labels
+          let finalListingStatus: 'off_market' | 'active' | 'sold' | 'pending' = 'off_market';
+          if (serpData?.listingStatus) {
+            finalListingStatus = serpData.listingStatus;
+          }
+
+          if (serpData?.is55Plus && !labels.includes('55_PLUS')) {
+            labels.push('55_PLUS');
+          }
+          if (serpData?.hoaFee && !labels.includes('HOA_PROPERTY')) {
+            labels.push('HOA_PROPERTY');
+          }
+          if (finalListingStatus === 'active' && !labels.includes('ACTIVE_MLS')) {
+            labels.push('ACTIVE_MLS');
+          }
+          if (finalListingStatus === 'sold' && !labels.includes('RECENTLY_SOLD')) {
+            labels.push('RECENTLY_SOLD');
           }
 
           const leadItem = {
@@ -757,7 +814,9 @@ export const handler: S3Handler = async (event) => {
               responseTime: null,
             }] : [],
             ghlSyncStatus: 'PENDING',
-            listingStatus: 'off_market', // Default to off_market for new leads
+            listingStatus: finalListingStatus,
+            lastSaleAmount: serpData?.lastSaleAmount ?? null,
+            lastSaleDate: serpData?.lastSaleDate ?? null,
             uploadSource: 'csv_upload',
             validationStatus: addressUsable ? 'VALID' : 'INVALID',
             
@@ -772,7 +831,19 @@ export const handler: S3Handler = async (event) => {
             rentZestimate: zillowData?.rentZestimate || null,
             priceHistory: null,
             taxHistory: null,
-            homeDetails: null,
+            homeDetails: serpData
+              ? JSON.stringify({
+                  beds: serpData.beds,
+                  baths: serpData.baths,
+                  sqft: serpData.sqft,
+                  yearBuilt: serpData.yearBuilt,
+                  propertyType: serpData.propertyType,
+                  hoaFee: serpData.hoaFee,
+                  annualTaxes: serpData.annualTaxes,
+                  mlsNumber: serpData.mlsNumber,
+                  community: serpData.community,
+                })
+              : null,
             neighborhoodData: null,
             comparableProperties: null,
             zillowLastUpdated: zillowData ? new Date().toISOString() : null,

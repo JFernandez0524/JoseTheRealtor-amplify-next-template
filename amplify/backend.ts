@@ -88,6 +88,10 @@ backend.uploadCsvHandler.addEnvironment(
   'BRIDGE_API_KEY',
   process.env.BRIDGE_API_KEY || 'placeholder'
 );
+backend.uploadCsvHandler.addEnvironment(
+  'SERPER_API_KEY',
+  process.env.SERPER_API_KEY || ''
+);
 
 // 🛡️ Add table name environment variables to data stack functions
 backend.skipTraceLeads.addEnvironment(

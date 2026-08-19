@@ -15,6 +15,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { cookiesClient } from '@/app/utils/aws/auth/amplifyServerUtils.server';
 import { analyzeBridgeProperty } from '@/app/utils/bridge.server';
+import { resolvePropertyWithSerp } from '@/app/utils/serpPropertyResolver.server';
 
 /**
  * Parse a Zillow URL into address components + zpid.
@@ -83,7 +84,42 @@ export async function POST(request: NextRequest) {
       zpid: resolvedZpid,
     });
 
-    if (!result.valuation) {
+    let v = result.valuation;
+    let serpData: any = null;
+
+    // If Bridge returned no valuation and no manual Zillow URL was provided, try SERP resolver
+    if (!v && !zillowUrl && searchStreet && searchCity && searchState) {
+      const serpRes = await resolvePropertyWithSerp({
+        address: searchStreet,
+        city: searchCity,
+        state: searchState,
+        zip: searchZip,
+      });
+
+      if (serpRes.success && serpRes.data) {
+        serpData = serpRes.data;
+        if (serpRes.bridgeValuation) {
+          v = serpRes.bridgeValuation;
+          resolvedZpid = serpData.zpid;
+          resolvedZillowUrl = serpData.zillowUrl;
+        } else if (serpData.zpid) {
+          resolvedZpid = serpData.zpid;
+          resolvedZillowUrl = serpData.zillowUrl;
+          const retryBridge = await analyzeBridgeProperty({
+            street: searchStreet,
+            city: searchCity,
+            state: searchState,
+            zip: searchZip,
+            zpid: resolvedZpid,
+          });
+          if (retryBridge.success && retryBridge.valuation) {
+            v = retryBridge.valuation;
+          }
+        }
+      }
+    }
+
+    if (!v) {
       if (zillowUrl && resolvedZpid) {
         await cookiesClient.models.PropertyLead.update({
           id: leadId,
@@ -95,7 +131,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'No Zestimate found for this address. Run enrichment or set the value manually with ✏️.' }, { status: 404 });
     }
 
-    const v = result.valuation;
     const zillowData = {
       zestimate: v.zestimate,
       zpid: resolvedZpid || v.zpid,
@@ -104,7 +139,7 @@ export async function POST(request: NextRequest) {
       rentalZestimate: v.rentalZestimate,
     };
 
-    const { errors } = await cookiesClient.models.PropertyLead.update({
+    const updatePayload: Record<string, any> = {
       id: leadId,
       zestimate: zillowData.zestimate,
       zillowZpid: zillowData.zpid,
@@ -114,11 +149,36 @@ export async function POST(request: NextRequest) {
       zillowLastUpdated: new Date().toISOString(),
       zestimateSource: 'ZILLOW',
       zestimateDate: new Date().toISOString(),
-    });
+    };
+
+    if (serpData?.listingStatus) {
+      updatePayload.listingStatus = serpData.listingStatus;
+    }
+    if (serpData?.lastSaleAmount) {
+      updatePayload.lastSaleAmount = serpData.lastSaleAmount;
+    }
+    if (serpData?.lastSaleDate) {
+      updatePayload.lastSaleDate = serpData.lastSaleDate;
+    }
+    if (serpData) {
+      updatePayload.homeDetails = JSON.stringify({
+        beds: serpData.beds,
+        baths: serpData.baths,
+        sqft: serpData.sqft,
+        yearBuilt: serpData.yearBuilt,
+        propertyType: serpData.propertyType,
+        hoaFee: serpData.hoaFee,
+        annualTaxes: serpData.annualTaxes,
+        mlsNumber: serpData.mlsNumber,
+        community: serpData.community,
+      });
+    }
+
+    const { errors } = await cookiesClient.models.PropertyLead.update(updatePayload as any);
 
     if (errors) throw new Error(errors.map((e: any) => e.message).join(', '));
 
-    return NextResponse.json({ success: true, zillowData });
+    return NextResponse.json({ success: true, zillowData, serpData });
   } catch (error: any) {
     console.error('Refresh Zestimate error:', error);
     return NextResponse.json({ error: error.message || 'Failed to refresh Zestimate' }, { status: 500 });

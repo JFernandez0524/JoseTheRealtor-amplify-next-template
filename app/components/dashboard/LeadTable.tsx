@@ -577,6 +577,46 @@ export function LeadTable({
                           ENTITY
                         </span>
                       )}
+                      {(lead.listingStatus === 'active' || lead.leadLabels?.includes('ACTIVE_MLS')) && (
+                        <span
+                          className='text-[10px] bg-emerald-100 text-emerald-800 border border-emerald-300 px-1.5 py-0.5 rounded font-bold'
+                          title='Active MLS Listing'
+                        >
+                          🟢 ACTIVE MLS
+                        </span>
+                      )}
+                      {(lead.listingStatus === 'sold' || lead.leadLabels?.includes('RECENTLY_SOLD')) && (
+                        <span
+                          className='text-[10px] bg-red-100 text-red-800 border border-red-300 px-1.5 py-0.5 rounded font-bold'
+                          title={lead.lastSaleAmount ? `Sold for $${Number(lead.lastSaleAmount).toLocaleString()}${lead.lastSaleDate ? ` on ${lead.lastSaleDate}` : ''}` : 'Recently Sold'}
+                        >
+                          🔴 SOLD
+                        </span>
+                      )}
+                      {lead.listingStatus === 'pending' && (
+                        <span
+                          className='text-[10px] bg-amber-100 text-amber-800 border border-amber-300 px-1.5 py-0.5 rounded font-bold'
+                          title='Pending / Under Contract'
+                        >
+                          🟡 PENDING
+                        </span>
+                      )}
+                      {lead.leadLabels?.includes('55_PLUS') && (
+                        <span
+                          className='text-[10px] bg-purple-100 text-purple-800 border border-purple-300 px-1.5 py-0.5 rounded font-bold'
+                          title='55+ Active Adult Community'
+                        >
+                          55+
+                        </span>
+                      )}
+                      {lead.leadLabels?.includes('HOA_PROPERTY') && (
+                        <span
+                          className='text-[10px] bg-blue-100 text-blue-800 border border-blue-300 px-1.5 py-0.5 rounded font-bold'
+                          title='HOA Property'
+                        >
+                          HOA
+                        </span>
+                      )}
                       <button
                         onClick={(e) => {
                           e.stopPropagation();

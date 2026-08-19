@@ -17,6 +17,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { AuthGetCurrentUserServer } from '@/app/utils/aws/auth/amplifyServerUtils.server';
 import { analyzeBridgeProperty } from '@/app/utils/bridge.server';
+import { resolvePropertyWithSerp } from '@/app/utils/serpPropertyResolver.server';
 import { createLead } from '@/app/utils/aws/data/lead.server';
 import { isValidName, formatPhoneE164 } from '@/app/utils/leadValidation';
 
@@ -27,7 +28,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { type, ownerFirstName, ownerLastName, phone, ownerAddr, adminFirstName, adminLastName, adminAddr } = await request.json();
+    const body = await request.json();
+    const {
+      type,
+      ownerFirstName,
+      ownerLastName,
+      phone,
+      ownerAddr,
+      adminFirstName,
+      adminLastName,
+      adminAddr,
+    } = body;
 
     if (!type || !ownerAddr || !ownerLastName) {
       return NextResponse.json({ error: 'type, ownerLastName, and ownerAddr are required' }, { status: 400 });
@@ -54,7 +65,17 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Phone is optional, but if provided it must be a valid US number.
+    if (!ownerAddr.street && !ownerAddr.formattedAddress) {
+      return NextResponse.json({ error: 'Property address is required' }, { status: 400 });
+    }
+    if (!ownerAddr.city || !ownerAddr.state || !ownerAddr.zip) {
+      return NextResponse.json(
+        { error: 'Property city, state, and zip are required' },
+        { status: 400 }
+      );
+    }
+
+    // Phone normalization (E.164) — non-fatal if invalid, but reject clearly if malformed
     let normalizedPhone: string | null = null;
     if (phone) {
       normalizedPhone = formatPhoneE164(phone);
@@ -65,7 +86,10 @@ export async function POST(request: NextRequest) {
 
     // Address components come pre-parsed from Places API on the client — no server re-validation needed
     let zestimate: number | null = null;
+    let rentZestimate: number | null = null;
     let zillowZpid: string | null = null;
+    let zillowUrl: string | null = null;
+    let zillowAddress: string | null = null;
     const latitude: number | null = ownerAddr.lat ?? null;
     const longitude: number | null = ownerAddr.lng ?? null;
 
@@ -81,11 +105,48 @@ export async function POST(request: NextRequest) {
 
       if (propertyData.success && propertyData.valuation) {
         zestimate = propertyData.valuation.zestimate ?? null;
+        rentZestimate = propertyData.valuation.rentalZestimate ?? null;
         zillowZpid = propertyData.valuation.zpid ?? null;
+        zillowUrl = propertyData.valuation.zillowUrl ?? null;
+        zillowAddress = propertyData.valuation.address ?? null;
       }
     } catch (error) {
       console.error('Zestimate fetch failed (non-fatal):', error);
     }
+
+    // 🔎 Proactive SERP Property & Listing Status Resolution (Serper.dev)
+    let serpData: any = null;
+    if (process.env.SERPER_API_KEY) {
+      try {
+        const street = ownerAddr.street || ownerAddr.formattedAddress;
+        const serpRes = await resolvePropertyWithSerp({
+          address: street,
+          city: ownerAddr.city,
+          state: ownerAddr.state,
+          zip: ownerAddr.zip,
+        });
+
+        if (serpRes.success && serpRes.data) {
+          serpData = serpRes.data;
+          if (!zestimate && serpRes.data.zpid) {
+            zestimate = serpRes.bridgeValuation?.zestimate ?? null;
+            rentZestimate = serpRes.bridgeValuation?.rentalZestimate ?? null;
+            zillowZpid = serpRes.data.zpid;
+            zillowUrl = serpRes.data.zillowUrl ?? null;
+            zillowAddress = serpRes.bridgeValuation?.address ?? null;
+          }
+        }
+      } catch (serpErr: any) {
+        console.warn('⚠️ [CREATE_MANUAL_LEAD] Serper resolution failed:', serpErr.message);
+      }
+    }
+
+    const leadLabels: string[] = [];
+    let listingStatus = serpData?.listingStatus || 'off_market';
+    if (serpData?.is55Plus) leadLabels.push('55_PLUS');
+    if (serpData?.hoaFee) leadLabels.push('HOA_PROPERTY');
+    if (listingStatus === 'active') leadLabels.push('ACTIVE_MLS');
+    if (listingStatus === 'sold') leadLabels.push('RECENTLY_SOLD');
 
     const lead = await createLead({
       type,
@@ -99,14 +160,33 @@ export async function POST(request: NextRequest) {
       latitude: latitude ?? undefined,
       longitude: longitude ?? undefined,
       zestimate: zestimate ?? undefined,
+      rentZestimate: rentZestimate ?? undefined,
       zillowZpid: zillowZpid ?? undefined,
+      zillowUrl: zillowUrl ?? undefined,
+      zillowAddress: zillowAddress ?? undefined,
       zestimateSource: zestimate ? 'ZILLOW' : undefined,
       zestimateDate: zestimate ? new Date().toISOString() : undefined,
       phones: normalizedPhone ? [normalizedPhone] : [],
       skipTraceStatus: normalizedPhone ? 'COMPLETED' : 'PENDING',
       ghlSyncStatus: 'PENDING',
       ghlContactId: null,
-      listingStatus: 'off_market',
+      listingStatus,
+      lastSaleAmount: serpData?.lastSaleAmount ?? undefined,
+      lastSaleDate: serpData?.lastSaleDate ?? undefined,
+      homeDetails: serpData
+        ? JSON.stringify({
+            beds: serpData.beds,
+            baths: serpData.baths,
+            sqft: serpData.sqft,
+            yearBuilt: serpData.yearBuilt,
+            propertyType: serpData.propertyType,
+            hoaFee: serpData.hoaFee,
+            annualTaxes: serpData.annualTaxes,
+            mlsNumber: serpData.mlsNumber,
+            community: serpData.community,
+          })
+        : undefined,
+      leadLabels: leadLabels.length > 0 ? leadLabels : undefined,
       uploadSource: 'manual_entry',
       validationStatus: 'VALID',
       ...(adminAddr && {
