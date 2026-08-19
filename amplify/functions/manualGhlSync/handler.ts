@@ -1,13 +1,21 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand, UpdateCommand, ScanCommand } from '@aws-sdk/lib-dynamodb';
+import { validateEnv } from '../shared/config';
 import { syncToGoHighLevel } from './integrations/gohighlevel';
 import { getValidGhlToken, saveFieldIds } from '../shared/ghlTokenManager';
 import { provisionCustomFields, provisionOpportunityFields, provisionTags } from '../shared/ghlFieldProvisioner';
 import { validateLeadForSync, updateLeadSyncStatus, SyncResult } from '../shared/syncUtils';
 import { filterValidEmails } from '../shared/emailValidator';
 
+// Validate environment at module load time
+validateEnv('manualGhlSync');
+
 const dynamoClient = new DynamoDBClient({ region: process.env.AWS_REGION });
-const docClient = DynamoDBDocumentClient.from(dynamoClient);
+const docClient = DynamoDBDocumentClient.from(dynamoClient, {
+  marshallOptions: {
+    removeUndefinedValues: true,
+  },
+});
 
 const propertyLeadTableName = process.env.AMPLIFY_DATA_PropertyLead_TABLE_NAME;
 const userAccountTableName = process.env.AMPLIFY_DATA_UserAccount_TABLE_NAME;

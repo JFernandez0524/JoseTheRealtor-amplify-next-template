@@ -82,6 +82,7 @@ describe('detectCallOutcomeFromMessage', () => {
   it('detects Listed With Realtor from realtor keywords', () => {
     expect(detectCallOutcomeFromMessage('We are working with a realtor')).toBe('Listed With Realtor');
     expect(detectCallOutcomeFromMessage('It is already listed')).toBe('Listed With Realtor');
+    expect(detectCallOutcomeFromMessage("Got your email.  We have hired a realtor for my dad's property.")).toBe('Listed With Realtor');
   });
 
   it('detects Sold Already', () => {

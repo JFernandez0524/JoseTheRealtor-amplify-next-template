@@ -24,6 +24,11 @@ import { findQueueItemByContactId } from './outreachQueue';
 
 const docClient = DynamoDBDocumentClient.from(
   new DynamoDBClient({ region: process.env.AWS_REGION }),
+  {
+    marshallOptions: {
+      removeUndefinedValues: true,
+    },
+  },
 );
 
 const PROPERTY_LEAD_TABLE = process.env.AMPLIFY_DATA_PropertyLead_TABLE_NAME;
@@ -76,6 +81,8 @@ export async function resolveOwnerByGhlContactId(
       new ScanCommand({
         TableName: PROPERTY_LEAD_TABLE,
         FilterExpression: 'ghlContactId = :contactId',
+        ProjectionExpression: '#owner, ghlContactId',
+        ExpressionAttributeNames: { '#owner': 'owner' },
         ExpressionAttributeValues: { ':contactId': contactId },
         ExclusiveStartKey: lastKey,
       }),

@@ -4,8 +4,15 @@ import { BedrockRuntimeClient, InvokeModelCommand } from '@aws-sdk/client-bedroc
 import { createGhlClient } from '../shared/ghlClient';
 
 const dynamoClient = new DynamoDBClient({ region: process.env.AWS_REGION });
-const docClient = DynamoDBDocumentClient.from(dynamoClient);
+const docClient = DynamoDBDocumentClient.from(dynamoClient, {
+  marshallOptions: {
+    removeUndefinedValues: true,
+  },
+});
 const bedrockClient = new BedrockRuntimeClient({ region: process.env.BEDROCK_REGION || 'us-east-1' });
+
+const PROPERTY_LEAD_TABLE = process.env.AMPLIFY_DATA_PropertyLead_TABLE_NAME;
+const GHL_INTEGRATION_TABLE = process.env.AMPLIFY_DATA_GhlIntegration_TABLE_NAME;
 
 // 🚦 RATE LIMITING CONSTANTS
 const MAX_MESSAGES_PER_HOUR = 10;  // Conservative limit
@@ -230,9 +237,6 @@ async function processLeadFollowUp(lead: Lead) {
   console.log(`✅ Completed follow-up processing for lead ${lead.id}`);
 }
 
-const PROPERTY_LEAD_TABLE = process.env.AMPLIFY_DATA_PropertyLead_TABLE_NAME;
-const GHL_INTEGRATION_TABLE = process.env.AMPLIFY_DATA_GhlIntegration_TABLE_NAME;
-
 async function getGhlAccessToken(userId: string): Promise<{token: string, integration: GhlIntegration} | null> {
   try {
     const scanParams = {
@@ -397,7 +401,7 @@ AI Suggestions:`;
   };
 
   const command = new InvokeModelCommand({
-    modelId: process.env.BEDROCK_MODEL_ID,
+    modelId: process.env.BEDROCK_MODEL_ID || 'anthropic.claude-3-5-sonnet-20241022-v2:0',
     body: JSON.stringify(modelInput),
     contentType: 'application/json'
   });

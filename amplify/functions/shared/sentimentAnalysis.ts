@@ -109,7 +109,11 @@ async function detectSentiment(message: string): Promise<ConversationSentiment |
   // guard below — otherwise literal opt-outs like "Stop" / "quit" (<= 10 chars) return null
   // and get misclassified as CONVERSATION, so the lead never gets marked DND and we attempt a
   // doomed AI reply to someone who just unsubscribed.
-  const objectionKeywords = ['not interested', 'stop', 'remove', 'unsubscribe', 'leave me alone', 'busy', 'later', 'not for sale', 'not selling', 'never selling'];
+  const objectionKeywords = [
+    'not interested', 'stop', 'remove', 'unsubscribe', 'leave me alone',
+    'busy', 'later', 'not for sale', 'not selling', 'never selling',
+    'realtor', 'listed', 'agent', 'already sold', 'sold'
+  ];
   if (objectionKeywords.some(kw => safeMessage.toLowerCase().includes(kw))) {
     return 'DISENGAGING';
   }

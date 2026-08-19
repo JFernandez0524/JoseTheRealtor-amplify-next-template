@@ -7,5 +7,9 @@ import { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb';
 // It automatically uses the Lambda's execution role if run in AWS.
 const client = new DynamoDBClient({});
 
-// Export the Document Client for simpler CRUD operations
-export const ddbDocClient = DynamoDBDocumentClient.from(client);
+// Export the Document Client for simpler CRUD operations with safe marshalling
+export const ddbDocClient = DynamoDBDocumentClient.from(client, {
+  marshallOptions: {
+    removeUndefinedValues: true,
+  },
+});

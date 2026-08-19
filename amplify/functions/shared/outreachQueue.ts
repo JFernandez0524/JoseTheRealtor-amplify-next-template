@@ -24,10 +24,14 @@
  */
 
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, PutCommand, UpdateCommand, QueryCommand, GetCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, PutCommand, UpdateCommand, QueryCommand, GetCommand, ScanCommand } from '@aws-sdk/lib-dynamodb';
 
 const dynamoClient = new DynamoDBClient({ region: process.env.AWS_REGION });
-const docClient = DynamoDBDocumentClient.from(dynamoClient);
+const docClient = DynamoDBDocumentClient.from(dynamoClient, {
+  marshallOptions: {
+    removeUndefinedValues: true,
+  },
+});
 
 const OUTREACH_QUEUE_TABLE = process.env.AMPLIFY_DATA_OutreachQueue_TABLE_NAME;
 
@@ -40,7 +44,7 @@ interface OutreachQueueItem {
   contactName?: string;
   contactPhone?: string;
   contactEmail?: string;
-  queueStatus?: 'OUTREACH' | 'CONVERSATION' | 'DND' | 'WRONG_INFO' | 'COMPLETED';
+  queueStatus?: 'OUTREACH' | 'CONVERSATION' | 'DND' | 'WRONG_INFO' | 'COMPLETED' | 'MANUAL_HANDLING';
   emailStatus?: 'PENDING' | 'SENT' | 'REPLIED' | 'BOUNCED' | 'FAILED' | 'OPTED_OUT' | 'NURTURE' | 'COMPLETED';
   emailAttempts?: number;
   lastEmailSent?: string;
@@ -366,8 +370,6 @@ export async function getQueueItemByContact(userId: string, contactId: string): 
  * @returns Queue item or null
  */
 export async function findQueueItemByContactId(contactId: string): Promise<OutreachQueueItem | null> {
-  const { ScanCommand } = await import('@aws-sdk/lib-dynamodb');
-
   let lastKey: Record<string, any> | undefined;
   do {
     const result = await docClient.send(new ScanCommand({

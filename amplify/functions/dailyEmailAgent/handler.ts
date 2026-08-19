@@ -1,9 +1,21 @@
 // v2 - force redeploy with updated shared outreachQueue index names
 import { DynamoDBClient, ScanCommand } from "@aws-sdk/client-dynamodb";
 import axios from "axios"; // used for internal APP_URL call only
+import { validateEnv } from '../shared/config';
 import { ghlUpdateContact } from '../shared/ghlClient';
 import { isWithinBusinessHours, getNextBusinessHourMessage } from '../shared/businessHours';
 import { getValidGhlToken } from '../shared/ghlTokenManager';
+import { resetEmailStatsIfStale, bounceRateExceeded, incrementEmailSent } from '../shared/emailStats';
+import {
+  getPendingEmailContacts,
+  updateEmailStatus,
+  preLockEmailSend,
+  updateEmailSent,
+  releaseEmailLock
+} from '../shared/outreachQueue';
+import { isValidEmailSyntax } from '../shared/emailValidator';
+
+validateEnv('dailyEmailAgent');
 
 const dynamoClient = new DynamoDBClient({});
 
@@ -109,7 +121,6 @@ export const handler = async (event: any) => {
 
       // ⛔ Bounce-rate circuit breaker: pause this account if its recent bounce rate is too high,
       // so a problem self-limits instead of cascading into another GHL email suspension.
-      const { resetEmailStatsIfStale, bounceRateExceeded, incrementEmailSent } = await import('../shared/emailStats');
       const { sent: sentToday, bounced: bouncedToday } = await resetEmailStatsIfStale(integration);
       if (bounceRateExceeded(sentToday, bouncedToday)) {
         const pct = ((bouncedToday / sentToday) * 100).toFixed(1);
@@ -129,7 +140,6 @@ export const handler = async (event: any) => {
       
       try {
         // Query OutreachQueue for PENDING email contacts (limit 50)
-        const { getPendingEmailContacts } = await import('../shared/outreachQueue');
         const eligibleContacts = await getPendingEmailContacts(integration.userId, 50);
         
         console.log(`📋 [QUEUE] Found ${eligibleContacts.length} pending email contacts`);
@@ -162,10 +172,8 @@ export const handler = async (event: any) => {
           try {
             // Cheap, free last-line guard: never send to a malformed address (deliverability
             // was already vetted via Debounce at ingest). Mark FAILED so it isn't retried.
-            const { isValidEmailSyntax } = await import('../shared/emailValidator');
             if (!isValidEmailSyntax(contact.email)) {
               console.warn(`⚠️ [EMAIL] Skipping ${contact.id} — invalid email syntax: ${contact.email}`);
-              const { updateEmailStatus } = await import('../shared/outreachQueue');
               await updateEmailStatus(contact._queueId, 'FAILED');
               continue;
             }
@@ -175,7 +183,6 @@ export const handler = async (event: any) => {
             // Pre-lock: set nextEmailDate = +4 days BEFORE sending so the contact is
             // protected even if the post-send updateEmailSent call fails.
             try {
-              const { preLockEmailSend } = await import('../shared/outreachQueue');
               await preLockEmailSend(contact._queueId);
             } catch (lockError: any) {
               console.error(`❌ [QUEUE] Failed to pre-lock ${contact._queueId}, skipping:`, lockError.message);
@@ -214,7 +221,6 @@ export const handler = async (event: any) => {
               // Update queue status (increments attempts, sets lastEmailSent, keeps +4-day nextEmailDate)
               console.log(`📋 [QUEUE] Updating queue item ${contact._queueId}`);
               try {
-                const { updateEmailSent } = await import('../shared/outreachQueue');
                 await updateEmailSent(contact._queueId);
                 console.log(`✅ [QUEUE] Updated queue item ${contact._queueId}`);
               } catch (queueError: any) {
@@ -248,7 +254,6 @@ export const handler = async (event: any) => {
               const isPermanentFailure = errorMsg.includes('DND is active') || errorMsg.includes('Contact has no email');
               if (isTerminalOutcome) {
                 try {
-                  const { updateEmailStatus } = await import('../shared/outreachQueue');
                   await updateEmailStatus(contact._queueId, 'OPTED_OUT');
                   console.log(`🛑 [QUEUE] Opted out ${contact._queueId} (${errorMsg})`);
                 } catch (queueError: any) {
@@ -257,7 +262,6 @@ export const handler = async (event: any) => {
               } else if (isPermanentFailure) {
                 // Mark permanently so it never retries
                 try {
-                  const { updateEmailStatus } = await import('../shared/outreachQueue');
                   await updateEmailStatus(contact._queueId, 'FAILED');
                   console.log(`📋 [QUEUE] Marked ${contact._queueId} as FAILED (${errorMsg})`);
                 } catch (queueError: any) {
@@ -266,7 +270,6 @@ export const handler = async (event: any) => {
               } else {
                 // Transient failure: release the pre-lock so we retry tomorrow
                 try {
-                  const { releaseEmailLock } = await import('../shared/outreachQueue');
                   await releaseEmailLock(contact._queueId);
                 } catch (unlockError: any) {
                   console.error(`❌ [QUEUE] Failed to release lock for ${contact._queueId}:`, unlockError.message);

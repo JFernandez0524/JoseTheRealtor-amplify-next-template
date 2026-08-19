@@ -2,6 +2,7 @@ import axios, { isAxiosError } from 'axios';
 import { randomUUID } from 'crypto';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand, PutCommand, UpdateCommand, ScanCommand } from '@aws-sdk/lib-dynamodb';
+import { validateEnv } from '../shared/config';
 import { filterValidEmails } from '../shared/emailValidator';
 import { rankMobilePhones, rankLandlinePhones } from '../shared/sanitize';
 import {
@@ -13,8 +14,15 @@ import {
   validateReviewerQuota,
 } from '../shared/skiptraceBilling';
 
+// Validate environment at module load time
+validateEnv('skiptraceLeads');
+
 const dynamoClient = new DynamoDBClient({ region: process.env.AWS_REGION });
-const docClient = DynamoDBDocumentClient.from(dynamoClient);
+const docClient = DynamoDBDocumentClient.from(dynamoClient, {
+  marshallOptions: {
+    removeUndefinedValues: true,
+  },
+});
 
 const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 1000;

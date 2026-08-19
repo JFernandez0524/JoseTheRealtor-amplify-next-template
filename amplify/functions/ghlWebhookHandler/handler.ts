@@ -21,7 +21,7 @@
 
 import { createHmac } from 'crypto';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, ScanCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, ScanCommand, GetCommand, PutCommand, DeleteCommand, QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { validateEnv } from '../shared/config';
 import { claimProcessing, extractWebhookId } from '../shared/idempotency';
 import { logError, logWarning } from '../shared/logger';
@@ -33,7 +33,11 @@ import { extractGhlMessages, isSystemMessage } from '../shared/ghlMessages';
 validateEnv('ghlWebhookHandler');
 
 const dynamoClient = new DynamoDBClient({ region: process.env.AWS_REGION });
-const docClient = DynamoDBDocumentClient.from(dynamoClient);
+const docClient = DynamoDBDocumentClient.from(dynamoClient, {
+  marshallOptions: {
+    removeUndefinedValues: true,
+  },
+});
 
 const GHL_INTEGRATION_TABLE = process.env.AMPLIFY_DATA_GhlIntegration_TABLE_NAME!;
 
@@ -640,56 +644,97 @@ async function handleEmailReply(body: any, contactId: string, locationId: string
     // Fetch contact
     const contact = await ghlGetContact(token, contactId);
 
-    // Get userId from contact if not provided
+    // Get userId from contact or integration if not provided
     if (!userId) {
       const appUserIdFieldId = fieldIds.app_user_id;
       userId = appUserIdFieldId
         ? contact?.customFields?.find((f: any) => f.id === appUserIdFieldId)?.value
-        : undefined;
+        : integration.userId;
     }
-    
-    // IMMEDIATE ACTION: Move to CONVERSATION status
+
+    // 1. Detect Call Outcome from message body (e.g. Listed With Realtor, Sold Already, Not Interested, DNC, Wrong Number)
+    const { detectCallOutcomeFromMessage, isTerminalDisposition } = await import('../shared/dispositions');
+    const detectedCallOutcome = detectCallOutcomeFromMessage(messageBody);
+
+    // 2. Perform sentiment analysis
+    const { analyzeLeadIntent } = await import('../shared/sentimentAnalysis');
+    const sentiment = await analyzeLeadIntent(messageBody);
+
+    const isTerminal = sentiment.intent === 'STOP' || (!!detectedCallOutcome && isTerminalDisposition(detectedCallOutcome));
+    const isWrongInfo = sentiment.intent === 'WRONG_INFO' || detectedCallOutcome === 'Wrong Number / Disconnected / Invalid Number';
+
+    // 3. Update GHL custom fields
+    const customFieldsToUpdate: Array<{ id: string; value: any }> = [];
+    if (detectedCallOutcome && fieldIds.call_outcome) {
+      customFieldsToUpdate.push({ id: fieldIds.call_outcome, value: detectedCallOutcome });
+      console.log(`✅ [EMAIL] Setting Call Outcome = "${detectedCallOutcome}"`);
+    }
+
+    if (fieldIds.ai_state) {
+      const newAiState = isTerminal ? 'stopped' : 'paused';
+      customFieldsToUpdate.push({ id: fieldIds.ai_state, value: newAiState });
+      console.log(`✅ [EMAIL] Setting AI State = "${newAiState}"`);
+    }
+
+    // 4. Update contact tags (only conversation:manual tag)
+    const currentTags: string[] = Array.isArray(contact?.tags) ? contact.tags : [];
+    const updatedTags = currentTags.includes('conversation:manual')
+      ? currentTags
+      : [...currentTags, 'conversation:manual'];
+
+    await ghlUpdateContact(token, contactId, {
+      customFields: customFieldsToUpdate.length > 0 ? customFieldsToUpdate : undefined,
+      tags: updatedTags,
+    });
+    console.log('✅ [EMAIL] Contact updated with conversation:manual tag and custom fields');
+
+    // 5. Add Note to contact in GoHighLevel
+    const timestamp = new Date().toLocaleString('en-US', {
+      timeZone: 'America/New_York',
+      dateStyle: 'short',
+      timeStyle: 'short'
+    });
+    const truncatedMsg = (messageBody || '').trim().slice(0, 300);
+    const ghl = createGhlClient(token);
+    const noteText = detectedCallOutcome
+      ? `📧 Inbound email reply received (${timestamp} EST):\n"${truncatedMsg}"\n\n🤖 Automated Action:\n• Detected Call Outcome: ${detectedCallOutcome}\n• Call Outcome custom field updated\n• Switched to manual mode (AI paused) for Jose's review.`
+      : `📧 Inbound email reply received (${timestamp} EST):\n"${truncatedMsg}"\n\n🤖 Automated Action:\n• Switched to manual mode (AI paused) for Jose's review.`;
+
+    await ghl.post(`/contacts/${contactId}/notes`, { body: noteText }).catch((err: any) => {
+      console.error('⚠️ [EMAIL] Failed to create GHL note:', err.message);
+    });
+    console.log('✅ [EMAIL] Added note to GHL contact');
+
+    // 6. Update OutreachQueue status
     if (userId) {
       const queueId = `${userId}_${contactId}`;
       const { logInboundReply, updateQueueStatus } = await import('../shared/outreachQueue');
-      
-      await logInboundReply(queueId);
-      console.log('✅ [EMAIL] Moved to CONVERSATION status - automated drip stopped');
-      
-      // AI SENTIMENT ANALYSIS
-      const { analyzeLeadIntent } = await import('../shared/sentimentAnalysis');
-      const sentiment = await analyzeLeadIntent(messageBody);
-      
-      if (sentiment.intent === 'STOP') {
-        console.log('🛑 [EMAIL] Lead wants to STOP - marking as DND');
-        await updateQueueStatus(queueId, 'DND', 'Lead requested to stop');
-        return { statusCode: 200, body: JSON.stringify({ success: true, action: 'DND' }) };
+
+      if (isTerminal) {
+        console.log(`🛑 [EMAIL] Terminal disposition (${detectedCallOutcome || 'STOP'}) - marking as DND`);
+        await updateQueueStatus(queueId, 'DND', `Email reply terminal outcome: ${detectedCallOutcome || 'Lead requested to stop'}`);
+        return {
+          statusCode: 200,
+          body: JSON.stringify({ success: true, action: 'DND', callOutcome: detectedCallOutcome })
+        };
       }
-      
-      if (sentiment.intent === 'WRONG_INFO') {
+
+      if (isWrongInfo) {
         console.log('❌ [EMAIL] Wrong email - marking as WRONG_INFO');
         await updateQueueStatus(queueId, 'WRONG_INFO', 'Wrong contact information');
         await handleWrongEmail(contactId, contact.email, token, fieldIds);
-        return { statusCode: 200, body: JSON.stringify({ success: true, action: 'WRONG_INFO' }) };
+        return {
+          statusCode: 200,
+          body: JSON.stringify({ success: true, action: 'WRONG_INFO' })
+        };
       }
+
+      await logInboundReply(queueId);
+      await updateQueueStatus(queueId, 'MANUAL_HANDLING', 'Inbound email reply - manual handling');
+      console.log('✅ [EMAIL] Moved to MANUAL_HANDLING status - automated drip stopped');
     }
 
-    // Generate AI response if AI is active
-    const aiStateFieldId = fieldIds.ai_state;
-    const aiState = aiStateFieldId
-      ? contact?.customFields?.find((f: any) => f.id === aiStateFieldId)?.value
-      : undefined;
-    
-    if (aiState === 'running' || aiState === 'not_started') {
-      // TODO: Import and call email AI handler
-      console.log(`✅ [EMAIL] AI response sent`);
-    } else {
-      // Just tag as replied
-      await ghlUpdateContact(token, contactId, { tags: ['email:replied'] });
-      console.log(`✅ [EMAIL] Tagged as replied (AI not active)`);
-    }
-
-    return { statusCode: 200, body: JSON.stringify({ success: true }) };
+    return { statusCode: 200, body: JSON.stringify({ success: true, callOutcome: detectedCallOutcome }) };
 
   } catch (error: any) {
     console.error('❌ [EMAIL] Error handling reply:', error.message);
@@ -796,6 +841,7 @@ async function handleWrongEmail(contactId: string, emailAddress: string, token: 
  */
 async function getIntegrationForLocation(locationId: string): Promise<{
   token: string;
+  userId: string;
   integrationId: string;
   fieldIds: Record<string, string>;
   opportunityFieldIds: Record<string, string>;
@@ -806,6 +852,7 @@ async function getIntegrationForLocation(locationId: string): Promise<{
     if (!integration) return null;
     return {
       token: integration.token,
+      userId: integration.userId,
       integrationId: integration.integrationId,
       fieldIds: integration.customFieldIds || {},
       opportunityFieldIds: integration.opportunityFieldIds || {},
@@ -844,11 +891,6 @@ async function handleTaskEvent(body: any) {
     
     // Import utilities
     const { createCalendarEvent, markEventCompleted } = await import('../shared/googleCalendar');
-    const { DynamoDBDocumentClient, GetCommand, PutCommand, DeleteCommand } = await import('@aws-sdk/lib-dynamodb');
-    const { DynamoDBClient } = await import('@aws-sdk/client-dynamodb');
-    
-    const dynamoClient = new DynamoDBClient({ region: process.env.AWS_REGION });
-    const docClient = DynamoDBDocumentClient.from(dynamoClient);
     const TASK_SYNC_TABLE = process.env.AMPLIFY_DATA_TaskCalendarSync_TABLE_NAME;
     const CALENDAR_ID = process.env.GOOGLE_CALENDAR_ID || taskIntegration.agentCalendarEmail || null;
     if (!CALENDAR_ID) {
@@ -893,7 +935,6 @@ async function handleTaskEvent(body: any) {
       
     } else if (type === 'TaskComplete') {
       // Find calendar event ID using query
-      const { QueryCommand } = await import('@aws-sdk/lib-dynamodb');
       const { Items } = await docClient.send(new QueryCommand({
         TableName: TASK_SYNC_TABLE,
         IndexName: 'byGhlTaskId',
