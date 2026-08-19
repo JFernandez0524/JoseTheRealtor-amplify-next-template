@@ -146,6 +146,7 @@ const schema = a.schema({
       aiPersona: a.string(),         // Freeform style/tone guide injected into the AI reply prompt
       aiExamples: a.string(),        // A few real example replies (few-shot) the AI should mimic
       openAiApiKey: a.string(),      // User's personal OpenAI API key (BYOK model)
+      timezone: a.string().default('America/New_York'), // User's local timezone for outreach compliance
     })
     .authorization((allow) => [
       allow.owner().to(['create', 'read', 'update', 'delete']),
@@ -358,6 +359,7 @@ const schema = a.schema({
       index('owner')
         .sortKeys(['foreclosureAuctionDate'])
         .queryField('leadsByAuctionDate'),
+      index('ghlContactId').queryField('byGhlContactId'),
     ]),
 
   Contact: a
@@ -494,7 +496,10 @@ const schema = a.schema({
       totalLeadsSynced: a.integer().default(0),
       totalSkipsPerformed: a.integer().default(0),
     })
-    .authorization((allow) => [allow.owner(), allow.group('ADMINS')]),
+    .authorization((allow) => [allow.owner(), allow.group('ADMINS')])
+    .secondaryIndexes((index) => [
+      index('email').queryField('byEmail'),
+    ]),
 
   TaskCalendarSync: a
     .model({

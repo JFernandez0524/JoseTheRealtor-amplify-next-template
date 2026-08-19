@@ -28,31 +28,42 @@
  * - Returns helpful messages about next available time
  */
 
-function getEasternTime(now: Date): { dayOfWeek: number; hour: number } {
-  // Use Intl to get correct Eastern time accounting for EST/EDT automatically
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'America/New_York',
-    hour: 'numeric',
-    weekday: 'short',
-    hour12: false,
-  }).formatToParts(now);
+function getTimeInZone(now: Date, timeZone: string = 'America/New_York'): { dayOfWeek: number; hour: number; zoneLabel: string } {
+  // Normalize fallback timezone
+  const safeZone = timeZone || 'America/New_York';
 
-  const weekdayStr = parts.find(p => p.type === 'weekday')?.value ?? '';
-  const hourStr = parts.find(p => p.type === 'hour')?.value ?? '0';
+  try {
+    // Use Intl to get correct local time accounting for daylight saving time automatically
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: safeZone,
+      hour: 'numeric',
+      weekday: 'short',
+      timeZoneName: 'short',
+      hour12: false,
+    }).formatToParts(now);
 
-  const weekdayMap: Record<string, number> = {
-    Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6,
-  };
+    const weekdayStr = parts.find(p => p.type === 'weekday')?.value ?? '';
+    const hourStr = parts.find(p => p.type === 'hour')?.value ?? '0';
+    const zoneLabel = parts.find(p => p.type === 'timeZoneName')?.value ?? safeZone;
 
-  return {
-    dayOfWeek: weekdayMap[weekdayStr] ?? 0,
-    // hour12:false returns 24 for midnight in some locales; normalize to 0
-    hour: parseInt(hourStr, 10) % 24,
-  };
+    const weekdayMap: Record<string, number> = {
+      Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6,
+    };
+
+    return {
+      dayOfWeek: weekdayMap[weekdayStr] ?? 0,
+      // hour12:false returns 24 for midnight in some locales; normalize to 0
+      hour: parseInt(hourStr, 10) % 24,
+      zoneLabel,
+    };
+  } catch {
+    // Fallback to America/New_York on invalid timezone
+    return getTimeInZone(now, 'America/New_York');
+  }
 }
 
-export function isWithinBusinessHours(): boolean {
-  const { dayOfWeek, hour } = getEasternTime(new Date());
+export function isWithinBusinessHours(timeZone: string = 'America/New_York'): boolean {
+  const { dayOfWeek, hour } = getTimeInZone(new Date(), timeZone);
 
   if (dayOfWeek === 0) return false; // Sunday
 
@@ -61,30 +72,30 @@ export function isWithinBusinessHours(): boolean {
   return hour >= 9 && hour < 19; // Mon–Fri 9 AM–7 PM
 }
 
-export function getNextBusinessHourMessage(): string {
-  const { dayOfWeek, hour } = getEasternTime(new Date());
+export function getNextBusinessHourMessage(timeZone: string = 'America/New_York'): string {
+  const { dayOfWeek, hour, zoneLabel } = getTimeInZone(new Date(), timeZone);
 
   if (dayOfWeek === 0) {
-    return 'Sunday - closed. Next business hours: Monday 9 AM Eastern';
+    return `Sunday - closed. Next business hours: Monday 9 AM ${zoneLabel}`;
   }
 
   if (dayOfWeek === 6) {
     if (hour >= 12) {
-      return 'Saturday after hours. Next business hours: Monday 9 AM Eastern';
+      return `Saturday after hours. Next business hours: Monday 9 AM ${zoneLabel}`;
     }
-    return `Saturday - open until 12 PM Eastern (currently ${hour}:00)`;
+    return `Saturday - open until 12 PM ${zoneLabel} (currently ${hour}:00)`;
   }
 
   if (hour < 9) {
-    return 'Before business hours. Opens at 9 AM Eastern';
+    return `Before business hours. Opens at 9 AM ${zoneLabel}`;
   }
 
   if (hour >= 19) {
     if (dayOfWeek === 5) {
-      return 'Friday after hours. Next business hours: Saturday 9 AM Eastern';
+      return `Friday after hours. Next business hours: Saturday 9 AM ${zoneLabel}`;
     }
-    return 'After business hours. Next business hours: tomorrow 9 AM Eastern';
+    return `After business hours. Next business hours: tomorrow 9 AM ${zoneLabel}`;
   }
 
-  return `Within business hours (9 AM - 7 PM Eastern)`;
+  return `Within business hours (9 AM - 7 PM ${zoneLabel})`;
 }

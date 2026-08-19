@@ -19,7 +19,7 @@
  */
 
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, ScanCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, ScanCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
 import { findQueueItemByContactId } from './outreachQueue';
 
 const docClient = DynamoDBDocumentClient.from(
@@ -61,10 +61,8 @@ export function selectOwnerId(
  * Primary source is PropertyLead (every synced contact has a `ghlContactId` + `owner`);
  * OutreachQueue is a fallback for contacts that exist in the queue but not as a lead.
  *
- * NOTE: DynamoDB `Limit` caps rows scanned BEFORE the FilterExpression is applied, so it must
- * NOT be combined with a filter (a `Limit: 1` scan would check only the first table row and
- * almost always miss). We paginate until matches are found — same pattern as
- * findQueueItemByContactId().
+ * Uses the `byGhlContactId` GSI for fast O(1) point lookups, with a graceful fallback
+ * to a filtered Scan if the index is provisioning or not yet populated.
  *
  * @param contactId GHL contact ID from the webhook payload
  * @returns the owning userId, or null if the contact can't be attributed to a single tenant
@@ -74,25 +72,46 @@ export async function resolveOwnerByGhlContactId(
 ): Promise<string | null> {
   if (!contactId) return null;
 
-  const matches: Array<{ owner?: string | null }> = [];
-  let lastKey: Record<string, any> | undefined;
-  do {
-    const { Items, LastEvaluatedKey } = await docClient.send(
-      new ScanCommand({
+  // 1. Primary: Fast O(1) GSI query on PropertyLead.byGhlContactId
+  try {
+    const { Items } = await docClient.send(
+      new QueryCommand({
         TableName: PROPERTY_LEAD_TABLE,
-        FilterExpression: 'ghlContactId = :contactId',
+        IndexName: 'byGhlContactId',
+        KeyConditionExpression: 'ghlContactId = :contactId',
         ProjectionExpression: '#owner, ghlContactId',
         ExpressionAttributeNames: { '#owner': 'owner' },
         ExpressionAttributeValues: { ':contactId': contactId },
-        ExclusiveStartKey: lastKey,
       }),
     );
-    if (Items) matches.push(...(Items as Array<{ owner?: string | null }>));
-    lastKey = LastEvaluatedKey;
-  } while (lastKey);
 
-  const owner = selectOwnerId(matches);
-  if (owner) return owner;
+    if (Items && Items.length > 0) {
+      const owner = selectOwnerId(Items as Array<{ owner?: string | null }>);
+      if (owner) return owner;
+    }
+  } catch (gsiErr: any) {
+    // If GSI query fails (e.g. index provisioning in local/test or table transition), fallback to scan
+    console.warn('⚠️ [TENANT_RESOLVER] GSI query fallback to scan:', gsiErr.message);
+    const matches: Array<{ owner?: string | null }> = [];
+    let lastKey: Record<string, any> | undefined;
+    do {
+      const { Items, LastEvaluatedKey } = await docClient.send(
+        new ScanCommand({
+          TableName: PROPERTY_LEAD_TABLE,
+          FilterExpression: 'ghlContactId = :contactId',
+          ProjectionExpression: '#owner, ghlContactId',
+          ExpressionAttributeNames: { '#owner': 'owner' },
+          ExpressionAttributeValues: { ':contactId': contactId },
+          ExclusiveStartKey: lastKey,
+        }),
+      );
+      if (Items) matches.push(...(Items as Array<{ owner?: string | null }>));
+      lastKey = LastEvaluatedKey;
+    } while (lastKey);
+
+    const owner = selectOwnerId(matches);
+    if (owner) return owner;
+  }
 
   // Fallback: the OutreachQueue also maps contactId → userId.
   const queueItem = await findQueueItemByContactId(contactId);

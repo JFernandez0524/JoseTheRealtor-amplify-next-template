@@ -103,4 +103,16 @@ describe('getNextBusinessHourMessage', () => {
     const msg = getNextBusinessHourMessage();
     expect(msg).toContain('Within business hours');
   });
+
+  it('supports per-tenant timezones (e.g. America/Los_Angeles vs America/New_York)', () => {
+    // 9 AM EST = 6 AM PST (before business hours in LA, within business hours in NY)
+    vi.useFakeTimers({ now: estDate(0, 9) });
+    expect(isWithinBusinessHours('America/New_York')).toBe(true);
+    expect(isWithinBusinessHours('America/Los_Angeles')).toBe(false);
+
+    // 12 PM EST = 9 AM PST (within business hours in both NY and LA)
+    vi.useFakeTimers({ now: estDate(0, 12) });
+    expect(isWithinBusinessHours('America/New_York')).toBe(true);
+    expect(isWithinBusinessHours('America/Los_Angeles')).toBe(true);
+  });
 });
