@@ -6,9 +6,26 @@ This guide covers everything a new user must configure in their GoHighLevel sub-
 
 ## 1. Connect Your GHL Account
 
-Go to **DealFinder → Settings → GHL Integration** and click **Connect GoHighLevel**.
+You can connect your GoHighLevel sub-account to DealFinder in two ways:
 
-When you authorize, the system automatically creates in your GHL account:
+### Method A: Private Integration Token (PIT) — *Recommended for Instant Setup*
+Bypasses marketplace approval and uses a permanent token:
+1. In GoHighLevel, go to **Settings → Integrations → Private Integrations**.
+2. Click **+ Create Token** (Name: `DealFinder`).
+3. Select scopes: **Contacts, Conversations, Calendars, Locations, Opportunities, Custom Fields, Tags**.
+4. Copy your **Location ID** (from *Settings → Business Profile*) and your **PIT Token** (`pit-...`).
+5. In DealFinder → **Profile → Launch AI Connection**, click **"Connect PIT"**, enter both values, and click **Connect**.
+
+### Method B: 1-Click OAuth / Test Draft Link
+1. In DealFinder, go to **Profile → Launch AI Connection**.
+2. Click **Connect Launch AI** (or enter your Sub-Account ID under *"Have a Sub-Account ID? Connect test draft link"*).
+3. Authorize on the GoHighLevel consent screen.
+
+---
+
+### What Gets Created Automatically Upon Connection:
+
+When you connect (via either method), the system automatically provisions in your GHL account:
 
 | What gets created | Details |
 |---|---|

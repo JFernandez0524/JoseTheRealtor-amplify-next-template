@@ -337,14 +337,60 @@ export default function DocsPage() {
           {/* Launch AI Account Setup */}
           <section id="launch-ai-setup" className="mb-12">
             <h2 className="text-2xl font-semibold text-gray-900 mb-6">⚙️ Launch AI Account Setup</h2>
-            <p className="text-gray-600 mb-6 text-sm">Complete these steps once after connecting your Launch AI account. Most of the technical setup happens automatically — you only need to configure the GHL-side pieces below.</p>
+            <p className="text-gray-600 mb-6 text-sm">Complete these steps once to connect and configure your CRM. You can connect your GoHighLevel sub-account using 1-Click OAuth or instantly via a Private Integration Token (PIT).</p>
 
             <div className="space-y-6">
+
+              {/* Connection Methods */}
+              <div className="border border-indigo-200 bg-indigo-50/60 p-5 rounded-2xl">
+                <h3 className="text-base font-bold text-indigo-950 mb-3 flex items-center gap-2">
+                  <span>🔗</span> How to Connect Your GoHighLevel Sub-Account
+                </h3>
+
+                <div className="grid md:grid-cols-2 gap-4 text-sm">
+                  {/* Method 1: PIT (Instant) */}
+                  <div className="bg-white border border-indigo-100 p-4 rounded-xl shadow-sm">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="font-bold text-indigo-900 text-xs uppercase tracking-wider">Method 1: Private Integration Token (PIT)</span>
+                      <span className="bg-green-100 text-green-800 text-[10px] font-black px-2 py-0.5 rounded">Instant • No App Review</span>
+                    </div>
+                    <p className="text-xs text-gray-600 mb-3">
+                      Best for immediate access and beta testing. Direct API connection with permanent 100-year validity:
+                    </p>
+                    <ol className="list-decimal list-inside space-y-1.5 text-xs text-gray-700">
+                      <li>Log into your <strong>GoHighLevel</strong> sub-account.</li>
+                      <li>Go to <strong>Settings → Integrations → Private Integrations</strong>.</li>
+                      <li>Click <strong>+ Create Token</strong> (name it <em>"DealFinder"</em>).</li>
+                      <li>Select scopes: <strong>Contacts, Conversations, Calendars, Locations, Opportunities, Custom Fields, Tags</strong>.</li>
+                      <li>Copy your <strong>Location ID</strong> (from <em>Settings → Business Profile</em>) and <strong>PIT Token</strong> (<code className="bg-gray-100 px-1 rounded">pit-...</code>).</li>
+                      <li>In DealFinder → <strong>Profile → Launch AI Connection</strong>, click <strong>"Connect PIT"</strong>, paste both, and click <strong>Connect</strong>.</li>
+                    </ol>
+                  </div>
+
+                  {/* Method 2: 1-Click OAuth */}
+                  <div className="bg-white border border-indigo-100 p-4 rounded-xl shadow-sm">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="font-bold text-indigo-900 text-xs uppercase tracking-wider">Method 2: 1-Click OAuth / Test Link</span>
+                      <span className="bg-blue-100 text-blue-800 text-[10px] font-black px-2 py-0.5 rounded">Standard</span>
+                    </div>
+                    <p className="text-xs text-gray-600 mb-3">
+                      Standard HighLevel Marketplace authentication:
+                    </p>
+                    <ol className="list-decimal list-inside space-y-1.5 text-xs text-gray-700">
+                      <li>In DealFinder, go to <strong>Profile → Launch AI Connection</strong>.</li>
+                      <li>Click <strong>"Connect Launch AI"</strong>.</li>
+                      <li>You will be redirected to the secure HighLevel consent screen.</li>
+                      <li>Choose your Sub-Account / Location and click <strong>Authorize</strong>.</li>
+                      <li><em>(For Draft Beta Accounts)</em>: You can also enter your Sub-Account ID under <em>"Have a Sub-Account ID? Connect test draft link"</em> and click <strong>Install ↗</strong>.</li>
+                    </ol>
+                  </div>
+                </div>
+              </div>
 
               {/* Auto-provisioned */}
               <div className="bg-green-50 p-4 rounded-lg">
                 <h4 className="font-medium text-green-800 mb-2">✅ Created Automatically When You Connect</h4>
-                <p className="text-sm text-green-700 mb-3">The moment you click "Connect Launch AI" and authorize, the system creates all of the following in your GHL sub-account — no manual setup needed:</p>
+                <p className="text-sm text-green-700 mb-3">The moment you connect (via PIT or OAuth), the system creates all of the following in your GHL sub-account — no manual setup needed:</p>
                 <ul className="list-disc list-inside space-y-1 text-green-700 text-sm">
                   <li><strong>35+ contact custom fields</strong> — property address, mailing address, Zestimate, cash offer, AI state, outreach counters, and more</li>
                   <li><strong>1 opportunity custom field</strong> — Disposition (single-select with deal stages)</li>
