@@ -278,11 +278,18 @@ export async function syncToGoHighLevel(
             console.warn(`⚠️ Stored contact ${lead.ghlContactId} returned no contact — falling back to search`);
           }
         } catch (lookupError: any) {
-          // A 404 means the contact was deleted in GHL; anything else is unresolvable. Only the
-          // 404 is safe to recover from by searching — on any other error, stop rather than risk
-          // creating a duplicate of a contact that is actually still there.
-          if (lookupError.response?.status === 404) {
-            console.warn(`⚠️ Stored contact ${lead.ghlContactId} no longer exists in GHL — falling back to search`);
+          // A 404 or 400 with "Contact not found" means the contact was deleted in GHL or was
+          // linked to a previous sub-account/location. Only when not found is it safe to
+          // recover by searching — on any other error, stop rather than risk creating a duplicate
+          // of a contact that is actually still there.
+          const status = lookupError.response?.status;
+          const msg = lookupError.response?.data?.message || lookupError.message || '';
+          const isNotFound =
+            status === 404 ||
+            (status === 400 && typeof msg === 'string' && /contact not found/i.test(msg));
+
+          if (isNotFound) {
+            console.warn(`⚠️ Stored contact ${lead.ghlContactId} no longer exists in GHL location (status ${status}: ${msg}) — falling back to search`);
           } else {
             throw lookupError;
           }
