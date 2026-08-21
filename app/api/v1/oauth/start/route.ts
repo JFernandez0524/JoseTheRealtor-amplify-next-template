@@ -98,8 +98,8 @@ export async function GET(req: Request) {
     const sig = createHmac('sha256', GHL_STATE_SECRET).update(sigPayload).digest('hex');
     const state = Buffer.from(JSON.stringify({ userId: user.userId, nonce, timestamp, sig })).toString('base64url');
     
-    // Build GHL authorization URL (v2 marketplace endpoint requires version_id)
-    const authUrl = new URL('https://marketplace.gohighlevel.com/v2/oauth/chooselocation');
+    // Build GHL authorization URL (whitelabeled LeadConnector OAuth endpoint)
+    const authUrl = new URL('https://marketplace.leadconnectorhq.com/oauth/chooselocation');
     authUrl.searchParams.set('response_type', 'code');
     authUrl.searchParams.set('client_id', GHL_CLIENT_ID);
     authUrl.searchParams.set('redirect_uri', redirectUri);

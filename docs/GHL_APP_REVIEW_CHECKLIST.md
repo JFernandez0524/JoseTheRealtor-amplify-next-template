@@ -4,6 +4,16 @@ This checklist contains the actions to take in the **GoHighLevel Developer Porta
 
 ---
 
+## 📌 Marketplace Submission & Review Standards
+
+### Whitelabeled Installation URL Requirement
+GoHighLevel App Marketplace requires all installation / authorization URLs originating from public marketplace apps to use the official whitelabeled domain:
+* **Authorization Base URL:** `https://marketplace.leadconnectorhq.com/oauth/chooselocation`
+* **Webhooks & API Base URL:** `https://services.leadconnectorhq.com`
+* **Contact Links in App UI:** `https://app.leadconnectorhq.com/v2/location/{locationId}/contacts/detail/{contactId}`
+
+---
+
 ## 📌 Post-Approval Tasks for `dealfinder.yourailaunch.com`
 
 ### 1. Update GHL Developer Portal App Settings

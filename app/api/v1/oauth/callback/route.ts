@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createHmac, timingSafeEqual } from 'crypto';
 import axios from 'axios';
 import { createGhlIntegration } from '@/app/utils/aws/data/ghlIntegration.server';
+import { AuthGetCurrentUserServer } from '@/app/utils/aws/auth/amplifyServerUtils.server';
 import {
   provisionCustomFields,
   provisionOpportunityFields,
@@ -75,38 +76,48 @@ export async function GET(req: Request) {
       return NextResponse.redirect(`${origin}/oauth/error?error=missing_credentials`);
     }
 
-    // Extract user ID from state parameter
-    if (!state) {
-      console.error('No state parameter provided');
-      return NextResponse.redirect(`${origin}/oauth/error?error=invalid_state`);
-    }
-
+    // Extract user ID from state parameter (or active session if installed via direct GHL link)
     let userId: string;
-    try {
-      const stateData = JSON.parse(Buffer.from(state, 'base64url').toString());
-      const { userId: uid, nonce, timestamp, sig } = stateData;
 
-      if (!uid || !nonce || !timestamp || !sig) throw new Error('Incomplete state fields');
+    if (state) {
+      try {
+        const stateData = JSON.parse(Buffer.from(state, 'base64url').toString());
+        const { userId: uid, nonce, timestamp, sig } = stateData;
 
-      // Reject expired state tokens (user took more than 15 minutes on the OAuth screen)
-      if (Date.now() - timestamp > STATE_MAX_AGE_MS) {
-        throw new Error('State token expired');
+        if (!uid || !nonce || !timestamp || !sig) throw new Error('Incomplete state fields');
+
+        // Reject expired state tokens (user took more than 15 minutes on the OAuth screen)
+        if (Date.now() - timestamp > STATE_MAX_AGE_MS) {
+          throw new Error('State token expired');
+        }
+
+        // Verify HMAC — same canonical payload used in oauth/start
+        const sigPayload = `${uid}|${nonce}|${timestamp}`;
+        const expected = createHmac('sha256', GHL_STATE_SECRET).update(sigPayload).digest('hex');
+        const sigBuf = Buffer.from(sig.padEnd(expected.length));
+        const expBuf = Buffer.from(expected);
+        if (sigBuf.length !== expBuf.length || !timingSafeEqual(sigBuf, expBuf)) {
+          throw new Error('State HMAC verification failed');
+        }
+
+        userId = uid;
+        console.log('State verified for user:', userId);
+      } catch (stateError) {
+        console.error('State verification error:', stateError);
+        return NextResponse.redirect(`${origin}/oauth/error?error=invalid_state`);
       }
-
-      // Verify HMAC — same canonical payload used in oauth/start
-      const sigPayload = `${uid}|${nonce}|${timestamp}`;
-      const expected = createHmac('sha256', GHL_STATE_SECRET).update(sigPayload).digest('hex');
-      const sigBuf = Buffer.from(sig.padEnd(expected.length));
-      const expBuf = Buffer.from(expected);
-      if (sigBuf.length !== expBuf.length || !timingSafeEqual(sigBuf, expBuf)) {
-        throw new Error('State HMAC verification failed');
+    } else {
+      // Fallback for direct in-GHL test links or marketplace installs without state parameter
+      console.log('No state parameter provided, checking active user session...');
+      const sessionUser = await AuthGetCurrentUserServer();
+      if (!sessionUser || !sessionUser.userId) {
+        console.warn('Direct GHL install without state and no active user session');
+        return NextResponse.redirect(
+          `${origin}/login?returnTo=${encodeURIComponent('/profile?setup=1')}&error=ghl_auth_login_required`
+        );
       }
-
-      userId = uid;
-      console.log('State verified for user:', userId);
-    } catch (stateError) {
-      console.error('State verification error:', stateError);
-      return NextResponse.redirect(`${origin}/oauth/error?error=invalid_state`);
+      userId = sessionUser.userId;
+      console.log('Direct GHL install mapped to active logged-in user:', userId);
     }
 
     console.log('Attempting token exchange with GHL...');

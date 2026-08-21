@@ -68,7 +68,7 @@ function formatTime(iso: string) {
 }
 
 function ghlContactUrl(locationId: string, contactId: string) {
-  return `https://app.gohighlevel.com/v2/location/${locationId}/contacts/detail/${contactId}`;
+  return `https://app.leadconnectorhq.com/v2/location/${locationId}/contacts/detail/${contactId}`;
 }
 
 function SummaryCard({ label, value, sub }: { label: string; value: number; sub?: string }) {
