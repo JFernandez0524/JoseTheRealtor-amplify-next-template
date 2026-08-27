@@ -53,7 +53,16 @@ export default function AdminDashboard({
   }, []);
 
   const changeUserPlan = async (user: UserAccount, targetGroup: string) => {
-    if (!user.owner) return;
+    // Extract Cognito username if compound ID (e.g. sub::username), fallback to email
+    const targetUserId = user.owner?.includes('::')
+      ? (user.owner.split('::')[1] || user.owner)
+      : (user.owner || user.email);
+
+    if (!targetUserId) {
+      alert('Unable to identify user ID or email for plan change.');
+      return;
+    }
+
     if (!confirm(`Change plan for ${user.email} to ${targetGroup}?`)) return;
 
     setLoading(true);
@@ -63,7 +72,7 @@ export default function AdminDashboard({
         if (g !== targetGroup) {
           try {
             await client.mutations.removeUserFromGroup({
-              userId: user.owner,
+              userId: targetUserId,
               groupName: g,
             });
           } catch {
@@ -73,13 +82,24 @@ export default function AdminDashboard({
       }
 
       const { errors } = await client.mutations.addUserToGroup({
-        userId: user.owner,
+        userId: targetUserId,
         groupName: targetGroup,
       });
 
       if (errors) {
         alert(`Plan update failed: ${errors[0].message}`);
       } else {
+        // If updating to a paid tier, ensure OAUTH is set for GHL integration
+        if (targetGroup === 'PRO' || targetGroup === 'AI_PLAN') {
+          try {
+            await client.models.UserAccount.update({
+              id: user.id,
+              ghlIntegrationType: 'OAUTH',
+            });
+          } catch {
+            // Non-blocking
+          }
+        }
         alert(`Successfully changed ${user.email}'s plan to ${targetGroup}!`);
         window.location.reload();
       }
@@ -89,6 +109,7 @@ export default function AdminDashboard({
       setLoading(false);
     }
   };
+
 
   const adjustUserCredits = async (user: UserAccount) => {
     const current = user.credits || 0;
@@ -123,10 +144,14 @@ export default function AdminDashboard({
   const promoteUser = async (userId: string, email: string) => {
     if (!confirm(`Promote ${email} to ADMINS group?`)) return;
 
+    const targetUserId = userId?.includes('::')
+      ? (userId.split('::')[1] || userId)
+      : (userId || email);
+
     setLoading(true);
     try {
       const { errors } = await client.mutations.addUserToGroup({
-        userId,
+        userId: targetUserId,
         groupName: 'ADMINS',
       });
 
@@ -134,6 +159,7 @@ export default function AdminDashboard({
         alert(`Promotion failed: ${errors[0].message}`);
       } else {
         alert(`${email} promoted to ADMINS successfully!`);
+        window.location.reload();
       }
     } catch (err: any) {
       alert(`Error: ${err.message}`);
@@ -141,6 +167,7 @@ export default function AdminDashboard({
       setLoading(false);
     }
   };
+
 
   // Calculate stats
   const totalUsers = users.length;

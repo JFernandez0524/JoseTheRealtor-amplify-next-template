@@ -67,6 +67,44 @@ export async function getUserAccount(ownerId: string, email?: string): Promise<U
 }
 
 /**
+ * Get existing UserAccount or create a new one with 5 starter credits
+ */
+export async function getOrCreateUserAccount(
+  ownerId: string,
+  email: string,
+  clientIP?: string
+): Promise<UserAccount | null> {
+  try {
+    const account = await getUserAccount(ownerId, email);
+    if (account) return account;
+
+    const creditsExpiresAt = new Date();
+    creditsExpiresAt.setDate(creditsExpiresAt.getDate() + 30);
+
+    const { data: newAccount, errors } = await cookiesClient.models.UserAccount.create({
+      email,
+      credits: 5,
+      creditsExpiresAt: creditsExpiresAt.toISOString(),
+      registrationIP: clientIP || '0.0.0.0',
+      lastLoginIP: clientIP || '0.0.0.0',
+      totalLeadsSynced: 0,
+      totalSkipsPerformed: 0,
+    });
+
+    if (errors) {
+      console.error('❌ Failed to create UserAccount:', errors);
+      return null;
+    }
+
+    return newAccount;
+  } catch (error: any) {
+    console.error('❌ getOrCreateUserAccount error:', error.message);
+    return null;
+  }
+}
+
+
+/**
  * Update user account
  * 
  * @param accountId - The UserAccount record ID (not the owner/user ID)

@@ -65,6 +65,33 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Defensive address component resolution across all US jurisdictions
+    const resolveAddrComponents = (addr: any) => {
+      if (!addr) return;
+      if (!addr.street && addr.formattedAddress) {
+        addr.street = addr.formattedAddress.split(',')[0]?.trim() || '';
+      }
+      if (addr.formattedAddress) {
+        const parts = addr.formattedAddress.split(',').map((p: string) => p.trim());
+        if (!addr.city && parts.length >= 3) {
+          addr.city = parts[1];
+        }
+        if ((!addr.state || !addr.zip) && parts.length >= 3) {
+          for (let i = parts.length - 1; i >= 1; i--) {
+            const match = parts[i].match(/\b([A-Z]{2})\b(?:\s+(\d{5}(?:-\d{4})?))?/);
+            if (match) {
+              if (!addr.state) addr.state = match[1];
+              if (!addr.zip && match[2]) addr.zip = match[2];
+              break;
+            }
+          }
+        }
+      }
+    };
+
+    resolveAddrComponents(ownerAddr);
+    if (adminAddr) resolveAddrComponents(adminAddr);
+
     if (!ownerAddr.street && !ownerAddr.formattedAddress) {
       return NextResponse.json({ error: 'Property address is required' }, { status: 400 });
     }
@@ -74,6 +101,7 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
+
 
     // Phone normalization (E.164) — non-fatal if invalid, but reject clearly if malformed
     let normalizedPhone: string | null = null;

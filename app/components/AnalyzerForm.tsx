@@ -69,14 +69,43 @@ export default function AnalyzerForm({
             return useShort ? c?.shortText : c?.longText;
           };
 
+          let city =
+            getComp('locality') ||
+            getComp('sublocality_level_1') ||
+            getComp('sublocality') ||
+            getComp('postal_town') ||
+            getComp('administrative_area_level_3') ||
+            getComp('neighborhood');
+
+          let state = getComp('administrative_area_level_1', true);
+          let zip = getComp('postal_code');
+
+          if (place.formattedAddress) {
+            const parts = place.formattedAddress.split(',').map((p: string) => p.trim());
+            if (!city && parts.length >= 3) {
+              city = parts[1];
+            }
+            if ((!state || !zip) && parts.length >= 3) {
+              for (let i = parts.length - 1; i >= 1; i--) {
+                const match = parts[i].match(/\b([A-Z]{2})\b(?:\s+(\d{5}(?:-\d{4})?))?/);
+                if (match) {
+                  if (!state) state = match[1];
+                  if (!zip && match[2]) zip = match[2];
+                  break;
+                }
+              }
+            }
+          }
+
           const details = {
-            street: `${getComp('street_number') || ''} ${getComp('route') || ''}`.trim(),
-            city: getComp('locality'),
-            state: getComp('administrative_area_level_1', true),
-            zip: getComp('postal_code'),
+            street: `${getComp('street_number') || ''} ${getComp('route') || ''}`.trim() || place.formattedAddress?.split(',')[0]?.trim() || '',
+            city: city || '',
+            state: state || '',
+            zip: zip || '',
             lat: place.location?.lat(),
             lng: place.location?.lng(),
           };
+
 
           if (place.formattedAddress) {
             setAddress(place.formattedAddress);

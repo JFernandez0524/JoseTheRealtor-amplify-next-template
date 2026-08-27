@@ -174,11 +174,30 @@ backend.auth.resources.userPool.grant(
   'cognito-idp:AdminGetUser'
 );
 
-// 🛡️ Auth Permissions for removeUserFromGroup
+// 🛡️ Auth Permissions & Environment for addUserToGroup
+backend.addUserToGroup.addEnvironment(
+  'AMPLIFY_AUTH_USERPOOL_ID',
+  backend.auth.resources.userPool.userPoolId
+);
+backend.auth.resources.userPool.grant(
+  backend.addUserToGroup.resources.lambda,
+  'cognito-idp:AdminAddUserToGroup',
+  'cognito-idp:AdminRemoveUserFromGroup',
+  'cognito-idp:ListUsers'
+);
+
+// 🛡️ Auth Permissions & Environment for removeUserFromGroup
+backend.removeUserFromGroup.addEnvironment(
+  'AMPLIFY_AUTH_USERPOOL_ID',
+  backend.auth.resources.userPool.userPoolId
+);
 backend.auth.resources.userPool.grant(
   backend.removeUserFromGroup.resources.lambda,
-  'cognito-idp:AdminRemoveUserFromGroup'
+  'cognito-idp:AdminAddUserToGroup',
+  'cognito-idp:AdminRemoveUserFromGroup',
+  'cognito-idp:ListUsers'
 );
+
 
 // 🤖 Grant Bedrock permissions to AI Follow-Up Agent
 backend.aiFollowUpAgent.resources.lambda.addToRolePolicy(
