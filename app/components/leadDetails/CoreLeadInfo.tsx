@@ -43,7 +43,13 @@ export function CoreLeadInfo({
     mailingCity: lead.mailingCity || '',
     mailingState: lead.mailingState || '',
     mailingZip: lead.mailingZip || '',
-    leadLabels: lead.leadLabels || [], // 👈 Ensure this is always an array
+    adminFirstName: lead.adminFirstName || '',
+    adminLastName: lead.adminLastName || '',
+    adminAddress: lead.adminAddress || '',
+    adminCity: lead.adminCity || '',
+    adminState: lead.adminState || '',
+    adminZip: lead.adminZip || '',
+    leadLabels: lead.leadLabels || [],
   });
   const [isSaving, setIsSaving] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -59,7 +65,13 @@ export function CoreLeadInfo({
         mailingCity: lead.mailingCity || '',
         mailingState: lead.mailingState || '',
         mailingZip: lead.mailingZip || '',
-        leadLabels: lead.leadLabels || [], // 👈 Sync with server data
+        adminFirstName: lead.adminFirstName || '',
+        adminLastName: lead.adminLastName || '',
+        adminAddress: lead.adminAddress || '',
+        adminCity: lead.adminCity || '',
+        adminState: lead.adminState || '',
+        adminZip: lead.adminZip || '',
+        leadLabels: lead.leadLabels || [],
       });
     }
   }, [lead, isEditing, formData.id]);
@@ -82,17 +94,26 @@ export function CoreLeadInfo({
     e.preventDefault();
     setIsSaving(true);
     try {
-      const payload = {
+      const payload: Record<string, any> = {
         id: formData.id,
-        ownerFirstName: formData.ownerFirstName,
+        ownerFirstName: formData.ownerFirstName || null,
         ownerLastName: formData.ownerLastName,
         notes: formData.notes,
-        mailingAddress: formData.mailingAddress,
-        mailingCity: formData.mailingCity,
-        mailingState: formData.mailingState,
-        mailingZip: formData.mailingZip,
-        leadLabels: formData.leadLabels, // 👈 Explicitly include labels in the update
+        mailingAddress: formData.mailingAddress || null,
+        mailingCity: formData.mailingCity || null,
+        mailingState: formData.mailingState || null,
+        mailingZip: formData.mailingZip || null,
+        leadLabels: formData.leadLabels,
       };
+
+      if (lead.type === 'PROBATE') {
+        payload.adminFirstName = formData.adminFirstName || null;
+        payload.adminLastName = formData.adminLastName || null;
+        payload.adminAddress = formData.adminAddress || null;
+        payload.adminCity = formData.adminCity || null;
+        payload.adminState = formData.adminState || null;
+        payload.adminZip = formData.adminZip || null;
+      }
 
       const { data: updatedLead, errors } =
         await client.models.PropertyLead.update(payload);
@@ -116,7 +137,7 @@ export function CoreLeadInfo({
 
   const renderField = (name: keyof typeof formData, label: string) => {
     const value = formData[name];
-    if (Array.isArray(value)) return null; // Skip labels array for standard inputs
+    if (Array.isArray(value)) return null;
 
     const isTextArea = name === 'notes';
     const InputComponent = isTextArea ? 'textarea' : 'input';
@@ -129,7 +150,7 @@ export function CoreLeadInfo({
         {isEditing ? (
           <InputComponent
             name={name}
-            value={value as string}
+            value={(value as string) || ''}
             onChange={handleChange}
             className='block w-full border border-gray-200 rounded-md p-2 text-sm text-gray-800 focus:ring-indigo-500'
           />
@@ -156,40 +177,42 @@ export function CoreLeadInfo({
       </div>
 
       {/* 👤 ADMIN/EXECUTOR INFO (Probate Only) */}
-      {lead.type === 'PROBATE' && (lead.adminFirstName || lead.adminLastName || lead.adminAddress) && (
+      {lead.type === 'PROBATE' && (
         <div className='pt-4 border-t border-gray-100'>
           <label className='block text-xs font-bold text-gray-400 uppercase tracking-wider mb-3'>
             👤 Administrator / Executor
           </label>
-          <div className='bg-purple-50 p-4 rounded-lg border border-purple-200 space-y-3'>
+          <div className='bg-purple-50 p-4 rounded-lg border border-purple-200 space-y-4'>
             <div className='grid grid-cols-2 gap-4'>
-              <div>
-                <p className='text-xs text-gray-500 mb-1'>First Name</p>
-                <p className='text-base font-medium text-gray-800'>
-                  {lead.adminFirstName || <span className='text-gray-300 italic text-sm'>N/A</span>}
-                </p>
-              </div>
-              <div>
-                <p className='text-xs text-gray-500 mb-1'>Last Name</p>
-                <p className='text-base font-medium text-gray-800'>
-                  {lead.adminLastName || <span className='text-gray-300 italic text-sm'>N/A</span>}
-                </p>
-              </div>
+              {renderField('adminFirstName', 'Admin First Name')}
+              {renderField('adminLastName', 'Admin Last Name')}
             </div>
-            {lead.adminAddress && (
-              <div>
-                <p className='text-xs text-gray-500 mb-1'>Address</p>
-                <p className='text-base font-medium text-gray-800'>
-                  {lead.adminAddress}
-                  {lead.adminCity && `, ${lead.adminCity}`}
-                  {lead.adminState && `, ${lead.adminState}`}
-                  {lead.adminZip && ` ${lead.adminZip}`}
-                </p>
+            {isEditing ? (
+              <div className='space-y-3 pt-2 border-t border-purple-200/50'>
+                {renderField('adminAddress', 'Admin Street Address')}
+                <div className='grid grid-cols-3 gap-3'>
+                  {renderField('adminCity', 'City')}
+                  {renderField('adminState', 'State')}
+                  {renderField('adminZip', 'Zip')}
+                </div>
               </div>
+            ) : (
+              (formData.adminAddress || formData.adminCity) && (
+                <div>
+                  <p className='text-xs text-gray-500 mb-1'>Address</p>
+                  <p className='text-base font-medium text-gray-800'>
+                    {formData.adminAddress}
+                    {formData.adminCity && `, ${formData.adminCity}`}
+                    {formData.adminState && `, ${formData.adminState}`}
+                    {formData.adminZip && ` ${formData.adminZip}`}
+                  </p>
+                </div>
+              )
             )}
           </div>
         </div>
       )}
+
 
       {/* 🟢 PROSPECTING LABELS DISPLAY */}
       <div className='pt-4 border-t border-gray-100'>

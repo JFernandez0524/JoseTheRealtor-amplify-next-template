@@ -16,7 +16,7 @@ import {
   HiOutlineEnvelope,
   HiChevronLeft,
 } from 'react-icons/hi2';
-import { FiMapPin } from 'react-icons/fi';
+import { FiMapPin, FiEdit2, FiPlus, FiTrash2, FiPhone, FiMail } from 'react-icons/fi';
 
 // Modular Components
 import { CoreLeadInfo } from './CoreLeadInfo';
@@ -30,7 +30,9 @@ import { SkipTraceHistory } from './SkipTraceHistory';
 import { ErrorBoundary } from './ErrorBoundary';
 import { ToastProvider, useToast } from './ToastProvider';
 import { DeleteConfirmModal } from '../dashboard/DeleteConfirmModal';
+import { AddressAutocomplete, ParsedAddress } from '@/app/components/address/AddressAutocomplete';
 import { deleteLead, updateLead } from '@/app/utils/aws/data/lead.client';
+import { formatPhoneE164 } from '@/app/utils/leadValidation';
 import { 
   MapSkeleton, 
   PropertyInfoSkeleton, 
@@ -41,6 +43,7 @@ import {
 import { client } from '@/app/utils/aws/data/frontEndClient';
 import { getFrontEndAuthSession } from '@/app/utils/aws/auth/amplifyFrontEndUser';
 import { type Schema } from '@/amplify/data/resource';
+
 
 type Lead = Schema['PropertyLead']['type'] & {
   notes?: Array<{ text: string; createdAt: string; createdBy?: string }> | null;
@@ -98,12 +101,31 @@ function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
   const [zestimateInput, setZestimateInput] = useState('');
   const [zestimateUrlInput, setZestimateUrlInput] = useState('');
 
+  // 🏠 Address Editing State
+  const [showEditAddressModal, setShowEditAddressModal] = useState(false);
+  const [selectedNewAddress, setSelectedNewAddress] = useState<ParsedAddress | null>(null);
+  const [manualStreet, setManualStreet] = useState('');
+  const [manualCity, setManualCity] = useState('');
+  const [manualState, setManualState] = useState('');
+  const [manualZip, setManualZip] = useState('');
+  const [showManualFields, setShowManualFields] = useState(false);
+  const [isSavingAddress, setIsSavingAddress] = useState(false);
+
+  // 📞 Contact Management State
+  const [showAddPhoneModal, setShowAddPhoneModal] = useState(false);
+  const [newPhoneInput, setNewPhoneInput] = useState('');
+  const [newPhoneType, setNewPhoneType] = useState<'Mobile' | 'Landline'>('Mobile');
+  const [showAddEmailModal, setShowAddEmailModal] = useState(false);
+  const [newEmailInput, setNewEmailInput] = useState('');
+  const [isSavingContacts, setIsSavingContacts] = useState(false);
+
+  // 🏷️ Pipeline / Disposition State
+  const [isUpdatingDisposition, setIsUpdatingDisposition] = useState(false);
+
   const { isLoaded: isMapLoaded } = useGoogleMaps();
 
   /**
-   * Save a manually-entered Zestimate for properties Zillow's feed doesn't cover. Writes the dollar
-   * amount as a MANUAL value; if a Zillow link is also given, saves the URL/zpid too so the displayed
-   * value links out to that property (mirrors the dashboard table's one-step manual entry).
+   * Save a manually-entered Zestimate for properties Zillow's feed doesn't cover.
    */
   const saveManualZestimate = async () => {
     const amount = Number(zestimateInput.replace(/[$,\s]/g, ''));
@@ -137,6 +159,190 @@ function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
       addToast({ type: 'error', title: 'Save failed', message: err.message || 'Could not save value.' });
     }
   };
+
+  /**
+   * Save updated property address and refresh market intel & valuation
+   */
+  const handleSaveAddress = async () => {
+    const street = selectedNewAddress?.street || manualStreet.trim();
+    const city = selectedNewAddress?.city || manualCity.trim();
+    const state = selectedNewAddress?.state || manualState.trim();
+    const zip = selectedNewAddress?.zip || manualZip.trim();
+
+    if (!street || !city || !state) {
+      addToast({ type: 'error', title: 'Missing fields', message: 'Street, city, and state are required.' });
+      return;
+    }
+
+    setIsSavingAddress(true);
+    try {
+      const updated = await updateLead(lead.id, {
+        ownerAddress: street,
+        ownerCity: city,
+        ownerState: state,
+        ownerZip: zip,
+        ownerCounty: selectedNewAddress?.county || lead.ownerCounty || null,
+        latitude: selectedNewAddress?.lat ?? undefined,
+        longitude: selectedNewAddress?.lng ?? undefined,
+        validationStatus: 'VALID',
+      });
+
+      setLead(updated as Lead);
+      setShowEditAddressModal(false);
+      addToast({ type: 'success', title: 'Address updated', message: `${street}, ${city}, ${state} saved.` });
+      
+      // Auto-trigger market intel refresh for the new address
+      handleRefreshMarketIntel();
+    } catch (err: any) {
+      addToast({ type: 'error', title: 'Update failed', message: err.message || 'Could not update address.' });
+    } finally {
+      setIsSavingAddress(false);
+    }
+  };
+
+  /**
+   * Contact Management: Add Phone
+   */
+  const handleAddPhone = async () => {
+    if (!newPhoneInput.trim()) return;
+    const normalized = formatPhoneE164(newPhoneInput.trim());
+    if (!normalized) {
+      addToast({ type: 'error', title: 'Invalid Phone', message: 'Enter a valid 10-digit US phone number.' });
+      return;
+    }
+
+    setIsSavingContacts(true);
+    try {
+      const currentPhones = [...(lead.phones || [])];
+      const currentLandlines = [...(lead.landlinePhones || [])];
+
+      if (newPhoneType === 'Landline') {
+        if (!currentLandlines.includes(normalized)) {
+          currentLandlines.push(normalized);
+        }
+      } else {
+        const exists = currentPhones.some((p: any) => (typeof p === 'string' ? p === normalized : p.number === normalized));
+        if (!exists) {
+          currentPhones.push(normalized);
+        }
+      }
+
+      const updated = await updateLead(lead.id, {
+        phones: currentPhones,
+        landlinePhones: currentLandlines,
+        skipTraceStatus: 'COMPLETED',
+      });
+
+      setLead(updated as Lead);
+      setNewPhoneInput('');
+      setShowAddPhoneModal(false);
+      addToast({ type: 'success', title: 'Phone Added', message: `${normalized} added successfully.` });
+    } catch (err: any) {
+      addToast({ type: 'error', title: 'Failed to add phone', message: err.message });
+    } finally {
+      setIsSavingContacts(false);
+    }
+  };
+
+  /**
+   * Contact Management: Delete Phone
+   */
+  const handleDeletePhone = async (phoneToDelete: string, isLandline: boolean) => {
+    setIsSavingContacts(true);
+    try {
+      let currentPhones = [...(lead.phones || [])];
+      let currentLandlines = [...(lead.landlinePhones || [])];
+
+      if (isLandline) {
+        currentLandlines = currentLandlines.filter(p => p !== phoneToDelete);
+      } else {
+        currentPhones = currentPhones.filter((p: any) => (typeof p === 'string' ? p !== phoneToDelete : p.number !== phoneToDelete));
+      }
+
+      const updated = await updateLead(lead.id, {
+        phones: currentPhones,
+        landlinePhones: currentLandlines,
+      });
+
+      setLead(updated as Lead);
+      addToast({ type: 'success', title: 'Phone Removed', message: 'Contact phone removed.' });
+    } catch (err: any) {
+      addToast({ type: 'error', title: 'Failed to remove phone', message: err.message });
+    } finally {
+      setIsSavingContacts(false);
+    }
+  };
+
+  /**
+   * Contact Management: Add Email
+   */
+  const handleAddEmail = async () => {
+    if (!newEmailInput.trim() || !newEmailInput.includes('@')) {
+      addToast({ type: 'error', title: 'Invalid Email', message: 'Enter a valid email address.' });
+      return;
+    }
+
+    setIsSavingContacts(true);
+    try {
+      const currentEmails = [...(lead.emails || [])];
+      const exists = currentEmails.some((e: any) => (typeof e === 'string' ? e === newEmailInput.trim() : e.address === newEmailInput.trim()));
+      if (!exists) {
+        currentEmails.push(newEmailInput.trim());
+      }
+
+      const updated = await updateLead(lead.id, {
+        emails: currentEmails,
+      });
+
+      setLead(updated as Lead);
+      setNewEmailInput('');
+      setShowAddEmailModal(false);
+      addToast({ type: 'success', title: 'Email Added', message: `${newEmailInput.trim()} added.` });
+    } catch (err: any) {
+      addToast({ type: 'error', title: 'Failed to add email', message: err.message });
+    } finally {
+      setIsSavingContacts(false);
+    }
+  };
+
+  /**
+   * Contact Management: Delete Email
+   */
+  const handleDeleteEmail = async (emailToDelete: string) => {
+    setIsSavingContacts(true);
+    try {
+      const currentEmails = (lead.emails || []).filter((e: any) => (typeof e === 'string' ? e !== emailToDelete : e.address !== emailToDelete));
+      const updated = await updateLead(lead.id, {
+        emails: currentEmails,
+      });
+
+      setLead(updated as Lead);
+      addToast({ type: 'success', title: 'Email Removed', message: 'Email address removed.' });
+    } catch (err: any) {
+      addToast({ type: 'error', title: 'Failed to remove email', message: err.message });
+    } finally {
+      setIsSavingContacts(false);
+    }
+  };
+
+  /**
+   * Pipeline: Update Call Outcome / Listing Status
+   */
+  const handleDispositionChange = async (newStatus: string) => {
+    setIsUpdatingDisposition(true);
+    try {
+      const updated = await updateLead(lead.id, {
+        listingStatus: newStatus as any,
+      });
+      setLead(updated as Lead);
+      addToast({ type: 'success', title: 'Status Updated', message: `Lead status set to ${newStatus}.` });
+    } catch (err: any) {
+      addToast({ type: 'error', title: 'Update Failed', message: err.message });
+    } finally {
+      setIsUpdatingDisposition(false);
+    }
+  };
+
 
   const refreshLeadData = async () => {
     try {
@@ -385,7 +591,7 @@ function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
     setIsDeleting(true);
     try {
       await deleteLead(lead.id);
-      router.push('/');
+      router.push('/dashboard');
     } catch (err: any) {
       addToast({ type: 'error', title: 'Delete Failed', message: err.message || 'Please try again' });
       setIsDeleting(false);
@@ -468,17 +674,16 @@ function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
           >
             NEXT
           </button>
-          {access.isAdmin && (
-            <button
-              onClick={() => setShowDeleteModal(true)}
-              disabled={isDeleting}
-              className='px-3 py-1.5 text-sm rounded bg-red-100 text-red-600 hover:bg-red-200 transition shadow-sm disabled:opacity-50'
-            >
-              {isDeleting ? 'Deleting…' : 'Delete'}
-            </button>
-          )}
+          <button
+            onClick={() => setShowDeleteModal(true)}
+            disabled={isDeleting}
+            className='px-3 py-1.5 text-xs font-black uppercase tracking-wider rounded-lg bg-red-50 border border-red-200 text-red-600 hover:bg-red-100 transition shadow-sm disabled:opacity-50'
+          >
+            {isDeleting ? 'Deleting…' : 'Delete Lead'}
+          </button>
         </div>
       </div>
+
 
       <div className='grid grid-cols-1 lg:grid-cols-12 gap-6 md:gap-8'>
         <div className='lg:col-span-9 space-y-6 md:space-y-8'>
@@ -513,9 +718,26 @@ function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
             ) : (
               <div className='p-6 md:p-10 flex flex-col md:flex-row justify-between items-start md:items-end gap-4 md:gap-6'>
                 <div className='flex-1'>
-                  <span className='bg-indigo-600 text-white text-[10px] font-black px-2.5 py-1 rounded uppercase tracking-widest mb-3 inline-block'>
-                    {lead.type}
-                  </span>
+                  <div className='flex items-center gap-3 mb-3'>
+                    <span className='bg-indigo-600 text-white text-[10px] font-black px-2.5 py-1 rounded uppercase tracking-widest inline-block'>
+                      {lead.type}
+                    </span>
+                    <button
+                      onClick={() => {
+                        setSelectedNewAddress(null);
+                        setManualStreet(lead.ownerAddress || '');
+                        setManualCity(lead.ownerCity || '');
+                        setManualState(lead.ownerState || '');
+                        setManualZip(lead.ownerZip || '');
+                        setShowManualFields(false);
+                        setShowEditAddressModal(true);
+                      }}
+                      className='flex items-center gap-1.5 text-xs font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 px-3 py-1 rounded-lg border border-indigo-200 shadow-sm transition'
+                      title='Edit Property Address'
+                    >
+                      <FiEdit2 className='w-3.5 h-3.5' /> Edit Address
+                    </button>
+                  </div>
                   <h2 className='text-2xl md:text-4xl font-black text-slate-900 tracking-tight leading-tight'>
                     {displayAddress}
                   </h2>
@@ -636,23 +858,41 @@ function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
 
                 {/* Quality Contacts Section */}
                 <div>
-                  <h4 className='text-[10px] font-black uppercase text-slate-400 mb-3 flex items-center gap-2'>
-                    <HiOutlinePhone className='text-lg text-indigo-500' />{' '}
-                    Phones (Quality Contacts)
-                  </h4>
+                  <div className='flex items-center justify-between mb-3'>
+                    <h4 className='text-[10px] font-black uppercase text-slate-400 flex items-center gap-2'>
+                      <HiOutlinePhone className='text-lg text-indigo-500' />{' '}
+                      Phones (Quality Contacts)
+                    </h4>
+                    <button
+                      onClick={() => { setNewPhoneInput(''); setNewPhoneType('Mobile'); setShowAddPhoneModal(true); }}
+                      className='flex items-center gap-1 text-[11px] font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 px-2.5 py-1 rounded border border-indigo-200 transition'
+                    >
+                      <FiPlus className='w-3 h-3' /> Add Phone
+                    </button>
+                  </div>
                   <div className='space-y-2'>
                     {lead.phones && lead.phones.length > 0 ? (
                       lead.phones.map((p: any, idx) => (
                         <div
                           key={idx}
-                          className='flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100'
+                          className='flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100 group'
                         >
-                          <span className='font-mono font-bold text-slate-700'>
-                            {formatPhone(p.number || p)}
-                          </span>
-                          <span className='text-[9px] font-black bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded uppercase'>
-                            {p.type || 'Mobile'}
-                          </span>
+                          <div className='flex items-center gap-2'>
+                            <span className='font-mono font-bold text-slate-700'>
+                              {formatPhone(p.number || p)}
+                            </span>
+                            <span className='text-[9px] font-black bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded uppercase'>
+                              {p.type || 'Mobile'}
+                            </span>
+                          </div>
+                          <button
+                            onClick={() => handleDeletePhone(p.number || p, false)}
+                            disabled={isSavingContacts}
+                            title='Remove Phone'
+                            className='text-slate-300 hover:text-red-600 transition p-1'
+                          >
+                            <FiTrash2 className='w-3.5 h-3.5' />
+                          </button>
                         </div>
                       ))
                     ) : (
@@ -667,40 +907,74 @@ function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
                     tries to text. Only populated when the skip trace found no usable mobile. */}
                 {(lead.landlinePhones?.length ?? 0) > 0 && (
                   <div>
-                    <h4 className='text-[10px] font-black uppercase text-slate-400 mb-3 flex items-center gap-2'>
-                      <HiOutlinePhone className='text-lg text-amber-500' />{' '}
-                      Landlines — call only, no SMS
-                    </h4>
+                    <div className='flex items-center justify-between mb-3'>
+                      <h4 className='text-[10px] font-black uppercase text-slate-400 flex items-center gap-2'>
+                        <HiOutlinePhone className='text-lg text-amber-500' />{' '}
+                        Landlines — call only, no SMS
+                      </h4>
+                      <button
+                        onClick={() => { setNewPhoneInput(''); setNewPhoneType('Landline'); setShowAddPhoneModal(true); }}
+                        className='flex items-center gap-1 text-[11px] font-bold text-amber-700 hover:text-amber-900 bg-amber-50 hover:bg-amber-100 px-2.5 py-1 rounded border border-amber-200 transition'
+                      >
+                        <FiPlus className='w-3 h-3' /> Add Landline
+                      </button>
+                    </div>
                     <div className='space-y-2'>
                       {lead.landlinePhones?.map((p: any, idx: number) => (
                         <div
                           key={idx}
-                          className='flex items-center justify-between p-3 bg-amber-50 rounded-xl border border-amber-100'
+                          className='flex items-center justify-between p-3 bg-amber-50 rounded-xl border border-amber-100 group'
                         >
-                          <span className='font-mono font-bold text-slate-700'>
-                            {formatPhone(p)}
-                          </span>
-                          <span className='text-[9px] font-black bg-amber-100 text-amber-800 px-2 py-0.5 rounded uppercase'>
-                            Landline
-                          </span>
+                          <div className='flex items-center gap-2'>
+                            <span className='font-mono font-bold text-slate-700'>
+                              {formatPhone(p)}
+                            </span>
+                            <span className='text-[9px] font-black bg-amber-100 text-amber-800 px-2 py-0.5 rounded uppercase'>
+                              Landline
+                            </span>
+                          </div>
+                          <button
+                            onClick={() => handleDeletePhone(p, true)}
+                            disabled={isSavingContacts}
+                            title='Remove Landline'
+                            className='text-amber-300 hover:text-red-600 transition p-1'
+                          >
+                            <FiTrash2 className='w-3.5 h-3.5' />
+                          </button>
                         </div>
                       ))}
                     </div>
                   </div>
                 )}
                 <div>
-                  <h4 className='text-[10px] font-black uppercase text-slate-400 mb-3 flex items-center gap-2'>
-                    <HiOutlineEnvelope className='text-lg text-indigo-500' />{' '}
-                    Emails (Quality Contacts)
-                  </h4>
+                  <div className='flex items-center justify-between mb-3'>
+                    <h4 className='text-[10px] font-black uppercase text-slate-400 flex items-center gap-2'>
+                      <HiOutlineEnvelope className='text-lg text-indigo-500' />{' '}
+                      Emails (Quality Contacts)
+                    </h4>
+                    <button
+                      onClick={() => { setNewEmailInput(''); setShowAddEmailModal(true); }}
+                      className='flex items-center gap-1 text-[11px] font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 px-2.5 py-1 rounded border border-indigo-200 transition'
+                    >
+                      <FiPlus className='w-3 h-3' /> Add Email
+                    </button>
+                  </div>
                   <div className='space-y-2'>
                     {lead.emails && lead.emails.length > 0 ? (
                       lead.emails.map((e: any, idx) => (
                         <div
                           key={idx}
-                          className='p-3 bg-slate-50 rounded-xl border border-slate-100 text-sm font-medium text-slate-600'
+                          className='flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100 text-sm font-medium text-slate-600 group'
                         >
-                          {e.address || e}
+                          <span>{e.address || e}</span>
+                          <button
+                            onClick={() => handleDeleteEmail(e.address || e)}
+                            disabled={isSavingContacts}
+                            title='Remove Email'
+                            className='text-slate-300 hover:text-red-600 transition p-1'
+                          >
+                            <FiTrash2 className='w-3.5 h-3.5' />
+                          </button>
                         </div>
                       ))
                     ) : (
@@ -710,6 +984,7 @@ function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
                     )}
                   </div>
                 </div>
+
 
                 {/* #1 — What We Searched */}
                 {['COMPLETED', 'NO_MATCH', 'FAILED', 'NO_QUALITY_CONTACTS'].includes(lead.skipTraceStatus || '') && (() => {
@@ -1025,6 +1300,27 @@ function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
                         status={lead.ghlSyncStatus}
                       />
                     </div>
+
+                    <div className='pt-3 border-t border-slate-100 space-y-1.5'>
+                      <label className='text-[10px] font-bold text-slate-400 uppercase tracking-wider block'>
+                        Pipeline / Outcome Status
+                      </label>
+                      <select
+                        value={lead.listingStatus || 'off_market'}
+                        disabled={isUpdatingDisposition}
+                        onChange={(e) => handleDispositionChange(e.target.value)}
+                        className='w-full text-xs font-semibold bg-slate-50 border border-slate-200 rounded-lg p-2 text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500'
+                      >
+                        <option value='off_market'>Off Market (Active Lead)</option>
+                        <option value='active'>Active MLS Listing</option>
+                        <option value='pending'>Under Contract / Pending</option>
+                        <option value='sold'>Sold Already</option>
+                        <option value='not_interested'>Not Interested</option>
+                        <option value='listed_with_realtor'>Listed With Realtor</option>
+                        <option value='wrong_number'>Wrong Number / Invalid</option>
+                        <option value='dnc'>Do Not Call (DNC)</option>
+                      </select>
+                    </div>
                   </div>
                 </CardWrapper>
               </>
@@ -1038,6 +1334,220 @@ function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
         onConfirm={handleDeleteConfirm}
         count={1}
       />
+
+      {/* 🏠 EDIT PROPERTY ADDRESS MODAL */}
+      {showEditAddressModal && (
+        <div className='fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4'>
+          <div className='bg-white rounded-2xl p-6 max-w-lg w-full shadow-2xl space-y-4 animate-in fade-in zoom-in duration-150'>
+            <div className='flex items-center justify-between border-b pb-3'>
+              <h3 className='text-lg font-bold text-slate-900'>Edit Property Address</h3>
+              <button
+                onClick={() => setShowEditAddressModal(false)}
+                className='text-slate-400 hover:text-slate-600 text-sm font-bold'
+              >
+                ✕
+              </button>
+            </div>
+
+            <div>
+              <label className='block text-xs font-bold text-slate-500 uppercase mb-1.5'>
+                Search New Address *
+              </label>
+              <AddressAutocomplete
+                key={lead.id}
+                onSelect={(addr) => {
+                  setSelectedNewAddress(addr);
+                  setManualStreet(addr.street);
+                  setManualCity(addr.city);
+                  setManualState(addr.state);
+                  setManualZip(addr.zip);
+                }}
+                className='w-full'
+              />
+              {selectedNewAddress && (
+                <p className='mt-2 text-xs text-green-700 bg-green-50 border border-green-200 rounded-md p-2'>
+                  ✓ {[selectedNewAddress.street, selectedNewAddress.city, selectedNewAddress.state, selectedNewAddress.zip].filter(Boolean).join(', ')}
+                </p>
+              )}
+
+              <div className='pt-3 mt-3 border-t'>
+                <button
+                  type='button'
+                  onClick={() => setShowManualFields(!showManualFields)}
+                  className='text-xs text-indigo-600 hover:text-indigo-800 underline font-medium'
+                >
+                  {showManualFields ? 'Hide manual fields' : '✏️ Or edit address fields manually'}
+                </button>
+
+                {showManualFields && (
+                  <div className='grid grid-cols-2 gap-2 mt-2 bg-slate-50 p-3 rounded-lg border text-xs space-y-1'>
+                    <div className='col-span-2'>
+                      <label className='block text-slate-600 font-medium'>Street Address</label>
+                      <input
+                        type='text'
+                        value={manualStreet}
+                        onChange={(e) => setManualStreet(e.target.value)}
+                        className='w-full p-2 border rounded text-xs mt-0.5'
+                        placeholder='e.g. 508 2nd St'
+                      />
+                    </div>
+                    <div>
+                      <label className='block text-slate-600 font-medium'>City</label>
+                      <input
+                        type='text'
+                        value={manualCity}
+                        onChange={(e) => setManualCity(e.target.value)}
+                        className='w-full p-2 border rounded text-xs mt-0.5'
+                        placeholder='e.g. Carlstadt'
+                      />
+                    </div>
+                    <div>
+                      <label className='block text-slate-600 font-medium'>State</label>
+                      <input
+                        type='text'
+                        value={manualState}
+                        onChange={(e) => setManualState(e.target.value)}
+                        className='w-full p-2 border rounded text-xs mt-0.5'
+                        placeholder='e.g. NJ'
+                      />
+                    </div>
+                    <div className='col-span-2'>
+                      <label className='block text-slate-600 font-medium'>ZIP Code</label>
+                      <input
+                        type='text'
+                        value={manualZip}
+                        onChange={(e) => setManualZip(e.target.value)}
+                        className='w-full p-2 border rounded text-xs mt-0.5'
+                        placeholder='e.g. 07072'
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className='flex gap-3 pt-2'>
+              <button
+                onClick={handleSaveAddress}
+                disabled={isSavingAddress || (!selectedNewAddress && (!manualStreet || !manualCity || !manualState))}
+                className='flex-1 bg-indigo-600 text-white font-bold text-xs uppercase tracking-wider py-3 rounded-xl hover:bg-indigo-700 disabled:opacity-50 transition shadow-md'
+              >
+                {isSavingAddress ? 'Saving & Refreshing...' : 'Save & Refresh Market Intel'}
+              </button>
+              <button
+                onClick={() => setShowEditAddressModal(false)}
+                className='px-4 py-3 border border-slate-200 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-50 transition'
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 📞 ADD PHONE MODAL */}
+      {showAddPhoneModal && (
+        <div className='fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4'>
+          <div className='bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl space-y-4 animate-in fade-in zoom-in duration-150'>
+            <div className='flex items-center justify-between border-b pb-3'>
+              <h3 className='text-lg font-bold text-slate-900'>Add Phone Number</h3>
+              <button
+                onClick={() => setShowAddPhoneModal(false)}
+                className='text-slate-400 hover:text-slate-600 text-sm font-bold'
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className='space-y-3'>
+              <div>
+                <label className='block text-xs font-bold text-slate-500 uppercase mb-1'>Phone Number *</label>
+                <input
+                  type='tel'
+                  placeholder='(201) 555-1234'
+                  value={newPhoneInput}
+                  onChange={(e) => setNewPhoneInput(e.target.value)}
+                  className='w-full p-2.5 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-indigo-500'
+                />
+              </div>
+              <div>
+                <label className='block text-xs font-bold text-slate-500 uppercase mb-1'>Phone Type</label>
+                <select
+                  value={newPhoneType}
+                  onChange={(e) => setNewPhoneType(e.target.value as any)}
+                  className='w-full p-2.5 border rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-indigo-500'
+                >
+                  <option value='Mobile'>Mobile (SMS & Calls)</option>
+                  <option value='Landline'>Landline (Call Only)</option>
+                </select>
+              </div>
+            </div>
+
+            <div className='flex gap-3 pt-2'>
+              <button
+                onClick={handleAddPhone}
+                disabled={isSavingContacts || !newPhoneInput.trim()}
+                className='flex-1 bg-indigo-600 text-white font-bold text-xs uppercase tracking-wider py-3 rounded-xl hover:bg-indigo-700 disabled:opacity-50 transition shadow-md'
+              >
+                {isSavingContacts ? 'Saving...' : 'Add Phone'}
+              </button>
+              <button
+                onClick={() => setShowAddPhoneModal(false)}
+                className='px-4 py-3 border border-slate-200 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-50 transition'
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ✉️ ADD EMAIL MODAL */}
+      {showAddEmailModal && (
+        <div className='fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4'>
+          <div className='bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl space-y-4 animate-in fade-in zoom-in duration-150'>
+            <div className='flex items-center justify-between border-b pb-3'>
+              <h3 className='text-lg font-bold text-slate-900'>Add Email Address</h3>
+              <button
+                onClick={() => setShowAddEmailModal(false)}
+                className='text-slate-400 hover:text-slate-600 text-sm font-bold'
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className='space-y-3'>
+              <div>
+                <label className='block text-xs font-bold text-slate-500 uppercase mb-1'>Email Address *</label>
+                <input
+                  type='email'
+                  placeholder='owner@example.com'
+                  value={newEmailInput}
+                  onChange={(e) => setNewEmailInput(e.target.value)}
+                  className='w-full p-2.5 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-indigo-500'
+                />
+              </div>
+            </div>
+
+            <div className='flex gap-3 pt-2'>
+              <button
+                onClick={handleAddEmail}
+                disabled={isSavingContacts || !newEmailInput.trim()}
+                className='flex-1 bg-indigo-600 text-white font-bold text-xs uppercase tracking-wider py-3 rounded-xl hover:bg-indigo-700 disabled:opacity-50 transition shadow-md'
+              >
+                {isSavingContacts ? 'Saving...' : 'Add Email'}
+              </button>
+              <button
+                onClick={() => setShowAddEmailModal(false)}
+                className='px-4 py-3 border border-slate-200 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-50 transition'
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </main>
   );
 }
