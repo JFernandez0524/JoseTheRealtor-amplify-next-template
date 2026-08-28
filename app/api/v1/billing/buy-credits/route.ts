@@ -36,17 +36,17 @@ export async function POST(req: NextRequest) {
       '100': {
         credits: 100,
         price: 1000, // $10.00 in cents
-        priceId: 'price_1SovJYR59rm8qzIq5u1WuyXp'
+        priceId: 'price_1SowKIJQcsYG8tQY8Lm7OPbh'
       },
       '250': {
         credits: 250,
         price: 2500, // $25.00 in cents
-        priceId: 'price_1SovJtR59rm8qzIq92wdSF9C'
+        priceId: 'price_1SowKVJQcsYG8tQYvlVbqEHH'
       },
       '500': {
         credits: 500,
         price: 5000, // $50.00 in cents
-        priceId: 'price_1SovK7R59rm8qzIqv8xZHFTM'
+        priceId: 'price_1SowKiJQcsYG8tQYciQWVvMJ'
       }
     };
 

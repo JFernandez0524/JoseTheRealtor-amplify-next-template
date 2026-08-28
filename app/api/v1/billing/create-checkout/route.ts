@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
     const { plan } = await req.json(); // 'sync-plan' or 'ai-outreach'
 
     const priceIds = {
-      'sync-plan': 'price_1ThtFqR59rm8qzIqX9xHfVbn', // $39/month (BETA - SYNC PLAN)
+      'sync-plan': 'price_1SowJdJQcsYG8tQYRsi3nzex', // $39/month (BETA - SYNC PLAN)
       'ai-outreach': 'price_1SovIxR59rm8qzIqJZ6jruwi', // $250/month
     };
 
