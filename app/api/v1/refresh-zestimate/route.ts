@@ -87,35 +87,41 @@ export async function POST(request: NextRequest) {
     let v = result.valuation;
     let serpData: any = null;
 
-    // If Bridge returned no valuation and no manual Zillow URL was provided, try SERP resolver
-    if (!v && !zillowUrl && searchStreet && searchCity && searchState) {
-      const serpRes = await resolvePropertyWithSerp({
-        address: searchStreet,
-        city: searchCity,
-        state: searchState,
-        zip: searchZip,
-      });
+    // 🔎 Proactively query SERP for real-time listing status, MLS active price, and home details
+    if (!zillowUrl && searchStreet && searchCity && searchState) {
+      try {
+        const serpRes = await resolvePropertyWithSerp({
+          address: searchStreet,
+          city: searchCity,
+          state: searchState,
+          zip: searchZip,
+        });
 
-      if (serpRes.success && serpRes.data) {
-        serpData = serpRes.data;
-        if (serpRes.bridgeValuation) {
-          v = serpRes.bridgeValuation;
-          resolvedZpid = serpData.zpid;
-          resolvedZillowUrl = serpData.zillowUrl;
-        } else if (serpData.zpid) {
-          resolvedZpid = serpData.zpid;
-          resolvedZillowUrl = serpData.zillowUrl;
-          const retryBridge = await analyzeBridgeProperty({
-            street: searchStreet,
-            city: searchCity,
-            state: searchState,
-            zip: searchZip,
-            zpid: resolvedZpid,
-          });
-          if (retryBridge.success && retryBridge.valuation) {
-            v = retryBridge.valuation;
+        if (serpRes.success && serpRes.data) {
+          serpData = serpRes.data;
+          if (!v) {
+            if (serpRes.bridgeValuation) {
+              v = serpRes.bridgeValuation;
+              resolvedZpid = serpData.zpid;
+              resolvedZillowUrl = serpData.zillowUrl;
+            } else if (serpData.zpid) {
+              resolvedZpid = serpData.zpid;
+              resolvedZillowUrl = serpData.zillowUrl;
+              const retryBridge = await analyzeBridgeProperty({
+                street: searchStreet,
+                city: searchCity,
+                state: searchState,
+                zip: searchZip,
+                zpid: resolvedZpid,
+              });
+              if (retryBridge.success && retryBridge.valuation) {
+                v = retryBridge.valuation;
+              }
+            }
           }
         }
+      } catch (serpErr: any) {
+        console.warn('⚠️ [REFRESH_ZESTIMATE] Serper resolution failed:', serpErr.message);
       }
     }
 
@@ -174,7 +180,17 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    const leadLabels: string[] = [];
+    if (serpData?.is55Plus) leadLabels.push('55_PLUS');
+    if (serpData?.hoaFee) leadLabels.push('HOA_PROPERTY');
+    if (serpData?.listingStatus === 'active') leadLabels.push('ACTIVE_MLS');
+    if (serpData?.listingStatus === 'sold') leadLabels.push('RECENTLY_SOLD');
+    if (leadLabels.length > 0) {
+      updatePayload.leadLabels = leadLabels;
+    }
+
     const { errors } = await cookiesClient.models.PropertyLead.update(updatePayload as any);
+
 
     if (errors) throw new Error(errors.map((e: any) => e.message).join(', '));
 
