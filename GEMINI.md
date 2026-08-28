@@ -41,8 +41,6 @@
 3. **Cadence & Rate Limits**:
    - Cold email outreach uses a 7-touch cadence over 28 days (every 4 days).
    - Hourly email sending is capped at 50 emails per hour per integration with bounce circuit-breaker protection.
-4. **Marketplace Reviewer Accounts**:
-   - The GoHighLevel reviewer account (`ghl-reviewer@yourailaunch.com`) is strictly limited to a lifetime trial cap of **5 skip trace calls**.
 
 ## AI Persona & Compliance Boundaries
 

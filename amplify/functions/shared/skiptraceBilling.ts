@@ -43,9 +43,7 @@ export function billableSkipCount(statuses: Array<string | null | undefined>): n
 }
 
 // ---- Marketplace App Reviewer Accounts (5 skip-trace trial cap) ----
-export const REVIEWER_EMAILS = new Set<string>([
-  'ghl-reviewer@yourailaunch.com',
-]);
+export const REVIEWER_EMAILS = new Set<string>();
 
 export const MAX_REVIEWER_SKIPS = 5;
 

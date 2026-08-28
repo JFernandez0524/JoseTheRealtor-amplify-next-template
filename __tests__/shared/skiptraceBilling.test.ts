@@ -68,10 +68,9 @@ describe('credit charge math', () => {
   });
 });
 
-describe('Reviewer Account (ghl-reviewer@yourailaunch.com) Quota Rules', () => {
-  it('identifies ghl-reviewer@yourailaunch.com as a reviewer account regardless of case/whitespace', () => {
-    expect(isReviewerAccount('ghl-reviewer@yourailaunch.com')).toBe(true);
-    expect(isReviewerAccount(' GHL-REVIEWER@YOURAILAUNCH.COM ')).toBe(true);
+describe('Reviewer Account Quota Rules', () => {
+  it('returns false for normal accounts and checks REVIEWER_EMAILS set', () => {
+    expect(isReviewerAccount('ghl-reviewer@yourailaunch.com')).toBe(false);
     expect(isReviewerAccount('user@example.com')).toBe(false);
     expect(isReviewerAccount(null)).toBe(false);
     expect(isReviewerAccount(undefined)).toBe(false);

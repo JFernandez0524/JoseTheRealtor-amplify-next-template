@@ -24,7 +24,6 @@ import { RouteExplanationModal } from './RouteExplanationModal';
 import { SyncConfirmModal } from './SyncConfirmModal';
 import { DeleteConfirmModal } from './DeleteConfirmModal';
 import { SyncResultModal } from './SyncResultModal';
-import MarketplaceReviewerBanner from './MarketplaceReviewerBanner';
 import { getFrontEndUser } from '@/app/utils/aws/auth/amplifyFrontEndUser';
 import type { Schema } from '@/amplify/data/resource';
 
@@ -1313,12 +1312,6 @@ export default function LeadDashboardClient({}: Props) {
         handleViewDetails={handleViewDetails}
         isEmailCampaigning={false}
         isPopulatingQueue={isPopulatingQueue}
-      />
-
-      {/* GHL Marketplace Reviewer Banner (active for ghl-reviewer@yourailaunch.com) */}
-      <MarketplaceReviewerBanner
-        userEmail={userAccount?.email}
-        totalSkipsPerformed={userAccount?.totalSkipsPerformed || 0}
       />
 
       {/* GHL Connection Status */}

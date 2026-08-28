@@ -3,6 +3,8 @@ import { skipTraceLeads } from '../functions/skiptraceLeads/resource';
 import { manualGhlSync } from '../functions/manualGhlSync/resource';
 import { fixFailedSyncs } from '../functions/fixFailedSyncs/resource';
 import { populateQueueFromGhl } from '../functions/populateQueueFromGhl/resource';
+import { addUserToGroup } from './add-user-to-group/resource';
+import { removeUserFromGroup } from './remove-user-from-group/resource';
 
 const schema = a.schema({
   CsvUploadJob: a
@@ -458,7 +460,7 @@ const schema = a.schema({
       groupName: a.string().required(),
     })
     .authorization((allow) => [allow.authenticated()])
-    .handler(a.handler.function('addUserToGroup'))
+    .handler(a.handler.function(addUserToGroup))
     .returns(a.json()),
 
   removeUserFromGroup: a
@@ -468,7 +470,7 @@ const schema = a.schema({
       groupName: a.string().required(),
     })
     .authorization((allow) => [allow.group('ADMINS')])
-    .handler(a.handler.function('removeUserFromGroup'))
+    .handler(a.handler.function(removeUserFromGroup))
     .returns(a.json()),
 
   UserAccount: a
