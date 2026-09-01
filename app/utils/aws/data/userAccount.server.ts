@@ -67,7 +67,7 @@ export async function getUserAccount(ownerId: string, email?: string): Promise<U
 }
 
 /**
- * Get existing UserAccount or create a new one with 5 starter credits
+ * Get existing UserAccount or create a new one
  */
 export async function getOrCreateUserAccount(
   ownerId: string,
@@ -78,13 +78,9 @@ export async function getOrCreateUserAccount(
     const account = await getUserAccount(ownerId, email);
     if (account) return account;
 
-    const creditsExpiresAt = new Date();
-    creditsExpiresAt.setDate(creditsExpiresAt.getDate() + 30);
-
     const { data: newAccount, errors } = await cookiesClient.models.UserAccount.create({
       email,
-      credits: 5,
-      creditsExpiresAt: creditsExpiresAt.toISOString(),
+      credits: 0,
       registrationIP: clientIP || '0.0.0.0',
       lastLoginIP: clientIP || '0.0.0.0',
       totalLeadsSynced: 0,
@@ -102,6 +98,7 @@ export async function getOrCreateUserAccount(
     return null;
   }
 }
+
 
 
 /**

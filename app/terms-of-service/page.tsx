@@ -58,7 +58,7 @@ export default function TermsOfService() {
 
               <h3 className="text-lg font-semibold text-gray-800 mb-3">1.2 Subscription Plans</h3>
               <ul className="list-disc pl-6 mb-4 space-y-2">
-                <li><strong>FREE Plan:</strong> 5 starter credits with ability to purchase additional skip trace credits</li>
+                <li><strong>FREE Plan:</strong> Access to property lead management with ability to purchase skip trace credits as needed</li>
                 <li><strong>LAUNCH AI SYNC BETA ($39/month):</strong> Launch AI integration with manual outreach workflows</li>
                 <li><strong>AI OUTREACH PLAN ($250/month):</strong> Automated AI messaging plus all SYNC features</li>
               </ul>

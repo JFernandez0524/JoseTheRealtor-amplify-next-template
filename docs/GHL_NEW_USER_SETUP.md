@@ -29,16 +29,95 @@ When you connect (via either method), the system automatically provisions in you
 
 | What gets created | Details |
 |---|---|
-| 35+ contact custom fields | Property info, outreach counters, AI state, etc. |
-| 1 opportunity custom field | Disposition (single-select) |
-| System tags | All workflow/state tags (so tag-triggered workflows + smart lists resolve) |
+| **41 Contact Custom Fields** | Full property info, mailing info, AI state, counters, sentiment, and outcomes |
+| **1 Opportunity Custom Field** | Disposition (single-select with deal stages) |
+| **45 System Tags** | All workflow, sentiment, cadence, and state tags |
 
 You do **not** need to create those manually.
 
-> **Custom phone Call Dispositions are NOT auto-created** — GHL has no public API for them.
-> Get the 9 dispositions (No Answer, Voicemail, Follow Up, Requested Appointment, Not
-> Interested, Incorrect Number, Listed With Realtor, Sold Already, DNC) from the **GHL
-> snapshot**, or add them manually under **Settings → Phone → Call Dispositions**.
+---
+
+### Complete Reference: Contact Custom Fields (41 Fields)
+
+| Field Name | Key | Data Type | Picklist Options / Values |
+|:---|:---|:---|:---|
+| **Property Address** | `property_address` | TEXT | Property street address |
+| **Property City** | `property_city` | TEXT | Property city |
+| **Property State** | `property_state` | TEXT | Property state (2-letter abbreviation) |
+| **Property Zip** | `property_zip` | TEXT | Property ZIP code |
+| **property_county** | `property_county` | TEXT | Validated county name |
+| **Mailing Address** | `mailing_address` | TEXT | Owner mailing street address |
+| **Mailing City** | `mailing_city` | TEXT | Owner mailing city |
+| **Mailing State** | `mailing_state` | TEXT | Owner mailing state |
+| **Mailing Zipcode** | `mailing_zipcode` | TEXT | Owner mailing ZIP |
+| **Out of State Admin** | `is_out_of_state_admin` | SINGLE_OPTIONS | `YES`, `NO` |
+| **Lead Type** | `lead_type` | SINGLE_OPTIONS | `Probate`, `Preforeclosure`, `Sell As Is`, `General Inquiry` |
+| **Contact Type** | `contact_type` | SINGLE_OPTIONS | `Phone Contact`, `Direct Mail`, `Probate Landing Page`, `Foreclosure Landing Page`, `Sell As-Is Landing Page` |
+| **SkipTraceStatus** | `skiptracestatus` | SINGLE_OPTIONS | `COMPLETED`, `NO_MATCH`, `FAILED`, `NO_QUALITY_CONTACTS`, `PENDING` |
+| **Listing Status** | `listing_status` | SINGLE_OPTIONS | `off market`, `active`, `sold`, `pending`, `fsbo`, `auction`, `skip`, `door knock` |
+| **Zestimate** | `zestimate` | NUMERICAL | Automated property valuation estimate |
+| **cash offer** | `cash_offer` | TEXT | Formatted instant cash offer range |
+| **Call Attempt or Text Counter** | `call_attempt_counter` | NUMERICAL | Total phone/SMS attempts counter |
+| **email attempt counter** | `email_attempt_counter` | NUMERICAL | Total email touches sent |
+| **Mail Sent Count** | `mail_sent_count` | NUMERICAL | Total direct mailers delivered/sent |
+| **Mail Sent With Thanks** | `mail_sent_with_thanks` | SINGLE_OPTIONS | `true`, `false` |
+| **QR Scan Count** | `qr_scan_count` | NUMERICAL | Number of QR code scans from mailers |
+| **Last Call Date** | `last_call_date` | DATE | Date of most recent call/SMS touch |
+| **last email date** | `last_email_date` | DATE | Date of most recent email outreach |
+| **Last Mail Date** | `last_mail_date` | DATE | Date of most recent mail drop |
+| **Mail Delivery Date** | `mail_delivery_date` | DATE | USPS confirmed delivery date |
+| **Phone 2** | `phone_2` | PHONE | Secondary phone number |
+| **Phone 3** | `phone_3` | PHONE | Third phone number |
+| **Phone 4** | `phone_4` | PHONE | Fourth phone number |
+| **Phone 5** | `phone_5` | TEXT | Additional contact phone number |
+| **Email 2** | `email_2` | TEXT | Secondary email address |
+| **Email 3** | `email_3` | TEXT | Third email address |
+| **App User ID** | `app_user_id` | TEXT | App internal account UUID |
+| **App Plan** | `app_plan` | SINGLE_OPTIONS | `SYNC`, `AI` |
+| **App Account Status** | `app_account_status` | SINGLE_OPTIONS | `active`, `past_due`, `canceled` |
+| **App Lead ID** | `app_lead_id` | TEXT | App lead UUID |
+| **AI State** | `ai_state` | SINGLE_OPTIONS | `not_started`, `running`, `paused`, `handoff` |
+| **Lead Source Id** | `lead_source_id` | TEXT | Original upload file / batch ID |
+| **Conversation Sentiment** | `conversation_sentiment` | SINGLE_OPTIONS | `POSITIVE`, `NEUTRAL`, `FRUSTRATED`, `URGENT`, `DISENGAGING` |
+| **Property Tier** | `property_tier` | MULTIPLE_OPTIONS | `luxury`, `mid_range`, `entry_level` |
+| **Zillow Link** | `zillow_link` | TEXT | Direct URL to property on Zillow |
+| **Call Outcome** | `call_outcome` | SINGLE_OPTIONS | `No Answer`, `Left Voicemail`, `Spoke - Follow Up`, `Timeline / Not Ready Yet`, `Appointment Set`, `Not Interested`, `DNC`, `Listed With Realtor`, `Sold Already`, `Wrong Number / Disconnected / Invalid Number`, `DEAD / Max Attempts` |
+
+---
+
+### Opportunity Custom Field (1 Field)
+
+| Field Name | Key | Data Type | Picklist Options |
+|:---|:---|:---|:---|
+| **Disposition** | `disposition` | SINGLE_OPTIONS | `Unanswered/Unreachable`, `Price Too High`, `Not Interested`, `Sold`, `Listed / For Sale`, `Wrong Number`, `Follow Up`, `Voicemail`, `Skiptrace Failed`, `Direct Mail Campaign` |
+
+---
+
+### Custom Phone Call Dispositions (9 Dispositions)
+
+> **Custom phone Call Dispositions are NOT auto-created via API** — GHL has no public API for them.
+> They are pre-loaded in the **GHL snapshot**, or can be added manually under **Settings → Phone → Call Dispositions**:
+
+1. **No Answer**
+2. **Voicemail**
+3. **Follow Up**
+4. **Requested Appointment**
+5. **Not Interested**
+6. **Incorrect Number**
+7. **Listed With Realtor**
+8. **Sold Already**
+9. **DNC**
+
+#### Automatic Call Outcome & Disposition Mapping
+When a lead replies via SMS or email, the AI automatically categorizes their response into the exact matching choice for the **`Call Outcome`** custom field:
+- *"not for sale"*, *"not selling"*, *"not interested"* $\rightarrow$ **`Not Interested`**
+- *"sold"*, *"already sold"* $\rightarrow$ **`Sold Already`**
+- *"listed"*, *"realtor"*, *"agent"* $\rightarrow$ **`Listed With Realtor`**
+- *"wrong number"*, *"wrong person"* $\rightarrow$ **`Wrong Number / Disconnected / Invalid Number`**
+- *"DNC"*, *"do not call"*, *"unsubscribe"* $\rightarrow$ **`DNC`**
+
+*Note: Property status responses stop outreach (`queueStatus = 'DND'`) but do not mark the lead legal DNC/opted-out.*
+
 
 ---
 

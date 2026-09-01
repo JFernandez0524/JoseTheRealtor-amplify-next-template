@@ -40,7 +40,7 @@ export default function DocsPage() {
                 <h3 className="text-lg font-medium text-gray-900 mb-2">Account Setup</h3>
                 <ol className="list-decimal list-inside space-y-2 text-gray-700">
                   <li>Sign up with Google OAuth (recommended) or email</li>
-                  <li>Start with FREE plan (5 starter credits included)</li>
+                  <li>Start with FREE plan (pay-as-you-go skip trace credits)</li>
                   <li>Upgrade to LAUNCH AI SYNC BETA ($39/month) or AI OUTREACH PLAN (Coming Soon) as needed</li>
                 </ol>
               </div>
@@ -315,9 +315,8 @@ export default function DocsPage() {
                   <h4 className="font-medium text-green-800 mb-2">💰 Pricing</h4>
                   <ul className="text-sm text-green-700 space-y-1">
                     <li>• $0.10 per successful skip trace</li>
-                    <li>• FREE users: 5 starter credits</li>
                     <li>• Credit packages: $10, $25, $50</li>
-                    <li>• Credits expire after 30 days</li>
+                    <li>• Pay as you go with instant top-ups</li>
                   </ul>
                 </div>
 
@@ -387,15 +386,90 @@ export default function DocsPage() {
                 </div>
               </div>
 
-              {/* Auto-provisioned */}
-              <div className="bg-green-50 p-4 rounded-lg">
-                <h4 className="font-medium text-green-800 mb-2">✅ Created Automatically When You Connect</h4>
-                <p className="text-sm text-green-700 mb-3">The moment you connect (via PIT or OAuth), the system creates all of the following in your GHL sub-account — no manual setup needed:</p>
-                <ul className="list-disc list-inside space-y-1 text-green-700 text-sm">
-                  <li><strong>35+ contact custom fields</strong> — property address, mailing address, Zestimate, cash offer, AI state, outreach counters, and more</li>
-                  <li><strong>1 opportunity custom field</strong> — Disposition (single-select with deal stages)</li>
-                  <li><strong>9 phone call dispositions</strong> — No Answer, Voicemail, Follow Up, Requested Appointment, Not Interested, Incorrect Number, Listed With Realtor, Sold Already, DNC</li>
-                </ul>
+              {/* Auto-provisioned & Custom Fields */}
+              <div className="bg-green-50/80 border border-green-200 p-5 rounded-2xl">
+                <h4 className="font-bold text-green-900 text-base mb-2 flex items-center gap-2">
+                  <span>✅</span> Created Automatically When You Connect
+                </h4>
+                <p className="text-sm text-green-800 mb-4">The moment you connect your GoHighLevel sub-account (via PIT or OAuth), DealFinder automatically provisions all custom fields, opportunity fields, and system tags:</p>
+                
+                <div className="space-y-4">
+                  {/* Contact Fields Summary */}
+                  <div className="bg-white p-4 rounded-xl border border-green-100 shadow-sm">
+                    <h5 className="font-bold text-gray-900 text-sm mb-2 flex items-center justify-between">
+                      <span>📋 41 Contact Custom Fields</span>
+                      <span className="text-xs bg-green-100 text-green-800 px-2 py-0.5 rounded font-medium">Auto-Created</span>
+                    </h5>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 text-xs text-gray-700">
+                      <div className="bg-gray-50 p-2 rounded"><strong>Property Address</strong> (Text)</div>
+                      <div className="bg-gray-50 p-2 rounded"><strong>Property City</strong> (Text)</div>
+                      <div className="bg-gray-50 p-2 rounded"><strong>Property State</strong> (Text)</div>
+                      <div className="bg-gray-50 p-2 rounded"><strong>Property Zip</strong> (Text)</div>
+                      <div className="bg-gray-50 p-2 rounded"><strong>property_county</strong> (Text)</div>
+                      <div className="bg-gray-50 p-2 rounded"><strong>Mailing Address</strong> (Text)</div>
+                      <div className="bg-gray-50 p-2 rounded"><strong>Mailing City</strong> (Text)</div>
+                      <div className="bg-gray-50 p-2 rounded"><strong>Mailing State</strong> (Text)</div>
+                      <div className="bg-gray-50 p-2 rounded"><strong>Mailing Zipcode</strong> (Text)</div>
+                      <div className="bg-gray-50 p-2 rounded"><strong>Out of State Admin</strong> (YES / NO)</div>
+                      <div className="bg-gray-50 p-2 rounded"><strong>Lead Type</strong> (Probate, Preforeclosure, Sell As Is...)</div>
+                      <div className="bg-gray-50 p-2 rounded"><strong>Contact Type</strong> (Phone, Direct Mail, Landing Page...)</div>
+                      <div className="bg-gray-50 p-2 rounded"><strong>SkipTraceStatus</strong> (COMPLETED, NO_MATCH...)</div>
+                      <div className="bg-gray-50 p-2 rounded"><strong>Listing Status</strong> (off market, active, sold...)</div>
+                      <div className="bg-gray-50 p-2 rounded"><strong>Zestimate</strong> (Numerical)</div>
+                      <div className="bg-gray-50 p-2 rounded"><strong>cash offer</strong> (Text)</div>
+                      <div className="bg-gray-50 p-2 rounded"><strong>Call Attempt or Text Counter</strong> (Numerical)</div>
+                      <div className="bg-gray-50 p-2 rounded"><strong>email attempt counter</strong> (Numerical)</div>
+                      <div className="bg-gray-50 p-2 rounded"><strong>Mail Sent Count</strong> (Numerical)</div>
+                      <div className="bg-gray-50 p-2 rounded"><strong>Mail Sent With Thanks</strong> (true / false)</div>
+                      <div className="bg-gray-50 p-2 rounded"><strong>QR Scan Count</strong> (Numerical)</div>
+                      <div className="bg-gray-50 p-2 rounded"><strong>Last Call Date</strong> (Date)</div>
+                      <div className="bg-gray-50 p-2 rounded"><strong>last email date</strong> (Date)</div>
+                      <div className="bg-gray-50 p-2 rounded"><strong>Last Mail Date</strong> (Date)</div>
+                      <div className="bg-gray-50 p-2 rounded"><strong>Mail Delivery Date</strong> (Date)</div>
+                      <div className="bg-gray-50 p-2 rounded"><strong>Phone 2, 3, 4, 5</strong> (Phone / Text)</div>
+                      <div className="bg-gray-50 p-2 rounded"><strong>Email 2, 3</strong> (Text)</div>
+                      <div className="bg-gray-50 p-2 rounded"><strong>App User ID &amp; Lead ID</strong> (Text)</div>
+                      <div className="bg-gray-50 p-2 rounded"><strong>App Plan</strong> (SYNC / AI)</div>
+                      <div className="bg-gray-50 p-2 rounded"><strong>App Account Status</strong> (active, past_due...)</div>
+                      <div className="bg-gray-50 p-2 rounded"><strong>AI State</strong> (not_started, running, paused, handoff)</div>
+                      <div className="bg-gray-50 p-2 rounded"><strong>Conversation Sentiment</strong> (POSITIVE, NEUTRAL...)</div>
+                      <div className="bg-gray-50 p-2 rounded"><strong>Property Tier</strong> (luxury, mid_range, entry_level)</div>
+                      <div className="bg-gray-50 p-2 rounded"><strong>Zillow Link</strong> (Text URL)</div>
+                      <div className="bg-blue-50 border border-blue-200 p-2 rounded col-span-full">
+                        <strong>Call Outcome</strong> (Single Option: <em>No Answer, Left Voicemail, Spoke - Follow Up, Timeline / Not Ready Yet, Appointment Set, Not Interested, DNC, Listed With Realtor, Sold Already, Wrong Number / Disconnected / Invalid Number, DEAD / Max Attempts</em>)
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Opportunity Field & Call Dispositions */}
+                  <div className="grid md:grid-cols-2 gap-4">
+                    <div className="bg-white p-4 rounded-xl border border-green-100 shadow-sm">
+                      <h5 className="font-bold text-gray-900 text-sm mb-1.5 flex items-center justify-between">
+                        <span>🎯 1 Opportunity Custom Field</span>
+                        <span className="text-xs bg-green-100 text-green-800 px-2 py-0.5 rounded font-medium">Auto-Created</span>
+                      </h5>
+                      <p className="text-xs text-gray-600 mb-2"><strong>Disposition</strong> (Single Select):</p>
+                      <div className="flex flex-wrap gap-1 text-[11px] text-gray-700">
+                        {['Unanswered/Unreachable', 'Price Too High', 'Not Interested', 'Sold', 'Listed / For Sale', 'Wrong Number', 'Follow Up', 'Voicemail', 'Skiptrace Failed', 'Direct Mail Campaign'].map(d => (
+                          <span key={d} className="bg-gray-100 px-2 py-0.5 rounded">{d}</span>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="bg-white p-4 rounded-xl border border-amber-200 shadow-sm">
+                      <h5 className="font-bold text-gray-900 text-sm mb-1.5 flex items-center justify-between">
+                        <span>📞 9 Phone Call Dispositions</span>
+                        <span className="text-xs bg-amber-100 text-amber-800 px-2 py-0.5 rounded font-medium">Snapshot / Manual</span>
+                      </h5>
+                      <p className="text-xs text-gray-600 mb-2">Set up in <strong>Settings → Phone System → Call Dispositions</strong> (or via snapshot):</p>
+                      <div className="flex flex-wrap gap-1 text-[11px] text-gray-700">
+                        {['No Answer', 'Voicemail', 'Follow Up', 'Requested Appointment', 'Not Interested', 'Incorrect Number', 'Listed With Realtor', 'Sold Already', 'DNC'].map(d => (
+                          <span key={d} className="bg-amber-50 border border-amber-100 px-2 py-0.5 rounded font-medium text-amber-900">{d}</span>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
 
               {/* Phone number */}
