@@ -1,6 +1,5 @@
 // amplify/auth/resource.ts
 import { defineAuth, secret } from '@aws-amplify/backend';
-import { addUserToGroup } from '../data/add-user-to-group/resource';
 import { postConfirmation } from './post-confirmation/resource';
 import { preSignUp } from './pre-signup/resource';
 
@@ -54,7 +53,6 @@ export const auth = defineAuth({
     postConfirmation,
   },
   access: (allow) => [
-    allow.resource(addUserToGroup).to(['addUserToGroup']),
     allow.resource(postConfirmation).to(['addUserToGroup']),
     allow.resource(preSignUp).to(['listUsers']),
   ],
