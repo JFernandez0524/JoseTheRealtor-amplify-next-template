@@ -2,12 +2,12 @@ import { createGhlClient } from './ghlClient';
 
 type FieldDef = { name: string; dataType: string; picklistOptions?: string[] };
 
-const CONTACT_FIELDS: Array<{ key: string } & FieldDef> = [
+export const CONTACT_FIELDS: Array<{ key: string } & FieldDef> = [
   { key: 'property_address',     name: 'Property Address',          dataType: 'TEXT' },
   { key: 'property_city',        name: 'Property City',             dataType: 'TEXT' },
   { key: 'property_state',       name: 'Property State',            dataType: 'TEXT' },
   { key: 'property_zip',         name: 'Property Zip',              dataType: 'TEXT' },
-  { key: 'property_county',      name: 'property_county',           dataType: 'TEXT' },
+  { key: 'property_county',      name: 'Property County',           dataType: 'TEXT' },
   { key: 'mailing_address',      name: 'Mailing Address',           dataType: 'TEXT' },
   { key: 'mailing_city',         name: 'Mailing City',              dataType: 'TEXT' },
   { key: 'mailing_state',        name: 'Mailing State',             dataType: 'TEXT' },
@@ -27,8 +27,7 @@ const CONTACT_FIELDS: Array<{ key: string } & FieldDef> = [
   {
     key: 'contact_type',
     name: 'Contact Type',
-    dataType: 'SINGLE_OPTIONS',
-    picklistOptions: ['Phone Contact', 'Direct Mail', 'Probate Landing Page', 'Foreclosure Landing Page', 'Sell As-Is Landing Page'],
+    dataType: 'TEXT',
   },
   {
     key: 'skiptracestatus',
@@ -43,7 +42,7 @@ const CONTACT_FIELDS: Array<{ key: string } & FieldDef> = [
     picklistOptions: ['off market', 'active', 'sold', 'pending', 'fsbo', 'auction', 'skip', 'door knock'],
   },
   { key: 'zestimate',            name: 'Zestimate',                 dataType: 'NUMERICAL' },
-  { key: 'cash_offer',           name: 'cash offer',                dataType: 'TEXT' },
+  { key: 'cash_offer',           name: 'Cash Offer',                dataType: 'NUMERICAL' },
   { key: 'call_attempt_counter', name: 'Call Attempt or Text Counter', dataType: 'NUMERICAL' },
   { key: 'email_attempt_counter', name: 'email attempt counter',   dataType: 'NUMERICAL' },
   { key: 'mail_sent_count',      name: 'Mail Sent Count',           dataType: 'NUMERICAL' },
@@ -55,13 +54,13 @@ const CONTACT_FIELDS: Array<{ key: string } & FieldDef> = [
   },
   { key: 'qr_scan_count',        name: 'QR Scan Count',             dataType: 'NUMERICAL' },
   { key: 'last_call_date',       name: 'Last Call Date',            dataType: 'DATE' },
-  { key: 'last_email_date',      name: 'last email date',           dataType: 'DATE' },
+  { key: 'last_email_date',      name: 'Last Email Date',           dataType: 'DATE' },
   { key: 'last_mail_date',       name: 'Last Mail Date',            dataType: 'DATE' },
   { key: 'mail_delivery_date',   name: 'Mail Delivery Date',        dataType: 'DATE' },
   { key: 'phone_2',              name: 'Phone 2',                   dataType: 'PHONE' },
   { key: 'phone_3',              name: 'Phone 3',                   dataType: 'PHONE' },
   { key: 'phone_4',              name: 'Phone 4',                   dataType: 'PHONE' },
-  { key: 'phone_5',              name: 'Phone 5',                   dataType: 'TEXT' },
+  { key: 'phone_5',              name: 'Phone 5',                   dataType: 'PHONE' },
   { key: 'email_2',              name: 'Email 2',                   dataType: 'TEXT' },
   { key: 'email_3',              name: 'Email 3',                   dataType: 'TEXT' },
   { key: 'app_user_id',          name: 'App User ID',               dataType: 'TEXT' },
@@ -74,8 +73,7 @@ const CONTACT_FIELDS: Array<{ key: string } & FieldDef> = [
   {
     key: 'app_account_status',
     name: 'App Account Status',
-    dataType: 'SINGLE_OPTIONS',
-    picklistOptions: ['active', 'past_due', 'canceled'],
+    dataType: 'TEXT',
   },
   { key: 'app_lead_id',          name: 'App Lead ID',               dataType: 'TEXT' },
   {
@@ -84,7 +82,7 @@ const CONTACT_FIELDS: Array<{ key: string } & FieldDef> = [
     dataType: 'SINGLE_OPTIONS',
     picklistOptions: ['not_started', 'running', 'paused', 'handoff'],
   },
-  { key: 'lead_source_id',       name: 'Lead Source Id',            dataType: 'TEXT' },
+  { key: 'lead_source_id',       name: 'Lead Source ID',            dataType: 'TEXT' },
   {
     key: 'conversation_sentiment',
     name: 'Conversation Sentiment',
@@ -94,7 +92,7 @@ const CONTACT_FIELDS: Array<{ key: string } & FieldDef> = [
   {
     key: 'property_tier',
     name: 'Property Tier',
-    dataType: 'MULTIPLE_OPTIONS',
+    dataType: 'SINGLE_OPTIONS',
     picklistOptions: ['luxury', 'mid_range', 'entry_level'],
   },
   { key: 'zillow_link',          name: 'Zillow Link',               dataType: 'TEXT' },
@@ -118,23 +116,11 @@ const CONTACT_FIELDS: Array<{ key: string } & FieldDef> = [
   },
 ];
 
-const OPPORTUNITY_FIELDS: Array<{ key: string } & FieldDef> = [
+export const OPPORTUNITY_FIELDS: Array<{ key: string } & FieldDef> = [
   {
     key: 'disposition',
     name: 'Disposition',
-    dataType: 'SINGLE_OPTIONS',
-    picklistOptions: [
-      'Unanswered/Unreachable',
-      'Price Too High',
-      'Not Interested',
-      'Sold',
-      'Listed / For Sale',
-      'Wrong Number',
-      'Follow Up',
-      'Voicemail',
-      'Skiptrace Failed',
-      'Direct Mail Campaign',
-    ],
+    dataType: 'TEXT',
   },
 ];
 
@@ -222,7 +208,22 @@ export async function provisionCustomFields(locationId: string, token: string): 
   const result: Record<string, string> = {};
 
   for (const field of CONTACT_FIELDS) {
-    const existingId = existingByName.get(field.name.toLowerCase().trim());
+    const normalizedName = field.name.toLowerCase().trim();
+    const underscoreName = normalizedName.replace(/\s+/g, '_');
+    const spaceName = normalizedName.replace(/_/g, ' ');
+
+    let existingId = existingByName.get(normalizedName)
+      || existingByName.get(spaceName)
+      || existingByName.get(underscoreName);
+
+    // Fallbacks for legacy/alternative naming
+    if (!existingId && field.key === 'call_attempt_counter') {
+      existingId = existingByName.get('call attempt counter');
+    }
+    if (!existingId && field.key === 'email_attempt_counter') {
+      existingId = existingByName.get('email attempt counter');
+    }
+
     if (existingId) {
       result[field.key] = existingId;
       console.log(`✅ [PROVISIONER] Field "${field.name}" already exists: ${existingId}`);

@@ -1,7 +1,7 @@
 import { cookiesClient } from '@/app/utils/aws/auth/amplifyServerUtils.server';
 import { AuthGetUserGroupsServer, AuthGetCurrentUserServer } from '@/app/utils/aws/auth/amplifyServerUtils.server';
 import { redirect } from 'next/navigation';
-import AdminDashboard from '@/app/components/admin/AdminDashboard';
+import AdminDashboard, { type AdminUser } from '@/app/components/admin/AdminDashboard';
 import { type Schema } from '@/amplify/data/resource';
 import { fetchAllLeads } from '@/app/utils/aws/data/pagination';
 
@@ -40,8 +40,21 @@ export default async function AdminPage() {
   });
   const deduplicatedUsers = Array.from(userMap.values());
 
-  // Serialize for client component
-  const initialUsers: UserAccount[] = JSON.parse(JSON.stringify(deduplicatedUsers));
+  // Serialize and assign currentPlan based on DynamoDB record (ghlIntegrationType)
+  const initialUsers: AdminUser[] = deduplicatedUsers.map(user => {
+    let plan: 'FREE' | 'PRO' | 'AI_PLAN' | 'ADMINS' = 'FREE';
+    if (user.owner === currentUser?.userId) {
+      plan = 'ADMINS';
+    } else if (user.ghlIntegrationType === 'OAUTH') {
+      plan = 'PRO';
+    } else if (user.ghlIntegrationType === 'SUB_ACCOUNT') {
+      plan = 'AI_PLAN';
+    }
+    return {
+      ...JSON.parse(JSON.stringify(user)),
+      currentPlan: plan,
+    };
+  });
   const initialLeads: PropertyLead[] = JSON.parse(JSON.stringify(leadsData || []));
 
   return (

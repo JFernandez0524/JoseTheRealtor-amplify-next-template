@@ -92,7 +92,7 @@ export const handler: Handler = async (event) => {
 
     // 1. Try direct lookup by App Lead ID (fast, works for newly synced contacts)
     let lead: Record<string, any> | undefined;
-    const appLeadId = payload['App Lead ID'] || payload['Lead Source Id'];
+    const appLeadId = payload['App Lead ID'] || payload['Lead Source ID'] || payload['Lead Source Id'];
     if (appLeadId) {
       const get = await docClient.send(new GetCommand({
         TableName: process.env.AMPLIFY_DATA_PropertyLead_TABLE_NAME,

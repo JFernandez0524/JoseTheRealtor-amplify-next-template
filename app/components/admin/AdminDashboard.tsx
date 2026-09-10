@@ -13,8 +13,12 @@ import {
 type UserAccount = Schema['UserAccount']['type'];
 type PropertyLead = Schema['PropertyLead']['type'];
 
+export type AdminUser = UserAccount & {
+  currentPlan?: 'FREE' | 'PRO' | 'AI_PLAN' | 'ADMINS';
+};
+
 interface AdminDashboardProps {
-  initialUsers: UserAccount[];
+  initialUsers: AdminUser[];
   initialLeads: PropertyLead[];
   currentUserId: string;
 }
@@ -24,7 +28,7 @@ export default function AdminDashboard({
   initialLeads,
   currentUserId,
 }: AdminDashboardProps) {
-  const [users, setUsers] = useState(initialUsers);
+  const [users, setUsers] = useState<AdminUser[]>(initialUsers);
   const [leads] = useState(initialLeads);
   const [loading, setLoading] = useState(false);
   const [expandedLeadId, setExpandedLeadId] = useState<string | null>(null);
@@ -52,7 +56,15 @@ export default function AdminDashboard({
       .catch(console.error);
   }, []);
 
-  const changeUserPlan = async (user: UserAccount, targetGroup: string) => {
+  const getUserPlan = (user: AdminUser): 'FREE' | 'PRO' | 'AI_PLAN' | 'ADMINS' => {
+    if (user.currentPlan) return user.currentPlan;
+    if (user.owner === currentUserId) return 'ADMINS';
+    if (user.ghlIntegrationType === 'OAUTH') return 'PRO';
+    if (user.ghlIntegrationType === 'SUB_ACCOUNT') return 'AI_PLAN';
+    return 'FREE';
+  };
+
+  const changeUserPlan = async (user: AdminUser, targetGroup: string) => {
     // Extract Cognito username if compound ID (e.g. sub::username), fallback to email
     const targetUserId = user.owner?.includes('::')
       ? (user.owner.split('::')[1] || user.owner)
@@ -89,19 +101,18 @@ export default function AdminDashboard({
       if (errors) {
         alert(`Plan update failed: ${errors[0].message}`);
       } else {
-        // If updating to a paid tier, ensure OAUTH is set for GHL integration
-        if (targetGroup === 'PRO' || targetGroup === 'AI_PLAN') {
-          try {
-            await client.models.UserAccount.update({
-              id: user.id,
-              ghlIntegrationType: 'OAUTH',
-            });
-          } catch {
-            // Non-blocking
-          }
+        // Sync DynamoDB ghlIntegrationType with plan tier
+        const ghlType = (targetGroup === 'PRO' || targetGroup === 'AI_PLAN') ? 'OAUTH' : 'NONE';
+        try {
+          await client.models.UserAccount.update({
+            id: user.id,
+            ghlIntegrationType: ghlType,
+          });
+        } catch {
+          // Non-blocking
         }
+        setUsers(prev => prev.map(u => u.id === user.id ? { ...u, ghlIntegrationType: ghlType, currentPlan: targetGroup as any } : u));
         alert(`Successfully changed ${user.email}'s plan to ${targetGroup}!`);
-        window.location.reload();
       }
     } catch (err: any) {
       alert(`Error updating plan: ${err.message}`);
@@ -752,9 +763,32 @@ export default function AdminDashboard({
                   </td>
                   <td className='px-6 py-4 whitespace-nowrap text-sm text-gray-900'>
                     <div className='flex items-center gap-2'>
+                      {/* Active Plan Badge */}
+                      {getUserPlan(user) === 'PRO' && (
+                        <span className='inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-300'>
+                          PRO (Beta)
+                        </span>
+                      )}
+                      {getUserPlan(user) === 'ADMINS' && (
+                        <span className='inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-purple-100 text-purple-800 border border-purple-300'>
+                          ADMIN
+                        </span>
+                      )}
+                      {getUserPlan(user) === 'AI_PLAN' && (
+                        <span className='inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-indigo-100 text-indigo-800 border border-indigo-300'>
+                          AI OUTREACH
+                        </span>
+                      )}
+                      {getUserPlan(user) === 'FREE' && (
+                        <span className='inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-600 border border-slate-200'>
+                          FREE
+                        </span>
+                      )}
+
                       <select
                         id={`plan-select-${user.id}`}
-                        defaultValue='FREE'
+                        defaultValue={getUserPlan(user)}
+                        key={`plan-select-${user.id}-${getUserPlan(user)}`}
                         className='text-xs border border-slate-300 rounded-lg px-2.5 py-1.5 bg-slate-50 font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500'
                         disabled={loading}
                       >
