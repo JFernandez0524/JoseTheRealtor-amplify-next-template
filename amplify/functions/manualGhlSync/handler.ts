@@ -32,7 +32,7 @@ console.log('🔧 [GHL_SYNC] Environment:', {
 // ---------------------------------------------------------
 // HELPER: Core GHL Sync Logic
 // ---------------------------------------------------------
-async function processGhlSync(lead: any, groups: string[] = [], ownerId: string = ''): Promise<SyncResult> {
+async function processGhlSync(lead: any, groups: string[] = [], ownerId: string = '', userEmail: string = ''): Promise<SyncResult> {
   console.log(`🔄 [GHL_SYNC] Processing sync for lead: ${lead.id}`);
   console.log(`🔄 [GHL_SYNC] Owner: ${ownerId}, Groups: ${groups.join(', ')}`);
   
@@ -88,7 +88,6 @@ async function processGhlSync(lead: any, groups: string[] = [], ownerId: string 
   }
 
   // 🚦 Check GHL rate limits before syncing
-  let userAccount: any = null;
   try {
     let { Items: accounts } = await docClient.send(new ScanCommand({
       TableName: userAccountTableName,
@@ -102,25 +101,17 @@ async function processGhlSync(lead: any, groups: string[] = [], ownerId: string 
       }
     }));
 
-    if (!accounts || accounts.length === 0) {
-      const userEmail = (
-        (identity as any)?.claims?.['email'] ||
-        (identity as any)?.claims?.['username'] ||
-        ''
-      ).toLowerCase().trim();
-      if (userEmail) {
-        const emailResult = await docClient.send(new ScanCommand({
-          TableName: userAccountTableName,
-          FilterExpression: '#email = :email',
-          ExpressionAttributeNames: { '#email': 'email' },
-          ExpressionAttributeValues: { ':email': userEmail },
-        }));
-        accounts = emailResult.Items || [];
-      }
+    if ((!accounts || accounts.length === 0) && userEmail) {
+      const emailResult = await docClient.send(new ScanCommand({
+        TableName: userAccountTableName,
+        FilterExpression: '#email = :email',
+        ExpressionAttributeNames: { '#email': 'email' },
+        ExpressionAttributeValues: { ':email': userEmail },
+      }));
+      accounts = emailResult.Items || [];
     }
 
     if (accounts && accounts[0]) {
-      userAccount = accounts[0];
       const account = accounts[0];
       const now = Date.now();
       const lastHourReset = account.lastHourReset || 0;
@@ -270,6 +261,12 @@ export const handler: Handler = async (event) => {
     groups = (identity as any).claims?.['cognito:groups'] || (identity as any).groups || [];
   }
 
+  const userEmail = (
+    (identity as any)?.claims?.['email'] ||
+    (identity as any)?.claims?.['username'] ||
+    ''
+  ).toLowerCase().trim();
+
   // 🛡️ 2. Identity Guard
   if (!ownerId) {
     return {
@@ -304,27 +301,34 @@ export const handler: Handler = async (event) => {
     }
 
     // 🚀 5. Execute Logic
-    const syncResult = await processGhlSync(lead, groups, ownerId);
+    const syncResult = await processGhlSync(lead, groups, ownerId, userEmail);
 
     // 📊 6. Track usage
     if (syncResult.status === 'SUCCESS') {
       try {
-        let account = userAccount;
-        if (!account) {
-          const { Items: accounts } = await docClient.send(new ScanCommand({
+        let { Items: accounts } = await docClient.send(new ScanCommand({
+          TableName: userAccountTableName,
+          FilterExpression: '#owner = :ownerId OR begins_with(#owner, :ownerIdPrefix)',
+          ExpressionAttributeNames: {
+            '#owner': 'owner'
+          },
+          ExpressionAttributeValues: {
+            ':ownerId': ownerId,
+            ':ownerIdPrefix': `${ownerId}::`
+          }
+        }));
+
+        if ((!accounts || accounts.length === 0) && userEmail) {
+          const emailResult = await docClient.send(new ScanCommand({
             TableName: userAccountTableName,
-            FilterExpression: '#owner = :ownerId OR begins_with(#owner, :ownerIdPrefix)',
-            ExpressionAttributeNames: {
-              '#owner': 'owner'
-            },
-            ExpressionAttributeValues: {
-              ':ownerId': ownerId,
-              ':ownerIdPrefix': `${ownerId}::`
-            }
+            FilterExpression: '#email = :email',
+            ExpressionAttributeNames: { '#email': 'email' },
+            ExpressionAttributeValues: { ':email': userEmail },
           }));
-          account = accounts?.[0];
+          accounts = emailResult.Items || [];
         }
 
+        const account = accounts?.[0];
         if (account) {
           const now = Date.now();
           const lastHourReset = account.lastHourReset || 0;
@@ -343,10 +347,10 @@ export const handler: Handler = async (event) => {
 
           await docClient.send(new UpdateCommand({
             TableName: userAccountTableName,
-            Key: { id: accounts[0].id },
+            Key: { id: account.id },
             UpdateExpression: 'SET totalLeadsSynced = :newTotal, hourlyMessageCount = :hourly, dailyMessageCount = :daily, lastHourReset = :hourReset, lastDayReset = :dayReset',
             ExpressionAttributeValues: {
-              ':newTotal': (accounts[0].totalLeadsSynced || 0) + 1,
+              ':newTotal': (account.totalLeadsSynced || 0) + 1,
               ':hourly': newHourlyCount,
               ':daily': newDailyCount,
               ':hourReset': newHourReset,
