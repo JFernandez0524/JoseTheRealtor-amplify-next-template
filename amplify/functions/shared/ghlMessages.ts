@@ -55,6 +55,17 @@ export function extractGhlMessages(responseData: unknown): GhlMessage[] {
 }
 
 /**
+ * Whether a message is a call, voicemail, or audio event rather than a text message.
+ */
+export function isCallOrVoicemailMessage(msg: GhlMessage | null | undefined): boolean {
+  if (!msg) return false;
+  const mt = typeof msg.messageType === 'string' ? msg.messageType.toUpperCase() : '';
+  if (mt.includes('CALL') || mt.includes('VOICEMAIL')) return true;
+  if (msg.type === 6 || msg.type === 10 || msg.type === 100) return true;
+  return false;
+}
+
+/**
  * Whether an outbound message was sent by a human in the GHL UI, as opposed to by this app's AI or
  * by a GHL workflow.
  *
@@ -65,10 +76,13 @@ export function extractGhlMessages(responseData: unknown): GhlMessage[] {
  * Observed markers on live payloads:
  * - this app's AI  → `meta.marketplace.appName` present (e.g. "DealFinder")
  * - GHL automation → `source: "workflow"`
- * - a human        → neither
+ * - calls/voicemail→ excluded (not text chat)
+ * - a human        → text sent directly from GHL
  */
 export function isHumanOutbound(msg: GhlMessage | null | undefined): boolean {
   if (!msg || msg.direction !== 'outbound') return false;
+  if (isSystemMessage(msg)) return false;
+  if (isCallOrVoicemailMessage(msg)) return false;
   if (msg.meta?.marketplace) return false; // sent by an installed app — i.e. us
   if (msg.source === 'workflow') return false; // sent by a GHL automation
   return true;

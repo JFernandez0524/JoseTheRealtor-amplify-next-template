@@ -3,6 +3,7 @@ import {
   extractGhlMessages,
   isHumanOutbound,
   isSystemMessage,
+  isCallOrVoicemailMessage,
 } from '../../amplify/functions/shared/ghlMessages';
 
 // Parsing for GET /conversations/{id}/messages. Four call sites previously read `data.messages`
@@ -159,5 +160,34 @@ describe('isSystemMessage', () => {
   it('is false for null/undefined', () => {
     expect(isSystemMessage(null)).toBe(false);
     expect(isSystemMessage(undefined)).toBe(false);
+  });
+});
+
+describe('isCallOrVoicemailMessage', () => {
+  it('identifies call and voicemail message types', () => {
+    expect(isCallOrVoicemailMessage({ messageType: 'TYPE_CALL' })).toBe(true);
+    expect(isCallOrVoicemailMessage({ messageType: 'TYPE_OUTBOUND_CALL' })).toBe(true);
+    expect(isCallOrVoicemailMessage({ messageType: 'TYPE_INBOUND_CALL' })).toBe(true);
+    expect(isCallOrVoicemailMessage({ messageType: 'TYPE_CAMPAIGN_VOICEMAIL' })).toBe(true);
+    expect(isCallOrVoicemailMessage({ messageType: 'TYPE_VOICEMAIL' })).toBe(true);
+  });
+
+  it('identifies numeric call type codes', () => {
+    expect(isCallOrVoicemailMessage({ type: 6 })).toBe(true);
+    expect(isCallOrVoicemailMessage({ type: 10 })).toBe(true);
+    expect(isCallOrVoicemailMessage({ type: 100 })).toBe(true);
+  });
+
+  it('is false for SMS and emails', () => {
+    expect(isCallOrVoicemailMessage({ messageType: 'TYPE_SMS', type: 2 })).toBe(false);
+    expect(isCallOrVoicemailMessage({ messageType: 'TYPE_EMAIL', type: 3 })).toBe(false);
+    expect(isCallOrVoicemailMessage(null)).toBe(false);
+    expect(isCallOrVoicemailMessage(undefined)).toBe(false);
+  });
+
+  it('ensures isHumanOutbound is false for call and voicemail events', () => {
+    expect(isHumanOutbound({ direction: 'outbound', messageType: 'TYPE_CALL' })).toBe(false);
+    expect(isHumanOutbound({ direction: 'outbound', messageType: 'TYPE_CAMPAIGN_VOICEMAIL' })).toBe(false);
+    expect(isHumanOutbound({ direction: 'outbound', type: 6 })).toBe(false);
   });
 });

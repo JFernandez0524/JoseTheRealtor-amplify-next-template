@@ -87,23 +87,12 @@ export async function hasManualCommunication(
     const messages = extractGhlMessages(res.data);
 
     for (const msg of messages) {
-      // 1. Human outbound message sent by agent directly
+      // 1. Human outbound message sent by agent directly (text only; calls/voicemail excluded)
       if (msg.direction === 'outbound' && isHumanOutbound(msg)) {
         console.log(`🤚 [ACTIVITY] Found human outbound message at ${msg.dateAdded}`);
         return {
           hasManual: true,
           reason: 'Manual agent message detected in conversation history',
-          lastTime: msg.dateAdded ?? null,
-        };
-      }
-
-      // 2. Phone call events (logged as TYPE_CALL, TYPE_INBOUND_CALL, TYPE_OUTBOUND_CALL, etc.)
-      const msgType = (msg.messageType || '').toString().toUpperCase();
-      if (msgType.includes('CALL') || msg.type === 6) {
-        console.log(`📞 [ACTIVITY] Found call event (${msgType}) at ${msg.dateAdded}`);
-        return {
-          hasManual: true,
-          reason: 'Phone call event detected in conversation history',
           lastTime: msg.dateAdded ?? null,
         };
       }

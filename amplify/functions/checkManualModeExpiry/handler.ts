@@ -133,10 +133,14 @@ export const handler = async () => {
               body: `🤖 AI resumed - no activity for 24 hours (${timestamp})`
             });
 
-            // Reset OutreachQueue status
-            const { updateQueueStatus } = await import('../shared/outreachQueue');
+            // Reset OutreachQueue status:
+            // If the lead never replied (no inbound message), restore to OUTREACH so automated cold
+            // outreach drips continue. Only set CONVERSATION if there was actual lead engagement.
+            const { getQueueItemByContact, updateQueueStatus } = await import('../shared/outreachQueue');
             const queueId = `${userId}_${contactId}`;
-            await updateQueueStatus(queueId, 'CONVERSATION', 'Auto-resumed after 24h inactivity');
+            const queueItem = await getQueueItemByContact(userId, contactId);
+            const targetStatus = queueItem?.lastLeadReplyDate ? 'CONVERSATION' : 'OUTREACH';
+            await updateQueueStatus(queueId, targetStatus, 'Auto-resumed after 24h inactivity');
 
             totalResumed++;
           }

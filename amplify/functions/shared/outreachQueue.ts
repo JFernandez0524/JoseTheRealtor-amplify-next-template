@@ -128,11 +128,15 @@ export async function addToOutreachQueue(item: OutreachQueueItem): Promise<strin
  */
 export async function getPendingEmailContacts(userId: string, limit: number = 50): Promise<OutreachQueueItem[]> {
   // Query both PENDING (high-priority initial sequence) and NURTURE (monthly long-term sequence)
-  let items: OutreachQueueItem[] = [];
+  const eligibleItems: OutreachQueueItem[] = [];
   const statuses: ('PENDING' | 'NURTURE')[] = ['PENDING', 'NURTURE'];
 
+  const now = new Date();
+  const today = new Date();
+  today.setHours(0, 0, 0, 0); // Start of today
+
   for (const statusVal of statuses) {
-    if (items.length >= limit) break;
+    if (eligibleItems.length >= limit) break;
     let lastEvaluatedKey: any = undefined;
     do {
       const params: any = {
@@ -149,58 +153,41 @@ export async function getPendingEmailContacts(userId: string, limit: number = 50
         params.ExclusiveStartKey = lastEvaluatedKey;
       }
       const result = await docClient.send(new QueryCommand(params));
-      items.push(...((result.Items || []) as OutreachQueueItem[]));
+      const pageItems = (result.Items || []) as OutreachQueueItem[];
+
+      for (const item of pageItems) {
+        if (eligibleItems.length >= limit) break;
+
+        // Must have email address
+        if (!item.contactEmail) continue;
+
+        // Only send to contacts in OUTREACH status
+        const status = item.queueStatus || 'OUTREACH';
+        if (status !== 'OUTREACH') continue;
+
+        // Must have nextEmailDate set
+        if (!item.nextEmailDate) continue;
+
+        // Check if nextEmailDate is today or earlier
+        const nextDate = new Date(item.nextEmailDate);
+        nextDate.setHours(0, 0, 0, 0);
+        if (nextDate > today) continue;
+
+        // Safety: enforce minimum 24 hours since last email
+        if (item.lastEmailSent) {
+          const lastSent = new Date(item.lastEmailSent);
+          const hoursSince = (now.getTime() - lastSent.getTime()) / (1000 * 60 * 60);
+          if (hoursSince < 24) continue;
+        }
+
+        eligibleItems.push(item);
+      }
+
       lastEvaluatedKey = result.LastEvaluatedKey;
-    } while (lastEvaluatedKey && items.length < limit);
+    } while (lastEvaluatedKey && eligibleItems.length < limit);
   }
 
-  const now = new Date();
-  const today = new Date();
-  today.setHours(0, 0, 0, 0); // Start of today
-
-  // Filter by nextEmailDate and queue status
-  return items.filter(item => {
-    // Must have email address
-    if (!item.contactEmail) {
-      console.log(`⚠️ Contact ${item.contactId} has no email - skipping`);
-      return false;
-    }
-
-    // Only send to contacts in OUTREACH status
-    const status = item.queueStatus || 'OUTREACH';
-    if (status !== 'OUTREACH') {
-      console.log(`⏹️ Contact ${item.contactId} not in OUTREACH status (${status})`);
-      return false;
-    }
-
-    // Must have nextEmailDate set
-    if (!item.nextEmailDate) {
-      console.log(`⚠️ Contact ${item.contactId} missing nextEmailDate`);
-      return false;
-    }
-
-    // Check if nextEmailDate is today or earlier
-    const nextDate = new Date(item.nextEmailDate);
-    nextDate.setHours(0, 0, 0, 0);
-
-    if (nextDate > today) {
-      console.log(`⏳ Contact ${item.contactId} not ready - scheduled for ${nextDate.toDateString()}`);
-      return false;
-    }
-
-    // Safety: enforce minimum 24 hours since last email (mirrors SMS guard; protects against
-    // race conditions if two Lambda invocations overlap on the same contact)
-    if (item.lastEmailSent) {
-      const lastSent = new Date(item.lastEmailSent);
-      const hoursSince = (now.getTime() - lastSent.getTime()) / (1000 * 60 * 60);
-      if (hoursSince < 24) {
-        console.log(`⏳ Contact ${item.contactId} emailed ${hoursSince.toFixed(1)}h ago - too soon`);
-        return false;
-      }
-    }
-
-    return true;
-  }).slice(0, limit);
+  return eligibleItems;
 }
 
 /**
