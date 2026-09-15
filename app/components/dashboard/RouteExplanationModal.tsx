@@ -23,32 +23,32 @@ export function RouteExplanationModal({
 }: RouteExplanationModalProps) {
   if (!isOpen) return null;
 
-  const isProbate = leadType === 'PROBATE';
-  const costPerLead = isProbate ? 0.10 : 0.35;
+  const isEnrichment = action === 'enrich';
+  const costPerLead = isEnrichment ? 0.30 : 0.10;
   const chargeableCount = leadCount - alreadyTracedCount;
   const totalCost = (chargeableCount * costPerLead).toFixed(2);
 
-  const routeInfo = isProbate
+  const routeInfo = isEnrichment
     ? {
-        title: 'Skip Trace',
-        cost: '$0.10/lead',
-        description: 'Phone & email lookup',
+        title: 'Property Enrichment',
+        cost: '$0.30/lead (3 credits)',
+        description: 'Complete property data',
         features: [
-          'Find contact phone numbers',
-          'Discover email addresses',
-          'Mailing address information',
-          'Basic contact data',
+          'Real equity percentage & mortgage balances',
+          'Foreclosure details & lender information',
+          'Property flags (owner occupied, high equity, free & clear)',
+          'Assessed property valuations & deed characteristics',
         ],
       }
     : {
-        title: 'Property Enrichment',
-        cost: '$0.35/lead',
-        description: 'Complete property data + contacts',
+        title: 'Skip Trace',
+        cost: '$0.10/lead (1 credit)',
+        description: 'Phone & email lookup',
         features: [
-          'Real equity percentage & mortgage balances',
-          'Owner emails & quality phone numbers (mobile, score 90+, not DNC)',
-          'Property flags (owner occupied, high equity, free & clear)',
-          'Foreclosure details & lender information',
+          'Find mobile numbers (scoring 90+, DNC filtered)',
+          'Discover verified email addresses',
+          'Non-DNC landlines (if no mobile found)',
+          'Verified owner mailing addresses',
         ],
       };
 

@@ -31,7 +31,7 @@ import { ErrorBoundary } from './ErrorBoundary';
 import { ToastProvider, useToast } from './ToastProvider';
 import { DeleteConfirmModal } from '../dashboard/DeleteConfirmModal';
 import { AddressAutocomplete, ParsedAddress } from '@/app/components/address/AddressAutocomplete';
-import { deleteLead, updateLead } from '@/app/utils/aws/data/lead.client';
+import { deleteLead, updateLead, skipTraceLeads } from '@/app/utils/aws/data/lead.client';
 import { formatPhoneE164 } from '@/app/utils/leadValidation';
 import { 
   MapSkeleton, 
@@ -565,15 +565,41 @@ function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
     if (lead.skipTraceStatus === 'COMPLETED') return;
     setIsSkipTracing(true);
     try {
-      await client.mutations.skipTraceLeads({ leadIds: [lead.id] });
+      await skipTraceLeads([lead.id]);
       const { data } = await client.models.PropertyLead.get({ id: lead.id });
       if (data) {
         setLead(data as Lead);
-        addToast({
-          type: 'success',
-          title: 'Skip Trace Complete',
-          message: 'Contact information has been updated'
-        });
+        if (data.skipTraceStatus === 'COMPLETED') {
+          addToast({
+            type: 'success',
+            title: 'Skip Trace Complete',
+            message: 'Contact information has been updated'
+          });
+        } else if (data.skipTraceStatus === 'NO_MATCH') {
+          addToast({
+            type: 'info',
+            title: 'No Match Found',
+            message: 'No owner records found at this address.'
+          });
+        } else if (data.skipTraceStatus === 'NO_QUALITY_CONTACTS') {
+          addToast({
+            type: 'info',
+            title: 'No Mobile Contacts',
+            message: 'Owner found but no qualifying mobile number or verified email.'
+          });
+        } else if (data.skipTraceStatus === 'NOT_ELIGIBLE') {
+          addToast({
+            type: 'warning',
+            title: 'Not Eligible',
+            message: 'Only off-market leads can be skip traced.'
+          });
+        } else {
+          addToast({
+            type: 'success',
+            title: 'Skip Trace Finished',
+            message: `Lead status updated to ${data.skipTraceStatus}`
+          });
+        }
       }
     } catch (err: any) {
       addToast({

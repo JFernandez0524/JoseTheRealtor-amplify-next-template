@@ -88,19 +88,39 @@ async function processGhlSync(lead: any, groups: string[] = [], ownerId: string 
   }
 
   // 🚦 Check GHL rate limits before syncing
+  let userAccount: any = null;
   try {
-    const { Items: accounts } = await docClient.send(new ScanCommand({
+    let { Items: accounts } = await docClient.send(new ScanCommand({
       TableName: userAccountTableName,
-      FilterExpression: '#owner = :ownerId',
+      FilterExpression: '#owner = :ownerId OR begins_with(#owner, :ownerIdPrefix)',
       ExpressionAttributeNames: {
         '#owner': 'owner'
       },
       ExpressionAttributeValues: {
-        ':ownerId': ownerId
+        ':ownerId': ownerId,
+        ':ownerIdPrefix': `${ownerId}::`
       }
     }));
 
+    if (!accounts || accounts.length === 0) {
+      const userEmail = (
+        (identity as any)?.claims?.['email'] ||
+        (identity as any)?.claims?.['username'] ||
+        ''
+      ).toLowerCase().trim();
+      if (userEmail) {
+        const emailResult = await docClient.send(new ScanCommand({
+          TableName: userAccountTableName,
+          FilterExpression: '#email = :email',
+          ExpressionAttributeNames: { '#email': 'email' },
+          ExpressionAttributeValues: { ':email': userEmail },
+        }));
+        accounts = emailResult.Items || [];
+      }
+    }
+
     if (accounts && accounts[0]) {
+      userAccount = accounts[0];
       const account = accounts[0];
       const now = Date.now();
       const lastHourReset = account.lastHourReset || 0;
@@ -289,19 +309,23 @@ export const handler: Handler = async (event) => {
     // 📊 6. Track usage
     if (syncResult.status === 'SUCCESS') {
       try {
-        const { Items: accounts } = await docClient.send(new ScanCommand({
-          TableName: userAccountTableName,
-          FilterExpression: '#owner = :ownerId',
-          ExpressionAttributeNames: {
-            '#owner': 'owner'
-          },
-          ExpressionAttributeValues: {
-            ':ownerId': ownerId
-          }
-        }));
+        let account = userAccount;
+        if (!account) {
+          const { Items: accounts } = await docClient.send(new ScanCommand({
+            TableName: userAccountTableName,
+            FilterExpression: '#owner = :ownerId OR begins_with(#owner, :ownerIdPrefix)',
+            ExpressionAttributeNames: {
+              '#owner': 'owner'
+            },
+            ExpressionAttributeValues: {
+              ':ownerId': ownerId,
+              ':ownerIdPrefix': `${ownerId}::`
+            }
+          }));
+          account = accounts?.[0];
+        }
 
-        if (accounts && accounts[0]) {
-          const account = accounts[0];
+        if (account) {
           const now = Date.now();
           const lastHourReset = account.lastHourReset || 0;
           const lastDayReset = account.lastDayReset || 0;

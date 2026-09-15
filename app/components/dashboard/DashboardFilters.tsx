@@ -635,8 +635,8 @@ export function DashboardFilters({
               <option value='door_knock'>Door Knock</option>
             </select>
 
-            {/* Skip Trace Button - Only for PROBATE when untraced leads are selected */}
-            {(!selectedLeadType || selectedLeadType === 'PROBATE') && hasUntracedSelectedLeads && (
+            {/* Skip Trace Button - Available for any selected untraced leads (Probate & Preforeclosure) */}
+            {hasUntracedSelectedLeads && (
               <button
                 onClick={handleBulkSkipTrace}
                 disabled={isSkipTracing || isGhlSyncing || selectedLeadsCount === 0}
@@ -686,8 +686,9 @@ export function DashboardFilters({
               )}
             </button>
 
-            {/* Enrich Leads Button - Only for PREFORECLOSURE */}
-            {(!selectedLeadType || selectedLeadType === 'PREFORECLOSURE') && (
+            {/* Enrich Leads Button - Temporarily disabled in toolbar to keep workflow simple (skip trace only) */}
+            {/* Can be re-enabled by setting ENABLE_ENRICHMENT_TOOLBAR to true */}
+            {false && (!selectedLeadType || selectedLeadType === 'PREFORECLOSURE') && (
               <button
                 onClick={handleBulkEnrichLeads}
                 disabled={isEnriching || isSkipTracing || isGhlSyncing || selectedLeadsCount === 0}

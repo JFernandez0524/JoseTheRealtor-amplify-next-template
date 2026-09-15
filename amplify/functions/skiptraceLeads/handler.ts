@@ -360,26 +360,40 @@ export const handler: Handler = async (event) => {
   try {
     console.log('💰 Checking user credits...');
     
+    const userEmail = (
+      (identity as any)?.claims?.['email'] ||
+      (identity as any)?.claims?.['username'] ||
+      ''
+    ).toLowerCase().trim();
+
     // 💰 3. Wallet Check using ScanCommand with Filter
-    const { Items: accounts } = await docClient.send(new ScanCommand({
+    // In Amplify Gen 2, owner can be stored as either "sub" or "sub::identityId" or "sub::sub"
+    let { Items: accounts } = await docClient.send(new ScanCommand({
       TableName: userAccountTableName,
-      FilterExpression: '#owner = :ownerId',
+      FilterExpression: '#owner = :ownerId OR begins_with(#owner, :ownerIdPrefix)',
       ExpressionAttributeNames: {
         '#owner': 'owner'
       },
       ExpressionAttributeValues: {
-        ':ownerId': ownerId
+        ':ownerId': ownerId,
+        ':ownerIdPrefix': `${ownerId}::`
       }
     }));
+
+    // Fallback: match by email if owner didn't match
+    if ((!accounts || accounts.length === 0) && userEmail) {
+      const { Items: emailAccounts } = await docClient.send(new ScanCommand({
+        TableName: userAccountTableName,
+        FilterExpression: '#email = :email',
+        ExpressionAttributeNames: { '#email': 'email' },
+        ExpressionAttributeValues: { ':email': userEmail },
+      }));
+      accounts = emailAccounts || [];
+    }
     
     const userAccount = accounts?.[0];
-    const userEmail = (
-      (identity as any)?.claims?.['email'] ||
-      (identity as any)?.claims?.['username'] ||
-      userAccount?.email ||
-      ''
-    ).toLowerCase().trim();
-    const isReviewer = isReviewerAccount(userEmail);
+    const resolvedEmail = (userEmail || userAccount?.email || '').toLowerCase().trim();
+    const isReviewer = isReviewerAccount(resolvedEmail);
 
     const isOwner = ownerId === '44d8f4c8-10c1-7038-744b-271103170819'; // Jose - unlimited credits
     const isAdmin = groups.includes('ADMINS');
@@ -389,7 +403,7 @@ export const handler: Handler = async (event) => {
     console.log(`💰 Credits: ${userAccount?.credits || 0}`);
     console.log(`👑 Is Owner: ${isOwner}`);
     console.log(`🔧 Is Admin: ${isAdmin}`);
-    console.log(`🎯 Is Reviewer: ${isReviewer} (${userEmail})`);
+    console.log(`🎯 Is Reviewer: ${isReviewer} (${resolvedEmail})`);
 
     console.log('📥 Fetching leads...');
 
@@ -401,7 +415,7 @@ export const handler: Handler = async (event) => {
         TableName: propertyLeadTableName,
         Key: { id: leadId }
       }));
-      if (lead && (lead.owner ?? '') === ownerId) {
+      if (lead && ((lead.owner ?? '') === ownerId || (lead.owner ?? '').startsWith(`${ownerId}::`))) {
         // Validate probate leads have admin info
         if (lead.type?.toUpperCase() === 'PROBATE' && (!lead.adminFirstName || !lead.adminLastName || !lead.adminAddress)) {
           console.warn(`⚠️ Invalid probate lead ${leadId} - missing admin info`);
