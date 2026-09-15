@@ -2,7 +2,17 @@
 
 import { useState } from 'react';
 
-export default function BuyCreditsButton({ packId, price }: { packId: string; price: string }) {
+export default function BuyCreditsButton({ 
+  packId, 
+  price,
+  className,
+  label,
+}: { 
+  packId: string; 
+  price: string;
+  className?: string;
+  label?: string;
+}) {
   const [loading, setLoading] = useState(false);
 
   const handleClick = async () => {
@@ -26,9 +36,12 @@ export default function BuyCreditsButton({ packId, price }: { packId: string; pr
     <button
       onClick={handleClick}
       disabled={loading}
-      className="w-full bg-blue-500 text-white py-2 px-4 rounded-lg font-semibold hover:bg-blue-600 transition-colors text-sm sm:text-base disabled:opacity-50"
+      className={
+        className ||
+        'w-full bg-blue-500 text-white py-2 px-4 rounded-lg font-semibold hover:bg-blue-600 transition-colors text-sm sm:text-base disabled:opacity-50'
+      }
     >
-      {loading ? 'Processing...' : `Buy for ${price}`}
+      {loading ? 'Processing...' : (label || `Buy for ${price}`)}
     </button>
   );
 }
