@@ -1062,8 +1062,16 @@ function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
                     return { passed: true, reason: 'Sent to Launch AI' };
                   };
 
+                  const verifiedEmails = (lead.emails || []).map((em: any) =>
+                    (typeof em === 'string' ? em : em.address || '').toLowerCase().trim()
+                  );
+
                   const emailResult = (e: any): { passed: boolean; reason: string } => {
+                    const emailAddr = (e.email || '').toLowerCase().trim();
                     if (!e.tested) return { passed: false, reason: 'Not verified' };
+                    if (!verifiedEmails.includes(emailAddr)) {
+                      return { passed: false, reason: 'Failed deliverability check' };
+                    }
                     return { passed: true, reason: 'Sent to Launch AI' };
                   };
 
@@ -1118,7 +1126,7 @@ function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
                       {/* Emails */}
                       <div>
                         <p className='text-[10px] font-bold text-slate-500 uppercase mb-2'>
-                          Emails ({allEmails.length} found · filter: verified only)
+                          Emails ({allEmails.length} found · filter: verified & deliverable)
                         </p>
                         <div className='space-y-1.5'>
                           {allEmails.length === 0 ? (
