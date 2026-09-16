@@ -150,9 +150,9 @@ export async function updateUserAccount(
  * // User purchased 100 credits
  * await addCredits(userId, 100);
  */
-export async function addCredits(ownerId: string, credits: number): Promise<boolean> {
+export async function addCredits(ownerId: string, credits: number, email?: string): Promise<boolean> {
   try {
-    const account = await getUserAccount(ownerId);
+    const account = await getUserAccount(ownerId, email);
     if (!account) return false;
 
     await updateUserAccount(account.id, {
@@ -174,15 +174,16 @@ export async function addCredits(ownerId: string, credits: number): Promise<bool
  * 
  * @param ownerId - The Cognito user ID
  * @param credits - Number of credits to deduct
+ * @param email - Optional email for OAuth users with compound owner IDs
  * @returns true if successful, false otherwise
  * 
  * @example
  * // User skip traced 5 leads
  * await deductCredits(userId, 5);
  */
-export async function deductCredits(ownerId: string, credits: number): Promise<boolean> {
+export async function deductCredits(ownerId: string, credits: number, email?: string): Promise<boolean> {
   try {
-    const account = await getUserAccount(ownerId);
+    const account = await getUserAccount(ownerId, email);
     if (!account) return false;
 
     const newCredits = Math.max(0, (account.credits || 0) - credits);
@@ -203,6 +204,7 @@ export async function deductCredits(ownerId: string, credits: number): Promise<b
  * 
  * @param ownerId - The Cognito user ID
  * @param required - Number of credits required
+ * @param email - Optional email for OAuth users with compound owner IDs
  * @returns true if user has enough credits, false otherwise
  * 
  * @example
@@ -212,8 +214,8 @@ export async function deductCredits(ownerId: string, credits: number): Promise<b
  *   // Show "insufficient credits" error
  * }
  */
-export async function hasCredits(ownerId: string, required: number): Promise<boolean> {
-  const account = await getUserAccount(ownerId);
+export async function hasCredits(ownerId: string, required: number, email?: string): Promise<boolean> {
+  const account = await getUserAccount(ownerId, email);
   return account ? (account.credits || 0) >= required : false;
 }
 
@@ -225,6 +227,7 @@ export async function hasCredits(ownerId: string, required: number): Promise<boo
  * 
  * @param ownerId - The Cognito user ID
  * @param increment - Number of API calls to add (default: 1)
+ * @param email - Optional email for OAuth users with compound owner IDs
  * 
  * @example
  * // After syncing a lead to GHL
@@ -232,10 +235,11 @@ export async function hasCredits(ownerId: string, required: number): Promise<boo
  */
 export async function updateGhlRateLimits(
   ownerId: string,
-  increment: number = 1
+  increment: number = 1,
+  email?: string
 ): Promise<void> {
   try {
-    const account = await getUserAccount(ownerId);
+    const account = await getUserAccount(ownerId, email);
     if (!account) return;
 
     const now = Date.now();

@@ -1,5 +1,10 @@
 import { NextResponse } from 'next/server';
-import { AuthGetCurrentUserServer, cookiesClient } from '@/app/utils/aws/auth/amplifyServerUtils.server';
+import {
+  AuthGetCurrentUserServer,
+  AuthGetUserAttributesServer,
+  cookiesClient,
+} from '@/app/utils/aws/auth/amplifyServerUtils.server';
+import { getUserAccount } from '@/app/utils/aws/data/userAccount.server';
 
 /**
  * Escapes a cell value for standard CSV formatting.
@@ -59,7 +64,9 @@ export async function GET() {
     const contacts = contactsRes.data || [];
     const doorKnocks = doorKnockRes.data || [];
     const outreachItems = outreachQueueRes.data || [];
-    const accounts = userAccountRes.data || [];
+    const attributes = await AuthGetUserAttributesServer();
+    const userAccount = await getUserAccount(userId, attributes?.email);
+    const accounts = userAccount ? [userAccount] : (userAccountRes.data || []);
     const integrations = ghlIntegrationRes.data || [];
     const batchJobs = batchJobsRes.data || [];
     const csvJobs = csvJobsRes.data || [];

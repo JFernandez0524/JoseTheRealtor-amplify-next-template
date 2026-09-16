@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { AuthGetCurrentUserServer, AuthGetUserGroupsServer, cookiesClient } from '@/app/utils/aws/auth/amplifyServerUtils.server';
+import {
+  AuthGetCurrentUserServer,
+  AuthGetUserAttributesServer,
+  AuthGetUserGroupsServer,
+  cookiesClient,
+} from '@/app/utils/aws/auth/amplifyServerUtils.server';
 import { enrichPreforeclosureLeads } from '@/app/utils/batchdata/enrichment';
 import { getLeadsByIds, updateLead } from '@/app/utils/aws/data/lead.server';
 import { getUserAccount, updateUserAccount, hasCredits, deductCredits } from '@/app/utils/aws/data/userAccount.server';
@@ -44,7 +49,10 @@ export async function POST(request: NextRequest) {
     const leads = await getLeadsByIds(leadIds);
 
     // IDOR guard: every requested lead must belong to the calling user
-    const foreignLeads = leads.filter(lead => lead.owner !== userId);
+    const foreignLeads = leads.filter(lead => {
+      const owner = lead.owner ?? '';
+      return owner !== userId && !owner.startsWith(`${userId}::`) && !userId.startsWith(`${owner}::`);
+    });
     if (foreignLeads.length > 0) {
       console.warn(`⚠️ IDOR attempt: user ${userId} requested ${foreignLeads.length} leads they don't own`);
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
@@ -101,9 +109,13 @@ export async function POST(request: NextRequest) {
     }
 
     // Billing & Reviewer checks
-    const groups = await AuthGetUserGroupsServer();
-    const userAccount = await getUserAccount(userId);
-    const isReviewer = isReviewerAccount(userAccount?.email);
+    const [groups, attributes] = await Promise.all([
+      AuthGetUserGroupsServer(),
+      AuthGetUserAttributesServer(),
+    ]);
+    const userEmail = attributes?.email;
+    const userAccount = await getUserAccount(userId, userEmail);
+    const isReviewer = isReviewerAccount(userAccount?.email || userEmail);
     const isExempt = groups.includes('ADMINS') || userId === OWNER_USER_ID;
 
     // 🛡️ Reviewer test quota check (strictly capped at 5 lifetime skips)
@@ -121,7 +133,7 @@ export async function POST(request: NextRequest) {
     // and get billed — without the ability to charge the client. Mirrors the skip-trace gate.
     if (!isExempt && !isReviewer) {
       const worstCase = toEnrich.length * ENRICHMENT_CREDITS_PER_MATCH;
-      if (!(await hasCredits(userId, worstCase))) {
+      if (!(await hasCredits(userId, worstCase, userEmail))) {
         return NextResponse.json(
           { error: `Insufficient credits: enriching ${toEnrich.length} lead(s) needs up to ${worstCase} credits (${ENRICHMENT_CREDITS_PER_MATCH} per match). Purchase more credits to continue.` },
           { status: 402 }
@@ -148,7 +160,7 @@ export async function POST(request: NextRequest) {
 
     // Deduct credits for matched leads only
     if (creditsCharged > 0) {
-      await deductCredits(userId, creditsCharged);
+      await deductCredits(userId, creditsCharged, userEmail);
     }
 
     // Track skips performed for reviewer

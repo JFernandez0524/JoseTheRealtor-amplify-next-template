@@ -24,7 +24,10 @@ import { RouteExplanationModal } from './RouteExplanationModal';
 import { SyncConfirmModal } from './SyncConfirmModal';
 import { DeleteConfirmModal } from './DeleteConfirmModal';
 import { SyncResultModal } from './SyncResultModal';
-import { getFrontEndUser } from '@/app/utils/aws/auth/amplifyFrontEndUser';
+import {
+  getFrontEndUser,
+  getFrontEndUserAttributes,
+} from '@/app/utils/aws/auth/amplifyFrontEndUser';
 import type { Schema } from '@/amplify/data/resource';
 
 type Lead = Schema['PropertyLead']['type'];
@@ -35,7 +38,7 @@ interface Props {}
 export default function LeadDashboardClient({}: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { hasPaidPlan, isAdmin, isAI } = useAccess();
+  const { hasPaidPlan, isAdmin, isAI, credits: contextCredits } = useAccess();
   const { isConnected: isGhlConnected } = useGhl();
   const { addToast } = useToast();
 
@@ -209,9 +212,21 @@ export default function LeadDashboardClient({}: Props) {
         if (!user) return;
 
         // Fix: Only fetch existing account, don't create new ones
-        const { data: accounts } = await client.models.UserAccount.list({
+        let { data: accounts } = await client.models.UserAccount.list({
           filter: { owner: { eq: user.userId } },
         });
+
+        // Fallback: match by email if owner query returned nothing (handles Google/OAuth login owner format differences)
+        if (accounts.length === 0) {
+          const attributes = await getFrontEndUserAttributes();
+          const email = user.signInDetails?.loginId || attributes?.email;
+          if (email) {
+            const { data: emailAccounts } = await client.models.UserAccount.list({
+              filter: { email: { eq: email } },
+            });
+            accounts = emailAccounts;
+          }
+        }
 
         if (accounts.length > 0) {
           setUserAccount(accounts[0]);
@@ -732,7 +747,7 @@ export default function LeadDashboardClient({}: Props) {
 
     // Skip credit check for admins
     if (!isAdmin) {
-      const currentCredits = userAccount?.credits || 0;
+      const currentCredits = userAccount?.credits ?? contextCredits ?? 0;
       if (currentCredits < idsToProcess.length) {
         addToast({ type: 'error', title: 'Insufficient Credits', message: `You need ${idsToProcess.length} credits but only have ${currentCredits}. Purchase more credits to continue.` });
         skipTraceInFlight.current = false;
@@ -857,7 +872,7 @@ export default function LeadDashboardClient({}: Props) {
     // (Server re-checks and only actually deducts for matches.)
     const ENRICH_CREDITS_PER_MATCH = 3;
     if (!isAdmin && toEnrichCount > 0) {
-      const currentCredits = userAccount?.credits || 0;
+      const currentCredits = userAccount?.credits ?? contextCredits ?? 0;
       const worstCase = toEnrichCount * ENRICH_CREDITS_PER_MATCH;
       if (currentCredits < worstCase) {
         addToast({ type: 'error', title: 'Insufficient Credits', message: `Enriching ${toEnrichCount} lead(s) needs up to ${worstCase} credits (${ENRICH_CREDITS_PER_MATCH} per match), but you have ${currentCredits}. You are only charged for matches. Purchase more credits to continue.` });
@@ -1323,7 +1338,7 @@ export default function LeadDashboardClient({}: Props) {
           <span className='w-2 h-2 rounded-full bg-green-500 animate-pulse' />
           Wallet:{' '}
           <span className='text-slate-900'>
-            {userAccount?.credits || 0} credits
+            {userAccount?.credits ?? contextCredits ?? 0} credits
           </span>
           <span className='normal-case font-normal text-slate-400'>
             · $0.10/skip trace

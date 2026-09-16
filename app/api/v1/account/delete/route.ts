@@ -1,5 +1,10 @@
 import { NextResponse } from 'next/server';
-import { AuthGetCurrentUserServer, cookiesClient } from '@/app/utils/aws/auth/amplifyServerUtils.server';
+import {
+  AuthGetCurrentUserServer,
+  AuthGetUserAttributesServer,
+  cookiesClient,
+} from '@/app/utils/aws/auth/amplifyServerUtils.server';
+import { getUserAccount } from '@/app/utils/aws/data/userAccount.server';
 
 /**
  * DELETE /api/v1/account/delete
@@ -44,7 +49,9 @@ export async function DELETE() {
     const doorKnocks = doorKnockRes.data || [];
     const outreachItems = outreachQueueRes.data || [];
     const integrations = integrationsRes.data || [];
-    const accounts = accountsRes.data || [];
+    const attributes = await AuthGetUserAttributesServer();
+    const userAccount = await getUserAccount(userId, attributes?.email);
+    const accounts = userAccount ? [userAccount] : (accountsRes.data || []);
     const batchJobs = batchJobsRes.data || [];
     const csvJobs = csvJobsRes.data || [];
     const notifications = notificationsRes.data || [];
