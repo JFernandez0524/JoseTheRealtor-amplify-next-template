@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useState, useRef, useEffect } from 'react';
 import Logout from './Logout';
+import NoCreditsBanner from './NoCreditsBanner';
 import { usePathname } from 'next/navigation';
 import { useAccess } from '../context/AccessContext';
 import { useUserProfile } from '../hooks/useUserProfile';
@@ -252,6 +253,8 @@ const Navbar = () => {
           </button>
         </div>
       </div>
+
+      <NoCreditsBanner />
 
       {/* --- MOBILE OVERLAY --- */}
       <div
