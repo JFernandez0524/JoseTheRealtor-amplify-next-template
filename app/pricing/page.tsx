@@ -247,7 +247,7 @@ export default function PricingPage() {
           </div>
         </div>
 
-        {/* 5th Grader Explanation: What is Skip Tracing? */}
+        {/* What is Skip Tracing? */}
         <div className="bg-gradient-to-br from-blue-50 via-indigo-50/50 to-white border border-blue-200/70 rounded-3xl p-6 sm:p-10 lg:p-12 shadow-sm">
           <div className="max-w-3xl mx-auto space-y-6">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-blue-100 text-blue-800">
@@ -256,7 +256,7 @@ export default function PricingPage() {
             </div>
 
             <h2 className="text-2xl sm:text-3xl font-extrabold text-gray-900">
-              What is Skip Tracing? (Explained for a 5th Grader 🕵️‍♂️)
+              What is Skip Tracing? (Explained Simply)
             </h2>
 
             <div className="space-y-4 text-gray-700 text-sm sm:text-base leading-relaxed">
