@@ -213,6 +213,11 @@ async function processTenantIntegration(integration: GHLIntegration): Promise<{ 
 
       } catch (error: any) {
         console.error(`Failed to send email to contact ${contact.id}:`, error.response?.data || error.message);
+        try {
+          await releaseEmailLock(contact._queueId);
+        } catch (unlockError: any) {
+          console.error(`❌ [QUEUE] Failed to release lock for ${contact._queueId}:`, unlockError.message);
+        }
       }
     }
 

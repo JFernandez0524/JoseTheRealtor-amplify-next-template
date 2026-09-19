@@ -622,6 +622,14 @@ export async function generateEmailAIResponse(
     return emailResponse;
   } catch (error) {
     console.error('Email conversation handler error:', error);
+
+    // CRITICAL: For automated cold outreach touches (touches 1-7), NEVER send a generic
+    // "Thanks for your message" fallback if AI fails! The contact never messaged us.
+    // Re-throw so the send route fails, the queue agent releases the lock, and it retries later.
+    if (context.incomingMessage === 'initial_outreach') {
+      throw error;
+    }
+
     const fallbackEmail = {
       subject: 'Re: Your Property',
       body: `${context.contactName},\n\nThanks for your message! I'll get back to you shortly.\n\nJose Fernandez\nRE/MAX Homeland Realtors\n(732) 810-0182`,

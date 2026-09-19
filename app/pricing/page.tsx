@@ -29,7 +29,7 @@ export default function PricingPage() {
         'Verified mobile & landline numbers',
         'Validated email addresses',
         'Current mailing & absentee addresses',
-        'Credits never expire',
+        '60-day grace period on cancellation',
         'Instant balance update',
       ],
     },
@@ -48,7 +48,7 @@ export default function PricingPage() {
         'Current mailing & absentee addresses',
         'Spouse & relative contact info',
         'Bulk CSV import ready',
-        'Credits never expire',
+        '60-day grace period on cancellation',
       ],
     },
     {
@@ -67,7 +67,7 @@ export default function PricingPage() {
         'Spouse & relative contact info',
         'Bulk CSV import ready',
         'Priority data lookup speed',
-        'Credits never expire',
+        '60-day grace period on cancellation',
       ],
     },
   ];
@@ -76,23 +76,23 @@ export default function PricingPage() {
     {
       icon: HiPhone,
       iconBg: 'bg-blue-100 text-blue-600',
-      title: 'Mobile & Landline Numbers',
+      title: 'Score 90+ Mobiles & Non-DNC Landlines',
       description:
-        'Direct cell phones and landlines flagged by carrier type (Mobile vs. Landline) and DNC registry status so you always call or text compliantly.',
+        'Filtered for deliverability with a strict 90+ quality score floor. Non-DNC landlines are structurally separated for Launch AI’s Power Dialer so you never waste SMS credits on landlines.',
     },
     {
       icon: HiEnvelope,
       iconBg: 'bg-emerald-100 text-emerald-600',
-      title: 'Verified Email Addresses',
+      title: 'DeBounce™ Tested & Deliverable Emails',
       description:
-        'Active personal and business email addresses pre-screened for deliverability so your cold emails land in the primary inbox, not spam.',
+        'Every address is tested in real-time through DeBounce™ at ingest. Undeliverable emails are automatically dropped, protecting your Launch AI domain sender reputation and keeping bounce rates near 0%.',
     },
     {
       icon: HiHome,
       iconBg: 'bg-purple-100 text-purple-600',
-      title: 'Current Mailing Address',
+      title: 'USPS Standardized Mailing Addresses',
       description:
-        'The owner’s true current residence. This is critical for absentee owners and out-of-state landlords who don’t live at the property address.',
+        'Standardized via Google Maps Address Validation. Identifies true owner residences and out-of-state absentee addresses with verified USPS formatting to boost match rates.',
     },
     {
       icon: HiUsers,
@@ -128,11 +128,15 @@ export default function PricingPage() {
     },
     {
       q: 'Do skip tracing credits expire?',
-      a: 'Never! Your purchased credits stay in your account forever until you use them. There are no monthly resets or use-it-or-lose-it deadlines.',
+      a: 'As long as your account is active, your purchased credits do not expire each month. If you cancel your subscription, you receive a full 60-day grace period to use remaining credits or export your data before inactive accounts are purged.',
+    },
+    {
+      q: 'What happens to my leads and credits if I cancel?',
+      a: 'When you cancel, your account downgrades to the Free tier with a 60-day grace period. Automated AI outreach and live CRM sync are immediately paused to protect your sending costs, but you can export all your leads via CSV and spend down your remaining skip trace credits anytime. After 60 days of inactivity, the lead database and unused credits are permanently purged.',
     },
     {
       q: 'Is there a monthly subscription fee required?',
-      a: 'No monthly subscription is required. We operate on a 100% pay-as-you-go credit model so you only pay for the leads you need.',
+      a: 'You can start with pay-as-you-go skip trace credits or subscribe to our Sync or AI Outreach plans to unlock automated CRM sync, lead enrichment, and AI follow-up workflows.',
     },
     {
       q: 'Can I skip trace bulk CSV lists?',
@@ -242,7 +246,7 @@ export default function PricingPage() {
             </div>
             <div className="flex items-center gap-2">
               <HiCheck className="w-4 h-4 text-blue-600" />
-              <span>Credits Never Expire</span>
+              <span>60-Day Data & Credit Retention</span>
             </div>
           </div>
         </div>
@@ -363,6 +367,66 @@ export default function PricingPage() {
                 </div>
               );
             })}
+          </div>
+        </div>
+
+        {/* The Clean Data Guarantee Spotlight */}
+        <div className="bg-gradient-to-br from-indigo-900 via-slate-900 to-indigo-950 text-white rounded-3xl p-6 sm:p-10 lg:p-12 shadow-xl border border-indigo-500/20">
+          <div className="max-w-4xl mx-auto">
+            <div className="text-center max-w-2xl mx-auto mb-10">
+              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 mb-3">
+                <HiShieldCheck className="w-4 h-4 text-emerald-400" />
+                <span>Deliverability &amp; CRM Protection</span>
+              </div>
+              <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
+                The Launch AI Clean Data Guarantee
+              </h2>
+              <p className="text-sm sm:text-base text-indigo-200 mt-2">
+                We don’t just fetch contact info—we sanitize every record so you never risk your Launch AI sender domain or phone numbers.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="bg-white/5 border border-white/10 rounded-2xl p-6 backdrop-blur-sm">
+                <div className="flex items-center gap-3 mb-2">
+                  <span className="text-xl">📬</span>
+                  <h3 className="font-bold text-white text-base">DeBounce™ Email Sanitization</h3>
+                </div>
+                <p className="text-xs sm:text-sm text-indigo-100/80 leading-relaxed">
+                  Every email is checked in real-time. Undeliverable addresses, spam traps, and role-based emails are dropped automatically, keeping bounce rates near 0% and protecting your domain reputation in Launch AI.
+                </p>
+              </div>
+
+              <div className="bg-white/5 border border-white/10 rounded-2xl p-6 backdrop-blur-sm">
+                <div className="flex items-center gap-3 mb-2">
+                  <span className="text-xl">📱</span>
+                  <h3 className="font-bold text-white text-base">Score 90+ Mobile Filtering</h3>
+                </div>
+                <p className="text-xs sm:text-sm text-indigo-100/80 leading-relaxed">
+                  We enforce a strict 90+ confidence score floor on all mobile numbers. Discarding recycled lines ensures your outreach campaigns connect directly with decision-makers.
+                </p>
+              </div>
+
+              <div className="bg-white/5 border border-white/10 rounded-2xl p-6 backdrop-blur-sm">
+                <div className="flex items-center gap-3 mb-2">
+                  <span className="text-xl">☎️</span>
+                  <h3 className="font-bold text-white text-base">Smart Landline Isolation</h3>
+                </div>
+                <p className="text-xs sm:text-sm text-indigo-100/80 leading-relaxed">
+                  Landlines are isolated with a <code className="bg-white/10 px-1 rounded text-xs text-yellow-300">channel:landline</code> tag. They are routed directly to Launch AI’s Power Dialer while structurally preventing wasted SMS credits.
+                </p>
+              </div>
+
+              <div className="bg-white/5 border border-white/10 rounded-2xl p-6 backdrop-blur-sm">
+                <div className="flex items-center gap-3 mb-2">
+                  <span className="text-xl">🛡️</span>
+                  <h3 className="font-bold text-white text-base">National DNC Scrubbing</h3>
+                </div>
+                <p className="text-xs sm:text-sm text-indigo-100/80 leading-relaxed">
+                  All phone numbers are automatically scrubbed against the federal Do-Not-Call (DNC) registry at ingest, keeping your team safe from costly TCPA compliance penalties.
+                </p>
+              </div>
+            </div>
           </div>
         </div>
 

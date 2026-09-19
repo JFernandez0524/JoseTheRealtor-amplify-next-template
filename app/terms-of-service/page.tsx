@@ -63,10 +63,11 @@ export default function TermsOfService() {
                 <li><strong>AI OUTREACH PLAN ($250/month):</strong> Automated AI messaging plus all SYNC features</li>
               </ul>
 
-              <h3 className="text-lg font-semibold text-gray-800 mb-3">1.3 Skip Trace Credits</h3>
+              <h3 className="text-lg font-semibold text-gray-800 mb-3">1.3 Skip Trace Credits &amp; Data Retention</h3>
               <p className="mb-4">
                 Skip trace services are available at $0.10 per lead. Credit packages: 100 credits ($10), 250 credits ($25), 
-                500 credits ($50). Credits expire after 12 months of inactivity.
+                500 credits ($50). Credits remain active while an account maintains an active subscription or regular activity. 
+                Upon subscription cancellation, accounts enter a 60-day Grace &amp; Export Period during which customers may export lead data and utilize remaining skip trace credits. Following 60 consecutive days without an active subscription or activity, unused credits and stored lead records are permanently purged.
               </p>
             </section>
 
@@ -105,7 +106,7 @@ export default function TermsOfService() {
                 There are strictly <strong>NO REFUNDS OF ANY KIND</strong> (including full refunds, partial refunds, skip trace credit refunds, or prorated subscription refunds). All purchases, credit top-ups, and subscription charges are non-refundable under any circumstances.
               </p>
               <p className="mb-4">
-                Subscriptions automatically renew on a monthly basis. Customers who do not wish to be billed for a new subscription month must cancel or delete their account prior to the end of their current monthly billing cycle. Account deletion or cancellation mid-cycle immediately revokes access without refund or credit for remaining days.
+                Subscriptions automatically renew on a monthly basis. Customers who do not wish to be billed for a new subscription month must cancel their subscription prior to the end of their current monthly billing cycle. Upon cancellation, automated subscription features (such as AI messaging and live CRM sync) cease, and the account enters the 60-day Grace &amp; Export Period described in Section 1.3. Explicit account deletion initiated by the user immediately revokes access and permanently erases all data without refund or credit for remaining days.
               </p>
             </section>
 

@@ -238,8 +238,8 @@ export default function DocsPage() {
                 </p>
                 <ul className="list-disc list-inside space-y-1 text-amber-800 text-sm">
                   <li><strong>Automatic State Comparison</strong>: DealFinder compares property state vs. administrator/owner mailing state (<code className="bg-amber-100 px-1 rounded">mailingState != propertyState</code>).</li>
-                  <li><strong>GHL Custom Field</strong>: Passes <code className="bg-amber-100 px-1 rounded">Out of State Admin: YES</code> or <code className="bg-amber-100 px-1 rounded">NO</code> directly into GoHighLevel.</li>
-                  <li><strong>GHL Tag</strong>: Automatically applies tag <code className="bg-amber-100 px-1 rounded">out_of_state_admin</code> on sync.</li>
+                  <li><strong>Launch AI Custom Field</strong>: Passes <code className="bg-amber-100 px-1 rounded">Out of State Admin: YES</code> or <code className="bg-amber-100 px-1 rounded">NO</code> directly into Launch AI.</li>
+                  <li><strong>Launch AI Tag</strong>: Automatically applies tag <code className="bg-amber-100 px-1 rounded">out_of_state_admin</code> on sync.</li>
                   <li><strong>Dashboard Filter</strong>: Use the <code className="bg-amber-100 px-1 rounded">🗺️ Out-of-State Admin</code> filter on the dashboard to select and launch high-ROI direct mail campaigns in seconds.</li>
                 </ul>
               </div>
@@ -267,36 +267,133 @@ export default function DocsPage() {
                 <h3 className="text-lg font-medium text-gray-900 mb-2">What We Capture</h3>
                 <p className="text-gray-700 mb-2">For each lead we pull the owner&apos;s contact and mailing details from our data provider:</p>
                 <ul className="list-disc list-inside space-y-1 text-gray-700">
-                  <li><strong>Cell phone numbers</strong> (high-quality SMS-capable mobiles)</li>
-                  <li><strong>Landline numbers</strong> (non-DNC landlines for cold calling via GHL Power Dialer)</li>
-                  <li><strong>Email addresses</strong> (validated for AI outreach)</li>
-                  <li><strong>Mailing address</strong> (standardized USPS mailing address)</li>
-                  <li><strong>Owner name</strong> (fills in missing names)</li>
+                  <li><strong>Cell phone numbers</strong> (high-quality SMS-capable mobiles, score 90+)</li>
+                  <li><strong>Landline numbers</strong> (non-DNC landlines for cold calling via Launch AI Power Dialer)</li>
+                  <li><strong>Email addresses</strong> (DeBounce™ verified for sender deliverability)</li>
+                  <li><strong>Mailing address</strong> (USPS standardized mailing address via Google Maps API)</li>
+                  <li><strong>Owner name</strong> (fills in missing names and identifies heirs/executors)</li>
                 </ul>
               </div>
 
-              <div className="bg-green-50 p-4 rounded-lg">
-                <h4 className="font-medium text-green-800 mb-2">✅ How We Keep It Clean &amp; Compliant</h4>
-                <p className="text-sm text-green-700 mb-2">We deliberately drop low-quality and non-compliant contact info at the source — this protects your dialer, your sender reputation, and respects consumer choice:</p>
-                <ul className="list-disc list-inside space-y-1 text-green-700 text-sm">
-                  <li><strong>Do-Not-Call numbers are removed</strong> — DNC-flagged phones are never captured, and DNC contacts are kept out of the dialer campaign.</li>
-                  <li><strong>High-quality mobiles &amp; landlines</strong> — we capture mobile numbers (score 90+) for SMS/calls, and verified landlines for cold calling.</li>
-                  <li><strong>Landline Protection (<code className="bg-green-100 px-1 rounded text-xs">channel:landline</code>)</strong> — landlines are tagged <code className="bg-green-100 px-1 rounded text-xs">channel:landline</code> and set to <code className="bg-green-100 px-1 rounded text-xs">Phone Contact</code> status for the Power Dialer while bypassing automated SMS drips.</li>
-                  <li><strong>Emails are validated (Debounce)</strong> — every address is checked for deliverability; undeliverable ones are dropped so bounces stay low.</li>
-                  <li><strong>Business hours enforced</strong> — automated email only sends Mon–Fri 9a–7p and Sat 9a–12p (no Sundays).</li>
-                  <li><strong>Opt-outs are honored</strong> — an unsubscribe or a terminal call outcome (Listed With Realtor, DNC, Not Interested, Sold) stops all outreach and sets Do-Not-Disturb.</li>
-                </ul>
-              </div>
+              {/* Comprehensive Clean Data Pipeline */}
+              <div className="bg-gradient-to-br from-indigo-50 via-white to-blue-50 border-2 border-indigo-200 p-6 rounded-2xl shadow-xs">
+                <div className="flex items-center gap-2 text-indigo-900 font-bold text-lg mb-3">
+                  <span className="text-2xl">🛡️</span>
+                  <h3>The Launch AI Clean Data Guarantee: 5-Layer CRM Protection Pipeline</h3>
+                </div>
+                <p className="text-sm text-gray-700 mb-4 leading-relaxed">
+                  Most lead tools dump raw, unverified data directly into your CRM—resulting in suspended sending domains, carrier spam blocks, wasted SMS fees, and TCPA compliance risks. DealFinder runs a strict multi-layer sanitation pipeline before records touch Launch AI:
+                </p>
 
-              <div className="bg-blue-50 p-4 rounded-lg">
-                <h4 className="font-medium text-blue-800 mb-2">🎯 1 Phone = 1 GHL Contact Strategy</h4>
-                <p className="text-sm text-blue-700 mb-2">A person often has several phones and emails. We rank them and create individual GHL contacts for each dialable line so every number can be dialed independently:</p>
-                <ul className="list-disc list-inside space-y-1 text-blue-700 text-sm">
-                  <li><strong>Best phone first</strong> — mobiles and landlines are ordered by quality score; the highest becomes the contact&apos;s <strong>primary phone</strong>.</li>
-                  <li><strong>Separate GHL contacts per line</strong> — additional mobiles and landlines spawn sibling GHL contacts (tagged <code className="bg-blue-100 px-1 rounded text-xs">Multi-Phone-Lead</code>) so power dialers can log outcomes for each line separately.</li>
-                  <li><strong>Best email first</strong> — validated emails are ranked (Deliverable &gt; catch-all &gt; role); the best becomes the <strong>primary email</strong> and the single address AI outreach uses.</li>
-                  <li><strong>Direct Mail as Last Resort</strong> — direct mail (<code className="bg-blue-100 px-1 rounded text-xs">direct-mail-only</code>) is reserved strictly for leads with NO mobile, NO landline, and NO email.</li>
-                </ul>
+                <div className="space-y-4 text-sm">
+                  {/* Layer 1: Google Address Validation */}
+                  <div className="bg-white p-4 rounded-xl border border-indigo-100 shadow-xs">
+                    <h4 className="font-bold text-indigo-950 flex items-center gap-2 mb-1">
+                      <span>1️⃣</span> Google Maps Address Standardization (USPS-Certified)
+                    </h4>
+                    <p className="text-xs sm:text-sm text-gray-600 leading-relaxed">
+                      Every address is standardized through the Google Maps Address Validation API before skip tracing. We correct misspelled street names, resolve directional suffixes (e.g. &ldquo;N&rdquo; vs &ldquo;North&rdquo;), append official zip+4 codes, and verify county jurisdictions. This dramatically increases skip-trace match rates and eliminates wasted lookups on bad addresses.
+                    </p>
+                  </div>
+
+                  {/* Layer 2: DeBounce.io Email Verification */}
+                  <div className="bg-white p-4 rounded-xl border border-indigo-100 shadow-xs">
+                    <h4 className="font-bold text-emerald-900 flex items-center gap-2 mb-1">
+                      <span>2️⃣</span> Real-Time DeBounce™ Email Verification &amp; Ranking
+                    </h4>
+                    <p className="text-xs sm:text-sm text-gray-600 leading-relaxed">
+                      Every email is vetted through DeBounce™ at ingest. Invalid addresses, spam traps, and dead inboxes (<code className="bg-red-50 text-red-700 px-1 rounded text-xs font-mono">send_transactional = 0</code>) are dropped automatically. Verified emails are ranked by confidence:
+                    </p>
+                    <ul className="list-disc list-inside space-y-1 text-xs text-gray-600 mt-2 pl-2">
+                      <li><strong>Rank 3 (Top Priority):</strong> <code className="bg-emerald-50 text-emerald-800 px-1 rounded text-xs">Deliverable</code> &amp; <code className="bg-emerald-50 text-emerald-800 px-1 rounded text-xs">Safe to Send</code></li>
+                      <li><strong>Rank 2:</strong> <code className="bg-blue-50 text-blue-800 px-1 rounded text-xs">Accept-All</code> catch-all corporate domains</li>
+                      <li><strong>Rank 1:</strong> <code className="bg-amber-50 text-amber-800 px-1 rounded text-xs">Role-based</code> addresses (e.g., info@, sales@)</li>
+                    </ul>
+                    <p className="text-xs text-emerald-800 font-medium mt-2">
+                      ✨ <strong>Outcome:</strong> Your Launch AI sender domain stays protected, bounce rates remain near 0%, and email providers won&apos;t flag your account.
+                    </p>
+                  </div>
+
+                  {/* Layer 3: Score 90+ Mobile Phone Floor & DNC Scrubbing */}
+                  <div className="bg-white p-4 rounded-xl border border-indigo-100 shadow-xs">
+                    <h4 className="font-bold text-blue-950 flex items-center gap-2 mb-1">
+                      <span>3️⃣</span> Mobile Quality Floor (Score 90+) &amp; National DNC Scrubbing
+                    </h4>
+                    <p className="text-xs sm:text-sm text-gray-600 leading-relaxed">
+                      Real estate skip tracing often returns multiple unverified numbers. DealFinder filters out all mobile lines with a confidence score under 90 (<code className="bg-gray-100 px-1 rounded text-xs font-mono">score &lt; 90</code>). Discarding recycled numbers ensures your automated outreach reaches real owners. Additionally, all numbers are checked against the National Do-Not-Call (DNC) registry at ingest, keeping your campaigns TCPA-compliant.
+                    </p>
+                  </div>
+
+                  {/* Layer 4: Structural Landline Isolation */}
+                  <div className="bg-white p-4 rounded-xl border border-indigo-100 shadow-xs">
+                    <h4 className="font-bold text-amber-950 flex items-center gap-2 mb-1">
+                      <span>4️⃣</span> Structural Landline Isolation (<code className="bg-amber-100 text-amber-900 px-1 rounded text-xs">channel:landline</code>)
+                    </h4>
+                    <p className="text-xs sm:text-sm text-gray-600 leading-relaxed">
+                      Texting a landline fails and incurs wasted carrier fees. Landlines are structurally stored in a separate <code className="bg-gray-100 px-1 rounded text-xs font-mono">landlinePhones</code> field so SMS automations can never pick them up. If a lead has no mobile, the best non-DNC landline is promoted to the primary dialable slot in Launch AI with the tag <code className="bg-amber-100 text-amber-900 px-1 rounded text-xs">channel:landline</code> so it can be cold-called via Launch AI&apos;s Power Dialer.
+                    </p>
+                  </div>
+
+                  {/* Layer 5: 1-Phone = 1-Contact Strategy */}
+                  <div className="bg-white p-4 rounded-xl border border-indigo-100 shadow-xs">
+                    <h4 className="font-bold text-purple-950 flex items-center gap-2 mb-1">
+                      <span>5️⃣</span> 1-Phone = 1-Contact Launch AI Dialing Strategy
+                    </h4>
+                    <p className="text-xs sm:text-sm text-gray-600 leading-relaxed">
+                      In standard CRMs, if you put 3 phone numbers on 1 contact card, the dialer only calls the first one. DealFinder creates linked sibling contacts in Launch AI tagged <code className="bg-purple-100 text-purple-900 px-1 rounded text-xs">Multi-Phone-Lead</code>. This empowers your Launch AI Power Dialer to work through every verified number until you connect with the homeowner.
+                    </p>
+                  </div>
+
+                  {/* Layer 6: Direct Mail Conservation */}
+                  <div className="bg-white p-4 rounded-xl border border-indigo-100 shadow-xs">
+                    <h4 className="font-bold text-rose-950 flex items-center gap-2 mb-1">
+                      <span>6️⃣</span> Direct Mail Budget Defense (Last-Resort Rule)
+                    </h4>
+                    <p className="text-xs sm:text-sm text-gray-600 leading-relaxed">
+                      Direct mail postcards cost between $0.70 and $1.00+ each. We strictly restrict the <code className="bg-rose-100 text-rose-900 px-1 rounded text-xs">direct-mail-only</code> tag to leads where a concluded skip trace returned <strong>zero mobile numbers, zero landlines, and zero emails</strong>. If an owner can be reached by phone or email, direct mail is withheld—saving you hundreds to thousands of dollars in print costs.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Comparison Table */}
+                <div className="mt-6 overflow-hidden rounded-xl border border-indigo-200">
+                  <table className="min-w-full text-xs text-left">
+                    <thead className="bg-indigo-900 text-white font-bold">
+                      <tr>
+                        <th className="p-3">Data Hygiene Metric</th>
+                        <th className="p-3 bg-indigo-950">Raw Scraping (Competitors)</th>
+                        <th className="p-3 bg-emerald-800">DealFinder Clean Data</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-indigo-100 bg-white">
+                      <tr>
+                        <td className="p-3 font-semibold text-gray-900">Email Deliverability</td>
+                        <td className="p-3 text-red-600">20–30% bounce rate (domain risk)</td>
+                        <td className="p-3 text-emerald-700 font-bold">Tested via DeBounce™ (&lt;1% bounce)</td>
+                      </tr>
+                      <tr>
+                        <td className="p-3 font-semibold text-gray-900">Mobile Phone Accuracy</td>
+                        <td className="p-3 text-red-600">Unfiltered (recycled/disconnected)</td>
+                        <td className="p-3 text-emerald-700 font-bold">Score 90+ Confidence Floor</td>
+                      </tr>
+                      <tr>
+                        <td className="p-3 font-semibold text-gray-900">Landline Handling</td>
+                        <td className="p-3 text-red-600">Mixed with mobiles (triggers SMS errors)</td>
+                        <td className="p-3 text-emerald-700 font-bold">Isolated for Launch AI Power Dialer</td>
+                      </tr>
+                      <tr>
+                        <td className="p-3 font-semibold text-gray-900">DNC Scrubbing</td>
+                        <td className="p-3 text-red-600">Manual or extra fee</td>
+                        <td className="p-3 text-emerald-700 font-bold">Automated at ingest (TCPA safe)</td>
+                      </tr>
+                      <tr>
+                        <td className="p-3 font-semibold text-gray-900">Address Formatting</td>
+                        <td className="p-3 text-red-600">Raw input (high no-match rates)</td>
+                        <td className="p-3 text-emerald-700 font-bold">USPS Standardized via Google Maps API</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
               </div>
 
               <div className="bg-yellow-50 p-4 rounded-lg">
@@ -336,14 +433,14 @@ export default function DocsPage() {
           {/* Launch AI Account Setup */}
           <section id="launch-ai-setup" className="mb-12">
             <h2 className="text-2xl font-semibold text-gray-900 mb-6">⚙️ Launch AI Account Setup</h2>
-            <p className="text-gray-600 mb-6 text-sm">Complete these steps once to connect and configure your CRM. You can connect your GoHighLevel sub-account using 1-Click OAuth or instantly via a Private Integration Token (PIT).</p>
+            <p className="text-gray-600 mb-6 text-sm">Complete these steps once to connect and configure your CRM. You can connect your Launch AI sub-account using 1-Click OAuth or instantly via a Private Integration Token (PIT).</p>
 
             <div className="space-y-6">
 
               {/* Connection Methods */}
               <div className="border border-indigo-200 bg-indigo-50/60 p-5 rounded-2xl">
                 <h3 className="text-base font-bold text-indigo-950 mb-3 flex items-center gap-2">
-                  <span>🔗</span> How to Connect Your GoHighLevel Sub-Account
+                  <span>🔗</span> How to Connect Your Launch AI Sub-Account
                 </h3>
 
                 <div className="grid md:grid-cols-2 gap-4 text-sm">
@@ -357,7 +454,7 @@ export default function DocsPage() {
                       Best for immediate access and beta testing. Direct API connection with permanent 100-year validity:
                     </p>
                     <ol className="list-decimal list-inside space-y-1.5 text-xs text-gray-700">
-                      <li>Log into your <strong>GoHighLevel</strong> sub-account.</li>
+                      <li>Log into your <strong>Launch AI</strong> sub-account.</li>
                       <li>Go to <strong>Settings → Integrations → Private Integrations</strong>.</li>
                       <li>Click <strong>+ Create Token</strong> (name it <em>"DealFinder"</em>).</li>
                       <li>Select scopes: <strong>Contacts, Conversations, Calendars, Locations, Opportunities, Custom Fields, Tags</strong>.</li>
@@ -373,12 +470,12 @@ export default function DocsPage() {
                       <span className="bg-blue-100 text-blue-800 text-[10px] font-black px-2 py-0.5 rounded">Standard</span>
                     </div>
                     <p className="text-xs text-gray-600 mb-3">
-                      Standard HighLevel Marketplace authentication:
+                      Standard Launch AI Marketplace authentication:
                     </p>
                     <ol className="list-decimal list-inside space-y-1.5 text-xs text-gray-700">
                       <li>In DealFinder, go to <strong>Profile → Launch AI Connection</strong>.</li>
                       <li>Click <strong>"Connect Launch AI"</strong>.</li>
-                      <li>You will be redirected to the secure HighLevel consent screen.</li>
+                      <li>You will be redirected to the secure Launch AI consent screen.</li>
                       <li>Choose your Sub-Account / Location and click <strong>Authorize</strong>.</li>
                       <li><em>(For Draft Beta Accounts)</em>: You can also enter your Sub-Account ID under <em>"Have a Sub-Account ID? Connect test draft link"</em> and click <strong>Install ↗</strong>.</li>
                     </ol>
@@ -391,7 +488,7 @@ export default function DocsPage() {
                 <h4 className="font-bold text-green-900 text-base mb-2 flex items-center gap-2">
                   <span>✅</span> Created Automatically When You Connect
                 </h4>
-                <p className="text-sm text-green-800 mb-4">The moment you connect your GoHighLevel sub-account (via PIT or OAuth), DealFinder automatically provisions all custom fields, opportunity fields, and system tags:</p>
+                <p className="text-sm text-green-800 mb-4">The moment you connect your Launch AI sub-account (via PIT or OAuth), DealFinder automatically provisions all custom fields, opportunity fields, and system tags:</p>
                 
                 <div className="space-y-4">
                   {/* Contact Fields Summary */}
@@ -476,7 +573,7 @@ export default function DocsPage() {
               <div className="border-l-4 border-blue-500 pl-4">
                 <h3 className="text-lg font-medium text-gray-900 mb-2">1. Buy a Phone Number</h3>
                 <ol className="list-decimal list-inside space-y-1 text-gray-700 text-sm">
-                  <li>Go to <strong>Settings → Phone Numbers</strong> in your GHL sub-account</li>
+                  <li>Go to <strong>Settings → Phone Numbers</strong> in your Launch AI sub-account</li>
                   <li>Purchase a local number in your target market area</li>
                   <li>Complete <strong>A2P 10DLC registration</strong> — SMS outreach is blocked by carriers until this is done</li>
                   <li>Once registered, select this number in DealFinder → Profile → Launch AI Settings → Campaign Phone</li>
@@ -531,7 +628,7 @@ export default function DocsPage() {
 
               {/* Tag-based workflows */}
               <div>
-                <h3 className="text-lg font-medium text-gray-900 mb-3">4. Required GHL Workflows (by Tag)</h3>
+                <h3 className="text-lg font-medium text-gray-900 mb-3">5. Recommended Launch AI Workflows (by Tag)</h3>
                 <p className="text-sm text-gray-600 mb-4">Build these in <strong>Automation → Workflows</strong>. Each triggers when the system adds a specific tag to a contact.</p>
                 <div className="space-y-3">
 
@@ -626,8 +723,8 @@ export default function DocsPage() {
 
               {/* Call Disposition Workflows */}
               <div>
-                <h3 className="text-lg font-medium text-gray-900 mb-3">5. Call Disposition Workflows (Phone System)</h3>
-                <p className="text-sm text-gray-600 mb-3">Build these in <strong>Automation → Workflows</strong>, triggered by call disposition logged in the GHL phone dialer.</p>
+                <h3 className="text-lg font-medium text-gray-900 mb-3">6. Call Disposition Workflows (Phone System)</h3>
+                <p className="text-sm text-gray-600 mb-3">Build these in <strong>Automation → Workflows</strong>, triggered by call disposition logged in the Launch AI phone dialer.</p>
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm border border-gray-200 rounded-lg overflow-hidden">
                     <thead className="bg-gray-100">
@@ -894,7 +991,7 @@ export default function DocsPage() {
                 <ol className="space-y-3">
                   <li className="flex gap-3 items-start">
                     <span className="flex-shrink-0 w-6 h-6 rounded-full bg-blue-600 text-white text-xs font-bold flex items-center justify-center mt-0.5">1</span>
-                    <span className="text-gray-700"><strong>Duplicate check.</strong> The webhook is claimed atomically so the same reply can never be processed twice (24-hour dedup window), even if GHL retries or fires it concurrently.</span>
+                    <span className="text-gray-700"><strong>Duplicate check.</strong> The webhook is claimed atomically so the same reply can never be processed twice (24-hour dedup window), even if Launch AI retries or fires it concurrently.</span>
                   </li>
                   <li className="flex gap-3 items-start">
                     <span className="flex-shrink-0 w-6 h-6 rounded-full bg-blue-600 text-white text-xs font-bold flex items-center justify-center mt-0.5">2</span>
@@ -902,7 +999,7 @@ export default function DocsPage() {
                   </li>
                   <li className="flex gap-3 items-start">
                     <span className="flex-shrink-0 w-6 h-6 rounded-full bg-blue-600 text-white text-xs font-bold flex items-center justify-center mt-0.5">3</span>
-                    <span className="text-gray-700"><strong>Right tenant.</strong> The reply is matched to the account that owns the lead (by user ID or GHL location). If it can&apos;t be matched, it&apos;s dropped — never handled under the wrong account.</span>
+                    <span className="text-gray-700"><strong>Right tenant.</strong> The reply is matched to the account that owns the lead (by user ID or Launch AI location). If it can&apos;t be matched, it&apos;s dropped — never handled under the wrong account.</span>
                   </li>
                   <li className="flex gap-3 items-start">
                     <span className="flex-shrink-0 w-6 h-6 rounded-full bg-blue-600 text-white text-xs font-bold flex items-center justify-center mt-0.5">4</span>
@@ -910,7 +1007,7 @@ export default function DocsPage() {
                   </li>
                   <li className="flex gap-3 items-start">
                     <span className="flex-shrink-0 w-6 h-6 rounded-full bg-red-500 text-white text-xs font-bold flex items-center justify-center mt-0.5">5</span>
-                    <span className="text-gray-700"><strong>Opt-out / DND guard.</strong> If the contact is opted out of SMS (GHL handles carrier keywords like STOP, UNSUBSCRIBE, CANCEL, QUIT, END), the AI never replies and the app marks the outreach queue <code className="bg-gray-200 px-1 rounded text-xs">DND</code>.</span>
+                    <span className="text-gray-700"><strong>Opt-out / DND guard.</strong> If the contact is opted out of SMS (Launch AI handles carrier keywords like STOP, UNSUBSCRIBE, CANCEL, QUIT, END), the AI never replies and the app marks the outreach queue <code className="bg-gray-200 px-1 rounded text-xs">DND</code>.</span>
                   </li>
                   <li className="flex gap-3 items-start">
                     <span className="flex-shrink-0 w-6 h-6 rounded-full bg-blue-600 text-white text-xs font-bold flex items-center justify-center mt-0.5">6</span>
@@ -921,15 +1018,15 @@ export default function DocsPage() {
                     <span className="text-gray-700"><strong>Manual-handling tag.</strong> If the contact has <code className="bg-yellow-100 px-1 rounded text-xs">conversation:manual</code>, a human has already taken over — AI stays silent.</span>
                   </li>
                   <li className="flex gap-3 items-start">
-                    <span className="flex-shrink-0 w-6 h-6 rounded-full bg-yellow-500 text-white text-xs font-bold flex items-center justify-center mt-0.5">8</span>
-                    <span className="text-gray-700"><strong>AI State field switch.</strong> If <code className="bg-blue-100 px-1 rounded text-xs">AI State = paused</code> or <code className="bg-blue-100 px-1 rounded text-xs">handoff</code>, the AI stands down. This is your deliberate &quot;I&apos;ve got this one&quot; control (see below).</span>
+                    <span className="flex-shrink-0 w-6 h-6 rounded-full bg-blue-600 text-white text-xs font-bold flex items-center justify-center mt-0.5">8</span>
+                    <span className="text-gray-700"><strong>Explicit pause field.</strong> If <code className="bg-blue-100 px-1 rounded text-xs">AI State = paused</code> on the contact, the AI stands down immediately.</span>
                   </li>
                   <li className="flex gap-3 items-start">
-                    <span className="flex-shrink-0 w-6 h-6 rounded-full bg-yellow-500 text-white text-xs font-bold flex items-center justify-center mt-0.5">9</span>
-                    <span className="text-gray-700"><strong>Recent-activity auto-pause.</strong> If <em>any</em> outbound message (a manual call/text or a workflow) touched this conversation in the last <strong>2 hours</strong>, the AI assumes a human is engaged, tags the contact <code className="bg-yellow-100 px-1 rounded text-xs">conversation:manual</code>, and steps aside.</span>
+                    <span className="flex-shrink-0 w-6 h-6 rounded-full bg-blue-600 text-white text-xs font-bold flex items-center justify-center mt-0.5">9</span>
+                    <span className="text-gray-700"><strong>Recent human activity.</strong> If an agent called, texted, or updated the contact in the last 2 hours, the AI pauses to avoid stepping on a live conversation.</span>
                   </li>
                   <li className="flex gap-3 items-start">
-                    <span className="flex-shrink-0 w-6 h-6 rounded-full bg-green-600 text-white text-xs font-bold flex items-center justify-center mt-0.5">✓</span>
+                    <span className="flex-shrink-0 w-6 h-6 rounded-full bg-green-600 text-white text-xs font-bold flex items-center justify-center mt-0.5">10</span>
                     <span className="text-gray-700"><strong>All clear → the AI replies.</strong> Only a genuinely cold lead with no human activity reaches this point. The AI reads the full conversation history and generates a natural, on-brand response.</span>
                   </li>
                 </ol>
@@ -942,7 +1039,7 @@ export default function DocsPage() {
                 <div className="space-y-3 text-sm">
                   <div className="flex gap-3 items-start">
                     <code className="bg-blue-100 px-2 py-0.5 rounded text-xs whitespace-nowrap">AI State = paused</code>
-                    <span className="text-yellow-900"><strong>The deliberate switch.</strong> Set this field (manually or via a GHL workflow) to take over precisely. The AI never sets <code className="bg-yellow-100 px-1 rounded text-xs">paused</code> on itself, so it&apos;s a safe human/workflow-only control. Set it back to <code className="bg-yellow-100 px-1 rounded text-xs">running</code> to hand the lead back to the AI.</span>
+                    <span className="text-yellow-900"><strong>The deliberate switch.</strong> Set this field (manually or via a Launch AI workflow) to take over precisely. The AI never sets <code className="bg-yellow-100 px-1 rounded text-xs">paused</code> on itself, so it&apos;s a safe human/workflow-only control. Set it back to <code className="bg-yellow-100 px-1 rounded text-xs">running</code> to hand the lead back to the AI.</span>
                   </div>
                   <div className="flex gap-3 items-start">
                     <code className="bg-yellow-100 px-2 py-0.5 rounded text-xs whitespace-nowrap">conversation:manual</code>
@@ -954,7 +1051,7 @@ export default function DocsPage() {
                   </div>
                 </div>
                 <p className="text-xs text-yellow-700 mt-3">
-                  <strong>Make it hands-off:</strong> add GHL workflows that set <code className="bg-yellow-100 px-1 rounded">AI State = paused</code> when an appointment is booked, a follow-up task is created, or the pipeline moves to a &quot;working&quot; stage. Then the AI only ever answers leads you haven&apos;t engaged.
+                  <strong>Make it hands-off:</strong> add Launch AI workflows that set <code className="bg-yellow-100 px-1 rounded">AI State = paused</code> when an appointment is booked, a follow-up task is created, or the pipeline moves to a &quot;working&quot; stage. Then the AI only ever answers leads you haven&apos;t engaged.
                 </p>
               </div>
 
@@ -990,7 +1087,7 @@ export default function DocsPage() {
                   <code className="bg-green-200 px-1 rounded text-xs">Ready-For-Human-Contact</code>), the{' '}
                   <code className="bg-blue-100 px-1 rounded text-xs">AI State</code> and{' '}
                   <code className="bg-blue-100 px-1 rounded text-xs">Call Outcome</code> fields, and a timestamped note
-                  whenever the AI pauses for manual handling. Build your GHL pipeline automations off these tags to route
+                  whenever the AI pauses for manual handling. Build your Launch AI pipeline automations off these tags to route
                   hot leads to yourself the instant the AI flags them.
                 </p>
               </div>
@@ -1110,6 +1207,27 @@ export default function DocsPage() {
                   $50 ($0.10 each)
                 </div>
               </div>
+            </div>
+
+            {/* Cancellation & Retention Policy */}
+            <div className="mt-6 bg-blue-50 border border-blue-200 rounded-lg p-5">
+              <h4 className="font-semibold text-blue-950 mb-2 flex items-center gap-2">
+                <span>🛡️</span> Subscription Cancellation & 60-Day Retention Policy
+              </h4>
+              <p className="text-sm text-blue-900 mb-3 leading-relaxed">
+                We believe you should always retain control over the leads and credits you have paid for:
+              </p>
+              <ul className="text-sm text-blue-800 space-y-2 list-disc list-inside">
+                <li>
+                  <strong>Immediate Protection (Day 0):</strong> When you cancel your subscription, your account moves to the Free tier. Automated AI outreach campaigns and live CRM sync are paused immediately to eliminate unexpected outbound messaging charges.
+                </li>
+                <li>
+                  <strong>60-Day Export &amp; Credit Window:</strong> You have a full <strong>60-day grace period</strong> to log in, download your entire lead database and contact records via CSV, and spend down any remaining skip trace credits on off-market properties.
+                </li>
+                <li>
+                  <strong>Day 60 Database Purge:</strong> After 60 consecutive days without an active subscription, inactive databases and remaining credit balances are permanently purged to comply with data privacy standards and maintain platform security.
+                </li>
+              </ul>
             </div>
           </section>
 

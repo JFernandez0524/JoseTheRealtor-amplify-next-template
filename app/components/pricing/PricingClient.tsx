@@ -210,8 +210,7 @@ export default function PricingClient({
                 <p className='text-indigo-100 font-medium'>
                   Enrichment data is pay-as-you-go. Each skip-trace costs{' '}
                   <span className='text-white font-bold'>$0.10 (1 credit)</span>
-                  . Buy a pack to refill your balance instantly. Credits never
-                  expire.
+                  . Buy a pack to refill your balance instantly. Credits remain active with your subscription, with a 60-day grace period upon cancellation.
                 </p>
               </div>
               <div className='bg-white/10 backdrop-blur-md px-6 py-3 rounded-2xl border border-white/20'>
