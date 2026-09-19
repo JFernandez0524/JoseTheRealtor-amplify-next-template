@@ -1,6 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, ReactNode, useState, useEffect, useCallback } from 'react';
+import { Hub } from 'aws-amplify/utils';
 import { client } from '@/app/utils/aws/data/frontEndClient';
 import { getFrontEndUser } from '@/app/utils/aws/auth/amplifyFrontEndUser';
 
@@ -84,12 +85,25 @@ export function GhlProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     checkConnection();
+
+    // Re-check whenever user signs in or refreshes token
+    const unsubscribe = Hub.listen('auth', ({ payload }) => {
+      if (payload.event === 'signedIn' || payload.event === 'tokenRefresh') {
+        setGhl((prev) => ({ ...prev, isLoading: true }));
+        checkConnection();
+      } else if (payload.event === 'signedOut') {
+        setGhl({ ...defaultGhl, isLoading: false });
+      }
+    });
     
     // Re-check when window regains focus (after OAuth redirect)
     const handleFocus = () => checkConnection();
     window.addEventListener('focus', handleFocus);
     
-    return () => window.removeEventListener('focus', handleFocus);
+    return () => {
+      unsubscribe();
+      window.removeEventListener('focus', handleFocus);
+    };
   }, [checkConnection]);
 
   return <GhlContext.Provider value={ghl}>{children}</GhlContext.Provider>;
