@@ -25,7 +25,7 @@ type Lead = Schema['PropertyLead']['type'] & {
 type Props = {
   leads: Lead[];
   selectedIds: string[];
-  selectedLeadType: 'PROBATE' | 'PREFORECLOSURE' | null;
+  selectedLeadType: string | null;
   isLoading: boolean;
   onToggleAll: () => void;
   onToggleAllFiltered: () => void;

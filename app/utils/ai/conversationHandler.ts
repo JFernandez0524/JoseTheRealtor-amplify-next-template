@@ -247,18 +247,21 @@ function isAIEnabled(contact: any): boolean {
   }
   
   // Check all variations of lead type (case-insensitive)
-  const validLeadTypes = [
-    'Probate',
-    'probate', 
+  const normType = (leadType || '').toUpperCase().replace(/[_\s-]+/g, ' ').trim();
+  const validLeadTypes = new Set([
     'PROBATE',
     'PREFORECLOSURE',
-    'Preforeclosure',
-    'preforeclosure',
-    'Pre-Foreclosure',
-    'pre-foreclosure'
-  ];
+    'PRE FORECLOSURE',
+    'FSBO',
+    'TAX DELINQUENT',
+    'DRIVING FOR DOLLARS',
+    'VACANT',
+    'OTHER',
+    'SELL AS IS',
+    'GENERAL INQUIRY',
+  ]);
   
-  if (!leadType || !validLeadTypes.includes(leadType)) {
+  if (!normType || !validLeadTypes.has(normType)) {
     console.log(`❌ Invalid or missing lead type: "${leadType}"`);
     return false;
   }

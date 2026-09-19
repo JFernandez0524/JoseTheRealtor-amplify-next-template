@@ -106,6 +106,34 @@ describe('missingRequired (probate admin)', () => {
     expect(miss).not.toContain('adminName');
     expect(miss).not.toContain('adminAddress');
   });
+
+  it('does not require admin fields for standard lead types (FSBO, VACANT, etc.)', () => {
+    for (const type of ['FSBO', 'TAX_DELINQUENT', 'DRIVING_FOR_DOLLARS', 'VACANT', 'OTHER'] as const) {
+      const fields = canonicalFields(type);
+      const miss = missingRequired(base, fields);
+      expect(miss).toEqual([]);
+    }
+  });
+});
+
+describe('autoDetectMapping (PropStream format)', () => {
+  const propStreamHeaders = [
+    'Address', 'City', 'State', 'Zip',
+    'Owner 1 First Name', 'Owner 1 Last Name',
+    'Estimated Value', 'Estimated Equity',
+  ];
+
+  it('maps PropStream headers to standard property fields', () => {
+    const fields = canonicalFields('TAX_DELINQUENT');
+    const mapping = autoDetectMapping(propStreamHeaders, fields);
+    expect(mapping.ownerAddress).toBe('Address');
+    expect(mapping.ownerCity).toBe('City');
+    expect(mapping.ownerState).toBe('State');
+    expect(mapping.ownerZip).toBe('Zip');
+    expect(mapping.ownerFirstName).toBe('Owner 1 First Name');
+    expect(mapping.ownerLastName).toBe('Owner 1 Last Name');
+    expect(mapping.estimatedValue).toBe('Estimated Value');
+  });
 });
 
 describe('resolveOwnerName', () => {

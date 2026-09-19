@@ -67,7 +67,7 @@ type Props = {
   // Bulk Action Props
   selectedLeadsCount: number;
   selectedLeadTypes: string[];
-  selectedLeadType: 'PROBATE' | 'PREFORECLOSURE' | null;
+  selectedLeadType: string | null;
   handleBulkSkipTrace: () => Promise<void>;
   handleBulkGHLSync: () => Promise<void>;
   handleBulkStatusUpdate: (status: string) => Promise<void>;
@@ -328,8 +328,13 @@ export function DashboardFilters({
           className='border border-slate-300 rounded-xl px-3 py-2 text-xs font-semibold focus:ring-2 focus:ring-blue-500 outline-none w-full bg-white text-slate-700'
         >
           <option value=''>🏠 All Lead Types</option>
-          <option value='PREFORECLOSURE'>Pre-Foreclosure</option>
           <option value='PROBATE'>Probate</option>
+          <option value='PREFORECLOSURE'>Pre-Foreclosure</option>
+          <option value='FSBO'>FSBO</option>
+          <option value='TAX_DELINQUENT'>Tax Delinquent</option>
+          <option value='DRIVING_FOR_DOLLARS'>Driving For Dollars</option>
+          <option value='VACANT'>Vacant</option>
+          <option value='OTHER'>Other</option>
         </select>
 
         {/* 🗺️ Out of State Admin Filter */}

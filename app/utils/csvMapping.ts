@@ -13,7 +13,14 @@
  */
 import { isEntityName } from './leadValidation';
 
-export type LeadType = 'PREFORECLOSURE' | 'PROBATE';
+export type LeadType =
+  | 'PROBATE'
+  | 'PREFORECLOSURE'
+  | 'FSBO'
+  | 'TAX_DELINQUENT'
+  | 'DRIVING_FOR_DOLLARS'
+  | 'VACANT'
+  | 'OTHER';
 
 export interface CanonicalField {
   key: string;
@@ -25,30 +32,128 @@ export interface CanonicalField {
 // Owner name is offered as BOTH a combined column and a split pair — files vary. The user maps
 // whichever their file has; required-ness is enforced as "full OR (first AND last)" in missingRequired.
 const OWNER_NAME_FIELDS: CanonicalField[] = [
-  { key: 'ownerFullName', label: 'Owner / Borrower Full Name', aliases: ['ownerFullName', 'owner name', 'ownername', 'borrower name', 'borrower or defendant name', 'borrower', 'defendant', 'ownership', 'owner'] },
-  { key: 'ownerFirstName', label: 'Owner First Name', aliases: ['ownerFirstName', 'owner first name', 'first name', 'firstname'] },
-  { key: 'ownerLastName', label: 'Owner Last Name', aliases: ['ownerLastName', 'owner last name', 'last name', 'lastname'] },
+  {
+    key: 'ownerFullName',
+    label: 'Owner / Borrower Full Name',
+    aliases: [
+      'ownerFullName', 'owner name', 'ownername', 'borrower name',
+      'borrower or defendant name', 'borrower', 'defendant', 'ownership', 'owner',
+      'owner 1 full name', 'owner 1 name', 'owner1 full name', 'owner1 name',
+      'owner 1 - full name', 'owner1fullname', 'owner1name',
+    ],
+  },
+  {
+    key: 'ownerFirstName',
+    label: 'Owner First Name',
+    aliases: [
+      'ownerFirstName', 'owner first name', 'first name', 'firstname',
+      'owner 1 first name', 'owner 1 first', 'owner1 first name', 'owner1 first',
+      'owner1firstname', 'owner1first',
+    ],
+  },
+  {
+    key: 'ownerLastName',
+    label: 'Owner Last Name',
+    aliases: [
+      'ownerLastName', 'owner last name', 'last name', 'lastname',
+      'owner 1 last name', 'owner 1 last', 'owner1 last name', 'owner1 last',
+      'owner1lastname', 'owner1last',
+    ],
+  },
 ];
 
 const PROPERTY_ADDRESS_FIELDS: CanonicalField[] = [
-  { key: 'ownerAddress', label: 'Property Address', required: true, aliases: ['ownerAddress', 'property address', 'situs address', 'situs', 'address'] },
-  { key: 'ownerCity', label: 'Property City', required: true, aliases: ['ownerCity', 'property city', 'situs city', 'municipality', 'municipali', 'city'] },
-  { key: 'ownerState', label: 'Property State', required: true, aliases: ['ownerState', 'property state', 'situs state', 'state'] },
-  { key: 'ownerZip', label: 'Property ZIP', required: true, aliases: ['ownerZip', 'property zip', 'situs zip', 'situs zif', 'postal code', 'postalcode', 'zip', 'zipcode'] },
+  {
+    key: 'ownerAddress',
+    label: 'Property Address',
+    required: true,
+    aliases: [
+      'ownerAddress', 'property address', 'situs address', 'situs', 'address',
+      'property street address', 'street address', 'prop address',
+    ],
+  },
+  {
+    key: 'ownerCity',
+    label: 'Property City',
+    required: true,
+    aliases: [
+      'ownerCity', 'property city', 'situs city', 'municipality', 'municipali', 'city', 'prop city',
+    ],
+  },
+  {
+    key: 'ownerState',
+    label: 'Property State',
+    required: true,
+    aliases: [
+      'ownerState', 'property state', 'situs state', 'state', 'prop state',
+    ],
+  },
+  {
+    key: 'ownerZip',
+    label: 'Property ZIP',
+    required: true,
+    aliases: [
+      'ownerZip', 'property zip', 'situs zip', 'situs zif', 'postal code',
+      'postalcode', 'zip', 'zipcode', 'zip code', 'prop zip',
+    ],
+  },
 ];
 
-const PHONE_FIELD: CanonicalField = { key: 'phone', label: 'Phone', aliases: ['phone', 'phone number', 'telephone', 'cell'] };
+const PHONE_FIELD: CanonicalField = {
+  key: 'phone',
+  label: 'Phone',
+  aliases: [
+    'phone', 'phone number', 'telephone', 'cell', 'mobile',
+    'phone 1', 'phone1', 'owner 1 phone', 'owner1phone',
+  ],
+};
+
+const ESTIMATED_VALUE_FIELD: CanonicalField = {
+  key: 'estimatedValue',
+  label: 'Estimated Value',
+  aliases: [
+    'estimatedValue', 'estimated value', 'est value', 'est. value',
+    'estimated equity', 'value', 'assessed value', 'prop value',
+  ],
+};
 
 const PREFORECLOSURE_FIELDS: CanonicalField[] = [
   ...OWNER_NAME_FIELDS,
   ...PROPERTY_ADDRESS_FIELDS,
-  { key: 'recordingDate', label: 'Recording / Filing Date', aliases: ['recordingDate', 'recording date', 'filing date', 'file date', 'nod date', 'date'] },
-  { key: 'caseNumber', label: 'Case / Docket Number', aliases: ['caseNumber', 'case number', 'docket', 'docket_', 'case', 'file number'] },
-  { key: 'lender', label: 'Lender / Plaintiff', aliases: ['lender', 'plaintiff', 'lender or plaintiff name', 'lender or plaintiff'] },
+  {
+    key: 'recordingDate',
+    label: 'Recording / Filing Date',
+    aliases: [
+      'recordingDate', 'recording date', 'filing date', 'file date',
+      'nod date', 'date', 'pre foreclosure recording date', 'preforeclosure recording date',
+    ],
+  },
+  {
+    key: 'caseNumber',
+    label: 'Case / Docket Number',
+    aliases: [
+      'caseNumber', 'case number', 'docket', 'docket_', 'case',
+      'file number', 'document number', 'doc number',
+    ],
+  },
+  {
+    key: 'lender',
+    label: 'Lender / Plaintiff',
+    aliases: [
+      'lender', 'plaintiff', 'lender or plaintiff name', 'lender or plaintiff', 'lender name',
+    ],
+  },
   { key: 'trustee', label: 'Trustee / Attorney', aliases: ['trustee', 'attorney', 'trustee or deputy name', 'deputy'] },
-  { key: 'loanAmount', label: 'Loan / Mortgage Amount', aliases: ['loanAmount', 'loan amount', 'mortgage amount', 'mortgageam', 'amount'] },
+  {
+    key: 'loanAmount',
+    label: 'Loan / Mortgage Amount',
+    aliases: [
+      'loanAmount', 'loan amount', 'mortgage amount', 'mortgageam', 'amount',
+      'open loan balance', 'loan balance',
+    ],
+  },
   PHONE_FIELD,
-  { key: 'estimatedValue', label: 'Estimated Value', aliases: ['estimatedValue', 'estimated value', 'est value', 'value'] },
+  ESTIMATED_VALUE_FIELD,
 ];
 
 const PROBATE_FIELDS: CanonicalField[] = [
@@ -65,9 +170,19 @@ const PROBATE_FIELDS: CanonicalField[] = [
   PHONE_FIELD,
 ];
 
+/** Standard fields for non-probate lead types (FSBO, Tax Delinquent, Driving for Dollars, Vacant, Other). */
+const STANDARD_PROPERTY_FIELDS: CanonicalField[] = [
+  ...OWNER_NAME_FIELDS,
+  ...PROPERTY_ADDRESS_FIELDS,
+  PHONE_FIELD,
+  ESTIMATED_VALUE_FIELD,
+];
+
 /** Canonical fields to map for a given lead type (drives both the UI and validation). */
 export function canonicalFields(leadType: LeadType): CanonicalField[] {
-  return leadType === 'PROBATE' ? PROBATE_FIELDS : PREFORECLOSURE_FIELDS;
+  if (leadType === 'PROBATE') return PROBATE_FIELDS;
+  if (leadType === 'PREFORECLOSURE') return PREFORECLOSURE_FIELDS;
+  return STANDARD_PROPERTY_FIELDS;
 }
 
 /** Normalize a header/alias for comparison: lowercase, drop everything but a–z0–9. */

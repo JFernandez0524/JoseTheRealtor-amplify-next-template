@@ -46,7 +46,7 @@ export default function LeadDashboardClient({}: Props) {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [userAccount, setUserAccount] = useState<UserAccount | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [selectedLeadType, setSelectedLeadType] = useState<'PROBATE' | 'PREFORECLOSURE' | null>(null);
+  const [selectedLeadType, setSelectedLeadType] = useState<string | null>(null);
   const [showRouteModal, setShowRouteModal] = useState(false);
   const [pendingAction, setPendingAction] = useState<'skipTrace' | 'enrich' | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -1459,7 +1459,7 @@ export default function LeadDashboardClient({}: Props) {
             setSelectedLeadType(null);
           } else {
             const firstLead = paginatedLeads[0];
-            if (firstLead) setSelectedLeadType(firstLead.type as 'PROBATE' | 'PREFORECLOSURE');
+            if (firstLead) setSelectedLeadType(firstLead.type);
           }
         }}
         onToggleAllFiltered={() => {
@@ -1476,7 +1476,7 @@ export default function LeadDashboardClient({}: Props) {
             setSelectedLeadType(null);
           } else {
             const firstLead = filteredLeads[0];
-            if (firstLead) setSelectedLeadType(firstLead.type as 'PROBATE' | 'PREFORECLOSURE');
+            if (firstLead) setSelectedLeadType(firstLead.type);
           }
         }}
         onToggleOne={(id) => {
@@ -1493,7 +1493,7 @@ export default function LeadDashboardClient({}: Props) {
               setSelectedLeadType(null);
             } else if (prev.length === 0) {
               const lead = leads.find(l => l.id === id);
-              if (lead) setSelectedLeadType(lead.type as 'PROBATE' | 'PREFORECLOSURE');
+              if (lead) setSelectedLeadType(lead.type);
             }
 
             return newSelection;

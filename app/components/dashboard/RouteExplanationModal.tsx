@@ -4,7 +4,7 @@ interface RouteExplanationModalProps {
   isOpen: boolean;
   onClose: () => void;
   onConfirm: () => void;
-  leadType: 'PROBATE' | 'PREFORECLOSURE';
+  leadType: string;
   leadCount: number;
   alreadyTracedCount?: number;
   isLargeBatch?: boolean;

@@ -434,11 +434,20 @@ function isAIEnabled(contact: any): boolean {
     (f: any) => f.id === 'oaf4wCuM3Ub9eGpiddrO',
   )?.value;
 
-  const hasValidLeadType = [
-    'Probate',
+  const normType = (leadType || '').toUpperCase().replace(/[_\s-]+/g, ' ').trim();
+  const validLeadTypes = new Set([
+    'PROBATE',
     'PREFORECLOSURE',
-    'Preforeclosure',
-  ].includes(leadType);
+    'PRE FORECLOSURE',
+    'FSBO',
+    'TAX DELINQUENT',
+    'DRIVING FOR DOLLARS',
+    'VACANT',
+    'OTHER',
+    'SELL AS IS',
+    'GENERAL INQUIRY',
+  ]);
+  const hasValidLeadType = validLeadTypes.has(normType);
 
   // For email outreach, we only need email and valid lead type
   // "Direct Mail" contacts can still receive AI emails

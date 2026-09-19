@@ -22,7 +22,15 @@ export const CONTACT_FIELDS: Array<{ key: string } & FieldDef> = [
     key: 'lead_type',
     name: 'Lead Type',
     dataType: 'SINGLE_OPTIONS',
-    picklistOptions: ['Probate', 'Preforeclosure', 'Sell As Is', 'General Inquiry'],
+    picklistOptions: [
+      'PROBATE',
+      'PREFORECLOSURE',
+      'FSBO',
+      'TAX DELINQUENT',
+      'DRIVING FOR DOLLARS',
+      'VACANT',
+      'OTHER',
+    ],
   },
   {
     key: 'contact_type',
@@ -136,6 +144,9 @@ export const SYSTEM_TAGS: string[] = [
   'data:skiptraced', 'data:originalupload',
   'ai outreach', 'primary_contact', 'multi-phone-lead',
   'direct-mail-only', 'digital-only', 'thanks_io_eligible',
+  // lead type markers
+  'probate-lead', 'preforeclosure-lead', 'fsbo-lead',
+  'tax-delinquent-lead', 'driving-for-dollars-lead', 'vacant-lead', 'other-lead',
   // conversation / AI outreach
   'conversation:active', 'conversation:manual',
   'ready-for-human-contact', 'conversation_ended',

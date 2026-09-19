@@ -21,15 +21,6 @@ interface CsvPreview {
   loading: boolean;
 }
 
-// 🎯 CSV Template Headers matching your updated Probate file requirements
-const PROBATE_TEMPLATE =
-  'OWNERSHIP,ownerAddress,ownerCity,ownerState,ownerZip,adminFirstName,adminLastName,adminAddress,adminCity,adminState,adminZip,phone';
-// Pre-foreclosure template mirrors the county-clerk file: a single borrowerName column (entities like
-// LLCs/trusts are auto-detected) plus the authoritative foreclosure fields (recording date, case
-// number, lender/plaintiff, trustee, loan amount). ownerFirstName/ownerLastName are still accepted by
-// the importer for older files.
-const PREFORECLOSURE_TEMPLATE =
-  'borrowerName,ownerAddress,ownerCity,ownerState,ownerZip,recordingDate,caseNumber,lender,trustee,loanAmount';
 
 export function ManualLeadForm() {
   const { hasPaidPlan, isAdmin } = useAccess();
@@ -150,19 +141,6 @@ export function ManualLeadForm() {
       setColumnMapping({});
     }
   }, [sourceHeaders, lead.type]);
-
-  const downloadTemplate = () => {
-    if (!lead.type) return alert('Please select a Lead Type first.');
-    const csvContent =
-      lead.type === 'PROBATE' ? PROBATE_TEMPLATE : PREFORECLOSURE_TEMPLATE;
-    const blob = new Blob([csvContent], { type: 'text/csv' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${lead.type.toLowerCase()}-lead-template.csv`;
-    a.click();
-    window.URL.revokeObjectURL(url);
-  };
 
   const handleManualSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -359,22 +337,12 @@ export function ManualLeadForm() {
                 <option value=''>Select Type</option>
                 <option value='PROBATE'>Probate</option>
                 <option value='PREFORECLOSURE'>Pre-Foreclosure</option>
+                <option value='FSBO'>FSBO</option>
+                <option value='TAX_DELINQUENT'>Tax Delinquent</option>
+                <option value='DRIVING_FOR_DOLLARS'>Driving For Dollars</option>
+                <option value='VACANT'>Vacant</option>
+                <option value='OTHER'>Other</option>
               </select>
-
-              {lead.type && (
-                <div className='mt-3 p-3 bg-blue-50 border border-blue-100 rounded text-sm'>
-                  <p className='text-blue-800 mb-1'>
-                    Format required for <strong>{lead.type}</strong>:
-                  </p>
-                  <button
-                    onClick={downloadTemplate}
-                    className='text-blue-600 font-bold hover:underline'
-                  >
-                    Download {lead.type} Template{' '}
-                    {lead.type === 'PROBATE' && '(includes phone column)'}
-                  </button>
-                </div>
-              )}
             </div>
 
             <div
@@ -555,6 +523,11 @@ export function ManualLeadForm() {
               <option value=''>Select Type</option>
               <option value='PROBATE'>Probate</option>
               <option value='PREFORECLOSURE'>Pre-Foreclosure</option>
+              <option value='FSBO'>FSBO</option>
+              <option value='TAX_DELINQUENT'>Tax Delinquent</option>
+              <option value='DRIVING_FOR_DOLLARS'>Driving For Dollars</option>
+              <option value='VACANT'>Vacant</option>
+              <option value='OTHER'>Other</option>
             </select>
           </div>
 

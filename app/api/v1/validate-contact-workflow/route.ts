@@ -14,6 +14,25 @@
 import { NextResponse } from 'next/server';
 import { ghlGetContact } from '../../../../amplify/functions/shared/ghlClient';
 
+const VALID_LEAD_TYPES = new Set([
+  'PROBATE',
+  'PREFORECLOSURE',
+  'PRE FORECLOSURE',
+  'FSBO',
+  'TAX DELINQUENT',
+  'DRIVING FOR DOLLARS',
+  'VACANT',
+  'OTHER',
+  'SELL AS IS',
+  'GENERAL INQUIRY',
+]);
+
+function isValidLeadType(type?: string): boolean {
+  if (!type) return false;
+  const norm = type.toUpperCase().replace(/[_\s-]+/g, ' ').trim();
+  return VALID_LEAD_TYPES.has(norm);
+}
+
 export async function POST(req: Request) {
   try {
     const { contactId } = await req.json();
@@ -72,11 +91,11 @@ function analyzeContactWorkflow(contact: any) {
     
     aiEligibility: {
       hasPhone: !!contact.phone,
-      hasValidLeadType: ['Probate', 'PREFORECLOSURE', 'Preforeclosure'].includes(leadType),
+      hasValidLeadType: isValidLeadType(leadType),
       notDirectMailOnly: contactType !== 'Direct Mail',
       wouldEnableAI: (() => {
         const hasPhone = !!contact.phone;
-        const hasValidLeadType = ['Probate', 'PREFORECLOSURE', 'Preforeclosure'].includes(leadType);
+        const hasValidLeadType = isValidLeadType(leadType);
         const notDirectMailOnly = contactType !== 'Direct Mail';
         return hasPhone && hasValidLeadType && notDirectMailOnly;
       })()
@@ -131,7 +150,7 @@ function generateRecommendations(contact: any, tags: string[], leadType: string,
   const recommendations = [];
   
   // AI System Recommendations
-  if (contact.phone && ['Probate', 'PREFORECLOSURE', 'Preforeclosure'].includes(leadType) && contactType !== 'Direct Mail') {
+  if (contact.phone && isValidLeadType(leadType) && contactType !== 'Direct Mail') {
     recommendations.push({
       type: 'AI_READY',
       message: 'Contact is ready for AI text campaigns',

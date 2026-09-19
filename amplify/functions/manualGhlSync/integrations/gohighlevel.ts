@@ -99,8 +99,19 @@ export async function syncToGoHighLevel(
       mailing_state: mailingState,
       mailing_zipcode: mailingZip,
       is_out_of_state_admin: isOutOfStateAdmin ? 'YES' : 'NO',
-      lead_type: lead.type === 'PROBATE' ? 'Probate' : lead.type === 'PREFORECLOSURE' ? 'Preforeclosure' : lead.type,
-      // A landline makes this a phone contact. Keying only off `specificPhone` (the mobile) left
+      lead_type: (() => {
+        const raw = (lead.type || '').toUpperCase().replace(/[_\s]+/g, ' ').trim();
+        if (raw === 'PROBATE') return 'PROBATE';
+        if (raw === 'PREFORECLOSURE' || raw === 'PRE FORECLOSURE') return 'PREFORECLOSURE';
+        if (raw === 'FSBO') return 'FSBO';
+        if (raw === 'TAX DELINQUENT') return 'TAX DELINQUENT';
+        if (raw === 'DRIVING FOR DOLLARS') return 'DRIVING FOR DOLLARS';
+        if (raw === 'VACANT') return 'VACANT';
+        if (raw === 'OTHER') return 'OTHER';
+        if (raw === 'SELL AS IS') return 'SELL AS IS';
+        if (raw === 'GENERAL INQUIRY') return 'GENERAL INQUIRY';
+        return raw || 'OTHER';
+      })(),
       // landline-only leads typed 'Direct Mail', so a dialer filtering on 'Phone Contact' never
       // saw them and the number sat unused.
       contact_type: dialablePhone ? 'Phone Contact' : 'Direct Mail',
@@ -156,6 +167,23 @@ export async function syncToGoHighLevel(
     tags.push('App:Synced');
     if (isAIPlan) tags.push('App:AI-Enabled');
     if (isOutOfStateAdmin) tags.push('out_of_state_admin');
+
+    // 🏷️ LEAD TYPE TAG
+    const leadTypeTagMap: Record<string, string> = {
+      PROBATE: 'probate-lead',
+      PREFORECLOSURE: 'preforeclosure-lead',
+      FSBO: 'fsbo-lead',
+      TAX_DELINQUENT: 'tax-delinquent-lead',
+      'TAX DELINQUENT': 'tax-delinquent-lead',
+      DRIVING_FOR_DOLLARS: 'driving-for-dollars-lead',
+      'DRIVING FOR DOLLARS': 'driving-for-dollars-lead',
+      VACANT: 'vacant-lead',
+      OTHER: 'other-lead',
+    };
+    const normType = (lead.type || '').toUpperCase().trim();
+    if (leadTypeTagMap[normType]) {
+      tags.push(leadTypeTagMap[normType]);
+    }
 
     // ☎️ Channel marker so GHL workflows can route landline contacts to the dialer and direct
     // mail while excluding them from anything that texts. Applied ONLY when a lead has NO cell/mobile phone, but DOES have landlines.
@@ -474,7 +502,11 @@ async function sendInitialProspectingEmail(
     const propertyAddress = `${lead.ownerAddress}, ${lead.ownerCity}, ${lead.ownerState} ${lead.ownerZip}`;
     const zestimate = lead.zestimate || lead.estimatedValue || 0;
     const cashOffer = Math.round(zestimate * 0.70);
-    const leadType = lead.type === 'PROBATE' ? 'probate' : 'preforeclosure';
+    const rawType = (lead.type || '').toUpperCase();
+    const propertyPhrase =
+      rawType === 'PROBATE' ? 'probate property' :
+      rawType === 'PREFORECLOSURE' ? 'pre-foreclosure property' :
+      'property';
     
     // Collect all email addresses
     const emails = [primaryEmail];
@@ -487,7 +519,7 @@ async function sendInitialProspectingEmail(
     const html = `
       <p>Hi ${lead.adminFirstName || lead.ownerFirstName || 'there'},</p>
       
-      <p>I noticed your ${leadType} property at <strong>${propertyAddress}</strong> and wanted to reach out.</p>
+      <p>I noticed your ${propertyPhrase} at <strong>${propertyAddress}</strong> and wanted to reach out.</p>
       
       <p>We specialize in helping property owners in situations like yours. Based on current market data:</p>
       <ul>
