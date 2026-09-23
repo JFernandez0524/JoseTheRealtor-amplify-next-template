@@ -28,6 +28,7 @@ export interface SerpPropertyData {
   zillowUrl?: string;
   listingStatus: 'active' | 'sold' | 'pending' | 'off_market';
   listPrice?: number;
+  zestimate?: number;
   lastSaleAmount?: number;
   lastSaleDate?: string; // YYYY-MM-DD
   mlsNumber?: string;
@@ -114,8 +115,13 @@ export function parseSerpResults(
     const text = `${title} ${snippet}`;
     if (snippet) result.rawSnippets?.push(snippet);
 
+    const hasMlsInTitle = /\|\s*MLS\s*#?[A-Za-z0-9]+/i.test(title);
+
     // 1. Extract Zillow ZPID & URL
     if (link.includes('zillow.com')) {
+      if (!result.zillowUrl) {
+        result.zillowUrl = link;
+      }
       const zpidMatch = link.match(/\/(\d+)_zpid/);
       if (zpidMatch && !result.zpid) {
         result.zpid = zpidMatch[1];
@@ -125,9 +131,19 @@ export function parseSerpResults(
 
     // 2. Extract MLS Number
     if (!result.mlsNumber) {
-      const mlsMatch = text.match(/MLS#?\s*([A-Za-z0-9]+)/i);
+      const mlsMatch = text.match(/MLS\s*#?\s*([A-Za-z0-9]+)/i);
       if (mlsMatch) {
         result.mlsNumber = mlsMatch[1];
+      }
+    }
+
+    // 2b. Extract Zestimate
+    if (result.zestimate === undefined) {
+      const zestimateMatch =
+        text.match(/\$([0-9,]+|[0-9]+[km])\s*(?:Zestimate|zestimate)/i) ||
+        text.match(/(?:Zestimate|zestimate)[^$]*\$([0-9,]+|[0-9]+[km])/i);
+      if (zestimateMatch) {
+        result.zestimate = parseCurrencyAmount(zestimateMatch[1]);
       }
     }
 
@@ -255,35 +271,39 @@ export function parseSerpResults(
 
     // 14. Active / For Sale Detection & List Price
     const listPriceMatch =
+      text.match(/(?:photos\s+of\s+this\s+)\$([0-9,]+|[0-9]+[km])/i) ||
       text.match(/(?:listed\s+(?:at|for)|list\s+price(?:\s+is|\s+of|:)?|for\s+sale\s*(?:at|for|:)?)\s*\$?([0-9,]+|[0-9]+[km])/i) ||
-      text.match(/(?:for\s+sale:?\s*)\$([0-9,]{5,})/i);
+      text.match(/(?:for\s+sale:?\s*)\$([0-9,]{5,})/i) ||
+      snippet.match(/^\s*(?:[A-Za-z]+\s+\d{1,2},?\s+\d{4}\s*[-—]\s*)?\$([0-9,]+|[0-9]+[km])\s+\d+\s+beds?/i);
     if (listPriceMatch && result.listPrice === undefined) {
       result.listPrice = parseCurrencyAmount(listPriceMatch[1]);
     }
 
     const hasActiveIndicator =
+      hasMlsInTitle ||
       /(?:^|\b)(?:for\s+sale\s*[-:]|active\s+listing|currently\s+listed\s+(?:for|at)|is\s+for\s+sale)\b/i.test(text) ||
-      (/zillow\s+has\s+\d+\s+photos\s+of\s+this\s+\$[0-9,]+/i.test(text));
+      (/zillow\s+has\s+\d+\s+photos\s+of\s+this\s+\$[0-9,]+/i.test(text)) ||
+      (/^\s*(?:[A-Za-z]+\s+\d{1,2},?\s+\d{4}\s*[-—]\s*)?\$[0-9,]+\s+\d+\s+beds/i.test(snippet) && !isExplicitOffMarket);
 
-    if (hasActiveIndicator && !isExplicitOffMarket && !foundPending) {
+    if ((hasMlsInTitle || (hasActiveIndicator && !isExplicitOffMarket)) && !foundPending) {
       foundActive = true;
     }
   }
 
   // Assign Final Listing Status based on authoritative hierarchy:
   // 1. Pending (e.g. 15 Ocean Ave is pending)
-  // 2. Recently sold within 180 days (active transaction outcome)
-  // 3. Explicit off-market (e.g. 1126 17th Ave or 207 Atlantic St is currently not for sale)
-  // 4. Active listing (explicit active indicators without off-market / pending)
+  // 2. Active listing (e.g. MLS in title, active for sale)
+  // 3. Recently sold within 180 days (active transaction outcome)
+  // 4. Explicit off-market (e.g. 1126 17th Ave or 207 Atlantic St is currently not for sale)
   // 5. Default to off-market
   if (foundPending) {
     result.listingStatus = 'pending';
+  } else if (foundActive) {
+    result.listingStatus = 'active';
   } else if (foundRecentSold) {
     result.listingStatus = 'sold';
   } else if (isExplicitOffMarket) {
     result.listingStatus = 'off_market';
-  } else if (foundActive) {
-    result.listingStatus = 'active';
   } else {
     result.listingStatus = 'off_market';
   }
@@ -313,7 +333,7 @@ export async function resolvePropertyWithSerp(params: {
     };
   }
 
-  const query = `${address}, ${city}, ${state} ${zip || ''} (site:zillow.com OR site:realtor.com)`.trim();
+  const query = `${address}, ${city}, ${state} ${zip || ''} site:zillow.com`.trim();
 
   try {
     console.log(`🔎 [SERP_RESOLVER] Querying Serper: "${query}"`);
@@ -340,6 +360,7 @@ export async function resolvePropertyWithSerp(params: {
     console.log('✅ [SERP_RESOLVER] Extracted property intel:', {
       zpid: parsedData.zpid,
       listingStatus: parsedData.listingStatus,
+      zestimate: parsedData.zestimate,
       lastSaleAmount: parsedData.lastSaleAmount,
       lastSaleDate: parsedData.lastSaleDate,
       listPrice: parsedData.listPrice,

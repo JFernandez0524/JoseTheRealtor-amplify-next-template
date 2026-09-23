@@ -156,10 +156,10 @@ export async function POST(request: NextRequest) {
 
         if (serpRes.success && serpRes.data) {
           serpData = serpRes.data;
-          if (!zestimate && serpRes.data.zpid) {
-            zestimate = serpRes.bridgeValuation?.zestimate ?? null;
+          if (!zestimate) {
+            zestimate = serpRes.bridgeValuation?.zestimate ?? serpRes.data.zestimate ?? serpRes.data.listPrice ?? null;
             rentZestimate = serpRes.bridgeValuation?.rentalZestimate ?? null;
-            zillowZpid = serpRes.data.zpid;
+            zillowZpid = serpRes.data.zpid ?? null;
             zillowUrl = serpRes.data.zillowUrl ?? null;
             zillowAddress = serpRes.bridgeValuation?.address ?? null;
           }
@@ -195,7 +195,7 @@ export async function POST(request: NextRequest) {
       zestimateSource: zestimate ? 'ZILLOW' : undefined,
       zestimateDate: zestimate ? new Date().toISOString() : undefined,
       phones: normalizedPhone ? [normalizedPhone] : [],
-      skipTraceStatus: normalizedPhone ? 'COMPLETED' : 'PENDING',
+      skipTraceStatus: normalizedPhone ? 'COMPLETED' : (listingStatus !== 'off_market' ? 'NOT_ELIGIBLE' : 'PENDING'),
       ghlSyncStatus: 'PENDING',
       ghlContactId: null,
       listingStatus,

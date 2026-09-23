@@ -208,6 +208,29 @@ describe('serpPropertyResolver', () => {
       expect(result.sqft).toBe(1738);
     });
 
+    it('correctly parses Active listing from Zillow with MLS in title, list price and Zestimate (78 Clinton Ave, Eatontown example)', () => {
+      const organic: SerpOrganicResult[] = [
+        {
+          title: '78 Clinton Avenue, Eatontown, NJ 07724 | MLS #22629187 | Zillow',
+          link: 'https://www.zillow.com/homedetails/78-Clinton-Ave-Eatontown-NJ-07724/39270519_zpid/',
+          snippet:
+            'Zillow has 22 photos of this $500000 2 beds, 2 baths, 1655 sqft single family home located at 78 Clinton Avenue, Eatontown, NJ 07724 built in 1946. 6,098 Square Feet Lot $526,300 Zestimate ...',
+        },
+      ];
+
+      const result = parseSerpResults('78 Clinton Avenue Eatontown NJ', organic);
+
+      expect(result.zpid).toBe('39270519');
+      expect(result.listingStatus).toBe('active');
+      expect(result.mlsNumber).toBe('22629187');
+      expect(result.listPrice).toBe(500000);
+      expect(result.zestimate).toBe(526300);
+      expect(result.beds).toBe(2);
+      expect(result.baths).toBe(2);
+      expect(result.sqft).toBe(1655);
+      expect(result.yearBuilt).toBe(1946);
+    });
+
     it('handles empty results gracefully', () => {
       const result = parseSerpResults('Empty Address', []);
       expect(result.listingStatus).toBe('off_market');

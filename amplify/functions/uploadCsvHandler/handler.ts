@@ -797,18 +797,27 @@ export const handler: S3Handler = async (event) => {
 
               if (serpRes.success && serpRes.data) {
                 serpData = serpRes.data;
-                if (!zillowData && serpRes.data.zpid) {
+                const resolvedZestimate =
+                  serpRes.bridgeValuation?.zestimate ??
+                  serpRes.data.zestimate ??
+                  serpRes.data.listPrice ??
+                  csvEstimatedValue;
+
+                if (!zillowData && (serpRes.data.zpid || serpRes.data.zillowUrl || resolvedZestimate != null)) {
                   zillowData = {
-                    zpid: serpRes.data.zpid,
-                    zestimate: serpRes.bridgeValuation?.zestimate || csvEstimatedValue,
-                    rentZestimate: serpRes.bridgeValuation?.rentalZestimate,
-                    url: serpRes.data.zillowUrl || `https://www.zillow.com/homes/${serpRes.data.zpid}_zpid/`,
+                    zpid: serpRes.data.zpid || null,
+                    zestimate: resolvedZestimate,
+                    rentZestimate: serpRes.bridgeValuation?.rentalZestimate || null,
+                    url: serpRes.data.zillowUrl || (serpRes.data.zpid ? `https://www.zillow.com/homes/${serpRes.data.zpid}_zpid/` : null),
                     address: serpRes.bridgeValuation?.address || finalPropAddr,
                   };
-                  console.log('✅ [SERP_RESOLVER] Resolved Zestimate via SERP ZPID:', {
+                  console.log('✅ [SERP_RESOLVER] Resolved Zestimate via SERP ZPID / snippet:', {
                     zpid: zillowData.zpid,
                     zestimate: zillowData.zestimate,
+                    source: serpRes.bridgeValuation?.zestimate ? 'BRIDGE' : (serpRes.data.zestimate ? 'SERP_ZESTIMATE' : (serpRes.data.listPrice ? 'SERP_LIST_PRICE' : 'CSV')),
                   });
+                } else if (zillowData && !zillowData.zestimate && resolvedZestimate) {
+                  zillowData.zestimate = resolvedZestimate;
                 }
               }
             } catch (serpErr: any) {
@@ -896,12 +905,12 @@ export const handler: S3Handler = async (event) => {
             
             // 🏠 Zestimate and Zillow data
             estimatedValue: csvEstimatedValue,
-            zestimate: zillowData?.zestimate ?? csvEstimatedValue,
-            zestimateDate: zillowData ? new Date().toISOString() : null,
-            zestimateSource: zillowData ? 'ZILLOW' : (csvEstimatedValue != null ? 'CSV' : null),
-            zillowZpid: zillowData?.zpid || null,
-            zillowUrl: zillowData?.url || null,
-            zillowAddress: zillowData?.address || null,
+            zestimate: zillowData?.zestimate ?? serpData?.zestimate ?? serpData?.listPrice ?? csvEstimatedValue,
+            zestimateDate: (zillowData?.zestimate ?? serpData?.zestimate ?? serpData?.listPrice) ? new Date().toISOString() : null,
+            zestimateSource: (zillowData?.zestimate || serpData?.zestimate) ? 'ZILLOW' : (serpData?.listPrice ? 'ZILLOW_LIST_PRICE' : (csvEstimatedValue != null ? 'CSV' : null)),
+            zillowZpid: zillowData?.zpid || serpData?.zpid || null,
+            zillowUrl: zillowData?.url || serpData?.zillowUrl || null,
+            zillowAddress: zillowData?.address || (serpData?.zillowUrl ? finalPropAddr : null),
             rentZestimate: zillowData?.rentZestimate || null,
             priceHistory: null,
             taxHistory: null,

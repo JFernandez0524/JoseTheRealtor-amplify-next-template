@@ -125,6 +125,16 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    if (!v && (serpData?.zestimate || serpData?.listPrice)) {
+      v = {
+        zestimate: serpData.zestimate || serpData.listPrice,
+        zpid: resolvedZpid || serpData.zpid,
+        zillowUrl: resolvedZillowUrl || serpData.zillowUrl,
+        address: `${searchStreet}, ${searchCity}, ${searchState} ${searchZip || ''}`.trim(),
+        rentalZestimate: null,
+      };
+    }
+
     if (!v) {
       if (zillowUrl && resolvedZpid) {
         await cookiesClient.models.PropertyLead.update({
