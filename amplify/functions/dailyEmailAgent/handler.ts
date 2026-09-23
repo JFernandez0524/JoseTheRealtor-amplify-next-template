@@ -11,7 +11,8 @@ import {
   updateEmailStatus,
   preLockEmailSend,
   updateEmailSent,
-  releaseEmailLock
+  releaseEmailLock,
+  markContactOutreachStopped
 } from '../shared/outreachQueue';
 import { isValidEmailSyntax } from '../shared/emailValidator';
 
@@ -121,26 +122,37 @@ async function processTenantIntegration(integration: GHLIntegration): Promise<{ 
           continue;
         }
 
-        const response = await axios.post(
-          `${process.env.APP_URL}/api/v1/send-email-to-contact`,
-          {
-            contactId: contact.id,
-            accessToken: validAccessToken,
-            fromEmail: integration.campaignEmail,
-            emailSignature: integration.emailSignature,
-            toEmail: contact.email,
-            touchNumber: contact._queueAttempts + 1, // 1=initial, 2-7=follow-ups
-            callOutcomeFieldId: fieldIds.call_outcome, // enables the send route's terminal-disposition guard
-          },
-          {
-            headers: {
-              'Content-Type': 'application/json',
-              'x-internal-secret': process.env.INTERNAL_API_SECRET || '',
-            }
-          }
-        );
+        let sendSuccess = false;
+        let sendError = '';
 
-        if (response.data.success) {
+        try {
+          const response = await axios.post(
+            `${process.env.APP_URL}/api/v1/send-email-to-contact`,
+            {
+              contactId: contact.id,
+              accessToken: validAccessToken,
+              fromEmail: integration.campaignEmail,
+              emailSignature: integration.emailSignature,
+              toEmail: contact.email,
+              touchNumber: contact._queueAttempts + 1, // 1=initial, 2-7=follow-ups
+              callOutcomeFieldId: fieldIds.call_outcome, // enables the send route's terminal-disposition guard
+            },
+            {
+              headers: {
+                'Content-Type': 'application/json',
+                'x-internal-secret': process.env.INTERNAL_API_SECRET || '',
+              },
+              validateStatus: () => true, // Don't throw for 4xx/5xx responses; handle them below
+            }
+          );
+          sendSuccess = Boolean(response.data?.success);
+          sendError = response.data?.error || (sendSuccess ? '' : `HTTP ${response.status}`);
+        } catch (postError: any) {
+          sendSuccess = false;
+          sendError = postError.response?.data?.error || postError.message || 'Unknown network error';
+        }
+
+        if (sendSuccess) {
           console.log(`✅ Email sent successfully to ${contact.email}`);
           emailsSent++;
 
@@ -176,27 +188,36 @@ async function processTenantIntegration(integration: GHLIntegration): Promise<{ 
             }
           }
         } else {
-          console.error(`Failed to send email to ${contact.email}:`, response.data.error);
+          console.error(`Failed to send email to ${contact.email}:`, sendError);
 
-          const errorMsg = response.data.error || '';
-          // Terminal Call Outcome (Listed With Realtor, DNC, etc.): opt the contact out so
-          // the cadence stops permanently — even if the GHL field-sync workflow didn't.
+          const errorMsg = sendError || '';
           const isTerminalOutcome = errorMsg.includes('terminal Call Outcome');
-          const isPermanentFailure = errorMsg.includes('DND is active') || errorMsg.includes('Contact has no email');
+          const isDndActive = errorMsg.includes('DND is active') || errorMsg.includes('dnd');
+          const isPermanentFailure = errorMsg.includes('Contact has no email') ||
+                                    errorMsg.includes('contact\'s e-mail is invalid') ||
+                                    errorMsg.includes('Contact not found');
+
           if (isTerminalOutcome) {
+            // Per GEMINI.md: Terminal outcomes stop automated AI outreach in the app's internal queue
+            // (queueStatus = 'DND'), but they do NOT set emailStatus = 'OPTED_OUT' (which is reserved
+            // for legal DNC / unsubscribe requests).
             try {
-              await updateEmailStatus(contact._queueId, 'OPTED_OUT');
-              console.log(`🛑 [QUEUE] Opted out ${contact._queueId} (${errorMsg})`);
+              await markContactOutreachStopped(contact._queueId, 'DND', 'COMPLETED', errorMsg);
             } catch (queueError: any) {
-              console.error(`❌ [QUEUE] Failed to opt out:`, queueError.message);
+              console.error(`❌ [QUEUE] Failed to mark terminal outcome:`, queueError.message);
+            }
+          } else if (isDndActive) {
+            try {
+              await markContactOutreachStopped(contact._queueId, 'DND', 'COMPLETED', errorMsg);
+            } catch (queueError: any) {
+              console.error(`❌ [QUEUE] Failed to update DND status:`, queueError.message);
             }
           } else if (isPermanentFailure) {
-            // Mark permanently so it never retries
+            // Permanent failure: no email on contact, bad syntax rejected by GHL, or contact deleted in GHL
             try {
-              await updateEmailStatus(contact._queueId, 'FAILED');
-              console.log(`📋 [QUEUE] Marked ${contact._queueId} as FAILED (${errorMsg})`);
+              await markContactOutreachStopped(contact._queueId, 'WRONG_INFO', 'FAILED', errorMsg);
             } catch (queueError: any) {
-              console.error(`❌ [QUEUE] Failed to update status:`, queueError.message);
+              console.error(`❌ [QUEUE] Failed to mark as FAILED:`, queueError.message);
             }
           } else {
             // Transient failure: release the pre-lock so we retry tomorrow
@@ -212,7 +233,7 @@ async function processTenantIntegration(integration: GHLIntegration): Promise<{ 
         await new Promise(resolve => setTimeout(resolve, 2000));
 
       } catch (error: any) {
-        console.error(`Failed to send email to contact ${contact.id}:`, error.response?.data || error.message);
+        console.error(`Unexpected error processing contact ${contact.id}:`, error.message);
         try {
           await releaseEmailLock(contact._queueId);
         } catch (unlockError: any) {

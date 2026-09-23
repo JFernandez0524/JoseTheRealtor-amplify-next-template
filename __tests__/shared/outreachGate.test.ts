@@ -54,6 +54,11 @@ describe('shouldQueueForOutreach', () => {
     expect(shouldQueueForOutreach('abc', TAGS, 'a@b.com')).toStrictEqual(true);
     expect(shouldQueueForOutreach('abc', [], 'a@b.com')).toStrictEqual(false);
   });
+
+  it('rejects sibling contacts when isPrimary is false', () => {
+    expect(shouldQueueForOutreach('abc', TAGS, 'a@b.com', false)).toBe(false);
+    expect(shouldQueueForOutreach('abc', TAGS, 'a@b.com', true)).toBe(true);
+  });
 });
 
 // GHL's PUT /contacts/{id} REPLACES the tag array rather than merging it — verified 2026-07-29 when

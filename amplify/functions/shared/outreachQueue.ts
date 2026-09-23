@@ -402,6 +402,35 @@ export async function updateQueueStatus(
 }
 
 /**
+ * Stop outreach for a contact with terminal disposition, GHL DND, or permanent failure.
+ * Updates both queueStatus and emailStatus.
+ *
+ * @param id - Queue item ID
+ * @param queueStatus - 'DND' | 'COMPLETED' | 'WRONG_INFO'
+ * @param emailStatus - 'COMPLETED' | 'FAILED' | 'OPTED_OUT'
+ * @param reason - Reason for stopping
+ */
+export async function markContactOutreachStopped(
+  id: string,
+  queueStatus: 'DND' | 'COMPLETED' | 'WRONG_INFO',
+  emailStatus: 'COMPLETED' | 'FAILED' | 'OPTED_OUT',
+  reason?: string
+): Promise<void> {
+  await docClient.send(new UpdateCommand({
+    TableName: OUTREACH_QUEUE_TABLE,
+    Key: { id },
+    UpdateExpression: 'SET queueStatus = :queueStatus, emailStatus = :emailStatus, updatedAt = :now',
+    ExpressionAttributeValues: {
+      ':queueStatus': queueStatus,
+      ':emailStatus': emailStatus,
+      ':now': new Date().toISOString(),
+    },
+  }));
+
+  console.log(`🛑 [QUEUE] Stopped outreach for ${id}: queueStatus=${queueStatus}, emailStatus=${emailStatus}${reason ? ` (${reason})` : ''}`);
+}
+
+/**
  * Log outbound contact (we sent a message)
  * Updates lastContactDate to prevent same-day duplicates
  * 

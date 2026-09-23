@@ -67,7 +67,8 @@ export function mergeTagsForSync(
 }
 
 /**
- * True only when all three requirements hold:
+ * True only when all requirements hold:
+ * - isPrimary is true (email outreach only targets the primary contact; siblings have no email),
  * - a contact id came back from GHL (create or update),
  * - the contact carries the `ai outreach` tag,
  * - there is a primary email to send to (outreach is email-only; SMS is disabled).
@@ -80,7 +81,8 @@ export function shouldQueueForOutreach(
   // Amplify types `leadLabels` as Nullable<string>[], and nulls do occur — the DNC check in
   // gohighlevel.ts filters them explicitly. Accept them here rather than forcing every caller to.
   tags: (string | null | undefined)[] | null | undefined,
-  primaryEmail: string | null | undefined
+  primaryEmail: string | null | undefined,
+  isPrimary: boolean = true
 ): boolean {
-  return Boolean(contactId) && Boolean(primaryEmail) && (tags ?? []).includes(AI_OUTREACH_TAG);
+  return Boolean(isPrimary) && Boolean(contactId) && Boolean(primaryEmail) && (tags ?? []).includes(AI_OUTREACH_TAG);
 }

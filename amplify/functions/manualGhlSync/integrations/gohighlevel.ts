@@ -436,7 +436,8 @@ export async function syncToGoHighLevel(
     // `${userId}_${contactId}`) and returns early when a row exists, preserving outreach progress.
     // finalTags, not tags — a contact whose `ai outreach` tag was withheld above must not be
     // enrolled in the queue either, or the cadence restarts through the back door.
-    if (shouldQueueForOutreach(contactId, finalTags, primaryEmail)) {
+    // isPrimary ensures only the main contact (which holds the email address) is enqueued.
+    if (shouldQueueForOutreach(contactId, finalTags, primaryEmail, isPrimary)) {
       try {
         const { addToOutreachQueue } = await import('../../shared/outreachQueue');
 
