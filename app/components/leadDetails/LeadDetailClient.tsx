@@ -331,9 +331,24 @@ function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
   const handleDispositionChange = async (newStatus: string) => {
     setIsUpdatingDisposition(true);
     try {
-      const updated = await updateLead(lead.id, {
+      const updates: any = {
         listingStatus: newStatus as any,
-      });
+      };
+
+      // Synchronize leadLabels so badges update immediately
+      const currentLabels = lead.leadLabels ? [...lead.leadLabels] : [];
+      let updatedLabels = currentLabels.filter((l) => l !== 'RECENTLY_SOLD' && l !== 'ACTIVE_MLS');
+      if (newStatus === 'sold') updatedLabels.push('RECENTLY_SOLD');
+      if (newStatus === 'active') updatedLabels.push('ACTIVE_MLS');
+      updates.leadLabels = updatedLabels;
+
+      if (newStatus && newStatus !== 'off_market' && lead.skipTraceStatus === 'PENDING') {
+        updates.skipTraceStatus = 'NOT_ELIGIBLE';
+      } else if ((!newStatus || newStatus === 'off_market') && lead.skipTraceStatus === 'NOT_ELIGIBLE') {
+        updates.skipTraceStatus = 'PENDING';
+      }
+
+      const updated = await updateLead(lead.id, updates);
       setLead(updated as Lead);
       addToast({ type: 'success', title: 'Status Updated', message: `Lead status set to ${newStatus}.` });
     } catch (err: any) {

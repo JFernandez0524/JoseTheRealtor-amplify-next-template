@@ -835,7 +835,8 @@ export default function LeadDashboardClient({}: Props) {
     try {
       await bulkUpdateStatus(
         ids,
-        status as 'off_market' | 'active' | 'sold' | 'pending' | 'fsbo' | 'auction' | 'skip' | 'door_knock'
+        status as 'off_market' | 'active' | 'sold' | 'pending' | 'fsbo' | 'auction' | 'skip' | 'door_knock',
+        leads as any
       );
       addToast({ type: 'success', title: 'Status Updated', message: `Successfully updated ${ids.length} leads to ${status}` });
       setSelectedIds([]);

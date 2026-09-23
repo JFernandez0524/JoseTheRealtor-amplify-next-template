@@ -7,12 +7,24 @@ import {
 } from '@/app/utils/csvExport';
 
 interface DuplicateLeadListProps {
-  /** A CsvUploadJob's `duplicateLeads` array. Entries may be null on older jobs. */
-  duplicateLeads: (DuplicateLeadEntry | null | undefined)[] | null | undefined;
+  /** A CsvUploadJob's `duplicateLeads` array. Entries may be strings (AppSync AWSJSON), null, or parsed objects. */
+  duplicateLeads: (DuplicateLeadEntry | string | null | undefined)[] | null | undefined;
   /** Used to name the downloaded file, e.g. `duplicate-leads-<fileName>.csv`. */
   fileName?: string | null;
   /** Tailwind max-height for the scroll area. Defaults to a modal-friendly height. */
   maxHeightClass?: string;
+}
+
+function parseDuplicateEntry(dup: unknown): DuplicateLeadEntry | null {
+  if (!dup) return null;
+  if (typeof dup === 'string') {
+    try {
+      return JSON.parse(dup) as DuplicateLeadEntry;
+    } catch {
+      return null;
+    }
+  }
+  return dup as DuplicateLeadEntry;
 }
 
 /**
@@ -28,7 +40,10 @@ export function DuplicateLeadList({
   fileName,
   maxHeightClass = 'max-h-[200px]',
 }: DuplicateLeadListProps) {
-  const entries = (duplicateLeads ?? []).filter(Boolean) as DuplicateLeadEntry[];
+  const entries: DuplicateLeadEntry[] = (duplicateLeads ?? [])
+    .map(parseDuplicateEntry)
+    .filter((e): e is DuplicateLeadEntry => Boolean(e));
+
   if (entries.length === 0) return null;
 
   const handleDownload = () => {
@@ -59,10 +74,14 @@ export function DuplicateLeadList({
               {dup?.csvData?.ownerName || dup?.existingLeadData?.ownerName || '(Owner name not specified)'}
             </div>
             <div className="text-gray-600">
-              {[dup?.csvData?.address, dup?.csvData?.city, dup?.csvData?.state]
+              {[
+                dup?.csvData?.address || dup?.existingLeadData?.address,
+                dup?.csvData?.city,
+                dup?.csvData?.state,
+              ]
                 .filter(Boolean)
                 .join(', ')}{' '}
-              {dup?.csvData?.zip}
+              {dup?.csvData?.zip || ''}
             </div>
             {dup?.existingLeadId ? (
               <a

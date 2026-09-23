@@ -191,16 +191,40 @@ export async function bulkDeleteLeads(ids: string[]): Promise<void> {
  */
 export async function bulkUpdateStatus(
   ids: string[],
-  status: 'off_market' | 'active' | 'sold' | 'pending' | 'fsbo' | 'auction' | 'skip' | 'door_knock'
+  status: 'off_market' | 'active' | 'sold' | 'pending' | 'fsbo' | 'auction' | 'skip' | 'door_knock',
+  existingLeads?: Lead[]
 ): Promise<void> {
   try {
+    const leadsToUpdate = existingLeads && existingLeads.length > 0
+      ? existingLeads.filter((l) => ids.includes(l.id))
+      : await fetchLeadsByIds(ids);
+
+    const leadMap = new Map(leadsToUpdate.map((l) => [l.id, l]));
+
     await Promise.all(
-      ids.map((id) =>
-        client.models.PropertyLead.update({
+      ids.map((id) => {
+        const lead = leadMap.get(id);
+        const updates: any = {
           id,
           listingStatus: status,
-        })
-      )
+        };
+
+        if (lead) {
+          const currentLabels = lead.leadLabels ? [...lead.leadLabels] : [];
+          let updatedLabels = currentLabels.filter((lbl) => lbl !== 'RECENTLY_SOLD' && lbl !== 'ACTIVE_MLS');
+          if (status === 'sold') updatedLabels.push('RECENTLY_SOLD');
+          if (status === 'active') updatedLabels.push('ACTIVE_MLS');
+          updates.leadLabels = updatedLabels;
+
+          if (status && status !== 'off_market' && lead.skipTraceStatus === 'PENDING') {
+            updates.skipTraceStatus = 'NOT_ELIGIBLE';
+          } else if ((!status || status === 'off_market') && lead.skipTraceStatus === 'NOT_ELIGIBLE') {
+            updates.skipTraceStatus = 'PENDING';
+          }
+        }
+
+        return client.models.PropertyLead.update(updates);
+      })
     );
     console.log(`✅ Updated ${ids.length} leads to ${status}`);
   } catch (err) {

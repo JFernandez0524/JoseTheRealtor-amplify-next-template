@@ -28,8 +28,8 @@ export function PropertyMarketIntel({
     }
   }
 
-  const isSold = lead.listingStatus === 'sold' || lead.leadLabels?.includes('RECENTLY_SOLD');
-  const isActive = lead.listingStatus === 'active' || lead.leadLabels?.includes('ACTIVE_MLS');
+  const isSold = lead.listingStatus === 'sold' || (!lead.listingStatus && lead.leadLabels?.includes('RECENTLY_SOLD'));
+  const isActive = lead.listingStatus === 'active' || (!lead.listingStatus && lead.leadLabels?.includes('ACTIVE_MLS'));
   const isPending = lead.listingStatus === 'pending';
   const is55Plus = lead.leadLabels?.includes('55_PLUS') || details.community?.includes('55+');
   const hasHoa = lead.leadLabels?.includes('HOA_PROPERTY') || details.hoaFee;

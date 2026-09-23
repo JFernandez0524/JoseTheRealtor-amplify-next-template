@@ -98,9 +98,10 @@ export function parseSerpResults(
     return result;
   }
 
-  let foundSold = false;
-  let foundActive = false;
+  let isExplicitOffMarket = false;
   let foundPending = false;
+  let foundActive = false;
+  let foundRecentSold = false;
   let dateHasExplicitDay = false;
 
   const hasExplicitDay = (str?: string) =>
@@ -204,55 +205,85 @@ export function parseSerpResults(
       }
     }
 
-    // 11. Sold Detection & Sale Price/Date
+    // 11. Explicit Off-Market Signals
+    if (/is\s+(?:currently\s+)?not\s+for\s+sale|is\s+currently\s+off\s*market|off\s*market/i.test(text)) {
+      isExplicitOffMarket = true;
+    }
+
+    // 12. Pending Detection (takes precedence over active / photo counts)
+    if (
+      /\b(?:is\s+pending|pending\s+sale|contingent|under\s+contract)\b/i.test(text) ||
+      (/\bpending\b/i.test(title) && !/not\s+pending/i.test(title))
+    ) {
+      foundPending = true;
+    }
+
+    // 13. Sold Detection & Sale Price/Date
     const soldPriceMatch = text.match(/(?:sold\s+(?:for\s+)?|last\s+sold\s+(?:for\s+)?)\$?([0-9,]+|[0-9]+[km])/i);
     const soldDateMatch = text.match(/(?:sold\s+.*?on|last\s+sold\s+.*?in|sold\s+on)\s+([A-Za-z]+\s+\d{1,2},?\s+\d{4}|\d{1,2}\/\d{1,2}\/\d{4}|[A-Za-z]+\s+\d{4})/i);
 
-    if (/\bsold\b/i.test(text) && !/not\s+sold/i.test(text)) {
-      foundSold = true;
-      if (soldPriceMatch && result.lastSaleAmount === undefined) {
-        result.lastSaleAmount = parseCurrencyAmount(soldPriceMatch[1]);
-      }
-      if (soldDateMatch) {
-        const rawDateStr = soldDateMatch[1];
-        const isPrecise = hasExplicitDay(rawDateStr);
-        const parsedIso = normalizeDateToIso(rawDateStr);
-        if (parsedIso) {
-          if (!result.lastSaleDate || (!dateHasExplicitDay && isPrecise)) {
-            result.lastSaleDate = parsedIso;
-            if (isPrecise) dateHasExplicitDay = true;
-          }
+    if (soldPriceMatch && result.lastSaleAmount === undefined) {
+      result.lastSaleAmount = parseCurrencyAmount(soldPriceMatch[1]);
+    }
+    if (soldDateMatch) {
+      const rawDateStr = soldDateMatch[1];
+      const isPrecise = hasExplicitDay(rawDateStr);
+      const parsedIso = normalizeDateToIso(rawDateStr);
+      if (parsedIso) {
+        if (!result.lastSaleDate || (!dateHasExplicitDay && isPrecise)) {
+          result.lastSaleDate = parsedIso;
+          if (isPrecise) dateHasExplicitDay = true;
         }
       }
     }
 
-    // 12. Active / For Sale Detection & List Price
-    if (
-      /for\s+sale|active\s+listing|listed\s+(?:at|for)|zillow\s+has\s+\d+\s+photos/i.test(text) &&
-      !/is\s+currently\s+not\s+for\s+sale|off\s*market/i.test(text)
-    ) {
-      foundActive = true;
-      const listPriceMatch =
-        text.match(/(?:listed\s+at|listed\s+for|for\s+sale\s*(?:at|for|:)?|of\s+this)\s*\$?([0-9,]+|[0-9]+[km])/i) ||
-        text.match(/\$([0-9,]{5,})/);
-      if (listPriceMatch && result.listPrice === undefined) {
-        result.listPrice = parseCurrencyAmount(listPriceMatch[1]);
+    const isSoldListingIndicator =
+      /(?:^|\b)(?:sold\s*[-:]|recently\s+sold|just\s+sold)\b/i.test(title) ||
+      /(?:^|\b)(?:sold\s*[-:]|recently\s+sold|just\s+sold)\b/i.test(snippet);
+
+    if (isSoldListingIndicator || (/\bsold\b/i.test(text) && !/not\s+sold/i.test(text))) {
+      if (result.lastSaleDate) {
+        const saleTime = new Date(result.lastSaleDate).getTime();
+        const daysAgo = (Date.now() - saleTime) / (1000 * 60 * 60 * 24);
+        if (daysAgo <= 180) {
+          foundRecentSold = true;
+        }
+      } else if (isSoldListingIndicator && !isExplicitOffMarket) {
+        foundRecentSold = true;
       }
     }
 
-    // 13. Pending Detection
-    if (/\bpending\b|\bcontingent\b|\bunder\s+contract\b/i.test(text)) {
-      foundPending = true;
+    // 14. Active / For Sale Detection & List Price
+    const listPriceMatch =
+      text.match(/(?:listed\s+(?:at|for)|list\s+price(?:\s+is|\s+of|:)?|for\s+sale\s*(?:at|for|:)?)\s*\$?([0-9,]+|[0-9]+[km])/i) ||
+      text.match(/(?:for\s+sale:?\s*)\$([0-9,]{5,})/i);
+    if (listPriceMatch && result.listPrice === undefined) {
+      result.listPrice = parseCurrencyAmount(listPriceMatch[1]);
+    }
+
+    const hasActiveIndicator =
+      /(?:^|\b)(?:for\s+sale\s*[-:]|active\s+listing|currently\s+listed\s+(?:for|at)|is\s+for\s+sale)\b/i.test(text) ||
+      (/zillow\s+has\s+\d+\s+photos\s+of\s+this\s+\$[0-9,]+/i.test(text));
+
+    if (hasActiveIndicator && !isExplicitOffMarket && !foundPending) {
+      foundActive = true;
     }
   }
 
-  // Assign Final Listing Status
-  if (foundActive && !foundSold) {
-    result.listingStatus = 'active';
-  } else if (foundSold) {
-    result.listingStatus = 'sold';
-  } else if (foundPending) {
+  // Assign Final Listing Status based on authoritative hierarchy:
+  // 1. Pending (e.g. 15 Ocean Ave is pending)
+  // 2. Recently sold within 180 days (active transaction outcome)
+  // 3. Explicit off-market (e.g. 1126 17th Ave or 207 Atlantic St is currently not for sale)
+  // 4. Active listing (explicit active indicators without off-market / pending)
+  // 5. Default to off-market
+  if (foundPending) {
     result.listingStatus = 'pending';
+  } else if (foundRecentSold) {
+    result.listingStatus = 'sold';
+  } else if (isExplicitOffMarket) {
+    result.listingStatus = 'off_market';
+  } else if (foundActive) {
+    result.listingStatus = 'active';
   } else {
     result.listingStatus = 'off_market';
   }
@@ -268,8 +299,9 @@ export async function resolvePropertyWithSerp(params: {
   city: string;
   state: string;
   zip?: string;
+  skipBridgeLookup?: boolean;
 }): Promise<SerpResolutionResult> {
-  const { address, city, state, zip } = params;
+  const { address, city, state, zip, skipBridgeLookup = false } = params;
   const serperApiKey = process.env.SERPER_API_KEY || SERPER_API_KEY;
 
   if (!serperApiKey) {
@@ -281,7 +313,7 @@ export async function resolvePropertyWithSerp(params: {
     };
   }
 
-  const query = `${address}, ${city}, ${state} ${zip || ''} zillow redfin realtor`.trim();
+  const query = `${address}, ${city}, ${state} ${zip || ''} (site:zillow.com OR site:realtor.com)`.trim();
 
   try {
     console.log(`🔎 [SERP_RESOLVER] Querying Serper: "${query}"`);
@@ -317,7 +349,7 @@ export async function resolvePropertyWithSerp(params: {
     });
 
     let bridgeValuation = null;
-    if (parsedData.zpid) {
+    if (parsedData.zpid && !skipBridgeLookup) {
       console.log(`🔗 [SERP_RESOLVER] Fetching Bridge valuation via ZPID: ${parsedData.zpid}`);
       try {
         const { analyzeBridgeProperty } = await import('./bridge.server');

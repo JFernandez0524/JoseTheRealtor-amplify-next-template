@@ -105,6 +105,7 @@ export async function analyzeBridgeProperty(params: {
   lat?: number;
   lng?: number;
   zpid?: string;
+  skipAssessments?: boolean;
 }): Promise<{
   success: boolean;
   valuation?: any;
@@ -257,37 +258,39 @@ export async function analyzeBridgeProperty(params: {
   const zpid = valuation?.zpid;
   const targetState = valuation?.state || state;
 
-  // Assessment waterfall - only use zpid or address, no coordinates
+  // Assessment waterfall - only use zpid or address, no coordinates (skipped during bulk Zestimate lookups)
   let assessment = null;
 
-  if (zpid) {
-    try {
-      const res = await bridgeClient.get('/pub/assessments', {
-        params: { zpid, limit: 1, 'address.state': targetState },
-      });
-      assessment = res.data.bundle?.[0];
-    } catch (err) {
-      console.log(`❌ Assessment lookup by zpid ${zpid} failed: ${describeBridgeError(err)}`);
-      if (classifyBridgeError(err).isAuthFailure) authFailed = true;
-    }
-  }
-
-  if (!assessment && !authFailed && streetVariations.length > 0) {
-    for (const street of streetVariations) {
+  if (!params.skipAssessments) {
+    if (zpid) {
       try {
         const res = await bridgeClient.get('/pub/assessments', {
-          params: { 'address.full': street, 'address.city': city, 'address.state': targetState, limit: 3 },
+          params: { zpid, limit: 1, 'address.state': targetState },
         });
-        const stateMatch = res.data.bundle?.find((a: any) => a.address?.state === targetState);
-        if (stateMatch) {
-          assessment = stateMatch;
-          break;
-        }
+        assessment = res.data.bundle?.[0];
       } catch (err) {
-        console.log(`❌ Assessment lookup for "${street}" failed: ${describeBridgeError(err)}`);
-        if (classifyBridgeError(err).isAuthFailure) {
-          authFailed = true;
-          break;
+        console.log(`❌ Assessment lookup by zpid ${zpid} failed: ${describeBridgeError(err)}`);
+        if (classifyBridgeError(err).isAuthFailure) authFailed = true;
+      }
+    }
+
+    if (!assessment && !authFailed && streetVariations.length > 0) {
+      for (const street of streetVariations) {
+        try {
+          const res = await bridgeClient.get('/pub/assessments', {
+            params: { 'address.full': street, 'address.city': city, 'address.state': targetState, limit: 3 },
+          });
+          const stateMatch = res.data.bundle?.find((a: any) => a.address?.state === targetState);
+          if (stateMatch) {
+            assessment = stateMatch;
+            break;
+          }
+        } catch (err) {
+          console.log(`❌ Assessment lookup for "${street}" failed: ${describeBridgeError(err)}`);
+          if (classifyBridgeError(err).isAuthFailure) {
+            authFailed = true;
+            break;
+          }
         }
       }
     }
@@ -338,7 +341,7 @@ export async function fetchBestZestimateResult(params: {
   state: string;
   zip: string;
 }): Promise<{ data: ZestimateResult | null; authFailed: boolean }> {
-  const result = await analyzeBridgeProperty(params);
+  const result = await analyzeBridgeProperty({ ...params, skipAssessments: true });
 
   if (!result.success || !result.valuation) {
     return { data: null, authFailed: result.authFailed === true };

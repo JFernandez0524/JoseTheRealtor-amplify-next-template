@@ -136,6 +136,78 @@ describe('serpPropertyResolver', () => {
       expect(result.community).toBe('55+ Active Adult Community');
     });
 
+    it('correctly parses Pending property with photos and list price (15 Ocean Ave, Manasquan example)', () => {
+      const organic: SerpOrganicResult[] = [
+        {
+          title: '15 Ocean Avenue, Manasquan, NJ 08736 | Zillow',
+          link: 'https://www.zillow.com/homedetails/15-Ocean-Avenue-Manasquan-NJ-08736/39255123_zpid/',
+          snippet:
+            'Aug 25, 2026 — 15 Ocean Avenue, Manasquan, NJ 08736 is pending. Zillow has 26 photos of this 3 beds, 2 baths, 1026 sqft single family home with a list price of $995,000.00.',
+        },
+        {
+          title: '15 Ocean Ave, Manasquan, NJ 08736 | Realtor.com',
+          link: 'https://www.realtor.com/realestateandhomes-detail/15-Ocean-Ave_Manasquan_NJ_08736',
+          snippet:
+            '15 Ocean Ave, Manasquan, NJ 08736 is pending. Single family, 3 beds, 2 baths, 1026 sq ft. List price: $995,000.',
+        },
+      ];
+
+      const result = parseSerpResults('15 Ocean Avenue Manasquan NJ', organic);
+
+      expect(result.zpid).toBe('39255123');
+      expect(result.listingStatus).toBe('pending');
+      expect(result.listPrice).toBe(995000);
+      expect(result.beds).toBe(3);
+      expect(result.baths).toBe(2);
+      expect(result.sqft).toBe(1026);
+    });
+
+    it('correctly keeps off-market status for historical sale older than 180 days (1126 17th Ave, Wall example)', () => {
+      const organic: SerpOrganicResult[] = [
+        {
+          title: '1126 17th Ave, Wall Township, NJ 07719 | Zillow',
+          link: 'https://www.zillow.com/homedetails/1126-17th-Ave-Wall-Township-NJ-07719/39300111_zpid/',
+          snippet:
+            '1126 17th Ave, Wall Township, NJ 07719 is currently not for sale. The 1360 Square Feet single family home is a 2 beds, 2 baths property. $716,600.00.',
+        },
+        {
+          title: '1126 17th Ave, Wall Township, NJ 07719 - Realtor.com',
+          link: 'https://www.realtor.com/realestateandhomes-detail/1126-17th-Ave_Wall-Township_NJ_07719',
+          snippet:
+            '1126 17th Ave, Wall Township, NJ 07719. Single family home, 1360 sqft. Last sold for $136,000 on June 3, 1987.',
+        },
+      ];
+
+      const result = parseSerpResults('1126 17th Ave Wall Township NJ', organic);
+
+      expect(result.zpid).toBe('39300111');
+      expect(result.listingStatus).toBe('off_market');
+      expect(result.lastSaleAmount).toBe(136000);
+      expect(result.lastSaleDate).toBe('1987-06-03');
+      expect(result.beds).toBe(2);
+      expect(result.baths).toBe(2);
+      expect(result.sqft).toBe(1360);
+    });
+
+    it('correctly parses off-market property with explicit not for sale (207 Atlantic St, Keyport example)', () => {
+      const organic: SerpOrganicResult[] = [
+        {
+          title: '207 Atlantic St, Keyport, NJ 07735 | Zillow',
+          link: 'https://www.zillow.com/homedetails/207-Atlantic-St-Keyport-NJ-07735/39200456_zpid/',
+          snippet:
+            '207 Atlantic St, Keyport, NJ 07735 is currently not for sale. The 1738 Square Feet single family home is a 3 beds, 2 baths property. $503,000.00.',
+        },
+      ];
+
+      const result = parseSerpResults('207 Atlantic St Keyport NJ', organic);
+
+      expect(result.zpid).toBe('39200456');
+      expect(result.listingStatus).toBe('off_market');
+      expect(result.beds).toBe(3);
+      expect(result.baths).toBe(2);
+      expect(result.sqft).toBe(1738);
+    });
+
     it('handles empty results gracefully', () => {
       const result = parseSerpResults('Empty Address', []);
       expect(result.listingStatus).toBe('off_market');

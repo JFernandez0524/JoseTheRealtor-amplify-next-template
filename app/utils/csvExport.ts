@@ -33,8 +33,28 @@ function csvCell(value: unknown): string {
  * Every field is optional-chained: historical jobs have `existingLeadData: null`, and intra-file
  * duplicates have no `existingLeadId`, so those columns come back empty rather than throwing.
  */
+function parseDuplicateEntry(dup: unknown): DuplicateLeadEntry | null {
+  if (!dup) return null;
+  if (typeof dup === 'string') {
+    try {
+      return JSON.parse(dup) as DuplicateLeadEntry;
+    } catch {
+      return null;
+    }
+  }
+  return dup as DuplicateLeadEntry;
+}
+
+/**
+ * Generate a CSV comparison report for the duplicate rows of a CSV upload — one line per
+ * duplicate, pairing the incoming CSV values against the existing lead they collided with.
+ *
+ * Called by the duplicate report download in `UploadProgressModal` and the upload history view.
+ * Every field is optional-chained: historical jobs have `existingLeadData: null`, and intra-file
+ * duplicates have no `existingLeadId`, so those columns come back empty rather than throwing.
+ */
 export function generateDuplicateComparisonCSV(
-  duplicateLeads: (DuplicateLeadEntry | null | undefined)[]
+  duplicateLeads: (DuplicateLeadEntry | string | null | undefined)[]
 ): string {
   const headers = [
     'CSV Owner Name',
@@ -48,7 +68,11 @@ export function generateDuplicateComparisonCSV(
     'Existing Lead ID',
   ];
 
-  const rows = (duplicateLeads ?? []).filter(Boolean).map((dup) => {
+  const parsed = (duplicateLeads ?? [])
+    .map(parseDuplicateEntry)
+    .filter((e): e is DuplicateLeadEntry => Boolean(e));
+
+  const rows = parsed.map((dup) => {
     const zestimate = dup?.existingLeadData?.zestimate;
     return [
       dup?.csvData?.ownerName || '',

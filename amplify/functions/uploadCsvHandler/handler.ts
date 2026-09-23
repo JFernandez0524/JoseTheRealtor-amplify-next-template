@@ -444,6 +444,83 @@ export const handler: S3Handler = async (event) => {
           const rawPropCity = sanitize(cell('ownerCity', 'ownerCity'));
           const rawPropState = sanitize(cell('ownerState', 'ownerState'));
 
+          const rawAdminZip = leadType === 'PROBATE' ? formatZip(cell('adminZip', 'adminZip')) : '';
+          const rawAdminAddr = leadType === 'PROBATE' ? sanitize(cell('adminAddress', 'adminAddress', 'Mailing Address')) : '';
+          const rawAdminCity = leadType === 'PROBATE' ? sanitize(cell('adminCity', 'adminCity')) : '';
+          const rawAdminState = leadType === 'PROBATE' ? sanitize(cell('adminState', 'adminState')) : '';
+
+          // --- 💾 EARLY DUPLICATE CHECK BEFORE EXTERNAL API CALLS ---
+          // Check raw address against preloaded existing addresses. This skips Google Address Validation,
+          // Bridge Zestimate lookups, and Serper API calls for all duplicate rows.
+          const rawPropKey = makeAddressKey(rawPropAddr, rawPropZip);
+          const rawAdminKey = leadType === 'PROBATE' ? makeAddressKey(rawAdminAddr, rawAdminZip) : null;
+          const earlyDupKey = (leadType === 'PROBATE' && rawAdminKey) ? rawAdminKey : rawPropKey;
+
+          if (earlyDupKey && existingAddressKeys.has(earlyDupKey)) {
+            const dupAddressDisplay = (leadType === 'PROBATE' && rawAdminAddr)
+              ? `${rawAdminAddr}, ${rawAdminCity} ${rawAdminZip}`.trim()
+              : `${rawPropAddr}, ${rawPropCity} ${rawPropZip}`.trim();
+            console.log(`⏭️ Skipping duplicate lead (early check) for user ${ownerId}: ${dupAddressDisplay}`);
+
+            if (duplicateLeads.length < MAX_DUPLICATE_STORE) {
+              const earlyOwnerName = resolveOwnerName({
+                full: cell('ownerFullName', 'borrowerName', 'Borrower Name', 'BORROWER OR DEFENDANT NAME', 'OWNERSHIP', 'ownership'),
+                first: cell('ownerFirstName', 'ownerFirstName', 'First Name'),
+                last: cell('ownerLastName', 'ownerLastName', 'Last Name'),
+              });
+              const earlyAdminName = leadType === 'PROBATE' ? resolveOwnerName({
+                full: cell('adminFullName', 'adminName'),
+                first: cell('adminFirstName', 'adminFirstName'),
+                last: cell('adminLastName', 'adminLastName'),
+              }) : null;
+              const csvOwner = `${earlyOwnerName.firstName || ''} ${earlyOwnerName.lastName || ''}`.trim();
+              const csvAdmin = `${earlyAdminName?.firstName || ''} ${earlyAdminName?.lastName || ''}`.trim();
+              let fallbackName = '';
+              if (!csvOwner && !csvAdmin && row && typeof row === 'object') {
+                for (const [key, val] of Object.entries(row)) {
+                  if (typeof val === 'string' && val.trim() && !val.includes('@')) {
+                    const k = key.toLowerCase();
+                    if (k.includes('name') || k.includes('owner') || k.includes('decedent') || k.includes('admin') || k.includes('borrower') || k.includes('contact')) {
+                      fallbackName = val.trim();
+                      break;
+                    }
+                  }
+                }
+              }
+              const csvDisplayName = csvOwner && csvAdmin ? `${csvOwner} (Admin: ${csvAdmin})` : csvOwner || (csvAdmin ? `Admin: ${csvAdmin}` : fallbackName);
+              duplicateLeads.push({
+                csvData: {
+                  ownerName: csvDisplayName,
+                  address: rawPropAddr || rawAdminAddr,
+                  city: rawPropCity || rawAdminCity,
+                  state: rawPropState || rawAdminState,
+                  zip: rawPropZip || rawAdminZip,
+                },
+                existingLeadId: existingKeyToId.get(earlyDupKey) || null,
+                existingLeadData: existingKeyToData.get(earlyDupKey) || null,
+              });
+            }
+
+            duplicateCount++;
+
+            if (currentRow % 5 === 0 || currentRow === totalRows) {
+              await docClient.send(new UpdateCommand({
+                TableName: csvUploadJobTableName,
+                Key: { id: jobId },
+                UpdateExpression: 'SET processedRows = :processed, successCount = :success, duplicateCount = :duplicate, duplicateLeads = :duplicates, updatedAt = :updated',
+                ExpressionAttributeValues: {
+                  ':processed': currentRow,
+                  ':success': successCount,
+                  ':duplicate': duplicateCount,
+                  ':duplicates': duplicateLeads,
+                  ':updated': new Date().toISOString(),
+                }
+              }));
+            }
+
+            continue;
+          }
+
           const cleanCity = cleanCityForGeocoding(rawPropCity);
           const fullPropString = `${rawPropAddr}, ${cleanCity}, ${rawPropState} ${rawPropZip}`;
 
@@ -530,10 +607,6 @@ export const handler: S3Handler = async (event) => {
             });
             adminFirstName = adminName.firstName;
             adminLastName = adminName.lastName;
-            const rawAdminZip = formatZip(cell('adminZip', 'adminZip'));
-            const rawAdminAddr = sanitize(cell('adminAddress', 'adminAddress', 'Mailing Address'));
-            const rawAdminCity = sanitize(cell('adminCity', 'adminCity'));
-            const rawAdminState = sanitize(cell('adminState', 'adminState'));
 
             if (rawAdminAddr) {
               await delay(GOOGLE_API_DELAY_MS); // respect Google Address Validation QPS limit
@@ -597,13 +670,13 @@ export const handler: S3Handler = async (event) => {
           const preSkiptracedPhone = formatPhoneNumber(cell('phone', 'phone'));
           const csvEstimatedValue = parseCurrency(cell('estimatedValue', 'estimatedValue', 'Estimated Value'));
 
-          // --- 💾 CHECK FOR DUPLICATES BEFORE SAVING ---
-          // O(1) lookup against the pre-loaded Set — replaces a full table scan per row
-          const dupKey = leadType === 'PROBATE'
-            ? makeAddressKey(finalMailAddr, finalMailZip)
-            : makeAddressKey(finalPropAddr, finalPropZip);
+          // --- 💾 SECONDARY DUPLICATE CHECK BEFORE SAVING ---
+          // O(1) lookup against the pre-loaded Set — catches any duplicates resolved after Google standardization
+          const stdPropKey = makeAddressKey(finalPropAddr, finalPropZip);
+          const stdAdminKey = leadType === 'PROBATE' ? makeAddressKey(finalMailAddr, finalMailZip) : null;
+          const dupKey = (leadType === 'PROBATE' && stdAdminKey) ? stdAdminKey : stdPropKey;
           const duplicateCheckAddress = leadType === 'PROBATE'
-            ? `${finalMailAddr || ''} ${finalMailCity || ''} ${finalMailZip || ''}`.trim()
+            ? `${finalMailAddr || finalPropAddr || ''} ${finalMailCity || finalPropCity || ''} ${finalMailZip || finalPropZip || ''}`.trim()
             : `${finalPropAddr} ${finalPropCity} ${finalPropZip}`.trim();
 
           if (dupKey && existingAddressKeys.has(dupKey)) {
@@ -628,10 +701,10 @@ export const handler: S3Handler = async (event) => {
               duplicateLeads.push({
                 csvData: {
                   ownerName: csvDisplayName,
-                  address: finalPropAddr,
-                  city: finalPropCity,
-                  state: finalPropState,
-                  zip: finalPropZip,
+                  address: finalPropAddr || finalMailAddr,
+                  city: finalPropCity || finalMailCity,
+                  state: finalPropState || finalMailState,
+                  zip: finalPropZip || finalMailZip,
                 },
                 existingLeadId: existingKeyToId.get(dupKey) || null,
                 existingLeadData: existingKeyToData.get(dupKey) || null,
@@ -640,7 +713,7 @@ export const handler: S3Handler = async (event) => {
 
             duplicateCount++;
 
-            if (currentRow % 25 === 0) {
+            if (currentRow % 5 === 0 || currentRow === totalRows) {
               await docClient.send(new UpdateCommand({
                 TableName: csvUploadJobTableName,
                 Key: { id: jobId },
@@ -719,6 +792,7 @@ export const handler: S3Handler = async (event) => {
                 city: zestimateCity,
                 state: finalPropState,
                 zip: zestimateZip,
+                skipBridgeLookup: !!zillowData,
               });
 
               if (serpRes.success && serpRes.data) {
@@ -802,7 +876,7 @@ export const handler: S3Handler = async (event) => {
             foreclosureAmount: foreclosureAmountCsv,
 
             phones: preSkiptracedPhone ? [preSkiptracedPhone] : [],
-            skipTraceStatus: preSkiptracedPhone ? 'COMPLETED' : 'PENDING',
+            skipTraceStatus: preSkiptracedPhone ? 'COMPLETED' : (finalListingStatus !== 'off_market' ? 'NOT_ELIGIBLE' : 'PENDING'),
             skipTraceCompletedAt: preSkiptracedPhone ? new Date().toISOString() : null,
             skipTraceHistory: preSkiptracedPhone ? [{
               timestamp: new Date().toISOString(),
@@ -868,7 +942,7 @@ export const handler: S3Handler = async (event) => {
 
           successCount++;
 
-          if (currentRow % 25 === 0) {
+          if (currentRow % 5 === 0 || currentRow === totalRows) {
             await docClient.send(new UpdateCommand({
               TableName: csvUploadJobTableName,
               Key: { id: jobId },

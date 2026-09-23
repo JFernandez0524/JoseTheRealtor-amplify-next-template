@@ -123,4 +123,29 @@ describe('generateDuplicateComparisonCSV', () => {
     }));
     expect(generateDuplicateComparisonCSV(entries).split('\n')).toHaveLength(9);
   });
+
+  it('parses JSON stringified entries from AppSync AWSJSON arrays', () => {
+    const stringified = JSON.stringify({
+      csvData: {
+        ownerName: 'Stringified Owner',
+        address: '1126 17th Ave',
+        city: 'Wall Township',
+        state: 'NJ',
+        zip: '07719',
+      },
+      existingLeadId: 'lead-appsync-1',
+      existingLeadData: {
+        ownerName: 'Existing Owner',
+        address: '1126 17th Ave, Wall Township',
+        zestimate: 716600,
+      },
+    });
+
+    const lines = generateDuplicateComparisonCSV([stringified as any]).split('\n');
+    expect(lines).toHaveLength(2);
+    expect(lines[1]).toBe(
+      '"Stringified Owner","1126 17th Ave","Wall Township","NJ","07719",' +
+        '"Existing Owner","1126 17th Ave, Wall Township","$716,600","lead-appsync-1"'
+    );
+  });
 });
