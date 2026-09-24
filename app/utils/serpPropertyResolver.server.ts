@@ -84,10 +84,93 @@ export function parseCurrencyAmount(raw?: string | null): number | undefined {
 }
 
 /**
+ * Normalizes street directions and types to standard USPS abbreviations
+ * matching Zillow's indexing format (e.g. "42 West Louis Place" -> "42 W Louis Pl").
+ */
+export function normalizeStreetForSearch(address: string): string {
+  if (!address) return '';
+  return address
+    .replace(/\bNorth\b/gi, 'N')
+    .replace(/\bSouth\b/gi, 'S')
+    .replace(/\bEast\b/gi, 'E')
+    .replace(/\bWest\b/gi, 'W')
+    .replace(/\bStreet\b/gi, 'St')
+    .replace(/\bAvenue\b/gi, 'Ave')
+    .replace(/\bPlace\b/gi, 'Pl')
+    .replace(/\bPlaza\b/gi, 'Plz')
+    .replace(/\bRoad\b/gi, 'Rd')
+    .replace(/\bDrive\b/gi, 'Dr')
+    .replace(/\bLane\b/gi, 'Ln')
+    .replace(/\bCourt\b/gi, 'Ct')
+    .replace(/\bBoulevard\b/gi, 'Blvd')
+    .replace(/\bCircle\b/gi, 'Cir')
+    .replace(/\bTerrace\b/gi, 'Ter')
+    .replace(/\bParkway\b/gi, 'Pkwy')
+    .replace(/\bHighway\b/gi, 'Hwy')
+    .trim();
+}
+
+/**
+ * Extracts house number and core street name to prevent search result leakage from neighboring homes.
+ */
+export function extractAddressParts(addr: string): { streetNum: string; baseNum: string; coreStreet: string } {
+  if (!addr) return { streetNum: '', baseNum: '', coreStreet: '' };
+  const streetNumMatch = addr.trim().match(/^(\d+[A-Za-z]?)\b/);
+  const streetNum = streetNumMatch ? streetNumMatch[1] : '';
+  const baseNum = streetNum.replace(/[A-Za-z]+$/, '');
+
+  let rest = addr.replace(/^\d+[A-Za-z]?\b/, '').trim();
+  rest = rest.replace(/^(?:North|South|East|West|N|S|E|W)\.?\s+/i, '');
+  if (rest.includes(',')) {
+    rest = rest.split(',')[0].trim();
+  }
+  rest = rest.replace(/\b(?:Street|St|Avenue|Ave|Place|Pl|Plaza|Plz|Road|Rd|Drive|Dr|Lane|Ln|Court|Ct|Boulevard|Blvd|Circle|Cir|Terrace|Ter|Way|Highway|Hwy|Unit|Apt|#|Suite|Ste)\b.*$/i, '').trim();
+
+  return { streetNum, baseNum, coreStreet: rest };
+}
+
+/**
+ * Verifies that a search result's title, link, or snippet actually matches the target property,
+ * accepting both full Google Address Validation format and USPS abbreviated format, while
+ * strictly rejecting results from neighboring homes with different house numbers or streets.
+ */
+export function isResultMatchingAddress(
+  item: SerpOrganicResult,
+  targetAddress: string
+): boolean {
+  const { streetNum, baseNum, coreStreet } = extractAddressParts(targetAddress);
+  if (!streetNum && !coreStreet) return true; // If address cannot be extracted, don't filter out
+
+  const title = (item.title || '').toLowerCase();
+  const link = (item.link || '').toLowerCase();
+  const snippet = (item.snippet || '').toLowerCase();
+
+  const numPattern = baseNum && baseNum !== streetNum ? `(?:${streetNum}|${baseNum})` : streetNum;
+  const numRegex = new RegExp(`\\b${numPattern}\\b`, 'i');
+  const streetRegex = coreStreet ? new RegExp(`\\b${coreStreet}\\b`, 'i') : null;
+
+  const titleOrLinkHasNum = numRegex.test(title) || numRegex.test(link);
+  const titleOrLinkHasStreet = streetRegex ? (streetRegex.test(title) || streetRegex.test(link)) : true;
+
+  if (titleOrLinkHasNum && titleOrLinkHasStreet) {
+    return true;
+  }
+
+  // Fallback: check snippet if title/link also mentions the street
+  if (numRegex.test(snippet) && (streetRegex ? streetRegex.test(snippet) : true)) {
+    if (streetRegex ? (streetRegex.test(title) || streetRegex.test(link)) : true) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+/**
  * Pure parsing function to extract structured property intelligence from search organic results.
  */
 export function parseSerpResults(
-  _query: string,
+  targetAddressOrQuery: string,
   organic: SerpOrganicResult[]
 ): SerpPropertyData {
   const result: SerpPropertyData = {
@@ -109,6 +192,12 @@ export function parseSerpResults(
     str ? /[A-Za-z]+\s+\d{1,2},?\s+\d{4}|\d{1,2}\/\d{1,2}\/\d{4}/.test(str) : false;
 
   for (const item of organic) {
+    // 🛡️ Guardrail: Verify that the search result matches the target property address
+    // Rejects neighboring properties (e.g. 41 W Henry Pl or 38 W Louis Pl when searching for 42 West Louis Pl)
+    if (!isResultMatchingAddress(item, targetAddressOrQuery)) {
+      continue;
+    }
+
     const title = item.title || '';
     const link = item.link || '';
     const snippet = item.snippet || '';
@@ -333,7 +422,13 @@ export async function resolvePropertyWithSerp(params: {
     };
   }
 
-  const query = `${address}, ${city}, ${state} ${zip || ''} site:zillow.com`.trim();
+  const normalizedStreet = normalizeStreetForSearch(address);
+  const streetQuery =
+    normalizedStreet.toLowerCase() !== address.toLowerCase()
+      ? `("${address}" OR "${normalizedStreet}")`
+      : `"${address}"`;
+
+  const query = `${streetQuery} ${city} ${state} ${zip || ''} site:zillow.com`.trim();
 
   try {
     console.log(`🔎 [SERP_RESOLVER] Querying Serper: "${query}"`);
@@ -355,7 +450,7 @@ export async function resolvePropertyWithSerp(params: {
     );
 
     const organic: SerpOrganicResult[] = res.data?.organic || [];
-    const parsedData = parseSerpResults(query, organic);
+    const parsedData = parseSerpResults(address, organic);
 
     console.log('✅ [SERP_RESOLVER] Extracted property intel:', {
       zpid: parsedData.zpid,

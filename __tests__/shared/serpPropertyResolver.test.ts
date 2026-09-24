@@ -4,6 +4,9 @@ import {
   parseSerpResults,
   normalizeDateToIso,
   parseCurrencyAmount,
+  normalizeStreetForSearch,
+  extractAddressParts,
+  isResultMatchingAddress,
   type SerpOrganicResult,
 } from '@/app/utils/serpPropertyResolver.server';
 
@@ -231,10 +234,137 @@ describe('serpPropertyResolver', () => {
       expect(result.yearBuilt).toBe(1946);
     });
 
+    it('skips neighboring property results and parses target property (e.g. 42 West Louis Place)', () => {
+      const organic: SerpOrganicResult[] = [
+        {
+          title: '38 W Louis Pl, Iselin, NJ 08830 - Zillow',
+          link: 'https://www.zillow.com/homedetails/38-W-Louis-Pl-Iselin-NJ-08830/38901235_zpid/',
+          snippet: '38 W Louis Pl, Iselin, NJ 08830 is currently not for sale. 4 beds, 2 baths, $600,000.',
+        },
+        {
+          title: '42 W Louis Pl, Iselin, NJ 08830 - Zillow',
+          link: 'https://www.zillow.com/homedetails/42-W-Louis-Pl-Iselin-NJ-08830/38901234_zpid/',
+          snippet: '42 W Louis Pl, Iselin, NJ 08830 is currently not for sale. 3 beds, 2 baths property. $750,000.',
+        },
+      ];
+
+      const result = parseSerpResults('42 West Louis Place', organic);
+
+      expect(result.zpid).toBe('38901234');
+      expect(result.zillowUrl).toContain('38901234_zpid');
+      expect(result.listingStatus).toBe('off_market');
+      expect(result.beds).toBe(3);
+      expect(result.baths).toBe(2);
+    });
+
     it('handles empty results gracefully', () => {
       const result = parseSerpResults('Empty Address', []);
       expect(result.listingStatus).toBe('off_market');
       expect(result.zpid).toBeUndefined();
+    });
+  });
+
+  describe('normalizeStreetForSearch', () => {
+    it('normalizes street directions and types to standard USPS abbreviations', () => {
+      expect(normalizeStreetForSearch('42 West Louis Place')).toBe('42 W Louis Pl');
+      expect(normalizeStreetForSearch('100 North Main Street')).toBe('100 N Main St');
+      expect(normalizeStreetForSearch('50 East Grand Avenue')).toBe('50 E Grand Ave');
+      expect(normalizeStreetForSearch('12 South Ocean Boulevard')).toBe('12 S Ocean Blvd');
+      expect(normalizeStreetForSearch('78 Clinton Road')).toBe('78 Clinton Rd');
+      expect(normalizeStreetForSearch('15 Park Court')).toBe('15 Park Ct');
+      expect(normalizeStreetForSearch('300 Route 9 Parkway')).toBe('300 Route 9 Pkwy');
+      expect(normalizeStreetForSearch('5 Garden Plaza')).toBe('5 Garden Plz');
+    });
+
+    it('handles empty or blank addresses', () => {
+      expect(normalizeStreetForSearch('')).toBe('');
+      expect(normalizeStreetForSearch(null as any)).toBe('');
+    });
+  });
+
+  describe('extractAddressParts', () => {
+    it('extracts street number, base number, and core street name', () => {
+      expect(extractAddressParts('42 West Louis Place')).toEqual({
+        streetNum: '42',
+        baseNum: '42',
+        coreStreet: 'Louis',
+      });
+      expect(extractAddressParts('100 North Main Street Apt 4B')).toEqual({
+        streetNum: '100',
+        baseNum: '100',
+        coreStreet: 'Main',
+      });
+      expect(extractAddressParts('42A South Broad St')).toEqual({
+        streetNum: '42A',
+        baseNum: '42',
+        coreStreet: 'Broad',
+      });
+    });
+
+    it('handles empty or invalid addresses gracefully', () => {
+      expect(extractAddressParts('')).toEqual({
+        streetNum: '',
+        baseNum: '',
+        coreStreet: '',
+      });
+    });
+  });
+
+  describe('isResultMatchingAddress', () => {
+    const targetAddress = '42 West Louis Place';
+
+    it('matches search result with full Google address format', () => {
+      const item: SerpOrganicResult = {
+        title: '42 West Louis Place, Iselin, NJ 08830 | Zillow',
+        link: 'https://www.zillow.com/homedetails/42-West-Louis-Pl-Iselin-NJ-08830/38901234_zpid/',
+        snippet: '42 West Louis Place, Iselin, NJ 08830 is currently not for sale.',
+      };
+      expect(isResultMatchingAddress(item, targetAddress)).toBe(true);
+    });
+
+    it('matches search result with USPS abbreviated address format', () => {
+      const item: SerpOrganicResult = {
+        title: '42 W Louis Pl, Iselin, NJ 08830 - Zillow',
+        link: 'https://www.zillow.com/homedetails/42-W-Louis-Pl-Iselin-NJ-08830/38901234_zpid/',
+        snippet: '42 W Louis Pl, Iselin, NJ 08830 is currently not for sale.',
+      };
+      expect(isResultMatchingAddress(item, targetAddress)).toBe(true);
+    });
+
+    it('matches when address details are only in the URL link slug', () => {
+      const item: SerpOrganicResult = {
+        title: 'Zillow Real Estate Listing',
+        link: 'https://www.zillow.com/homedetails/42-W-Louis-Pl-Iselin-NJ-08830/38901234_zpid/',
+        snippet: 'Single family home in Iselin NJ.',
+      };
+      expect(isResultMatchingAddress(item, targetAddress)).toBe(true);
+    });
+
+    it('strictly rejects neighboring home with different house number', () => {
+      const item: SerpOrganicResult = {
+        title: '38 W Louis Pl, Iselin, NJ 08830 - Zillow',
+        link: 'https://www.zillow.com/homedetails/38-W-Louis-Pl-Iselin-NJ-08830/38901235_zpid/',
+        snippet: '38 W Louis Pl, Iselin, NJ 08830 is currently not for sale.',
+      };
+      expect(isResultMatchingAddress(item, targetAddress)).toBe(false);
+    });
+
+    it('strictly rejects neighboring home on a different street', () => {
+      const item: SerpOrganicResult = {
+        title: '41 W Henry Pl, Iselin, NJ 08830 - Zillow',
+        link: 'https://www.zillow.com/homedetails/41-W-Henry-Pl-Iselin-NJ-08830/38901236_zpid/',
+        snippet: '41 W Henry Pl, Iselin, NJ 08830 is currently not for sale.',
+      };
+      expect(isResultMatchingAddress(item, targetAddress)).toBe(false);
+    });
+
+    it('strictly rejects neighboring home with same house number on different street', () => {
+      const item: SerpOrganicResult = {
+        title: '42 W Henry Pl, Iselin, NJ 08830 - Zillow',
+        link: 'https://www.zillow.com/homedetails/42-W-Henry-Pl-Iselin-NJ-08830/38901237_zpid/',
+        snippet: '42 W Henry Pl, Iselin, NJ 08830 is currently not for sale.',
+      };
+      expect(isResultMatchingAddress(item, targetAddress)).toBe(false);
     });
   });
 });
