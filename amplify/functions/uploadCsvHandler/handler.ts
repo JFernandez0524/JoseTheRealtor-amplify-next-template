@@ -630,11 +630,11 @@ export const handler: S3Handler = async (event) => {
               // Store admin standardized address
               if (adminValidation) {
                 adminStandardizedAddress = {
-                  street: { S: finalMailAddr },
-                  city: { S: finalMailCity },
-                  state: { S: finalMailState },
-                  zip: { S: finalMailZip },
-                  county: { S: aStd?.county || '' },
+                  street: finalMailAddr,
+                  city: finalMailCity,
+                  state: finalMailState,
+                  zip: finalMailZip,
+                  county: aStd?.county || '',
                 };
               }
             }

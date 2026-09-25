@@ -177,30 +177,29 @@ function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
     setIsSavingAddress(true);
     try {
       const resolvedCounty = selectedNewAddress?.county || lead.ownerCounty || null;
-      const updated = await updateLead(lead.id, {
-        ownerAddress: street,
-        ownerCity: city,
-        ownerState: state,
-        ownerZip: zip,
-        ownerCounty: resolvedCounty,
-        latitude: selectedNewAddress?.lat ?? undefined,
-        longitude: selectedNewAddress?.lng ?? undefined,
-        standardizedAddress: JSON.stringify({
+      const res = await fetch('/api/v1/update-lead-address', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          leadId: lead.id,
           street,
           city,
           state,
           zip,
           county: resolvedCounty,
+          latitude: selectedNewAddress?.lat ?? lead.latitude ?? null,
+          longitude: selectedNewAddress?.lng ?? lead.longitude ?? null,
         }),
-        validationStatus: 'VALID',
       });
 
-      setLead(updated as Lead);
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to update address');
+      }
+
+      setLead(data.lead as Lead);
       setShowEditAddressModal(false);
       addToast({ type: 'success', title: 'Address updated', message: `${street}, ${city}, ${state} saved.` });
-      
-      // Auto-trigger market intel refresh for the new address
-      handleRefreshMarketIntel();
     } catch (err: any) {
       addToast({ type: 'error', title: 'Update failed', message: err.message || 'Could not update address.' });
     } finally {

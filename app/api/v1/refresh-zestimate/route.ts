@@ -168,6 +168,15 @@ export async function POST(request: NextRequest) {
       zestimateDate: new Date().toISOString(),
     };
 
+    if (searchStreet && searchCity && searchState && !zillowUrl) {
+      updatePayload.ownerAddress = searchStreet;
+      updatePayload.ownerCity = searchCity;
+      updatePayload.ownerState = searchState;
+      if (searchZip) updatePayload.ownerZip = searchZip;
+      updatePayload.validationStatus = 'VALID';
+      updatePayload.validationErrors = [];
+    }
+
     if (serpData?.listingStatus) {
       updatePayload.listingStatus = serpData.listingStatus;
     }

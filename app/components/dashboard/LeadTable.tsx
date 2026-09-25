@@ -274,50 +274,31 @@ export function LeadTable({
     setIsSaving(true);
     try {
       const resolvedCounty = selectedAddress?.county || editingLead.ownerCounty || null;
-      await updateLead(editingLead.id, {
-        ownerAddress: street,
-        ownerCity: city,
-        ownerState: state,
-        ownerZip: zip,
-        ownerCounty: resolvedCounty,
-        latitude: selectedAddress?.lat ?? editingLead.latitude ?? null,
-        longitude: selectedAddress?.lng ?? editingLead.longitude ?? null,
-        standardizedAddress: JSON.stringify({
+      const res = await fetch('/api/v1/update-lead-address', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          leadId: editingLead.id,
           street,
           city,
           state,
           zip,
           county: resolvedCounty,
+          latitude: selectedAddress?.lat ?? editingLead.latitude ?? null,
+          longitude: selectedAddress?.lng ?? editingLead.longitude ?? null,
         }),
-        validationStatus: 'VALID',
       });
 
-      // Attempt Zestimate refresh in background gracefully (do not fail the address save if Zestimate is unavailable)
-      try {
-        const res = await fetch('/api/v1/refresh-zestimate', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            leadId: editingLead.id,
-            street,
-            city,
-            state,
-            zip,
-          }),
-        });
-
-        if (!res.ok) {
-          const error = await res.json();
-          console.warn('Zestimate refresh note:', error?.error || error);
-        }
-      } catch (zErr) {
-        console.warn('Zestimate refresh network note:', zErr);
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to update address');
       }
 
-      const savedLeadId = editingLead.id;
+      const updatedLead = data.lead;
       setEditingLead(null);
-      if (onLeadUpdated) {
-        await patchLeadById(savedLeadId);
+
+      if (onLeadUpdated && updatedLead) {
+        onLeadUpdated([updatedLead as Lead]);
       } else if (onRefresh) {
         await onRefresh();
       } else {
