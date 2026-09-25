@@ -837,6 +837,9 @@ export const handler: S3Handler = async (event) => {
           if (serpData?.hoaFee && !labels.includes('HOA_PROPERTY')) {
             labels.push('HOA_PROPERTY');
           }
+          if (serpData?.isCondo && !labels.includes('CONDO')) {
+            labels.push('CONDO');
+          }
           if (finalListingStatus === 'active' && !labels.includes('ACTIVE_MLS')) {
             labels.push('ACTIVE_MLS');
           }

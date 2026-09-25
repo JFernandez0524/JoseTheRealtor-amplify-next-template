@@ -150,9 +150,34 @@ export async function updateLead(
   updates: Partial<Lead>
 ): Promise<Lead> {
   try {
+    // AppSync GraphQL schema uses AWSJSON scalar for a.json() fields.
+    // If a JavaScript object is passed as a variable for an AWSJSON field, AppSync rejects
+    // the mutation with "Variable '<field>' has an invalid value". We defensively serialize
+    // any object passed for known AWSJSON fields to a valid JSON string.
+    const sanitizedUpdates: any = { ...updates };
+    const jsonFields = [
+      'standardizedAddress',
+      'adminStandardizedAddress',
+      'homeDetails',
+      'ghlOutreachData',
+      'openLienData',
+      'foreclosureData',
+      'rawEnrichmentData',
+      'rawSkipTraceData',
+      'skipTraceHistory',
+    ];
+
+    for (const field of jsonFields) {
+      if (sanitizedUpdates[field] !== undefined && sanitizedUpdates[field] !== null) {
+        if (typeof sanitizedUpdates[field] === 'object') {
+          sanitizedUpdates[field] = JSON.stringify(sanitizedUpdates[field]);
+        }
+      }
+    }
+
     const { data, errors } = await client.models.PropertyLead.update({
       id,
-      ...updates,
+      ...sanitizedUpdates,
     });
     if (errors) {
       throw new Error(errors.map((e: any) => e.message).join(', '));

@@ -85,13 +85,19 @@ export async function validateAddressWithGoogle(address: string) {
       }
     }
     
-    // Build street from USPS components
+    // Build street from USPS components, falling back cleanly to postalAddress
     let street = '';
-    if (standardizedAddr) {
-      street = standardizedAddr.firstAddressLine || '';
-      // If it contains comma, it's the full line - extract just street
-      if (street.includes(',')) {
-        street = street.split(',')[0].trim();
+    if (standardizedAddr?.firstAddressLine) {
+      const firstLine = standardizedAddr.firstAddressLine.split(',')[0].trim();
+      const city = postalAddress.locality || '';
+      const state = postalAddress.administrativeArea || '';
+      const hasCityOrState =
+        (city && new RegExp(`\\b${city}\\b`, 'i').test(firstLine)) ||
+        (state && new RegExp(`\\b${state}\\b`, 'i').test(firstLine));
+      if (!hasCityOrState) {
+        street = firstLine;
+      } else {
+        street = postalAddress.addressLines?.[0] || firstLine;
       }
     } else {
       street = postalAddress.addressLines?.[0] || '';

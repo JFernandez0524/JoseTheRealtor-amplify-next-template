@@ -87,7 +87,7 @@ export async function POST(request: NextRequest) {
     let v = result.valuation;
     let serpData: any = null;
 
-    // 🔎 Proactively query SERP for real-time listing status, MLS active price, and home details
+    // 🔎 Proactively query SERP with Smart AI for real-time listing status, MLS active price, and home details
     if (!zillowUrl && searchStreet && searchCity && searchState) {
       try {
         const serpRes = await resolvePropertyWithSerp({
@@ -95,6 +95,7 @@ export async function POST(request: NextRequest) {
           city: searchCity,
           state: searchState,
           zip: searchZip,
+          useAi: true,
         });
 
         if (serpRes.success && serpRes.data) {
@@ -187,17 +188,31 @@ export async function POST(request: NextRequest) {
         annualTaxes: serpData.annualTaxes,
         mlsNumber: serpData.mlsNumber,
         community: serpData.community,
+        aiReasoning: serpData.aiReasoning,
       });
     }
 
-    const leadLabels: string[] = [];
-    if (serpData?.is55Plus) leadLabels.push('55_PLUS');
-    if (serpData?.hoaFee) leadLabels.push('HOA_PROPERTY');
-    if (serpData?.listingStatus === 'active') leadLabels.push('ACTIVE_MLS');
-    if (serpData?.listingStatus === 'sold') leadLabels.push('RECENTLY_SOLD');
-    if (leadLabels.length > 0) {
-      updatePayload.leadLabels = leadLabels;
+    // Fetch current lead labels to preserve existing labels (e.g. ABSENTEE, DIRECT_MAIL_ONLY)
+    let leadLabels: string[] = [];
+    try {
+      const existing = await cookiesClient.models.PropertyLead.get({ id: leadId });
+      leadLabels = (existing.data?.leadLabels || []).filter(Boolean) as string[];
+    } catch {
+      leadLabels = [];
     }
+
+    if (serpData?.is55Plus && !leadLabels.includes('55_PLUS')) leadLabels.push('55_PLUS');
+    if (serpData?.hoaFee && !leadLabels.includes('HOA_PROPERTY')) leadLabels.push('HOA_PROPERTY');
+    if (serpData?.isCondo && !leadLabels.includes('CONDO')) leadLabels.push('CONDO');
+    if (serpData?.listingStatus === 'active' && !leadLabels.includes('ACTIVE_MLS')) leadLabels.push('ACTIVE_MLS');
+    if (serpData?.listingStatus === 'sold' && !leadLabels.includes('RECENTLY_SOLD')) leadLabels.push('RECENTLY_SOLD');
+    if (serpData?.listingStatus && serpData.listingStatus !== 'active') {
+      leadLabels = leadLabels.filter((l) => l !== 'ACTIVE_MLS');
+    }
+    if (serpData?.listingStatus && serpData.listingStatus !== 'sold') {
+      leadLabels = leadLabels.filter((l) => l !== 'RECENTLY_SOLD');
+    }
+    updatePayload.leadLabels = leadLabels;
 
     const { errors } = await cookiesClient.models.PropertyLead.update(updatePayload as any);
 

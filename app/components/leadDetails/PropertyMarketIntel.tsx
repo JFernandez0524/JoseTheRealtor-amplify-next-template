@@ -33,6 +33,7 @@ export function PropertyMarketIntel({
   const isPending = lead.listingStatus === 'pending';
   const is55Plus = lead.leadLabels?.includes('55_PLUS') || details.community?.includes('55+');
   const hasHoa = lead.leadLabels?.includes('HOA_PROPERTY') || details.hoaFee;
+  const isCondo = lead.leadLabels?.includes('CONDO') || details.isCondo || /condo|co-op|coop/i.test(details.propertyType || '');
 
   const formatMoney = (val?: number | null) =>
     val != null && !isNaN(val) ? `$${Number(val).toLocaleString()}` : null;
@@ -40,6 +41,14 @@ export function PropertyMarketIntel({
   return (
     <CardWrapper title='🏠 Property & Market Intelligence'>
       <div className='space-y-6'>
+        {/* Verification Notice */}
+        <div className='flex items-start gap-2 p-3 text-xs bg-amber-50/90 border border-amber-200 rounded-lg text-amber-800'>
+          <span className='text-base leading-none'>ℹ️</span>
+          <div>
+            <span className='font-semibold'>Automated Web Intelligence:</span> Property and listing details are compiled from public records and search snippets. Always verify current listing status, pricing, and HOA details directly on your local MLS.
+          </div>
+        </div>
+
         {/* Top Status & Summary Banner */}
         <div className='flex flex-wrap items-center justify-between gap-3 p-4 rounded-xl bg-slate-50 border border-slate-200'>
           <div className='flex flex-wrap items-center gap-2'>
@@ -67,6 +76,11 @@ export function PropertyMarketIntel({
                 ⚪ Off Market
               </span>
             )}
+            {isCondo && (
+              <span className='inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-indigo-100 text-indigo-800 border border-indigo-200'>
+                🏢 Condo / Co-op
+              </span>
+            )}
             {is55Plus && (
               <span className='inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-purple-100 text-purple-800 border border-purple-200'>
                 🏷️ 55+ Community
@@ -90,6 +104,16 @@ export function PropertyMarketIntel({
             </button>
           )}
         </div>
+
+        {/* AI Intelligence Callout */}
+        {details.aiReasoning && (
+          <div className='flex items-start gap-2.5 p-3 text-xs bg-indigo-50/90 border border-indigo-200 rounded-xl text-indigo-900'>
+            <span className='text-base leading-none'>💡</span>
+            <div>
+              <span className='font-bold'>AI Listing Synthesis:</span> {details.aiReasoning}
+            </div>
+          </div>
+        )}
 
         {/* 4-Quadrant Grid */}
         <div className='grid grid-cols-1 md:grid-cols-2 gap-6'>
@@ -173,14 +197,21 @@ export function PropertyMarketIntel({
                   </span>
                 </div>
               )}
-              {lead.estimatedEquity && (
+              {lead.type?.toUpperCase() !== 'PROBATE' && lead.estimatedEquity ? (
                 <div className='flex justify-between'>
                   <span className='text-gray-500'>Est. Equity:</span>
                   <span className='font-bold text-emerald-600'>
                     {formatMoney(lead.estimatedEquity)}
                   </span>
                 </div>
-              )}
+              ) : lead.type?.toUpperCase() === 'PROBATE' ? (
+                <div className='flex justify-between' title='Probate leads omit mortgage/debt balance from public court records; equity cannot be assumed'>
+                  <span className='text-gray-500'>Est. Equity:</span>
+                  <span className='font-medium text-gray-400'>
+                    N/A (Probate)
+                  </span>
+                </div>
+              ) : null}
             </div>
           </div>
 
@@ -211,7 +242,7 @@ export function PropertyMarketIntel({
               <div>
                 <span className='text-xs text-gray-400 block'>Property Type</span>
                 <span className='font-semibold text-gray-900'>
-                  {details.propertyType || 'Single Family'}
+                  {details.propertyType || (isCondo ? 'Condo / Co-op' : 'Single Family')}
                 </span>
               </div>
             </div>

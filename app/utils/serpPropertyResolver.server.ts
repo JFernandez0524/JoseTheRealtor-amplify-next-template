@@ -37,10 +37,13 @@ export interface SerpPropertyData {
   sqft?: number;
   yearBuilt?: number;
   propertyType?: string;
+  isCondo?: boolean;
   hoaFee?: number;
   annualTaxes?: number;
   is55Plus?: boolean;
   community?: string;
+  aiReasoning?: string;
+  _hasConflict?: boolean;
   rawSnippets?: string[];
 }
 
@@ -59,6 +62,14 @@ export function normalizeDateToIso(dateStr?: string | null): string | undefined 
   const cleaned = dateStr.trim();
   const isoMatch = /^\d{4}-\d{2}-\d{2}/.exec(cleaned);
   if (isoMatch) return isoMatch[0];
+
+  const shortDateMatch = /^(\d{1,2})\/(\d{1,2})\/(\d{2})$/.exec(cleaned);
+  if (shortDateMatch) {
+    const month = shortDateMatch[1].padStart(2, '0');
+    const day = shortDateMatch[2].padStart(2, '0');
+    const year = `20${shortDateMatch[3]}`;
+    return `${year}-${month}-${day}`;
+  }
 
   const parsed = new Date(cleaned);
   if (isNaN(parsed.getTime())) return undefined;
@@ -124,7 +135,7 @@ export function extractAddressParts(addr: string): { streetNum: string; baseNum:
   if (rest.includes(',')) {
     rest = rest.split(',')[0].trim();
   }
-  rest = rest.replace(/\b(?:Street|St|Avenue|Ave|Place|Pl|Plaza|Plz|Road|Rd|Drive|Dr|Lane|Ln|Court|Ct|Boulevard|Blvd|Circle|Cir|Terrace|Ter|Way|Highway|Hwy|Unit|Apt|#|Suite|Ste)\b.*$/i, '').trim();
+  rest = rest.replace(/\b(?:Street|St|Avenue|Ave|Place|Pl|Plaza|Plz|Road|Rd|Drive|Dr|Lane|Ln|Court|Ct|Boulevard|Blvd|Circle|Cir|Terrace|Ter|Way|Highway|Hwy|Parkway|Pkwy|Pike|Trail|Trl|Route|Rte|Loop|Run|Row|Path|Walk|Unit|Apt|#|Suite|Ste)\b.*$/i, '').trim();
 
   return { streetNum, baseNum, coreStreet: rest };
 }
@@ -149,6 +160,21 @@ export function isResultMatchingAddress(
   const numRegex = new RegExp(`\\b${numPattern}\\b`, 'i');
   const streetRegex = coreStreet ? new RegExp(`\\b${coreStreet}\\b`, 'i') : null;
 
+  // 🛡️ Strict house number check: if the title or link contains a distinct house number
+  // immediately preceding the street name that differs from target streetNum / baseNum, reject immediately.
+  // (Prevents neighboring homes like "5 Meadows Lane" or "396B Hystrix Plz" from matching when target is "7 Meadows Lane" or "392B Hystrix Plz")
+  if (coreStreet) {
+    const numMatch = (title + ' ' + link).match(new RegExp(`\\b(\\d+[A-Za-z]?)[-\\s]+(?:(?:n|s|e|w|north|south|east|west)[-\\s]+)?${coreStreet}\\b`, 'i'));
+    if (numMatch) {
+      const extractedNum = numMatch[1].toLowerCase();
+      const targetNum = streetNum.toLowerCase();
+      const targetBase = baseNum.toLowerCase();
+      if (extractedNum !== targetNum && extractedNum !== targetBase) {
+        return false;
+      }
+    }
+  }
+
   const titleOrLinkHasNum = numRegex.test(title) || numRegex.test(link);
   const titleOrLinkHasStreet = streetRegex ? (streetRegex.test(title) || streetRegex.test(link)) : true;
 
@@ -156,9 +182,13 @@ export function isResultMatchingAddress(
     return true;
   }
 
-  // Fallback: check snippet if title/link also mentions the street
+  // Fallback: check snippet if snippet contains the target number and street,
+  // provided title/link does not point to a conflicting house number on the same street.
   if (numRegex.test(snippet) && (streetRegex ? streetRegex.test(snippet) : true)) {
-    if (streetRegex ? (streetRegex.test(title) || streetRegex.test(link)) : true) {
+    const hasConflictingNumInTitleOrLink = coreStreet
+      ? new RegExp(`\\b(\\d+[A-Za-z]?)[-\\s]+(?:(?:n|s|e|w|north|south|east|west)[-\\s]+)?${coreStreet}\\b`, 'i').test(title + ' ' + link)
+      : false;
+    if (!hasConflictingNumInTitleOrLink) {
       return true;
     }
   }
@@ -189,7 +219,7 @@ export function parseSerpResults(
   let dateHasExplicitDay = false;
 
   const hasExplicitDay = (str?: string) =>
-    str ? /[A-Za-z]+\s+\d{1,2},?\s+\d{4}|\d{1,2}\/\d{1,2}\/\d{4}/.test(str) : false;
+    str ? /[A-Za-z]+\s+\d{1,2},?\s+\d{4}|\d{1,2}\/\d{1,2}\/\d{2,4}/.test(str) : false;
 
   for (const item of organic) {
     // 🛡️ Guardrail: Verify that the search result matches the target property address
@@ -301,12 +331,20 @@ export function parseSerpResults(
       const styleMatch = text.match(/(?:style|type):\s*([^.,;\n]+)/i);
       if (styleMatch) {
         result.propertyType = styleMatch[1].trim();
-      } else if (/\bcondo\b|\bco-op\b/i.test(text)) {
+      } else if (/\bcondos?\b|\bco-op\b|\bcondominiums?\b/i.test(text)) {
         result.propertyType = 'Condo/Co-op';
       } else if (/\btownhouse\b|\btownhome\b/i.test(text)) {
         result.propertyType = 'Townhouse';
       } else if (/\bsingle\s+family\b|\branch\b/i.test(text)) {
         result.propertyType = 'Single Family';
+      }
+    }
+    if (!result.isCondo) {
+      if (
+        (result.propertyType && /\bcondos?\b|\bco-op\b|\bcondominiums?\b/i.test(result.propertyType)) ||
+        /\bcondos?\b|\bco-op\b|\bcondominiums?\b/i.test(text)
+      ) {
+        result.isCondo = true;
       }
     }
 
@@ -324,11 +362,16 @@ export function parseSerpResults(
     }
 
     // 13. Sold Detection & Sale Price/Date
-    const soldPriceMatch = text.match(/(?:sold\s+(?:for\s+)?|last\s+sold\s+(?:for\s+)?)\$?([0-9,]+|[0-9]+[km])/i);
-    const soldDateMatch = text.match(/(?:sold\s+.*?on|last\s+sold\s+.*?in|sold\s+on)\s+([A-Za-z]+\s+\d{1,2},?\s+\d{4}|\d{1,2}\/\d{1,2}\/\d{4}|[A-Za-z]+\s+\d{4})/i);
+    const soldPriceMatch = text.match(/(?:sold\s+(?:for\s+)?|last\s+sold\s+(?:for\s+)?)\$?([0-9.]+[km]|[0-9,]+)/i);
+    const soldDateMatch = text.match(/(?:sold\s+.*?on|last\s+sold\s+.*?in|sold\s+on|sold\s+in|sold\s+)\s*([A-Za-z]+\s+\d{1,2},?\s+\d{4}|\d{1,2}\/\d{1,2}\/\d{2,4}|[A-Za-z]+\s+\d{4})/i);
 
-    if (soldPriceMatch && result.lastSaleAmount === undefined) {
-      result.lastSaleAmount = parseCurrencyAmount(soldPriceMatch[1]);
+    if (soldPriceMatch) {
+      const parsedAmount = parseCurrencyAmount(soldPriceMatch[1]);
+      if (parsedAmount) {
+        if (result.lastSaleAmount === undefined || (result.lastSaleAmount < 10000 && parsedAmount >= 10000)) {
+          result.lastSaleAmount = parsedAmount;
+        }
+      }
     }
     if (soldDateMatch) {
       const rawDateStr = soldDateMatch[1];
@@ -343,14 +386,16 @@ export function parseSerpResults(
     }
 
     const isSoldListingIndicator =
-      /(?:^|\b)(?:sold\s*[-:]|recently\s+sold|just\s+sold)\b/i.test(title) ||
-      /(?:^|\b)(?:sold\s*[-:]|recently\s+sold|just\s+sold)\b/i.test(snippet);
+      /(?:^|\b)(?:sold\s*[-:]|recently\s+sold|just\s+sold|sold\s+\d{1,2}\/\d{1,2}\/\d{2,4})\b/i.test(title) ||
+      /(?:^|\b)(?:sold\s*[-:]|recently\s+sold|just\s+sold|sold\s+\d{1,2}\/\d{1,2}\/\d{2,4})\b/i.test(snippet) ||
+      /(?:sold\s+(?:for\s+)?\$[0-9,]+)/i.test(snippet);
 
     if (isSoldListingIndicator || (/\bsold\b/i.test(text) && !/not\s+sold/i.test(text))) {
       if (result.lastSaleDate) {
         const saleTime = new Date(result.lastSaleDate).getTime();
         const daysAgo = (Date.now() - saleTime) / (1000 * 60 * 60 * 24);
-        if (daysAgo <= 180) {
+        // Closed sale within 730 days (2 years), or within 3 years with MLS#
+        if (daysAgo <= 730 || (daysAgo <= 1095 && result.mlsNumber)) {
           foundRecentSold = true;
         }
       } else if (isSoldListingIndicator && !isExplicitOffMarket) {
@@ -360,12 +405,17 @@ export function parseSerpResults(
 
     // 14. Active / For Sale Detection & List Price
     const listPriceMatch =
-      text.match(/(?:photos\s+of\s+this\s+)\$([0-9,]+|[0-9]+[km])/i) ||
-      text.match(/(?:listed\s+(?:at|for)|list\s+price(?:\s+is|\s+of|:)?|for\s+sale\s*(?:at|for|:)?)\s*\$?([0-9,]+|[0-9]+[km])/i) ||
+      text.match(/(?:photos\s+of\s+this\s+)\$([0-9.]+[km]|[0-9,]+)/i) ||
+      text.match(/(?:listed\s+(?:at|for)|list\s+price(?:\s+is|\s+of|:)?|for\s+sale\s*(?:at|for|:)?)\s*\$?([0-9.]+[km]|[0-9,]+)/i) ||
       text.match(/(?:for\s+sale:?\s*)\$([0-9,]{5,})/i) ||
-      snippet.match(/^\s*(?:[A-Za-z]+\s+\d{1,2},?\s+\d{4}\s*[-—]\s*)?\$([0-9,]+|[0-9]+[km])\s+\d+\s+beds?/i);
-    if (listPriceMatch && result.listPrice === undefined) {
-      result.listPrice = parseCurrencyAmount(listPriceMatch[1]);
+      snippet.match(/^\s*(?:[A-Za-z]+\s+\d{1,2},?\s+\d{4}\s*[-—]\s*)?\$([0-9.]+[km]|[0-9,]+)\s+\d+\s+beds?/i);
+    if (listPriceMatch) {
+      const parsedList = parseCurrencyAmount(listPriceMatch[1]);
+      if (parsedList) {
+        if (result.listPrice === undefined || (result.listPrice < 10000 && parsedList >= 10000)) {
+          result.listPrice = parsedList;
+        }
+      }
     }
 
     const hasActiveIndicator =
@@ -374,25 +424,35 @@ export function parseSerpResults(
       (/zillow\s+has\s+\d+\s+photos\s+of\s+this\s+\$[0-9,]+/i.test(text)) ||
       (/^\s*(?:[A-Za-z]+\s+\d{1,2},?\s+\d{4}\s*[-—]\s*)?\$[0-9,]+\s+\d+\s+beds/i.test(snippet) && !isExplicitOffMarket);
 
-    if ((hasMlsInTitle || (hasActiveIndicator && !isExplicitOffMarket)) && !foundPending) {
+    if ((hasMlsInTitle || hasActiveIndicator) && !isExplicitOffMarket && !foundPending) {
       foundActive = true;
     }
   }
 
+  // Detect conflicting signals across portals to trigger AI disambiguation
+  const allSnippetsText = organic.map((r) => `${r.title || ''} ${r.snippet || ''}`).join(' ');
+  const hasSoldSignal = foundRecentSold || !!result.lastSaleAmount || /sold\s+for\s+\$|last\s+sold\s+\$/i.test(allSnippetsText);
+  const hasActiveSignal = foundActive || /active\s+mls|for\s+sale/i.test(allSnippetsText);
+  result._hasConflict =
+    (isExplicitOffMarket && hasSoldSignal) ||
+    (isExplicitOffMarket && hasActiveSignal) ||
+    (foundActive && foundRecentSold) ||
+    (foundPending && (foundActive || foundRecentSold));
+
   // Assign Final Listing Status based on authoritative hierarchy:
   // 1. Pending (e.g. 15 Ocean Ave is pending)
-  // 2. Active listing (e.g. MLS in title, active for sale)
-  // 3. Recently sold within 180 days (active transaction outcome)
-  // 4. Explicit off-market (e.g. 1126 17th Ave or 207 Atlantic St is currently not for sale)
+  // 2. Recently sold within active transaction window (active transaction outcome)
+  // 3. Explicit off-market (e.g. 1126 17th Ave or 207 Atlantic St is currently not for sale)
+  // 4. Active listing (e.g. MLS in title, active for sale)
   // 5. Default to off-market
   if (foundPending) {
     result.listingStatus = 'pending';
-  } else if (foundActive) {
-    result.listingStatus = 'active';
   } else if (foundRecentSold) {
     result.listingStatus = 'sold';
   } else if (isExplicitOffMarket) {
     result.listingStatus = 'off_market';
+  } else if (foundActive) {
+    result.listingStatus = 'active';
   } else {
     result.listingStatus = 'off_market';
   }
@@ -409,8 +469,9 @@ export async function resolvePropertyWithSerp(params: {
   state: string;
   zip?: string;
   skipBridgeLookup?: boolean;
+  useAi?: boolean;
 }): Promise<SerpResolutionResult> {
-  const { address, city, state, zip, skipBridgeLookup = false } = params;
+  const { address, city, state, zip, skipBridgeLookup = false, useAi = false } = params;
   const serperApiKey = process.env.SERPER_API_KEY || SERPER_API_KEY;
 
   if (!serperApiKey) {
@@ -428,7 +489,7 @@ export async function resolvePropertyWithSerp(params: {
       ? `("${address}" OR "${normalizedStreet}")`
       : `"${address}"`;
 
-  const query = `${streetQuery} ${city} ${state} ${zip || ''} site:zillow.com`.trim();
+  const query = `${streetQuery} ${city} ${state} ${zip || ''}`.trim();
 
   try {
     console.log(`🔎 [SERP_RESOLVER] Querying Serper: "${query}"`);
@@ -436,7 +497,7 @@ export async function resolvePropertyWithSerp(params: {
       SERPER_URL,
       {
         q: query,
-        num: 5,
+        num: 8,
         gl: 'us',
         hl: 'en',
       },
@@ -452,6 +513,35 @@ export async function resolvePropertyWithSerp(params: {
     const organic: SerpOrganicResult[] = res.data?.organic || [];
     const parsedData = parseSerpResults(address, organic);
 
+    // 🤖 SMART HYBRID AI: Disambiguate when conflict detected or explicitly requested
+    if (useAi || parsedData._hasConflict) {
+      try {
+        const { interpretSerpWithAi } = await import('./ai/serpInterpreter.server');
+        const aiResult = await interpretSerpWithAi({
+          address,
+          city,
+          state,
+          zip,
+          items: organic,
+        });
+
+        if (aiResult) {
+          parsedData.listingStatus = aiResult.listingStatus;
+          if (aiResult.lastSaleAmount != null) parsedData.lastSaleAmount = aiResult.lastSaleAmount;
+          if (aiResult.lastSaleDate) parsedData.lastSaleDate = aiResult.lastSaleDate;
+          if (aiResult.listPrice != null) parsedData.listPrice = aiResult.listPrice;
+          if (aiResult.mlsNumber) parsedData.mlsNumber = aiResult.mlsNumber;
+          if (aiResult.propertyType) parsedData.propertyType = aiResult.propertyType;
+          if (aiResult.isCondo) parsedData.isCondo = true;
+          if (aiResult.is55Plus) parsedData.is55Plus = true;
+          if (aiResult.hoaFee != null) parsedData.hoaFee = aiResult.hoaFee;
+          parsedData.aiReasoning = aiResult.reasoning;
+        }
+      } catch (aiErr: any) {
+        console.warn('⚠️ [SERP_RESOLVER] AI disambiguation fallback:', aiErr?.message || aiErr);
+      }
+    }
+
     console.log('✅ [SERP_RESOLVER] Extracted property intel:', {
       zpid: parsedData.zpid,
       listingStatus: parsedData.listingStatus,
@@ -462,6 +552,7 @@ export async function resolvePropertyWithSerp(params: {
       mlsNumber: parsedData.mlsNumber,
       hoaFee: parsedData.hoaFee,
       is55Plus: parsedData.is55Plus,
+      aiReasoning: parsedData.aiReasoning,
     });
 
     let bridgeValuation = null;

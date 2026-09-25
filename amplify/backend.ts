@@ -92,6 +92,10 @@ backend.uploadCsvHandler.addEnvironment(
   'SERPER_API_KEY',
   process.env.SERPER_API_KEY || ''
 );
+backend.uploadCsvHandler.addEnvironment(
+  'OPENAI_API_KEY',
+  process.env.OPENAI_API_KEY || ''
+);
 
 // 🛡️ Add table name environment variables to data stack functions
 backend.skipTraceLeads.addEnvironment(

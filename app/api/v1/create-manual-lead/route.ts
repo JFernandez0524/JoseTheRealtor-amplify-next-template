@@ -173,6 +173,7 @@ export async function POST(request: NextRequest) {
     let listingStatus = serpData?.listingStatus || 'off_market';
     if (serpData?.is55Plus) leadLabels.push('55_PLUS');
     if (serpData?.hoaFee) leadLabels.push('HOA_PROPERTY');
+    if (serpData?.isCondo) leadLabels.push('CONDO');
     if (listingStatus === 'active') leadLabels.push('ACTIVE_MLS');
     if (listingStatus === 'sold') leadLabels.push('RECENTLY_SOLD');
 

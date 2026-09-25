@@ -273,21 +273,22 @@ export function LeadTable({
 
     setIsSaving(true);
     try {
+      const resolvedCounty = selectedAddress?.county || editingLead.ownerCounty || null;
       await updateLead(editingLead.id, {
         ownerAddress: street,
         ownerCity: city,
         ownerState: state,
         ownerZip: zip,
-        ownerCounty: selectedAddress?.county || editingLead.ownerCounty || null,
+        ownerCounty: resolvedCounty,
         latitude: selectedAddress?.lat ?? editingLead.latitude ?? null,
         longitude: selectedAddress?.lng ?? editingLead.longitude ?? null,
-        standardizedAddress: {
+        standardizedAddress: JSON.stringify({
           street,
           city,
           state,
           zip,
-          county: selectedAddress?.county || editingLead.ownerCounty,
-        },
+          county: resolvedCounty,
+        }),
         validationStatus: 'VALID',
       });
 
@@ -429,7 +430,12 @@ export function LeadTable({
               </th>
               {renderSortableHeader('type', 'Type')}
               {renderSortableHeader('skipTraceStatus', 'Skip Status')}
-              {renderSortableHeader('listingStatus', 'Listing Status', 'bg-yellow-50')}
+              {renderSortableHeader('listingStatus', (
+                <div className='flex items-center gap-1' title='Automated web estimate — verify listing status on local MLS'>
+                  <span>Listing Status</span>
+                  <span className='text-[10px] text-amber-700 font-normal lowercase opacity-80'>(verify MLS)</span>
+                </div>
+              ), 'bg-yellow-50')}
               {/* NEW GHL STATUS HEADER */}
               {renderSortableHeader('ghlSyncStatus', 'Launch AI Sync', 'bg-purple-50')}
               {renderSortableHeader('ghlSyncDate', 'Sync Date', 'bg-purple-50')}
@@ -673,6 +679,19 @@ export function LeadTable({
                           HOA
                         </span>
                       )}
+                      {(lead.leadLabels?.includes('CONDO') || (() => {
+                        try {
+                          const d = typeof lead.homeDetails === 'string' ? JSON.parse(lead.homeDetails) : lead.homeDetails;
+                          return d?.propertyType && /\bcondos?\b|\bco-op\b|\bcondominiums?\b/i.test(d.propertyType);
+                        } catch { return false; }
+                      })()) && (
+                        <span
+                          className='text-[10px] bg-cyan-100 text-cyan-800 border border-cyan-300 px-1.5 py-0.5 rounded font-bold'
+                          title='Condo / Co-op property'
+                        >
+                          🏢 CONDO
+                        </span>
+                      )}
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -837,6 +856,11 @@ export function LeadTable({
                   {/* Equity Column */}
                   <td className='px-4 py-4 whitespace-nowrap text-sm bg-emerald-50/30'>
                     {(() => {
+                      // Probate leads do not have recorded foreclosure debt; suppress artificial 100% equity
+                      if (lead.type?.toUpperCase() === 'PROBATE') {
+                        return <span className='text-gray-400' title='Equity calculation not applicable for Probate leads'>-</span>;
+                      }
+
                       const val = lead.zestimate || lead.estimatedValue || 0;
                       const loan = lead.foreclosureAmount || 0;
                       const equityAmt = val > 0 && loan > 0 ? val - loan : ((lead as any).equityAmount ?? (val > 0 ? val : 0));

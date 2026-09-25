@@ -18,6 +18,7 @@ describe('serpPropertyResolver', () => {
       expect(normalizeDateToIso('Jul 18, 2026')).toBe('2026-07-18');
       expect(normalizeDateToIso('2026-04-15')).toBe('2026-04-15');
       expect(normalizeDateToIso('05/20/2026')).toBe('2026-05-20');
+      expect(normalizeDateToIso('06/03/26')).toBe('2026-06-03');
       expect(normalizeDateToIso('')).toBeUndefined();
       expect(normalizeDateToIso(null)).toBeUndefined();
       expect(normalizeDateToIso('invalid-date')).toBeUndefined();
@@ -365,6 +366,126 @@ describe('serpPropertyResolver', () => {
         snippet: '42 W Henry Pl, Iselin, NJ 08830 is currently not for sale.',
       };
       expect(isResultMatchingAddress(item, targetAddress)).toBe(false);
+    });
+
+    it('strictly rejects neighboring home (5 Meadows Lane) when target is 7 Meadows Lane even if snippet mentions 7 Meadows', () => {
+      const item: SerpOrganicResult = {
+        title: '5 Meadows Lane, Whiting, NJ 08759 | MLS #22628015 | Zillow',
+        link: 'https://www.zillow.com/homedetails/5-Meadows-Ln-Whiting-NJ-08759/52687073_zpid/',
+        snippet: '7 Meadows Ln, Whiting, NJ 08759. Off Market. Save. 7 Meadows Ln, Whiting, NJ 08759 · $390,800. 2 bd. 2 ba. 1.6k sqft. 3 Meadows Ln, Whiting, NJ ...',
+      };
+      expect(isResultMatchingAddress(item, '7 Meadows Lane')).toBe(false);
+    });
+
+    it('matches target address from Zillow sold search page when snippet has exact address', () => {
+      const item: SerpOrganicResult = {
+        title: 'Recently Sold Homes in 08701 - 2755 Transactions',
+        link: 'https://www.zillow.com/lakewood-nj-08701/sold/6_p/',
+        snippet: '874A Balmoral Court, Lakewood, NJ 08701. WEICHERT REALTORS-BRICK, Janet Ettore. More. Sold 06/03/26. Save. 874A Balmoral Court, Lakewood, NJ 08701. Loading...',
+      };
+      expect(isResultMatchingAddress(item, '874a Balmoral Court')).toBe(true);
+    });
+  });
+
+  describe('parseSerpResults extended', () => {
+    it('correctly parses 14 Ann Ct condo snippet as Condo/Co-op and isCondo', () => {
+      const organic: SerpOrganicResult[] = [
+        {
+          title: '14 Ann Ct, Tinton Falls, NJ 07724 | Zillow',
+          link: 'https://www.zillow.com/homedetails/14-Ann-Ct-Tinton-Falls-NJ-07724/39255999_zpid/',
+          snippet:
+            '14 Ann Ct, Tinton Falls, NJ 07724 is currently not for sale. The 1616 Square Feet condo home is a 1 bed, 2 baths property. This home was built in 1980 and',
+        },
+      ];
+      const result = parseSerpResults('14 Ann Ct, Tinton Falls, NJ', organic);
+      expect(result.propertyType).toBe('Condo/Co-op');
+      expect(result.isCondo).toBe(true);
+      expect(result.beds).toBe(1);
+      expect(result.baths).toBe(2);
+      expect(result.sqft).toBe(1616);
+      expect(result.yearBuilt).toBe(1980);
+      expect(result.listingStatus).toBe('off_market');
+    });
+
+    it('prioritizes Sold over older MLS active title for 392B Hystrix Plz example', () => {
+      const organic: SerpOrganicResult[] = [
+        {
+          title: '392B Hystrix Plz, Monroe Township, NJ 08831 | MLS #2702647R',
+          link: 'https://www.zillow.com/homedetails/392B-Hystrix-Plz-Monroe-Township-NJ-08831/39098412_zpid/',
+          snippet: 'Zillow has 25 photos of this $299900 2 beds, 2 baths, 1380 sqft single family home located at 392B Hystrix Plz, Monroe Township, NJ 08831 ...',
+          date: 'Aug 25, 2026',
+        },
+        {
+          title: '392-B Hystrix Plz, Monroe Township, NJ 08831 - Redfin',
+          link: 'https://www.redfin.com/NJ/Monroe-Township/392-Hystrix-Plz-08831/home/204643915',
+          snippet: 'Sold: 2 beds, 2 baths located at 392-B Hystrix Plz, Monroe Township, NJ 08831 sold for $305,000 on Sep 15, 2026.',
+        },
+      ];
+      const result = parseSerpResults('392B Hystrix Plz, Monroe Township, NJ', organic);
+      expect(result.listingStatus).toBe('sold');
+      expect(result.lastSaleAmount).toBe(305000);
+      expect(result.lastSaleDate).toBe('2026-09-15');
+      expect(result.mlsNumber).toBe('2702647R');
+    });
+
+    it('correctly classifies sold property over Zillow not-for-sale boilerplate (1426 Northstream Parkway example)', () => {
+      const organic: SerpOrganicResult[] = [
+        {
+          title: '1426 Northstream Parkway, Point Pleasant Beach, NJ 08742 | Zillow',
+          link: 'https://www.zillow.com/homedetails/1426-Northstream-Pkwy-Point-Pleasant-Boro-NJ-08742/39294812_zpid/',
+          snippet:
+            '1426 Northstream Parkway, Point Pleasant Beach, NJ 08742 is currently not for sale. The 2570 Square Feet single family home is a 4 beds, 3 baths property.',
+        },
+        {
+          title: '1426 Northstream Pkwy, Point Pleasant, NJ 08742 - Realtor.com',
+          link: 'https://www.realtor.com/realestateandhomes-detail/1426-Northstream-Pkwy_Point-Pleasant_NJ_08742',
+          snippet:
+            '4 bed, 3 bath, 2570 sqft. single family home. Single Family Year built 1964 Last sold $900K in 2025 Price per sqft $350 Garage. Year Built: 1964 Building Area ...',
+        },
+        {
+          title: '1426 Northstream Pkwy, Point Pleasant Boro, NJ 08742 - Redfin',
+          link: 'https://www.redfin.com/NJ/Point-Pleasant-Boro/1426-Northstream-Pkwy-08742/home/39294812',
+          snippet:
+            '4 beds, 3 baths, 2570 sq. ft. house located at 1426 Northstream Pkwy, Point Pleasant Boro, NJ 08742 sold for $900000 on Jun 6, 2025. MLS# 22508202.',
+        },
+      ];
+
+      const result = parseSerpResults('1426 Northstream Parkway, Point Pleasant, NJ 08742', organic);
+      expect(result.listingStatus).toBe('sold');
+      expect(result.lastSaleAmount).toBe(900000);
+      expect(result.lastSaleDate).toBe('2025-06-06');
+      expect(result.mlsNumber).toBe('22508202');
+      expect(result.beds).toBe(4);
+      expect(result.baths).toBe(3);
+      expect(result.sqft).toBe(2570);
+      expect(result.yearBuilt).toBe(1964);
+      expect(result.propertyType).toBe('Single Family');
+    });
+
+    it('correctly classifies sold property from Zillow search result page with 2-digit year (874A Balmoral Court example)', () => {
+      const organic: SerpOrganicResult[] = [
+        {
+          title: '874A Balmoral Court, Lakewood, NJ 08701',
+          link: 'https://www.zillow.com/homedetails/874A-Balmoral-Ct-Lakewood-NJ-08701/39644891_zpid/',
+          snippet:
+            '874A Balmoral Court, Lakewood, NJ 08701 is currently not for sale. The 858 Square Feet single family home is a 2 beds, 1 bath property.',
+        },
+        {
+          title: 'Recently Sold Homes in 08701 - 2755 Transactions',
+          link: 'https://www.zillow.com/lakewood-nj-08701/sold/6_p/',
+          snippet:
+            '874A Balmoral Court, Lakewood, NJ 08701. WEICHERT REALTORS-BRICK, Janet Ettore. More. Sold 06/03/26. Save. 874A Balmoral Court, Lakewood, NJ 08701. Loading...',
+        },
+      ];
+
+      const result = parseSerpResults('874a Balmoral Court', organic);
+      expect(result.listingStatus).toBe('sold');
+      expect(result.lastSaleDate).toBe('2026-06-03');
+      expect(result.zpid).toBe('39644891');
+      expect(result.beds).toBe(2);
+      expect(result.baths).toBe(1);
+      expect(result.sqft).toBe(858);
+      expect(result.propertyType).toBe('Single Family');
     });
   });
 });

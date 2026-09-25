@@ -90,6 +90,7 @@ export default function LeadDashboardClient({}: Props) {
   const [filterOwnerType, setFilterOwnerType] = useState('INDIVIDUALS');
   const [filterOutOfStateAdmin, setFilterOutOfStateAdmin] = useState('');
   const [filterTaxForeclosure, setFilterTaxForeclosure] = useState(false);
+  const [filterCondoOnly, setFilterCondoOnly] = useState(false);
   const [skipTraceFromDate, setSkipTraceFromDate] = useState('');
   const [skipTraceToDate, setSkipTraceToDate] = useState('');
 
@@ -463,6 +464,18 @@ export default function LeadDashboardClient({}: Props) {
           return true;
         })();
 
+        // Condo filter
+        const matchesCondo = (() => {
+          if (!filterCondoOnly) return true;
+          if (lead.leadLabels?.includes('CONDO')) return true;
+          try {
+            const d = typeof lead.homeDetails === 'string' ? JSON.parse(lead.homeDetails) : lead.homeDetails;
+            return d?.propertyType && /\bcondos?\b|\bco-op\b|\bcondominiums?\b/i.test(d.propertyType);
+          } catch {
+            return false;
+          }
+        })();
+
         return (
           matchesSearch &&
           matchesType &&
@@ -475,6 +488,7 @@ export default function LeadDashboardClient({}: Props) {
           matchesAuctionWindow &&
           matchesEquity &&
           matchesPropertyValue &&
+          matchesCondo &&
           matchesDateAdded &&
           matchesSource &&
           matchesDataQuality &&
@@ -506,6 +520,7 @@ export default function LeadDashboardClient({}: Props) {
 
         if (sortField === 'equityAmount' || sortField === 'equityPercent') {
           const calcEq = (leadObj: Lead) => {
+            if (leadObj.type?.toUpperCase() === 'PROBATE') return -1;
             const val = leadObj.zestimate || leadObj.estimatedValue || 0;
             const loan = leadObj.foreclosureAmount || 0;
             const amt = val > 0 && loan > 0 ? val - loan : ((leadObj as any).equityAmount ?? (val > 0 ? val : 0));
@@ -556,6 +571,7 @@ export default function LeadDashboardClient({}: Props) {
     filterDataQuality,
     filterOwnerType,
     filterTaxForeclosure,
+    filterCondoOnly,
     skipTraceFromDate,
     skipTraceToDate,
     sortField,
@@ -594,6 +610,7 @@ export default function LeadDashboardClient({}: Props) {
     filterDataQuality,
     filterOwnerType,
     filterTaxForeclosure,
+    filterCondoOnly,
     skipTraceFromDate,
     skipTraceToDate,
     sortField,
@@ -1296,6 +1313,8 @@ export default function LeadDashboardClient({}: Props) {
         setFilterOutOfStateAdmin={setFilterOutOfStateAdmin}
         filterTaxForeclosure={filterTaxForeclosure}
         setFilterTaxForeclosure={setFilterTaxForeclosure}
+        filterCondoOnly={filterCondoOnly}
+        setFilterCondoOnly={setFilterCondoOnly}
         skipTraceFromDate={skipTraceFromDate}
         setSkipTraceFromDate={setSkipTraceFromDate}
         skipTraceToDate={skipTraceToDate}

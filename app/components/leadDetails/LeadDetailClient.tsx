@@ -176,14 +176,22 @@ function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
 
     setIsSavingAddress(true);
     try {
+      const resolvedCounty = selectedNewAddress?.county || lead.ownerCounty || null;
       const updated = await updateLead(lead.id, {
         ownerAddress: street,
         ownerCity: city,
         ownerState: state,
         ownerZip: zip,
-        ownerCounty: selectedNewAddress?.county || lead.ownerCounty || null,
+        ownerCounty: resolvedCounty,
         latitude: selectedNewAddress?.lat ?? undefined,
         longitude: selectedNewAddress?.lng ?? undefined,
+        standardizedAddress: JSON.stringify({
+          street,
+          city,
+          state,
+          zip,
+          county: resolvedCounty,
+        }),
         validationStatus: 'VALID',
       });
 

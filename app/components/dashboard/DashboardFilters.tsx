@@ -56,6 +56,8 @@ type Props = {
   setFilterOutOfStateAdmin?: (val: string) => void;
   filterTaxForeclosure: boolean;
   setFilterTaxForeclosure: (val: boolean) => void;
+  filterCondoOnly?: boolean;
+  setFilterCondoOnly?: (val: boolean) => void;
   skipTraceFromDate: string;
   setSkipTraceFromDate: (val: string) => void;
   skipTraceToDate: string;
@@ -126,6 +128,8 @@ export function DashboardFilters({
   setFilterOutOfStateAdmin,
   filterTaxForeclosure,
   setFilterTaxForeclosure,
+  filterCondoOnly = false,
+  setFilterCondoOnly,
   skipTraceFromDate,
   setSkipTraceFromDate,
   skipTraceToDate,
@@ -208,6 +212,7 @@ export function DashboardFilters({
     filterDataQuality && { label: `Quality: ${filterDataQuality}`, reset: () => setFilterDataQuality('') },
     filterOwnerType !== 'INDIVIDUALS' && { label: `Owner: ${filterOwnerType}`, reset: () => setFilterOwnerType('INDIVIDUALS') },
     filterTaxForeclosure && { label: '🏛️ Tax Foreclosure', reset: () => setFilterTaxForeclosure(false) },
+    filterCondoOnly && { label: '🏢 Condos Only', reset: () => setFilterCondoOnly?.(false) },
     filterSource && { label: `Source: ${filterSource}`, reset: () => setFilterSource('') },
     (filterDateAdded || filterDateAddedTo) && {
       label: `Added: ${filterDateAdded || 'Any'} - ${filterDateAddedTo || 'Any'}`,
@@ -236,6 +241,7 @@ export function DashboardFilters({
     setFilterDataQuality('');
     setFilterOwnerType('INDIVIDUALS');
     setFilterTaxForeclosure(false);
+    setFilterCondoOnly?.(false);
     setSkipTraceFromDate('');
     setSkipTraceToDate('');
   };
@@ -292,6 +298,18 @@ export function DashboardFilters({
             title='Quick Filter: Equity >= 30%, Active Foreclosure & Off-Market'
           >
             🔥 Top Deals (&gt;30% Equity)
+          </button>
+
+          <button
+            onClick={() => setFilterCondoOnly?.(!filterCondoOnly)}
+            className={`px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 border ${
+              filterCondoOnly
+                ? 'bg-cyan-600 text-white border-cyan-700 shadow-sm'
+                : 'bg-cyan-50 text-cyan-800 border-cyan-200 hover:bg-cyan-100'
+            }`}
+            title='Quick Filter: Condos & Co-ops only'
+          >
+            🏢 Condos Only
           </button>
 
           <button
@@ -473,6 +491,16 @@ export function DashboardFilters({
                   className='rounded border-slate-300 text-blue-600 focus:ring-blue-500'
                 />
                 🏛️ Tax Foreclosures Only
+              </label>
+
+              <label className='flex items-center gap-2 pt-1 font-semibold cursor-pointer'>
+                <input
+                  type='checkbox'
+                  checked={!!filterCondoOnly}
+                  onChange={(e) => setFilterCondoOnly?.(e.target.checked)}
+                  className='rounded border-slate-300 text-cyan-600 focus:ring-cyan-500'
+                />
+                🏢 Condos &amp; Co-ops Only
               </label>
             </div>
 
