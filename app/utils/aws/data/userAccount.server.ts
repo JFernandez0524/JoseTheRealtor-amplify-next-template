@@ -42,24 +42,54 @@ export type UserAccount = Schema['UserAccount']['type'];
  */
 export async function getUserAccount(ownerId: string, email?: string): Promise<UserAccount | null> {
   try {
+    const candidateAccounts: UserAccount[] = [];
+
+    // 1. Query by owner - support exact match and compound OAuth prefix (sub::username)
     const { data: accounts } = await cookiesClient.models.UserAccount.list({
-      filter: { owner: { eq: ownerId } },
+      filter: {
+        or: [
+          { owner: { eq: ownerId } },
+          { owner: { beginsWith: ownerId } },
+        ],
+      },
     });
 
     if (accounts && accounts.length > 0) {
-      return accounts[0];
+      candidateAccounts.push(...accounts);
     }
 
+    // 2. Query by email if provided
     if (email) {
       const { data: emailAccounts } = await cookiesClient.models.UserAccount.list({
         filter: { email: { eq: email } },
       });
       if (emailAccounts && emailAccounts.length > 0) {
-        return emailAccounts[0];
+        candidateAccounts.push(...emailAccounts);
       }
     }
 
-    return null;
+    if (candidateAccounts.length === 0) {
+      return null;
+    }
+
+    // Deduplicate candidates by id
+    const uniqueMap = new Map<string, UserAccount>();
+    for (const acc of candidateAccounts) {
+      if (!uniqueMap.has(acc.id)) {
+        uniqueMap.set(acc.id, acc);
+      }
+    }
+    const unique = Array.from(uniqueMap.values());
+
+    // Sort: highest credits first, then newest updatedAt
+    unique.sort((a, b) => {
+      const credA = a.credits ?? 0;
+      const credB = b.credits ?? 0;
+      if (credB !== credA) return credB - credA;
+      return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+    });
+
+    return unique[0];
   } catch (error: any) {
     console.error('❌ getUserAccount error:', error.message);
     return null;
@@ -67,36 +97,14 @@ export async function getUserAccount(ownerId: string, email?: string): Promise<U
 }
 
 /**
- * Get existing UserAccount or create a new one
+ * Get existing UserAccount (pure read - never creates duplicate accounts on read)
  */
 export async function getOrCreateUserAccount(
   ownerId: string,
   email: string,
   clientIP?: string
 ): Promise<UserAccount | null> {
-  try {
-    const account = await getUserAccount(ownerId, email);
-    if (account) return account;
-
-    const { data: newAccount, errors } = await cookiesClient.models.UserAccount.create({
-      email,
-      credits: 0,
-      registrationIP: clientIP || '0.0.0.0',
-      lastLoginIP: clientIP || '0.0.0.0',
-      totalLeadsSynced: 0,
-      totalSkipsPerformed: 0,
-    });
-
-    if (errors) {
-      console.error('❌ Failed to create UserAccount:', errors);
-      return null;
-    }
-
-    return newAccount;
-  } catch (error: any) {
-    console.error('❌ getOrCreateUserAccount error:', error.message);
-    return null;
-  }
+  return getUserAccount(ownerId, email);
 }
 
 

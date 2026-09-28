@@ -4,7 +4,7 @@ import {
   AuthGetUserAttributesServer,
   AuthGetUserGroupsServer,
 } from '@/app/utils/aws/auth/amplifyServerUtils.server';
-import { getOrCreateUserAccount } from '@/app/utils/aws/data/userAccount.server';
+import { getUserAccount } from '@/app/utils/aws/data/userAccount.server';
 
 export const dynamic = 'force-dynamic';
 
@@ -23,11 +23,7 @@ export async function GET(request: Request) {
     const userEmail = attributes?.email || '';
     const userId = currentUser.userId;
 
-    // Retrieve client IP for audit/starter account creation
-    const forwardedFor = request.headers.get('x-forwarded-for');
-    const clientIP = forwardedFor ? forwardedFor.split(',')[0].trim() : '0.0.0.0';
-
-    const account = await getOrCreateUserAccount(userId, userEmail, clientIP);
+    const account = await getUserAccount(userId, userEmail);
 
     const isPro = groups.includes('PRO') || groups.includes('AI_PLAN');
     const isAdmin = groups.includes('ADMINS');
