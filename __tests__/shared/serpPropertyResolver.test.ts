@@ -487,5 +487,96 @@ describe('serpPropertyResolver', () => {
       expect(result.sqft).toBe(858);
       expect(result.propertyType).toBe('Single Family');
     });
+
+    it('correctly classifies 1 Bridle Path as off-market Single Family (not condo, not sold)', () => {
+      const organic: SerpOrganicResult[] = [
+        {
+          title: '1 Bridle Path, Tinton Falls, NJ 07753',
+          link: 'https://www.zillow.com/homedetails/1-Bridle-Path-Tinton-Falls-NJ-07753/39378894_zpid/',
+          snippet:
+            '1 Bridle Path, Tinton Falls, NJ 07753 is currently not for sale. The 1420 Square Feet single family home is a 2 beds, 2 baths property.',
+        },
+        {
+          title: '1 Bridle Path, Tinton Falls, NJ 07753',
+          link: 'https://www.realtor.com/realestateandhomes-detail/1-Bridle-Path_Tinton-Falls_NJ_07753_M55172-54467',
+          snippet:
+            'Interested in selling 1 Bridle Path? Estimated value*. $676,000. *Estimation is calculated based on tax assessment records ...',
+        },
+        {
+          title: '1 Bridle Path - House Rental in Tinton Falls, NJ',
+          link: 'https://www.apartments.com/1-bridle-path-tinton-falls-nj/zt1dm9x/',
+          snippet:
+            '1 Bridle Path house in Tinton Falls,NJ, is available for rent. This house rental unit is available on Apartments.com, starting at $3800 monthly.',
+        },
+        {
+          title: '1 Bridle Path, Tinton Falls, NJ 07753',
+          link: 'https://www.homes.com/property/1-bridle-path-tinton-falls-nj/nmxrmk9fdj78s/',
+          snippet:
+            '1 Bridle Path, Tinton Falls, NJ 07753 - 1420 sqft home built in 1986 . Browse photos, take a 3D tour & see transaction details about this recently sold ...',
+        },
+        {
+          title: '1 Bridle Path Tinton Falls, NJ in Fox Chase - Monmouth Condos',
+          link: 'https://monmouthcondos.com/fox-chase-tinton-falls/listing/22505920/',
+          snippet:
+            'This single family home at 1 Bridle Path, Tinton Falls, NJ 07753 is located in Fox Chase Condominium Tinton Falls. This property has 2 bedrooms, 2 baths, and ...',
+        },
+        {
+          title: '3 beds, 2 baths house located at 1 Bridle Path',
+          link: 'https://www.redfin.com/NJ/Tinton-Falls/1-Bridle-Path-07753/home/39378894',
+          snippet:
+            '3 beds, 2 baths house located at 1 Bridle Path, Tinton Falls, NJ 07753 sold for $394000 on Sep 7, 2018. MLS# 21823745. UPDATED RANCH IN FOX CHASE!',
+        },
+        {
+          title: '1 Bridle Path, Tinton Falls, NJ 07753 - MLS 22407661',
+          link: 'https://www.coldwellbankerhomes.com/nj/tinton-falls/1-bridle-path/pid_58433698/',
+          snippet:
+            'Sold - 1 Bridle Path, Tinton Falls, NJ - $43200. View details, map and photos of this single family property with 2 bedrooms and 2 total baths.',
+        },
+      ];
+
+      const result = parseSerpResults('1 Bridle Path, Tinton Falls, NJ', organic);
+      expect(result.listingStatus).toBe('off_market');
+      expect(result.propertyType).toBe('Single Family');
+      expect(result.isCondo).toBe(false);
+      expect(result.lastSaleAmount).toBe(394000);
+      expect(result.lastSaleDate).toBe('2018-09-07');
+      expect(result._hasConflict).toBe(false);
+    });
+
+    it('correctly classifies 35 Wood Avenue as active MLS listing (not off-market)', () => {
+      const organic: SerpOrganicResult[] = [
+        {
+          title: '35 Wood Ave, Port Monmouth, NJ 07758 [Updated 9/27]',
+          link: 'https://www.realtor.com/realestateandhomes-detail/35-Wood-Ave_Port-Monmouth_NJ_07758_M63795-21365',
+          snippet:
+            'For Sale: View 17 photos for 35 Wood Ave, this 3 bed, 1 bath, 1232 sqft. single family home in Port Monmouth, NJ listed at $525000. MLS #22630265.',
+        },
+        {
+          title: '35 Wood Ave, Port Monmouth, NJ 07758',
+          link: 'https://www.homes.com/property/35-wood-ave-port-monmouth-nj/pt4nj6xm7tlbd/',
+          snippet:
+            'Priced at $525000 - 35 Wood Ave, Port Monmouth, NJ 07758 - 1232 sqft home built in 1959. Browse photos, take a 3D tour & get detailed information about this ...',
+        },
+        {
+          title: '35 Wood Avenue, Port Monmouth NJ 07758',
+          link: 'https://neuhausrealty.com/properties/35-wood-avenue-port-monmouth-nj-07758',
+          snippet:
+            '35 Wood Avenue is a 3-bedroom, 1-bathroom home for sale in Port Monmouth, NJ. It offers approximately 1,232 square feet of living space and was ...',
+        },
+        {
+          title: '35 Wood Avenue, Port Monmouth, NJ 07758',
+          link: 'https://www.bhgre.com/home/detail/nj/port-monmouth/35-wood-ave/lid-P00800000HHoquLmZrZsfxoLT9DSYEVkhrJx6rRY',
+          snippet:
+            'Welcome to 35 Wood Avenue, Port Monmouth, NJ 07758. This 3 bed, 1 bath, 1232 sqft Single family is listed as active with MLS# 22630265 on ...',
+        },
+      ];
+
+      const result = parseSerpResults('35 Wood Avenue', organic);
+      expect(result.listingStatus).toBe('active');
+      expect(result.propertyType).toBe('Single Family');
+      expect(result.isCondo).toBe(false);
+      expect(result.listPrice).toBe(525000);
+      expect(result.mlsNumber).toBe('22630265');
+    });
   });
 });

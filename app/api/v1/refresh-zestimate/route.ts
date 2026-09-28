@@ -88,7 +88,7 @@ export async function POST(request: NextRequest) {
     let serpData: any = null;
 
     // 🔎 Proactively query SERP with Smart AI for real-time listing status, MLS active price, and home details
-    if (!zillowUrl && searchStreet && searchCity && searchState) {
+    if (searchStreet && searchCity && searchState) {
       try {
         const serpRes = await resolvePropertyWithSerp({
           address: searchStreet,

@@ -60,14 +60,18 @@ Snippet: ${item.snippet || ''}`,
 
 Analyze these snippets to determine the property's true current status and specifications.`;
 
-  const systemPrompt = `You are a real estate MLS intelligence specialist analyzing public search engine listings (Zillow, Realtor.com, Redfin, Homes.com) for a target property.
+  const currentYear = new Date().getFullYear();
+
+  const systemPrompt = `You are a real estate MLS intelligence specialist analyzing public search engine listings (Zillow, Realtor.com, Redfin, Homes.com) for a target property. The current year is ${currentYear}.
 
 Portals often display conflicting text:
-- Zillow boilerplate: Zillow displays "is currently not for sale" for any property not actively on market, even when recently sold.
-- Closed Sales: Redfin and Realtor frequently report authoritative closed MLS sales (e.g. "sold for $900,000 on Jun 6, 2025. MLS# 22508202" or "Last sold $900K in 2025"). When a property closed on MLS with a sale price and date/year, its listingStatus is "sold".
-- Active: Marked "for sale", active MLS listing, or currently asking a list price.
+- Active: Marked "for sale", active MLS listing, currently listed, or currently asking a list price.
 - Pending: Marked "pending", "under contract", or "contingent".
-- Off Market: Unlisted residential home with no recent sale transaction.
+- Recent Closed Sales: ONLY mark listingStatus as "sold" if the property had an actual home sale closed RECENTLY (within the last 2 years / 24 months, e.g. ${currentYear - 2}-${currentYear}).
+- Historical Sales (> 2 years old): If the last MLS sale was older than 2 years (e.g. sold in 2018, 2021) and the home is not actively listed for sale, its listingStatus MUST be "off_market". You should still extract lastSaleAmount and lastSaleDate (e.g. 2018-09-07) as historical records.
+- Off Market: Unlisted residential home with no recent sale transaction within the last 2 years. Note: Zillow displaying "is currently not for sale" indicates off_market unless there is proof of a recent sale within the last 2 years.
+- Rental / Lease Transactions vs Home Sales: Portals sometimes record rental leases under "Sold" with an annual lease amount (e.g. $43,200/year, which equals $3,600/month) or display rental listings (e.g. Apartments.com). A rental lease is NOT a residential property sale. Do not mark the property as "sold" based on a rental lease or nominal amount under $80,000 for a single family home.
+- Property Type & Condo vs Single Family: If snippets indicate "single family", "ranch", or "house", classify propertyType as "Single Family" and isCondo as false, even if located near a condominium association or listed on a site with "condo" in its domain name (e.g. monmouthcondos.com). Only set isCondo: true if the property itself is explicitly a condominium unit or co-op.
 
 Respond ONLY with valid JSON with this exact schema:
 {

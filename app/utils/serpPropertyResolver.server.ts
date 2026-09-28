@@ -327,22 +327,34 @@ export function parseSerpResults(
     }
 
     // 10. Extract Property Type
+    // Strip URLs and website branding (e.g. monmouthcondos.com) to avoid false positives on domain names
+    const textWithoutUrls = text
+      .replace(/https?:\/\/[^\s]+/gi, '')
+      .replace(/\b(?:monmouthcondos|condos?\.com)\b/gi, '');
+
+    const isExplicitSingleFamily = /\bsingle\s+family\b|\branch\b|\bdetached\b/i.test(textWithoutUrls);
+    const isExplicitCondo = /\bcondo\s+home\b|\bcondominium\s+unit\b|\bcondo\s+unit\b|\bco-op\b/i.test(textWithoutUrls);
+
     if (!result.propertyType) {
-      const styleMatch = text.match(/(?:style|type):\s*([^.,;\n]+)/i);
+      const styleMatch = textWithoutUrls.match(/(?:style|type):\s*([^.,;\n]+)/i);
       if (styleMatch) {
         result.propertyType = styleMatch[1].trim();
-      } else if (/\bcondos?\b|\bco-op\b|\bcondominiums?\b/i.test(text)) {
-        result.propertyType = 'Condo/Co-op';
-      } else if (/\btownhouse\b|\btownhome\b/i.test(text)) {
-        result.propertyType = 'Townhouse';
-      } else if (/\bsingle\s+family\b|\branch\b/i.test(text)) {
+      } else if (isExplicitSingleFamily) {
         result.propertyType = 'Single Family';
+      } else if (/\btownhouse\b|\btownhome\b/i.test(textWithoutUrls)) {
+        result.propertyType = 'Townhouse';
+      } else if (isExplicitCondo || /\bcondos?\b|\bcondominiums?\b/i.test(textWithoutUrls)) {
+        result.propertyType = 'Condo/Co-op';
       }
     }
-    if (!result.isCondo) {
+
+    if (isExplicitSingleFamily && !isExplicitCondo) {
+      result.isCondo = false;
+    } else if (!result.isCondo) {
       if (
         (result.propertyType && /\bcondos?\b|\bco-op\b|\bcondominiums?\b/i.test(result.propertyType)) ||
-        /\bcondos?\b|\bco-op\b|\bcondominiums?\b/i.test(text)
+        isExplicitCondo ||
+        (!isExplicitSingleFamily && /\bcondos?\b|\bco-op\b|\bcondominiums?\b/i.test(textWithoutUrls))
       ) {
         result.isCondo = true;
       }
@@ -362,12 +374,14 @@ export function parseSerpResults(
     }
 
     // 13. Sold Detection & Sale Price/Date
-    const soldPriceMatch = text.match(/(?:sold\s+(?:for\s+)?|last\s+sold\s+(?:for\s+)?)\$?([0-9.]+[km]|[0-9,]+)/i);
+    const soldPriceMatch =
+      text.match(/(?:sold\s+(?:for\s+)?|last\s+sold\s+(?:for\s+)?)\$([0-9.]+[km]|[0-9,]+)/i) ||
+      text.match(/(?:sold\s+for\s+|last\s+sold\s+for\s+)\$?([0-9.]+[km]|[0-9,]+)(?!\/)/i);
     const soldDateMatch = text.match(/(?:sold\s+.*?on|last\s+sold\s+.*?in|sold\s+on|sold\s+in|sold\s+)\s*([A-Za-z]+\s+\d{1,2},?\s+\d{4}|\d{1,2}\/\d{1,2}\/\d{2,4}|[A-Za-z]+\s+\d{4})/i);
 
     if (soldPriceMatch) {
       const parsedAmount = parseCurrencyAmount(soldPriceMatch[1]);
-      if (parsedAmount) {
+      if (parsedAmount && parsedAmount >= 10000) {
         if (result.lastSaleAmount === undefined || (result.lastSaleAmount < 10000 && parsedAmount >= 10000)) {
           result.lastSaleAmount = parsedAmount;
         }
@@ -385,12 +399,21 @@ export function parseSerpResults(
       }
     }
 
-    const isSoldListingIndicator =
-      /(?:^|\b)(?:sold\s*[-:]|recently\s+sold|just\s+sold|sold\s+\d{1,2}\/\d{1,2}\/\d{2,4})\b/i.test(title) ||
-      /(?:^|\b)(?:sold\s*[-:]|recently\s+sold|just\s+sold|sold\s+\d{1,2}\/\d{1,2}\/\d{2,4})\b/i.test(snippet) ||
-      /(?:sold\s+(?:for\s+)?\$[0-9,]+)/i.test(snippet);
+    // Ignore annual rental lease transactions recorded as "Sold - $43,200" on MLS
+    const isLeaseAmount = !!(
+      result.lastSaleAmount &&
+      result.lastSaleAmount >= 10000 &&
+      result.lastSaleAmount < 80000 &&
+      (result.zestimate ? result.zestimate > 250000 : true)
+    );
 
-    if (isSoldListingIndicator || (/\bsold\b/i.test(text) && !/not\s+sold/i.test(text))) {
+    const isSoldListingIndicator =
+      !isLeaseAmount &&
+      (/(?:^|\b)(?:sold\s*[-:]|recently\s+sold|just\s+sold|sold\s+\d{1,2}\/\d{1,2}\/\d{2,4})\b/i.test(title) ||
+        /(?:^|\b)(?:sold\s*[-:]|recently\s+sold|just\s+sold|sold\s+\d{1,2}\/\d{1,2}\/\d{2,4})\b/i.test(snippet) ||
+        /(?:sold\s+(?:for\s+)?\$[0-9,]+)/i.test(snippet));
+
+    if (isSoldListingIndicator || (/\bsold\b/i.test(text) && !/not\s+sold/i.test(text) && !isLeaseAmount)) {
       if (result.lastSaleDate) {
         const saleTime = new Date(result.lastSaleDate).getTime();
         const daysAgo = (Date.now() - saleTime) / (1000 * 60 * 60 * 24);
@@ -406,7 +429,7 @@ export function parseSerpResults(
     // 14. Active / For Sale Detection & List Price
     const listPriceMatch =
       text.match(/(?:photos\s+of\s+this\s+)\$([0-9.]+[km]|[0-9,]+)/i) ||
-      text.match(/(?:listed\s+(?:at|for)|list\s+price(?:\s+is|\s+of|:)?|for\s+sale\s*(?:at|for|:)?)\s*\$?([0-9.]+[km]|[0-9,]+)/i) ||
+      text.match(/(?:listed\s+(?:at|for)|list\s+price(?:\s+is|\s+of|:)?|for\s+sale\s*(?:at|for|:)?|priced\s+at)\s*\$?([0-9.]+[km]|[0-9,]+)/i) ||
       text.match(/(?:for\s+sale:?\s*)\$([0-9,]{5,})/i) ||
       snippet.match(/^\s*(?:[A-Za-z]+\s+\d{1,2},?\s+\d{4}\s*[-—]\s*)?\$([0-9.]+[km]|[0-9,]+)\s+\d+\s+beds?/i);
     if (listPriceMatch) {
@@ -420,24 +443,43 @@ export function parseSerpResults(
 
     const hasActiveIndicator =
       hasMlsInTitle ||
-      /(?:^|\b)(?:for\s+sale\s*[-:]|active\s+listing|currently\s+listed\s+(?:for|at)|is\s+for\s+sale)\b/i.test(text) ||
+      /(?:^|\b)(?:for\s+sale(?:\s*[-:]|\b)|active\s+(?:listing|mls)|currently\s+listed|is\s+(?:for\s+sale|listed)|listed\s+as\s+active|on\s+the\s+market|home\s+for\s+sale|priced\s+at\s+\$[0-9,]+)/i.test(text) ||
       (/zillow\s+has\s+\d+\s+photos\s+of\s+this\s+\$[0-9,]+/i.test(text)) ||
       (/^\s*(?:[A-Za-z]+\s+\d{1,2},?\s+\d{4}\s*[-—]\s*)?\$[0-9,]+\s+\d+\s+beds/i.test(snippet) && !isExplicitOffMarket);
 
-    if ((hasMlsInTitle || hasActiveIndicator) && !isExplicitOffMarket && !foundPending) {
+    if (
+      ((hasMlsInTitle || hasActiveIndicator) && !isExplicitOffMarket && !foundPending) ||
+      (result.listPrice !== undefined && result.listPrice >= 10000 && !isExplicitOffMarket && !foundPending && !foundRecentSold)
+    ) {
       foundActive = true;
     }
   }
 
   // Detect conflicting signals across portals to trigger AI disambiguation
+  // Note: Only recent sales (within 2 years / 730 days) conflict with off-market or active status.
+  // Historical sales older than 2 years are normal for off-market homes and do NOT represent a conflict.
+  const isSaleRecent = (dateStr?: string) => {
+    if (!dateStr) return false;
+    const parsed = new Date(dateStr).getTime();
+    if (isNaN(parsed)) {
+      const yr = parseInt(dateStr, 10);
+      if (!isNaN(yr)) return new Date().getFullYear() - yr <= 2;
+      return false;
+    }
+    return (Date.now() - parsed) / (1000 * 60 * 60 * 24) <= 730;
+  };
+
   const allSnippetsText = organic.map((r) => `${r.title || ''} ${r.snippet || ''}`).join(' ');
-  const hasSoldSignal = foundRecentSold || !!result.lastSaleAmount || /sold\s+for\s+\$|last\s+sold\s+\$/i.test(allSnippetsText);
-  const hasActiveSignal = foundActive || /active\s+mls|for\s+sale/i.test(allSnippetsText);
+  const hasRecentSoldSignal = foundRecentSold || isSaleRecent(result.lastSaleDate);
+  const hasActiveSignal =
+    foundActive ||
+    /(?:^|\b)(?<!not\s+)for\s+sale(?:\s*[-:]|\b)|active\s+(?:mls|listing)|currently\s+listed|listed\s+as\s+active/i.test(allSnippetsText);
+
   result._hasConflict =
-    (isExplicitOffMarket && hasSoldSignal) ||
+    (isExplicitOffMarket && hasRecentSoldSignal) ||
     (isExplicitOffMarket && hasActiveSignal) ||
-    (foundActive && foundRecentSold) ||
-    (foundPending && (foundActive || foundRecentSold));
+    (foundActive && hasRecentSoldSignal) ||
+    (foundPending && (foundActive || hasRecentSoldSignal));
 
   // Assign Final Listing Status based on authoritative hierarchy:
   // 1. Pending (e.g. 15 Ocean Ave is pending)
@@ -532,8 +574,8 @@ export async function resolvePropertyWithSerp(params: {
           if (aiResult.listPrice != null) parsedData.listPrice = aiResult.listPrice;
           if (aiResult.mlsNumber) parsedData.mlsNumber = aiResult.mlsNumber;
           if (aiResult.propertyType) parsedData.propertyType = aiResult.propertyType;
-          if (aiResult.isCondo) parsedData.isCondo = true;
-          if (aiResult.is55Plus) parsedData.is55Plus = true;
+          if (aiResult.isCondo !== undefined) parsedData.isCondo = aiResult.isCondo;
+          if (aiResult.is55Plus !== undefined) parsedData.is55Plus = aiResult.is55Plus;
           if (aiResult.hoaFee != null) parsedData.hoaFee = aiResult.hoaFee;
           parsedData.aiReasoning = aiResult.reasoning;
         }
