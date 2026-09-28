@@ -224,6 +224,21 @@ export const handler = async (event: any) => {
     await logInboundReply(queueId);
     console.log('✅ [INBOUND] Moved to CONVERSATION status - automated drip stopped');
     
+    // Guard: Lead provided an email address via SMS (e.g. "Ccavallone1@gmail.com" when asked for email)
+    const isEmailResponse = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test((messageBody || '').trim());
+    if (isEmailResponse) {
+      console.log('📧 [INBOUND] Lead texted an email address - moving to CONVERSATION, not DND');
+      await updateQueueStatus(queueId, 'CONVERSATION', 'Lead provided email address');
+      return {
+        statusCode: 200,
+        body: JSON.stringify({
+          success: true,
+          action: 'CONVERSATION',
+          message: 'Lead provided email address - automated drip stopped'
+        })
+      };
+    }
+
     // AI SENTIMENT ANALYSIS: Determine if this is a terminal status
     const { analyzeLeadIntent } = await import('../shared/sentimentAnalysis');
     const sentiment = await analyzeLeadIntent(messageBody);
@@ -665,7 +680,10 @@ async function handleEmailReply(body: any, contactId: string, locationId: string
 
     // 3. Update GHL custom fields
     const customFieldsToUpdate: Array<{ id: string; value: any }> = [];
-    if (detectedCallOutcome && fieldIds.call_outcome) {
+    // CRITICAL: Call Outcome is the phone dialer disposition. An inbound email indicating
+    // wrong email / tenant must NEVER set Call Outcome = "Wrong Number / Disconnected / Invalid Number",
+    // because that would improperly stop phone calls to an untested phone number.
+    if (detectedCallOutcome && detectedCallOutcome !== 'Wrong Number / Disconnected / Invalid Number' && fieldIds.call_outcome) {
       customFieldsToUpdate.push({ id: fieldIds.call_outcome, value: detectedCallOutcome });
       console.log(`✅ [EMAIL] Setting Call Outcome = "${detectedCallOutcome}"`);
     }
@@ -720,12 +738,20 @@ async function handleEmailReply(body: any, contactId: string, locationId: string
       }
 
       if (isWrongInfo) {
-        console.log('❌ [EMAIL] Wrong email - marking as WRONG_INFO');
-        await updateQueueStatus(queueId, 'WRONG_INFO', 'Wrong contact information');
-        await handleWrongEmail(contactId, contact.email, token, fieldIds);
+        console.log('❌ [EMAIL] Wrong email - handling wrong email');
+        await updateQueueStatus(queueId, 'MANUAL_HANDLING', 'Wrong email address reported');
+        await handleWrongEmail(
+          contactId,
+          contact.email,
+          token,
+          fieldIds,
+          messageBody,
+          contact.phone,
+          `${contact.firstName || ''} ${contact.lastName || ''}`.trim()
+        );
         return {
           statusCode: 200,
-          body: JSON.stringify({ success: true, action: 'WRONG_INFO' })
+          body: JSON.stringify({ success: true, action: 'WRONG_EMAIL' })
         };
       }
 
@@ -798,7 +824,15 @@ async function handleEmailBounce(body: any) {
 /**
  * Handle wrong email address
  */
-async function handleWrongEmail(contactId: string, emailAddress: string, token: string, fieldIds: Record<string, string> = {}) {
+async function handleWrongEmail(
+  contactId: string,
+  emailAddress: string,
+  token: string,
+  fieldIds: Record<string, string> = {},
+  messageBody?: string,
+  contactPhone?: string,
+  contactName?: string
+) {
   console.log(`🚨 [EMAIL] Processing wrong email: ${emailAddress}`);
 
   try {
@@ -808,29 +842,84 @@ async function handleWrongEmail(contactId: string, emailAddress: string, token: 
       ? contact?.customFields?.find((f: any) => f.id === appUserIdFieldId)?.value
       : undefined;
 
-    // Update queue to BOUNCED
+    // 1. Update queue to FAILED and MANUAL_HANDLING (stops automated email drip without setting contact-level DND)
     if (userId) {
       const { UpdateCommand } = await import('@aws-sdk/lib-dynamodb');
       await docClient.send(new UpdateCommand({
         TableName: process.env.AMPLIFY_DATA_OutreachQueue_TABLE_NAME,
         Key: { id: `${userId}_${contactId}` },
-        UpdateExpression: 'SET emailStatus = :status, updatedAt = :now',
+        UpdateExpression: 'SET emailStatus = :status, queueStatus = :queueStatus, updatedAt = :now',
         ExpressionAttributeValues: {
-          ':status': 'BOUNCED',
+          ':status': 'FAILED',
+          ':queueStatus': 'MANUAL_HANDLING',
           ':now': new Date().toISOString(),
         },
       }));
+      console.log(`✅ [EMAIL] Queue updated to emailStatus=FAILED, queueStatus=MANUAL_HANDLING`);
     }
 
-    // Tag and add note
-    await ghlUpdateContact(token, contactId, { tags: ['email:wrong_address', 'needs_review'] });
-
-    const ghl = createGhlClient(token);
-    await ghl.post(`/contacts/${contactId}/notes`, {
-      body: `⚠️ WRONG EMAIL ADDRESS: Recipient reported that ${emailAddress} is incorrect. Please verify and update contact information.`
+    // 2. Clear invalid email in GHL and tag contact
+    const currentTags: string[] = Array.isArray(contact?.tags) ? contact.tags : [];
+    const updatedTags = Array.from(new Set([...currentTags, 'email:wrong_address', 'needs_review']));
+    await ghlUpdateContact(token, contactId, {
+      email: null,
+      tags: updatedTags,
     });
+    console.log(`✅ [EMAIL] Cleared invalid email in GHL and added email:wrong_address tag`);
 
-    console.log(`✅ [EMAIL] Wrong email processed`);
+    // 3. Add explanatory note to contact in GHL
+    const ghl = createGhlClient(token);
+    const phoneDisplay = contactPhone || contact?.phone || 'on file';
+    const truncatedMsg = (messageBody || '').trim().slice(0, 300);
+    await ghl.post(`/contacts/${contactId}/notes`, {
+      body: `⚠️ WRONG EMAIL ADDRESS: Recipient reported that ${emailAddress} is incorrect${truncatedMsg ? ` ("${truncatedMsg}")` : ''}.\n• Email removed from contact.\n• Phone number (${phoneDisplay}) is UNCALLED and ready for dialer outreach.`
+    }).catch((err: any) => console.warn('Failed to add GHL note:', err.message));
+
+    // 4. Create follow-up call task in GHL for Jose
+    const displayName = contactName || `${contact?.firstName || ''} ${contact?.lastName || ''}`.trim() || 'Lead';
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    tomorrow.setHours(13, 0, 0, 0);
+
+    await ghl.post(`/contacts/${contactId}/tasks`, {
+      title: `📞 Call ${displayName} — ${phoneDisplay}`,
+      body: `Email ${emailAddress} was reported incorrect by recipient${truncatedMsg ? ` ("${truncatedMsg}")` : ''}. Phone number has not been called yet. Call to verify contact information.`,
+      dueDate: tomorrow.toISOString(),
+      completed: false,
+    }).catch((err: any) => console.warn('Failed to create GHL task:', err.message));
+
+    // 5. Remove wrong email from PropertyLead DynamoDB if leadId exists
+    const appLeadIdFieldId = fieldIds.app_lead_id;
+    const leadId = appLeadIdFieldId
+      ? contact?.customFields?.find((f: any) => f.id === appLeadIdFieldId)?.value
+      : undefined;
+
+    if (leadId && process.env.AMPLIFY_DATA_PropertyLead_TABLE_NAME && emailAddress) {
+      try {
+        const { GetCommand, UpdateCommand } = await import('@aws-sdk/lib-dynamodb');
+        const leadRes = await docClient.send(new GetCommand({
+          TableName: process.env.AMPLIFY_DATA_PropertyLead_TABLE_NAME,
+          Key: { id: leadId }
+        }));
+        if (leadRes.Item && Array.isArray(leadRes.Item.emails)) {
+          const updatedEmails = leadRes.Item.emails.filter((e: string) => typeof e === 'string' && e.toLowerCase() !== emailAddress.toLowerCase());
+          await docClient.send(new UpdateCommand({
+            TableName: process.env.AMPLIFY_DATA_PropertyLead_TABLE_NAME,
+            Key: { id: leadId },
+            UpdateExpression: 'SET emails = :emails, updatedAt = :now',
+            ExpressionAttributeValues: {
+              ':emails': updatedEmails,
+              ':now': new Date().toISOString(),
+            }
+          }));
+          console.log(`✅ [EMAIL] Cleaned wrong email from PropertyLead ${leadId}`);
+        }
+      } catch (leadErr: any) {
+        console.warn('⚠️ [EMAIL] Failed to clean PropertyLead emails:', leadErr.message);
+      }
+    }
+
+    console.log(`✅ [EMAIL] Wrong email processed successfully`);
   } catch (error: any) {
     console.error('❌ [EMAIL] Error handling wrong email:', error.message);
   }

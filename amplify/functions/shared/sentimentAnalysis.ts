@@ -42,6 +42,51 @@ export async function analyzeLeadIntent(message: string): Promise<SentimentAnaly
     };
   }
 
+  // Guard 1: Pure email address or phone number (e.g. "Ccavallone1@gmail.com" sent in response to "what is your email?")
+  // This is active engagement providing contact details, NEVER an objection/STOP.
+  const isPureEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(safeMessage.trim());
+  if (isPureEmail) {
+    return {
+      intent: 'CONVERSATION',
+      sentiment: 'POSITIVE',
+      confidence: 1.0,
+      reason: 'Lead provided email address',
+    };
+  }
+
+  // Check for wrong info / authority mismatch keywords (including wrong email and tenant/landlord)
+  const wrongInfoPatterns = [
+    /\bnot\s+([a-z0-9'\s]+)?\bemail\b/i,
+    /\bwrong\s+email\b/i,
+    /\b(he|she|they)\s+(?:was|is)\s+my\s+(?:landlord|tenant)\b/i,
+    /\b(?:my\s+old|former)\s+(?:landlord|tenant)\b/i,
+    /\bused\s+to\s+rent\b/i,
+    /\bwrong\s+number\b/i,
+    /\bwrong\s+person\b/i,
+    /\bnot\s+me\b/i,
+    /\bincorrect\b/i,
+    /\byou\s+have\s+the\s+wrong\b/i,
+    /\bnot\s+my\s+(?:property|house|home)\b/i,
+    /\bnot\s+(?:the\s+)?owner\b/i,
+    /\bdon'?t\s+own\b/i,
+    /\bdo\s+not\s+own\b/i,
+    /\bnever\s+owned\b/i,
+    /\bwrong\s+contact\b/i,
+    /\bdoes(?:n't|\s+not)\s+belong\s+to\s+me\b/i,
+    /\bnot\s+mine\b/i,
+  ];
+
+  const hasWrongInfo = wrongInfoPatterns.some((pattern) => pattern.test(safeMessage));
+  if (hasWrongInfo) {
+    console.log(`🤖 [SENTIMENT] Intent: WRONG_INFO, Sentiment: NEUTRAL - Wrong contact/email detected`);
+    return {
+      intent: 'WRONG_INFO',
+      sentiment: 'NEUTRAL',
+      confidence: 0.95,
+      reason: 'Wrong contact information detected',
+    };
+  }
+
   // Detect sentiment using existing logic
   const sentiment = await detectSentiment(safeMessage);
   
@@ -53,38 +98,8 @@ export async function analyzeLeadIntent(message: string): Promise<SentimentAnaly
     intent = 'STOP';
     reason = 'Lead is disengaging - wants to stop communication';
   } else {
-    // Check for wrong info / authority mismatch keywords
-    const wrongInfoKeywords = [
-      'wrong number',
-      'wrong email',
-      'wrong person',
-      'not me',
-      'incorrect',
-      'you have the wrong',
-      'not my property',
-      'not my house',
-      'not my home',
-      'not the owner',
-      'not owner',
-      'dont own',
-      "don't own",
-      'do not own',
-      'not own',
-      'never owned',
-      'wrong contact',
-      "doesn't belong to me",
-      'does not belong to me',
-      'not mine'
-    ];
-    const hasWrongInfo = wrongInfoKeywords.some(kw => safeMessage.toLowerCase().includes(kw));
-    
-    if (hasWrongInfo) {
-      intent = 'WRONG_INFO';
-      reason = 'Wrong contact information detected';
-    } else {
-      intent = 'CONVERSATION';
-      reason = `Lead is ${sentiment?.toLowerCase() || 'engaging'} in conversation`;
-    }
+    intent = 'CONVERSATION';
+    reason = `Lead is ${sentiment?.toLowerCase() || 'engaging'} in conversation`;
   }
   
   console.log(`🤖 [SENTIMENT] Intent: ${intent}, Sentiment: ${sentiment} - ${reason}`);
@@ -104,6 +119,11 @@ export async function analyzeLeadIntent(message: string): Promise<SentimentAnaly
 async function detectSentiment(message: string): Promise<ConversationSentiment | null> {
   const safeMessage = typeof message === 'string' ? message : '';
   if (!safeMessage.trim()) return null;
+
+  // Standalone email address is engaging/providing contact info, NOT an objection
+  if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(safeMessage.trim())) {
+    return 'POSITIVE';
+  }
 
   // Check for objection keywords first (fast, local). This MUST run before the short-message
   // guard below — otherwise literal opt-outs like "Stop" / "quit" (<= 10 chars) return null
