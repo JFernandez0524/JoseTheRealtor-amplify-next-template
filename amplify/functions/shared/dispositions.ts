@@ -80,12 +80,35 @@ export function detectCallOutcomeFromMessage(message: string | null | undefined)
   if (!message || typeof message !== 'string') return null;
   const msg = message.trim().toLowerCase();
 
+  // 1. Explicit Phone DNC: Reserved specifically for explicit telemarketing / calling objections
+  if (
+    msg.includes('do not call') ||
+    msg.includes("don't call") ||
+    msg.includes('dont call') ||
+    msg.includes('stop calling') ||
+    msg.includes('dnc') ||
+    msg.includes('remove my number') ||
+    msg.includes('delete my number') ||
+    msg.includes('take my number off') ||
+    msg.includes('do not contact by phone') ||
+    msg.includes('reporting to ftc') ||
+    msg.includes('report you to') ||
+    msg.includes('call my lawyer')
+  ) {
+    return 'DNC';
+  }
+
+  // 2. Realtor / Agent representation
   if (msg.includes('realtor') || msg.includes('listed') || msg.includes('agent')) {
     return 'Listed With Realtor';
   }
+
+  // 3. Already Sold
   if (msg.includes('sold')) {
     return 'Sold Already';
   }
+
+  // 4. Wrong Number / Not Owner
   if (
     msg.includes('wrong number') ||
     msg.includes('wrong person') ||
@@ -107,17 +130,39 @@ export function detectCallOutcomeFromMessage(message: string | null | undefined)
   ) {
     return 'Wrong Number / Disconnected / Invalid Number';
   }
-  if (msg.includes('dnc') || msg.includes('do not call') || msg.includes('unsubscribe') || msg === 'stop' || msg.includes('remove me')) {
-    return 'DNC';
-  }
+
+  // 5. Not Interested / General Opt-Out / Stop / Leave Me Alone
+  // Halts automated AI outreach immediately, but preserves the phone number from being permanently blacklisted
   if (
+    msg.includes('leave me alone') ||
+    msg.includes('leave us alone') ||
+    msg.includes('stop emailing') ||
+    msg.includes('stop texting') ||
+    msg.includes('stop contacting') ||
+    msg.includes('stop messaging') ||
+    msg.includes('stop reaching out') ||
+    msg.includes('stop writing') ||
+    msg.includes('take me off') ||
+    msg.includes('take us off') ||
+    msg.includes('remove me') ||
+    msg.includes('remove my email') ||
+    msg.includes('delete my email') ||
+    msg.includes('unsubscribe') ||
+    msg.includes('opt out') ||
+    msg.includes('opt-out') ||
+    msg.includes('optout') ||
+    /\bstop\b/i.test(msg) ||
     msg.includes('not for sale') ||
     msg.includes('not selling') ||
     msg.includes('never selling') ||
     msg.includes('not interested') ||
     msg.includes('keeping it') ||
     msg.includes("don't want to sell") ||
-    msg.includes('dont want to sell')
+    msg.includes('dont want to sell') ||
+    msg.includes('do not contact') ||
+    msg.includes("don't contact") ||
+    msg.includes('dont contact') ||
+    msg.includes('never contact')
   ) {
     return 'Not Interested';
   }
@@ -134,6 +179,6 @@ export function callOutcomeForEndReason(reason: string | null | undefined): stri
   if (r.includes('realtor') || r.includes('listed') || r.includes('agent')) return 'Listed With Realtor';
   if (r.includes('sold')) return 'Sold Already';
   if (r.includes('wrong')) return 'Wrong Number / Disconnected / Invalid Number';
-  if (r.includes('dnc') || r.includes('stop')) return 'DNC';
+  if (r.includes('dnc') || r.includes('do_not_call')) return 'DNC';
   return 'Not Interested';
 }

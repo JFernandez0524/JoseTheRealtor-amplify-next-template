@@ -101,10 +101,24 @@ describe('detectCallOutcomeFromMessage', () => {
     expect(detectCallOutcomeFromMessage('does not belong to me')).toBe('Wrong Number / Disconnected / Invalid Number');
   });
 
-  it('detects DNC from stop/unsubscribe', () => {
+  it('detects Not Interested from leave me alone, stop, unsubscribe, and general disinterest', () => {
+    expect(detectCallOutcomeFromMessage('Please leave me alone !')).toBe('Not Interested');
+    expect(detectCallOutcomeFromMessage('leave us alone')).toBe('Not Interested');
+    expect(detectCallOutcomeFromMessage('stop emailing me')).toBe('Not Interested');
+    expect(detectCallOutcomeFromMessage('STOP')).toBe('Not Interested');
+    expect(detectCallOutcomeFromMessage('Please stop')).toBe('Not Interested');
+    expect(detectCallOutcomeFromMessage('unsubscribe')).toBe('Not Interested');
+    expect(detectCallOutcomeFromMessage('take me off your list')).toBe('Not Interested');
+  });
+
+  it('detects DNC strictly from explicit phone/calling objections', () => {
     expect(detectCallOutcomeFromMessage('Do not call me ever again')).toBe('DNC');
-    expect(detectCallOutcomeFromMessage('STOP')).toBe('DNC');
-    expect(detectCallOutcomeFromMessage('unsubscribe')).toBe('DNC');
+    expect(detectCallOutcomeFromMessage("don't call this number")).toBe('DNC');
+    expect(detectCallOutcomeFromMessage('stop calling me')).toBe('DNC');
+    expect(detectCallOutcomeFromMessage('put me on your DNC list')).toBe('DNC');
+    expect(detectCallOutcomeFromMessage('take my number off')).toBe('DNC');
+    expect(detectCallOutcomeFromMessage('remove my number')).toBe('DNC');
+    expect(detectCallOutcomeFromMessage('I will report you to the FTC')).toBe('DNC');
   });
 
   it('returns null for neutral or non-objection messages', () => {

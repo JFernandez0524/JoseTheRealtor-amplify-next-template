@@ -445,6 +445,13 @@ export const handler = async (event: any) => {
     if (messageType === 2 && isSmsOptedOut) {
       console.log(`🛑 [WEBHOOK_LAMBDA] Contact opted out of SMS (dnd=${fullContact?.dnd}, sms=${smsDndStatus}) - marking DND, skipping AI reply`);
       await updateQueueStatus(queueId, 'DND', 'Contact opted out (GHL SMS DND)');
+      if (fieldIds.call_outcome) {
+        const { detectCallOutcomeFromMessage } = await import('../shared/dispositions');
+        const smsOutcome = detectCallOutcomeFromMessage(messageBody) || 'Not Interested';
+        await ghlUpdateContact(token, contactId, {
+          customFields: [{ id: fieldIds.call_outcome, value: smsOutcome }],
+        }).catch((err: any) => console.error('⚠️ Failed to update Call Outcome on SMS opt out:', err.message));
+      }
       return {
         statusCode: 200,
         body: JSON.stringify({ message: 'Contact opted out of SMS - no AI response', contactId })
@@ -669,11 +676,16 @@ async function handleEmailReply(body: any, contactId: string, locationId: string
 
     // 1. Detect Call Outcome from message body (e.g. Listed With Realtor, Sold Already, Not Interested, DNC, Wrong Number)
     const { detectCallOutcomeFromMessage, isTerminalDisposition } = await import('../shared/dispositions');
-    const detectedCallOutcome = detectCallOutcomeFromMessage(messageBody);
+    let detectedCallOutcome = detectCallOutcomeFromMessage(messageBody);
 
     // 2. Perform sentiment analysis
     const { analyzeLeadIntent } = await import('../shared/sentimentAnalysis');
     const sentiment = await analyzeLeadIntent(messageBody);
+
+    // If keyword detection was null but AI sentiment intent is STOP, fallback to 'Not Interested'
+    if (!detectedCallOutcome && sentiment.intent === 'STOP') {
+      detectedCallOutcome = 'Not Interested';
+    }
 
     const isTerminal = sentiment.intent === 'STOP' || (!!detectedCallOutcome && isTerminalDisposition(detectedCallOutcome));
     const isWrongInfo = sentiment.intent === 'WRONG_INFO' || detectedCallOutcome === 'Wrong Number / Disconnected / Invalid Number';
