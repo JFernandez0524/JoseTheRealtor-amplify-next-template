@@ -224,3 +224,27 @@ export function addressesMatch(
   return false;
 }
 
+/**
+ * Normalize and pad a 5-digit US zip code (restores leading zeroes dropped by Excel/CSV export).
+ */
+export function formatZip(raw: string | null | undefined): string {
+  if (!raw) return '';
+  const digits = String(raw).replace(/\D/g, '');
+  if (digits.length > 0 && digits.length < 5) return digits.padStart(5, '0');
+  return digits.slice(0, 5);
+}
+
+/**
+ * Generate a canonical address key (normalized address | 5-digit zip) for duplicate detection.
+ * Returns null if either address or zip is missing.
+ */
+export function makeAddressKey(
+  addr: string | null | undefined,
+  zip: string | null | undefined
+): string | null {
+  const cleanAddr = normalizeAddress(addr);
+  const cleanZip = formatZip(zip);
+  if (!cleanAddr || !cleanZip) return null;
+  return `${cleanAddr}|${cleanZip}`;
+}
+

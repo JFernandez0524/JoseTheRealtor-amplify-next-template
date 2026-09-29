@@ -11,7 +11,7 @@ import { HiLockClosed } from 'react-icons/hi';
 import { UploadProgressModal } from './UploadProgressModal';
 import { fetchLeads } from '@/app/utils/aws/data/lead.client';
 import { AddressAutocomplete, ParsedAddress } from '@/app/components/address/AddressAutocomplete';
-import { sanitizeName, isValidName, formatPhoneE164, sanitizePhoneInput, NAME_MAX } from '@/app/utils/leadValidation';
+import { sanitizeName, isValidName, formatPhoneE164, sanitizePhoneInput, NAME_MAX, makeAddressKey } from '@/app/utils/leadValidation';
 import { canonicalFields, autoDetectMapping, missingRequired, type LeadType } from '@/app/utils/csvMapping';
 import { asJson } from '@/app/utils/batchdata/enrichment';
 
@@ -95,16 +95,15 @@ export function ManualLeadForm() {
       const csvKeys = new Set<string>();
       for (let i = 1; i < lines.length; i++) {
         const cols = lines[i].split(',');
-        const addr = (cols[addrIdx] || '').trim().toLowerCase();
-        const zip = (cols[zipIdx] || '').trim().replace(/\D/g, '').slice(0, 5);
-        if (addr && zip) csvKeys.add(`${addr}|${zip}`);
+        const key = makeAddressKey(cols[addrIdx], cols[zipIdx]);
+        if (key) csvKeys.add(key);
       }
 
       const existingLeads = await fetchLeads();
       const existingKeys = new Set(
-        existingLeads.map(l =>
-          `${(l.ownerAddress || '').trim().toLowerCase()}|${(l.ownerZip || '').trim().replace(/\D/g, '').slice(0, 5)}`
-        )
+        existingLeads
+          .map(l => makeAddressKey(l.ownerAddress, l.ownerZip))
+          .filter((k): k is string => Boolean(k))
       );
 
       let duplicateCount = 0;

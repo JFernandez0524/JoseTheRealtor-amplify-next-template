@@ -12,7 +12,14 @@ import { Readable } from 'stream';
 import { randomUUID } from 'crypto';
 import { validateAddressWithGoogle, toTitleCase } from '../../../app/utils/google.server';
 import { fetchBestZestimateResult } from '../../../app/utils/bridge.server';
-import { isUsableAddress, isTaxForeclosureCase } from '../../../app/utils/leadValidation';
+import {
+  isUsableAddress,
+  isTaxForeclosureCase,
+  normalizeAddress,
+  makeAddressKey,
+  formatPhoneE164,
+  formatZip,
+} from '../../../app/utils/leadValidation';
 import { resolveOwnerName, parseColumnMapping } from '../../../app/utils/csvMapping';
 import { resolvePropertyWithSerp } from '../../../app/utils/serpPropertyResolver.server';
 
@@ -66,16 +73,7 @@ function detectEmailsInRow(row: Record<string, any>, rowNum: number): { rowNum: 
 }
 
 const formatPhoneNumber = (val: any): string | null => {
-  const s = sanitize(val, 20).replace(/\D/g, '');
-  if (s.length === 10) return `+1${s}`;
-  if (s.length === 11 && s.startsWith('1')) return `+${s}`;
-  return null;
-};
-
-const formatZip = (val: any): string => {
-  const s = sanitize(String(val), 10).replace(/\D/g, '');
-  if (s.length > 0 && s.length < 5) return s.padStart(5, '0');
-  return s;
+  return formatPhoneE164(typeof val === 'string' ? val : String(val ?? ''));
 };
 
 // Parse a CSV date cell (e.g. "7/2/2026" or an ISO string) to an AWSDate (`YYYY-MM-DD`), or null.
@@ -110,13 +108,6 @@ const cleanCityForGeocoding = (city: string) => {
 // ---------------------------------------------------------
 // 🔍 DUPLICATE DETECTION HELPERS
 // ---------------------------------------------------------
-
-function makeAddressKey(addr: string | null | undefined, zip: string | null | undefined): string | null {
-  const cleanAddr = (addr || '').toLowerCase().trim();
-  const cleanZip = (zip || '').replace(/\D/g, '').slice(0, 5);
-  if (!cleanAddr || !cleanZip) return null;
-  return `${cleanAddr}|${cleanZip}`;
-}
 
 /**
  * Snapshot of an already-existing lead, stored on a CsvUploadJob's `duplicateLeads` entries so the
@@ -166,27 +157,21 @@ async function preloadExistingLeadKeys(
         '#oc': 'ownerCity',
         '#ofn': 'ownerFirstName',
         '#oln': 'ownerLastName',
-        '#ma': 'mailingAddress',
-        '#mz': 'mailingZip',
+        '#afn': 'adminFirstName',
+        '#aln': 'adminLastName',
         '#ze': 'zestimate',
       },
       ExpressionAttributeValues: { ':ownerId': ownerId },
-      ProjectionExpression: 'id, #oa, #oz, #oc, #ofn, #oln, #ma, #mz, #ze',
+      ProjectionExpression: 'id, #oa, #oz, #oc, #ofn, #oln, #afn, #aln, #ze',
       ExclusiveStartKey: lastKey,
     }));
     for (const lead of Items || []) {
       const summary = summarizeExistingLead(lead);
-      const prefoKey = makeAddressKey(lead.ownerAddress, lead.ownerZip);
-      if (prefoKey) {
-        keys.add(prefoKey);
-        keyToId.set(prefoKey, lead.id);
-        keyToData.set(prefoKey, summary);
-      }
-      const probateKey = makeAddressKey(lead.mailingAddress, lead.mailingZip);
-      if (probateKey && probateKey !== prefoKey) {
-        keys.add(probateKey);
-        keyToId.set(probateKey, lead.id);
-        keyToData.set(probateKey, summary);
+      const propKey = makeAddressKey(lead.ownerAddress, lead.ownerZip);
+      if (propKey) {
+        keys.add(propKey);
+        keyToId.set(propKey, lead.id);
+        keyToData.set(propKey, summary);
       }
     }
     lastKey = LastEvaluatedKey;
@@ -450,16 +435,12 @@ export const handler: S3Handler = async (event) => {
           const rawAdminState = leadType === 'PROBATE' ? sanitize(cell('adminState', 'adminState')) : '';
 
           // --- 💾 EARLY DUPLICATE CHECK BEFORE EXTERNAL API CALLS ---
-          // Check raw address against preloaded existing addresses. This skips Google Address Validation,
+          // Check raw property address against preloaded existing addresses. This skips Google Address Validation,
           // Bridge Zestimate lookups, and Serper API calls for all duplicate rows.
-          const rawPropKey = makeAddressKey(rawPropAddr, rawPropZip);
-          const rawAdminKey = leadType === 'PROBATE' ? makeAddressKey(rawAdminAddr, rawAdminZip) : null;
-          const earlyDupKey = (leadType === 'PROBATE' && rawAdminKey) ? rawAdminKey : rawPropKey;
+          const earlyDupKey = makeAddressKey(rawPropAddr, rawPropZip);
 
           if (earlyDupKey && existingAddressKeys.has(earlyDupKey)) {
-            const dupAddressDisplay = (leadType === 'PROBATE' && rawAdminAddr)
-              ? `${rawAdminAddr}, ${rawAdminCity} ${rawAdminZip}`.trim()
-              : `${rawPropAddr}, ${rawPropCity} ${rawPropZip}`.trim();
+            const dupAddressDisplay = `${rawPropAddr}, ${rawPropCity} ${rawPropZip}`.trim();
             console.log(`⏭️ Skipping duplicate lead (early check) for user ${ownerId}: ${dupAddressDisplay}`);
 
             if (duplicateLeads.length < MAX_DUPLICATE_STORE) {
@@ -491,10 +472,10 @@ export const handler: S3Handler = async (event) => {
               duplicateLeads.push({
                 csvData: {
                   ownerName: csvDisplayName,
-                  address: rawPropAddr || rawAdminAddr,
-                  city: rawPropCity || rawAdminCity,
-                  state: rawPropState || rawAdminState,
-                  zip: rawPropZip || rawAdminZip,
+                  address: rawPropAddr,
+                  city: rawPropCity,
+                  state: rawPropState,
+                  zip: rawPropZip,
                 },
                 existingLeadId: existingKeyToId.get(earlyDupKey) || null,
                 existingLeadData: existingKeyToData.get(earlyDupKey) || null,
@@ -672,12 +653,8 @@ export const handler: S3Handler = async (event) => {
 
           // --- 💾 SECONDARY DUPLICATE CHECK BEFORE SAVING ---
           // O(1) lookup against the pre-loaded Set — catches any duplicates resolved after Google standardization
-          const stdPropKey = makeAddressKey(finalPropAddr, finalPropZip);
-          const stdAdminKey = leadType === 'PROBATE' ? makeAddressKey(finalMailAddr, finalMailZip) : null;
-          const dupKey = (leadType === 'PROBATE' && stdAdminKey) ? stdAdminKey : stdPropKey;
-          const duplicateCheckAddress = leadType === 'PROBATE'
-            ? `${finalMailAddr || finalPropAddr || ''} ${finalMailCity || finalPropCity || ''} ${finalMailZip || finalPropZip || ''}`.trim()
-            : `${finalPropAddr} ${finalPropCity} ${finalPropZip}`.trim();
+          const dupKey = makeAddressKey(finalPropAddr, finalPropZip);
+          const duplicateCheckAddress = `${finalPropAddr} ${finalPropCity} ${finalPropZip}`.trim();
 
           if (dupKey && existingAddressKeys.has(dupKey)) {
             console.log(`⏭️ Skipping duplicate lead for user ${ownerId}: ${duplicateCheckAddress}`);
@@ -701,10 +678,10 @@ export const handler: S3Handler = async (event) => {
               duplicateLeads.push({
                 csvData: {
                   ownerName: csvDisplayName,
-                  address: finalPropAddr || finalMailAddr,
-                  city: finalPropCity || finalMailCity,
-                  state: finalPropState || finalMailState,
-                  zip: finalPropZip || finalMailZip,
+                  address: finalPropAddr,
+                  city: finalPropCity,
+                  state: finalPropState,
+                  zip: finalPropZip,
                 },
                 existingLeadId: existingKeyToId.get(dupKey) || null,
                 existingLeadData: existingKeyToData.get(dupKey) || null,

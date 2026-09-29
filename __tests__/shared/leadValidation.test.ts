@@ -9,6 +9,7 @@ import {
   isTaxForeclosureCase,
   normalizeAddress,
   addressesMatch,
+  makeAddressKey,
 } from '@/app/utils/leadValidation';
 
 // All functions are pure — no AWS / network setup required.
@@ -163,6 +164,50 @@ describe('addressesMatch', () => {
   it('returns true when either address is missing', () => {
     expect(addressesMatch(null, '123 Main St')).toBe(true);
     expect(addressesMatch('123 Main St', undefined)).toBe(true);
+  });
+});
+
+describe('makeAddressKey', () => {
+  it('normalizes street suffixes and punctuation to match duplicate addresses', () => {
+    const rawKey = makeAddressKey('24 COEYMAN AVENUE', '07110');
+    const existingKey = makeAddressKey('24 Coeyman Ave.', '07110');
+    expect(rawKey).toBe('24 coeyman ave|07110');
+    expect(existingKey).toBe('24 coeyman ave|07110');
+    expect(rawKey).toBe(existingKey);
+  });
+
+  it('handles zip codes with 4-digit extension by taking first 5 digits', () => {
+    expect(makeAddressKey('106 Willow Street', '07704-3550')).toBe('106 willow st|07704');
+  });
+
+  it('differentiates distinct properties regardless of common executor names or towns', () => {
+    // Ruth Kaplan vs Lorraine Lebo
+    const propKey1 = makeAddressKey('567B NUTLEY DRIVE', '08831');
+    const propKey2 = makeAddressKey('9a John Hancock Drive', '08831');
+    expect(propKey1).toBe('567b nutley dr|08831');
+    expect(propKey2).toBe('9a john hancock dr|08831');
+    expect(propKey1).not.toBe(propKey2);
+
+    // James Conover vs Vincent Supienski
+    const propKey3 = makeAddressKey('37 FORD AVENUE', '07728');
+    const propKey4 = makeAddressKey('22 Hollywood Avenue', '07737');
+    expect(propKey3).toBe('37 ford ave|07728');
+    expect(propKey4).toBe('22 hollywood ave|07737');
+    expect(propKey3).not.toBe(propKey4);
+  });
+
+  it('differentiates property address from admin mailing address', () => {
+    const propertyKey = makeAddressKey('37 FORD AVENUE', '07728');
+    const adminKey = makeAddressKey('6 Bayhill Road', '07737');
+    expect(propertyKey).not.toBe(adminKey);
+  });
+
+  it('returns null if either address or zip is missing or blank', () => {
+    expect(makeAddressKey(null, '07110')).toBeNull();
+    expect(makeAddressKey('', '07110')).toBeNull();
+    expect(makeAddressKey('24 Coeyman Ave', null)).toBeNull();
+    expect(makeAddressKey('24 Coeyman Ave', '')).toBeNull();
+    expect(makeAddressKey(undefined, undefined)).toBeNull();
   });
 });
 
