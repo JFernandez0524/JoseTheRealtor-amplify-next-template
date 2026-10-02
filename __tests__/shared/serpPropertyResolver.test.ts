@@ -578,5 +578,41 @@ describe('serpPropertyResolver', () => {
       expect(result.listPrice).toBe(525000);
       expect(result.mlsNumber).toBe('22630265');
     });
+
+    it('correctly classifies 54 Manchester Court as Sold within 3-year MLS window with punctuated MLS number and multi-portal snippets', () => {
+      const organic: SerpOrganicResult[] = [
+        {
+          title: '54 Manchester Court, Red Bank, NJ 07701',
+          link: 'https://www.zillow.com/homedetails/54-Manchester-Ct-Red-Bank-NJ-07701/39333989_zpid/',
+          snippet:
+            '54 Manchester Court, Red Bank, NJ 07701 is currently not for sale. The 999 Square Feet single family home is a 1 bed, 1 bath property.',
+        },
+        {
+          title: '54 Manchester Court, Red Bank, NJ 07701',
+          link: 'https://www.dianeturton.com/real-estate/54-manchester-court-red-bank-nj-07701/22418013/156309587',
+          snippet:
+            '54 Manchester Court Red Bank, NJ 07701. $285,000. 1 Beds 1 Full Bath 999 sq ft HOA $441.00/mo. Desirable first-floor Shrewsbury model in beautiful Shadow Lake ...',
+        },
+        {
+          title: 'Recently Sold Homes in Red Bank NJ - 1141 Transactions',
+          link: 'https://www.zillow.com/red-bank-nj/sold/21_p/',
+          snippet:
+            '54 Manchester Court, Red Bank, NJ 07701. DIANE TURTON, REALTORS-RUMSON, Frances Dunn. More. Sold 08/19/24. Save. 54 Manchester Court, Red Bank, NJ 07701.',
+        },
+        {
+          title: '54 Manchester Ct, Red Bank, NJ 07701',
+          link: 'https://www.compass.com/homedetails/54-Manchester-Ct-Red-Bank-NJ-07701/1NG50U_pid/',
+          snippet:
+            'Property Details for 54 Manchester Court. Status. Closed. MLS #. 22418013. Days on Market. 13. Pet Policy. -. Taxes. $3,692 / year. HOA Fees. $441 / month.',
+        },
+      ];
+
+      const result = parseSerpResults('54 Manchester Court, Red Bank, NJ 07701', organic);
+      expect(result.listingStatus).toBe('sold');
+      expect(result.lastSaleDate).toBe('2024-08-19');
+      expect(result.mlsNumber).toBe('22418013');
+      expect(result.hoaFee).toBe(441);
+      expect(result.zpid).toBe('39333989');
+    });
   });
 });

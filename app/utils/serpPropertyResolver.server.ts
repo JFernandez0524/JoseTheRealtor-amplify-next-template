@@ -250,7 +250,7 @@ export function parseSerpResults(
 
     // 2. Extract MLS Number
     if (!result.mlsNumber) {
-      const mlsMatch = text.match(/MLS\s*#?\s*([A-Za-z0-9]+)/i);
+      const mlsMatch = text.match(/MLS\s*#?\.?:?\s*([A-Za-z0-9]+)/i);
       if (mlsMatch) {
         result.mlsNumber = mlsMatch[1];
       }
@@ -286,9 +286,9 @@ export function parseSerpResults(
       }
     }
 
-    // 5. Extract 55+ Community Tag
+    // 5. Extract 55+ Community Tag (generic nationwide patterns)
     if (!result.is55Plus) {
-      if (/55\+\s*(?:adult|active)?\s*community|active\s+adult\s+community/i.test(text)) {
+      if (/\b(?:55\+|55\s*plus|active\s+adult|age\s*restricted|senior\s*community|senior\s*living|retirement\s*community)\b/i.test(text)) {
         result.is55Plus = true;
         result.community = '55+ Active Adult Community';
       }
@@ -377,7 +377,7 @@ export function parseSerpResults(
     const soldPriceMatch =
       text.match(/(?:sold\s+(?:for\s+)?|last\s+sold\s+(?:for\s+)?)\$([0-9.]+[km]|[0-9,]+)/i) ||
       text.match(/(?:sold\s+for\s+|last\s+sold\s+for\s+)\$?([0-9.]+[km]|[0-9,]+)(?!\/)/i);
-    const soldDateMatch = text.match(/(?:sold\s+.*?on|last\s+sold\s+.*?in|sold\s+on|sold\s+in|sold\s+)\s*([A-Za-z]+\s+\d{1,2},?\s+\d{4}|\d{1,2}\/\d{1,2}\/\d{2,4}|[A-Za-z]+\s+\d{4})/i);
+    const soldDateMatch = text.match(/(?:sold\s+.*?on|last\s+sold\s+.*?in|sold\s+on|sold\s+in|sold\s+|closed\s+on\s+|closed\s+in\s+|status\s*[:.]\s*closed\b.*?on\s+)\s*([A-Za-z]+\s+\d{1,2},?\s+\d{4}|\d{1,2}\/\d{1,2}\/\d{2,4}|[A-Za-z]+\s+\d{4})/i);
 
     if (soldPriceMatch) {
       const parsedAmount = parseCurrencyAmount(soldPriceMatch[1]);
@@ -409,11 +409,11 @@ export function parseSerpResults(
 
     const isSoldListingIndicator =
       !isLeaseAmount &&
-      (/(?:^|\b)(?:sold\s*[-:]|recently\s+sold|just\s+sold|sold\s+\d{1,2}\/\d{1,2}\/\d{2,4})\b/i.test(title) ||
-        /(?:^|\b)(?:sold\s*[-:]|recently\s+sold|just\s+sold|sold\s+\d{1,2}\/\d{1,2}\/\d{2,4})\b/i.test(snippet) ||
+      (/(?:^|\b)(?:sold\s*[-:]|recently\s+sold|just\s+sold|sold\s+\d{1,2}\/\d{1,2}\/\d{2,4}|status\s*[:.]\s*closed|closed\s+sale)\b/i.test(title) ||
+        /(?:^|\b)(?:sold\s*[-:]|recently\s+sold|just\s+sold|sold\s+\d{1,2}\/\d{1,2}\/\d{2,4}|status\s*[:.]\s*closed|closed\s+sale)\b/i.test(snippet) ||
         /(?:sold\s+(?:for\s+)?\$[0-9,]+)/i.test(snippet));
 
-    if (isSoldListingIndicator || (/\bsold\b/i.test(text) && !/not\s+sold/i.test(text) && !isLeaseAmount)) {
+    if (isSoldListingIndicator || (/\b(?:sold|closed\s+sale)\b/i.test(text) && !/not\s+sold/i.test(text) && !isLeaseAmount)) {
       if (result.lastSaleDate) {
         const saleTime = new Date(result.lastSaleDate).getTime();
         const daysAgo = (Date.now() - saleTime) / (1000 * 60 * 60 * 24);
@@ -455,8 +455,20 @@ export function parseSerpResults(
     }
   }
 
+  // Post-loop: Re-evaluate sale recency once all snippets have been parsed and both lastSaleDate and mlsNumber are collected.
+  // This guarantees that evaluation order between different snippets (e.g. sale date in Zillow, MLS# in Compass) never misses a sale.
+  if (result.lastSaleDate && !foundRecentSold) {
+    const saleTime = new Date(result.lastSaleDate).getTime();
+    if (!isNaN(saleTime)) {
+      const daysAgo = (Date.now() - saleTime) / (1000 * 60 * 60 * 24);
+      if (daysAgo <= 730 || (daysAgo <= 1095 && result.mlsNumber)) {
+        foundRecentSold = true;
+      }
+    }
+  }
+
   // Detect conflicting signals across portals to trigger AI disambiguation
-  // Note: Only recent sales (within 2 years / 730 days) conflict with off-market or active status.
+  // Note: Only recent sales (within 2 years / 730 days, or 3 years with MLS#) conflict with off-market or active status.
   // Historical sales older than 2 years are normal for off-market homes and do NOT represent a conflict.
   const isSaleRecent = (dateStr?: string) => {
     if (!dateStr) return false;
@@ -466,7 +478,8 @@ export function parseSerpResults(
       if (!isNaN(yr)) return new Date().getFullYear() - yr <= 2;
       return false;
     }
-    return (Date.now() - parsed) / (1000 * 60 * 60 * 24) <= 730;
+    const days = (Date.now() - parsed) / (1000 * 60 * 60 * 24);
+    return days <= 730 || (days <= 1095 && !!result.mlsNumber);
   };
 
   const allSnippetsText = organic.map((r) => `${r.title || ''} ${r.snippet || ''}`).join(' ');
