@@ -411,12 +411,6 @@ export function LeadTable({
               </th>
               {renderSortableHeader('type', 'Type')}
               {renderSortableHeader('skipTraceStatus', 'Skip Status')}
-              {renderSortableHeader('listingStatus', (
-                <div className='flex items-center gap-1' title='Automated web estimate — verify listing status on local MLS'>
-                  <span>Listing Status</span>
-                  <span className='text-[10px] text-amber-700 font-normal lowercase opacity-80'>(verify MLS)</span>
-                </div>
-              ), 'bg-yellow-50')}
               {/* NEW GHL STATUS HEADER */}
               {renderSortableHeader('ghlSyncStatus', 'Launch AI Sync', 'bg-purple-50')}
               {renderSortableHeader('ghlSyncDate', 'Sync Date', 'bg-purple-50')}
@@ -429,7 +423,12 @@ export function LeadTable({
               {renderSortableHeader('ownerCity', 'City/State/Zip', 'bg-blue-50')}
               {renderSortableHeader('ownerCounty', 'County', 'bg-blue-50')}
               {renderSortableHeader('zestimate', 'Zestimate', 'bg-yellow-50')}
-              {renderSortableHeader('equityAmount', 'Equity ($ / %)', 'bg-emerald-50')}
+              {renderSortableHeader('listingStatus', (
+                <div className='flex items-center gap-1' title='Automated web estimate — verify listing status on local MLS'>
+                  <span>Listing Status</span>
+                  <span className='text-[10px] text-amber-700 font-normal lowercase opacity-80'>(verify MLS)</span>
+                </div>
+              ), 'bg-yellow-50')}
               {renderSortableHeader('adminLastName', 'Admin Name', 'bg-purple-50')}
               {renderSortableHeader('adminAddress', 'Admin Address', 'bg-purple-50')}
               {renderSortableHeader('phones', 'Phone', 'bg-green-50')}
@@ -444,7 +443,7 @@ export function LeadTable({
             {isLoading ? (
               <tr>
                 <td
-                  colSpan={16}
+                  colSpan={18}
                   className='px-6 py-10 text-center text-gray-500'
                 >
                   <div className='flex flex-col items-center'>
@@ -456,7 +455,7 @@ export function LeadTable({
             ) : leads.length === 0 ? (
               <tr>
                 <td
-                  colSpan={16}
+                  colSpan={18}
                   className='px-6 py-10 text-center text-gray-500'
                 >
                   <div className='text-lg mb-2'>📭 No leads found</div>
@@ -514,62 +513,6 @@ export function LeadTable({
                         isDirectMailOnly={lead.leadLabels?.includes('DIRECT_MAIL_ONLY')}
                       />
                     </div>
-                  </td>
-
-                  {/* Listing Status Column */}
-                  <td className='px-4 py-4 whitespace-nowrap text-xs bg-yellow-50/30'>
-                    <select
-                      value={lead.listingStatus || ''}
-                      onChange={async (e) => {
-                        const newStatus = e.target.value as 'off_market' | 'active' | 'sold' | 'pending' | 'fsbo' | 'auction' | 'skip' | 'door_knock' | '';
-                        try {
-                          const updates: any = { listingStatus: newStatus || null };
-
-                          // Synchronize leadLabels so badges like 🔴 SOLD or 🟢 ACTIVE MLS update or disappear immediately
-                          const currentLabels = lead.leadLabels ? [...lead.leadLabels] : [];
-                          let updatedLabels = currentLabels.filter(l => l !== 'RECENTLY_SOLD' && l !== 'ACTIVE_MLS');
-                          if (newStatus === 'sold') updatedLabels.push('RECENTLY_SOLD');
-                          if (newStatus === 'active') updatedLabels.push('ACTIVE_MLS');
-                          updates.leadLabels = updatedLabels;
-
-                          if (newStatus && newStatus !== 'off_market' && lead.skipTraceStatus === 'PENDING') {
-                            updates.skipTraceStatus = 'NOT_ELIGIBLE';
-                          } else if ((!newStatus || newStatus === 'off_market') && lead.skipTraceStatus === 'NOT_ELIGIBLE') {
-                            updates.skipTraceStatus = 'PENDING';
-                          }
-                          const updated = await updateLead(lead.id, updates);
-                          // Required, not an optimisation: this <select> is controlled by
-                          // `lead.listingStatus`, so without patching state React re-renders from
-                          // unchanged props and the chosen option snaps back to the old value.
-                          // Passing the whole row also surfaces the skipTraceStatus flip above.
-                          if (onLeadUpdated && updated) onLeadUpdated([updated]);
-                        } catch (err) {
-                          console.error('Failed to update status:', err);
-                        }
-                      }}
-                      onClick={(e) => e.stopPropagation()}
-                      className={`text-xs font-semibold px-2 py-1 rounded border-0 cursor-pointer select-none ${
-                        lead.listingStatus === 'active' ? 'bg-green-100 text-green-800' :
-                        lead.listingStatus === 'sold' ? 'bg-red-100 text-red-800' :
-                        lead.listingStatus === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                        lead.listingStatus === 'off_market' ? 'bg-gray-100 text-gray-800' :
-                        lead.listingStatus === 'skip' ? 'bg-orange-100 text-orange-800' :
-                        lead.listingStatus === 'fsbo' ? 'bg-purple-100 text-purple-800' :
-                        lead.listingStatus === 'auction' ? 'bg-pink-100 text-pink-800' :
-                        lead.listingStatus === 'door_knock' ? 'bg-blue-100 text-blue-800' :
-                        'bg-white text-gray-500'
-                      }`}
-                    >
-                      <option value="">-</option>
-                      <option value="off_market">Off Market</option>
-                      <option value="active">Active</option>
-                      <option value="sold">Sold</option>
-                      <option value="pending">Pending</option>
-                      <option value="fsbo">FSBO</option>
-                      <option value="auction">Auction</option>
-                      <option value="skip">Skip</option>
-                      <option value="door_knock">Door Knock</option>
-                    </select>
                   </td>
 
                   {/* NEW GHL STATUS CELL */}
@@ -834,50 +777,60 @@ export function LeadTable({
                     )}
                   </td>
 
-                  {/* Equity Column */}
-                  <td className='px-4 py-4 whitespace-nowrap text-sm bg-emerald-50/30'>
-                    {(() => {
-                      // Probate leads do not have recorded foreclosure debt; suppress artificial 100% equity
-                      if (lead.type?.toUpperCase() === 'PROBATE') {
-                        return <span className='text-gray-400' title='Equity calculation not applicable for Probate leads'>-</span>;
-                      }
+                  {/* Listing Status Column */}
+                  <td className='px-4 py-4 whitespace-nowrap text-xs bg-yellow-50/30'>
+                    <select
+                      value={lead.listingStatus || ''}
+                      onChange={async (e) => {
+                        const newStatus = e.target.value as 'off_market' | 'active' | 'sold' | 'pending' | 'fsbo' | 'auction' | 'skip' | 'door_knock' | '';
+                        try {
+                          const updates: any = { listingStatus: newStatus || null };
 
-                      const val = lead.zestimate || lead.estimatedValue || 0;
-                      const loan = lead.foreclosureAmount || 0;
-                      const equityAmt = val > 0 && loan > 0 ? val - loan : ((lead as any).equityAmount ?? (val > 0 ? val : 0));
-                      const equityPct = val > 0 ? Math.round((equityAmt / val) * 100) : ((lead as any).equityPercent ?? null);
+                          // Synchronize leadLabels so badges like 🔴 SOLD or 🟢 ACTIVE MLS update or disappear immediately
+                          const currentLabels = lead.leadLabels ? [...lead.leadLabels] : [];
+                          let updatedLabels = currentLabels.filter(l => l !== 'RECENTLY_SOLD' && l !== 'ACTIVE_MLS');
+                          if (newStatus === 'sold') updatedLabels.push('RECENTLY_SOLD');
+                          if (newStatus === 'active') updatedLabels.push('ACTIVE_MLS');
+                          updates.leadLabels = updatedLabels;
 
-                      if (!equityAmt && equityPct == null) {
-                        return <span className='text-gray-400'>-</span>;
-                      }
-
-                      let badgeClass = 'bg-slate-100 text-slate-700 border-slate-200';
-                      if (equityPct != null) {
-                        if (equityPct >= 40) badgeClass = 'bg-emerald-100 text-emerald-800 border-emerald-300 font-bold';
-                        else if (equityPct >= 20) badgeClass = 'bg-amber-100 text-amber-800 border-amber-300';
-                        else badgeClass = 'bg-rose-100 text-rose-800 border-rose-300';
-                      }
-
-                      return (
-                        <div className='flex flex-col gap-0.5'>
-                          <div className='flex items-center gap-1.5'>
-                            <span className='font-semibold text-emerald-900'>
-                              ${equityAmt.toLocaleString()}
-                            </span>
-                            {equityPct != null && (
-                              <span className={`px-1.5 py-0.5 text-[10px] rounded border ${badgeClass}`}>
-                                {equityPct}%
-                              </span>
-                            )}
-                          </div>
-                          {loan > 0 && (
-                            <span className='text-[10px] text-gray-500'>
-                              Debt: ${loan.toLocaleString()}
-                            </span>
-                          )}
-                        </div>
-                      );
-                    })()}
+                          if (newStatus && newStatus !== 'off_market' && lead.skipTraceStatus === 'PENDING') {
+                            updates.skipTraceStatus = 'NOT_ELIGIBLE';
+                          } else if ((!newStatus || newStatus === 'off_market') && lead.skipTraceStatus === 'NOT_ELIGIBLE') {
+                            updates.skipTraceStatus = 'PENDING';
+                          }
+                          const updated = await updateLead(lead.id, updates);
+                          // Required, not an optimisation: this <select> is controlled by
+                          // `lead.listingStatus`, so without patching state React re-renders from
+                          // unchanged props and the chosen option snaps back to the old value.
+                          // Passing the whole row also surfaces the skipTraceStatus flip above.
+                          if (onLeadUpdated && updated) onLeadUpdated([updated]);
+                        } catch (err) {
+                          console.error('Failed to update status:', err);
+                        }
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                      className={`text-xs font-semibold px-2 py-1 rounded border-0 cursor-pointer select-none ${
+                        lead.listingStatus === 'active' ? 'bg-green-100 text-green-800' :
+                        lead.listingStatus === 'sold' ? 'bg-red-100 text-red-800' :
+                        lead.listingStatus === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                        lead.listingStatus === 'off_market' ? 'bg-gray-100 text-gray-800' :
+                        lead.listingStatus === 'skip' ? 'bg-orange-100 text-orange-800' :
+                        lead.listingStatus === 'fsbo' ? 'bg-purple-100 text-purple-800' :
+                        lead.listingStatus === 'auction' ? 'bg-pink-100 text-pink-800' :
+                        lead.listingStatus === 'door_knock' ? 'bg-blue-100 text-blue-800' :
+                        'bg-white text-gray-500'
+                      }`}
+                    >
+                      <option value="">-</option>
+                      <option value="off_market">Off Market</option>
+                      <option value="active">Active</option>
+                      <option value="sold">Sold</option>
+                      <option value="pending">Pending</option>
+                      <option value="fsbo">FSBO</option>
+                      <option value="auction">Auction</option>
+                      <option value="skip">Skip</option>
+                      <option value="door_knock">Door Knock</option>
+                    </select>
                   </td>
 
                   <td className='px-4 py-4 whitespace-nowrap text-sm text-gray-900 bg-purple-50/30'>
