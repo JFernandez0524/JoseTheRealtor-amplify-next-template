@@ -57,6 +57,7 @@ export default function LeadDashboardClient({}: Props) {
   const [showSyncModal, setShowSyncModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [syncCounts, setSyncCounts] = useState({ calling: 0, emailOnly: 0, digitalOnly: 0 });
+  const [syncEligibleIds, setSyncEligibleIds] = useState<string[]>([]);
   const [alreadySyncedCount, setAlreadySyncedCount] = useState(0);
   const [syncProgress, setSyncProgress] = useState<{ current: number; total: number } | null>(null);
   const [failedSyncIds, setFailedSyncIds] = useState<string[]>([]);
@@ -622,6 +623,14 @@ export default function LeadDashboardClient({}: Props) {
     }
   };
 
+  const isOffMarketLead = (lead: Lead): boolean => {
+    const status = (lead.listingStatus || '').trim().toLowerCase();
+    if (status && status !== 'off_market') return false;
+    const labels = Array.isArray(lead.leadLabels) ? lead.leadLabels : [];
+    if (labels.some((l) => l === 'ACTIVE_MLS' || l === 'RECENTLY_SOLD')) return false;
+    return true;
+  };
+
   const handleBulkGHLSync = async () => {
     if (selectedIds.length === 0) return;
 
@@ -636,26 +645,53 @@ export default function LeadDashboardClient({}: Props) {
       return;
     }
 
-    // Categorize leads by skip trace results and property value
-    const selectedLeads = leads.filter(lead => selectedIds.includes(lead.id));
-    
-    const callingLeads = selectedLeads.filter(lead => {
+    // Categorize eligible leads by skip trace results and property value (off-market only)
+    const selectedLeads = leads.filter((lead) => selectedIds.includes(lead.id));
+    const eligibleLeads = selectedLeads.filter(isOffMarketLead);
+    const nonOffMarketCount = selectedLeads.length - eligibleLeads.length;
+
+    if (eligibleLeads.length === 0) {
+      addToast({
+        type: 'warning',
+        title: 'No Off-Market Leads',
+        message: 'Only off-market leads can be synced to CRM. None of the selected leads are off-market.',
+      });
+      return;
+    }
+
+    if (nonOffMarketCount > 0) {
+      addToast({
+        type: 'info',
+        title: 'Non-Off-Market Leads Excluded',
+        message: `${nonOffMarketCount} lead${nonOffMarketCount !== 1 ? 's are' : ' is'} not off-market and will not be synced.`,
+      });
+    }
+
+    const callingLeads = eligibleLeads.filter((lead) => {
       return lead.phones && lead.phones.length > 0;
     });
-    
-    const emailOnlyLeads = selectedLeads.filter(lead => {
+
+    const emailOnlyLeads = eligibleLeads.filter((lead) => {
       const value = lead.zestimate || lead.estimatedValue || 0;
-      return (!lead.phones || lead.phones.length === 0) && 
-             value >= 300000 && value <= 850000;
-    });
-    
-    const digitalOnlyLeads = selectedLeads.filter(lead => {
-      const value = lead.zestimate || lead.estimatedValue || 0;
-      return value < 300000 || value > 850000;
+      return (
+        (!lead.phones || lead.phones.length === 0) &&
+        value >= 300000 &&
+        value <= 850000
+      );
     });
 
-    const alreadySynced = selectedLeads.filter(lead => lead.ghlSyncStatus === 'SUCCESS').length;
+    const digitalOnlyLeads = eligibleLeads.filter((lead) => {
+      const value = lead.zestimate || lead.estimatedValue || 0;
+      return (
+        (!lead.phones || lead.phones.length === 0) &&
+        (value < 300000 || value > 850000)
+      );
+    });
+
+    const eligibleIds = eligibleLeads.map((lead) => lead.id);
+    const alreadySynced = eligibleLeads.filter((lead) => lead.ghlSyncStatus === 'SUCCESS').length;
     setAlreadySyncedCount(alreadySynced);
+    setSyncEligibleIds(eligibleIds);
     setSyncCounts({ calling: callingLeads.length, emailOnly: emailOnlyLeads.length, digitalOnly: digitalOnlyLeads.length });
     setFailedSyncIds([]);
     setSkippedSyncIds([]);
@@ -663,8 +699,17 @@ export default function LeadDashboardClient({}: Props) {
   };
 
   const executeBulkGHLSync = async (idsToSync?: string[]) => {
-    const ids = idsToSync ?? selectedIds;
+    const rawIds = idsToSync ?? (syncEligibleIds.length > 0 ? syncEligibleIds : selectedIds);
+    const ids = leads
+      .filter((lead) => rawIds.includes(lead.id) && isOffMarketLead(lead))
+      .map((lead) => lead.id);
+
     setShowSyncModal(false);
+    if (ids.length === 0) {
+      addToast({ type: 'warning', title: 'No Eligible Leads', message: 'No off-market leads available to sync.' });
+      return;
+    }
+
     setIsProcessing(true);
     setSyncProgress({ current: 0, total: ids.length });
     setProcessingMessage('Starting Launch AI sync...');
@@ -1611,8 +1656,8 @@ export default function LeadDashboardClient({}: Props) {
       <SyncConfirmModal
         isOpen={showSyncModal}
         onClose={() => setShowSyncModal(false)}
-        onConfirm={() => executeBulkGHLSync()}
-        totalCount={selectedIds.length}
+        onConfirm={() => executeBulkGHLSync(syncEligibleIds)}
+        totalCount={syncEligibleIds.length}
         callingCount={syncCounts.calling}
         emailOnlyCount={syncCounts.emailOnly}
         digitalOnlyCount={syncCounts.digitalOnly}

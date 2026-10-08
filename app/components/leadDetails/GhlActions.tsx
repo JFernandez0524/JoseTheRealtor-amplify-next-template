@@ -47,6 +47,12 @@ export function GhlActions({
         throw new Error(errorDetail);
       }
 
+      if (syncResult?.status === 'SKIPPED') {
+        alert(`⚠️ Sync Skipped: ${syncResult?.message || 'Lead not eligible for sync'}`);
+        onSyncComplete();
+        return;
+      }
+
       alert('✅ Sync Success!');
       // 🎯 Refresh the lead data in the parent component
       onSyncComplete();

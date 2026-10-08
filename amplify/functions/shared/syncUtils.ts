@@ -56,10 +56,26 @@ export async function updateLeadSyncStatus(
 
 export function validateLeadForSync(lead: any): { isValid: boolean; reason?: string } {
   // Only off_market leads (or leads with no listing status set) are eligible for GHL sync
-  if (lead.listingStatus && lead.listingStatus !== 'off_market') {
+  const normalizedListingStatus = (lead.listingStatus || '').trim().toLowerCase();
+  if (normalizedListingStatus && normalizedListingStatus !== 'off_market') {
     return {
       isValid: false,
       reason: `Not eligible for CRM sync: listing status is '${lead.listingStatus}' (only off-market leads can be synced)`,
+    };
+  }
+
+  // Check labels for MLS Active or Recently Sold if listingStatus was unset
+  const labels: string[] = Array.isArray(lead.leadLabels) ? lead.leadLabels : [];
+  if (labels.includes('ACTIVE_MLS')) {
+    return {
+      isValid: false,
+      reason: 'Not eligible for CRM sync: lead is marked as ACTIVE_MLS (only off-market leads can be synced)',
+    };
+  }
+  if (labels.includes('RECENTLY_SOLD')) {
+    return {
+      isValid: false,
+      reason: 'Not eligible for CRM sync: lead is marked as RECENTLY_SOLD (only off-market leads can be synced)',
     };
   }
 

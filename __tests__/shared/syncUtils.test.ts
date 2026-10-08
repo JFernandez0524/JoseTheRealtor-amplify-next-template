@@ -54,4 +54,32 @@ describe('validateLeadForSync', () => {
     expect(validateLeadForSync({ listingStatus: 'off_market', skipTraceStatus: 'NO_QUALITY_CONTACTS' })).toEqual({ isValid: true });
     expect(validateLeadForSync({ listingStatus: 'off_market', skipTraceStatus: 'NO_MATCH' })).toEqual({ isValid: true });
   });
+
+  it('rejects lead with ACTIVE_MLS label even if listingStatus is unset', () => {
+    const lead = {
+      leadLabels: ['ACTIVE_MLS', 'ABSENTEE'],
+      skipTraceStatus: 'COMPLETED',
+    };
+    const result = validateLeadForSync(lead);
+    expect(result.isValid).toBe(false);
+    expect(result.reason).toContain('ACTIVE_MLS');
+  });
+
+  it('rejects lead with RECENTLY_SOLD label even if listingStatus is unset', () => {
+    const lead = {
+      leadLabels: ['RECENTLY_SOLD'],
+      skipTraceStatus: 'COMPLETED',
+    };
+    const result = validateLeadForSync(lead);
+    expect(result.isValid).toBe(false);
+    expect(result.reason).toContain('RECENTLY_SOLD');
+  });
+
+  it('normalizes listingStatus case and whitespace (e.g. OFF_MARKET)', () => {
+    const lead = {
+      listingStatus: ' OFF_MARKET ',
+      skipTraceStatus: 'COMPLETED',
+    };
+    expect(validateLeadForSync(lead)).toEqual({ isValid: true });
+  });
 });
