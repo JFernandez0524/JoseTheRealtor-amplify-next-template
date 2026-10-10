@@ -54,6 +54,7 @@ interface OutreachQueueItem {
   propertyAddress?: string;
   propertyCity?: string;
   propertyState?: string;
+  propertyZip?: string;
   leadType?: string;
 }
 
@@ -102,6 +103,7 @@ export async function addToOutreachQueue(item: OutreachQueueItem): Promise<strin
     propertyAddress: item.propertyAddress,
     propertyCity: item.propertyCity,
     propertyState: item.propertyState,
+    propertyZip: item.propertyZip,
     leadType: item.leadType,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),

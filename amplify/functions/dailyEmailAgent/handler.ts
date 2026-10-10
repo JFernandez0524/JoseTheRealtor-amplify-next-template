@@ -94,7 +94,12 @@ async function processTenantIntegration(integration: GHLIntegration): Promise<{ 
         fieldIds.lead_type && { id: fieldIds.lead_type, value: q.leadType },
       ].filter((f): f is { id: string; value: any } => Boolean(f)),
       _queueId: q.id,
-      _queueAttempts: q.emailAttempts || 0
+      _queueAttempts: q.emailAttempts || 0,
+      leadType: q.leadType,
+      propertyAddress: q.propertyAddress,
+      propertyCity: q.propertyCity,
+      propertyState: q.propertyState,
+      propertyZip: q.propertyZip,
     }));
 
     console.log(`${contacts.length} contacts eligible for email outreach for user ${integration.userId}`);
@@ -136,6 +141,12 @@ async function processTenantIntegration(integration: GHLIntegration): Promise<{ 
               toEmail: contact.email,
               touchNumber: contact._queueAttempts + 1, // 1=initial, 2-7=follow-ups
               callOutcomeFieldId: fieldIds.call_outcome, // enables the send route's terminal-disposition guard
+              leadType: contact.leadType,
+              leadTypeFieldId: fieldIds.lead_type,
+              propertyAddress: contact.propertyAddress,
+              propertyCity: contact.propertyCity,
+              propertyState: contact.propertyState,
+              propertyZip: contact.propertyZip,
             },
             {
               headers: {

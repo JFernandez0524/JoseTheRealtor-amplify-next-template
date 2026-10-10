@@ -17,6 +17,7 @@ interface GHLContact {
   email?: string;
   additionalEmails?: string[];
   tags?: string[];
+  customFields?: Array<{ id: string; value: any }>;
 }
 
 export const handler: Handler = async () => {
@@ -105,10 +106,22 @@ export const handler: Handler = async () => {
     // One queue entry per contact, using the GHL primary email only (the best address —
     // secondary emails live in email_2/email_3). Emailing every address 2-3x'd volume + bounces.
     const BATCH_SIZE = 25;
-    const queueEntries: any[] = [];
+    // Extract custom field IDs for mapping
+    const fieldIds = tokenData.customFieldIds || {};
+    const leadTypeFieldId = fieldIds.lead_type || 'oaf4wCuM3Ub9eGpiddrO';
+    const addressFieldId = fieldIds.property_address || 'p3NOYiInAERYbe0VsLHB';
+    const cityFieldId = fieldIds.property_city || 'h4UIjKQvFu7oRW4SAY8W';
+    const stateFieldId = fieldIds.property_state || '9r9OpQaxYPxqbA6Hvtx7';
+    const zipFieldId = fieldIds.property_zip || 'hgbjsTVwcyID7umdhm2o';
 
     for (const contact of aiOutreachContacts) {
       if (contact.email) {
+        const leadType = contact.customFields?.find((f: any) => f.id === leadTypeFieldId)?.value;
+        const propertyAddress = contact.customFields?.find((f: any) => f.id === addressFieldId)?.value;
+        const propertyCity = contact.customFields?.find((f: any) => f.id === cityFieldId)?.value;
+        const propertyState = contact.customFields?.find((f: any) => f.id === stateFieldId)?.value;
+        const propertyZip = contact.customFields?.find((f: any) => f.id === zipFieldId)?.value;
+
         queueEntries.push({
           userId: integration.userId,
           locationId: tokenData.locationId,
@@ -116,6 +129,11 @@ export const handler: Handler = async () => {
           contactName: `${contact.firstName || ''} ${contact.lastName || ''}`.trim(),
           contactPhone: contact.phone,
           contactEmail: contact.email,
+          leadType,
+          propertyAddress,
+          propertyCity,
+          propertyState,
+          propertyZip,
         });
       }
     }

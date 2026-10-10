@@ -65,7 +65,21 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    const { contactId, accessToken, fromEmail, emailSignature, toEmail, touchNumber, callOutcomeFieldId } = await req.json();
+    const {
+      contactId,
+      accessToken,
+      fromEmail,
+      emailSignature,
+      toEmail,
+      touchNumber,
+      callOutcomeFieldId,
+      leadType: passedLeadType,
+      leadTypeFieldId,
+      propertyAddress: passedPropertyAddress,
+      propertyCity: passedPropertyCity,
+      propertyState: passedPropertyState,
+      propertyZip: passedPropertyZip,
+    } = await req.json();
 
     if (!contactId || !accessToken) {
       return NextResponse.json(
@@ -121,13 +135,25 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: false, error: 'Cannot send message as DND is active for Email.' }, { status: 400 });
     }
 
-    // Extract property data from custom fields
-    const propertyAddress = contact?.customFields?.find((f: any) => f.id === 'p3NOYiInAERYbe0VsLHB')?.value;
-    const propertyCity = contact?.customFields?.find((f: any) => f.id === 'h4UIjKQvFu7oRW4SAY8W')?.value;
-    const propertyState = contact?.customFields?.find((f: any) => f.id === '9r9OpQaxYPxqbA6Hvtx7')?.value;
-    const propertyZip = contact?.customFields?.find((f: any) => f.id === 'hgbjsTVwcyID7umdhm2o')?.value;
-    const leadType = contact?.customFields?.find((f: any) => f.id === 'oaf4wCuM3Ub9eGpiddrO')?.value;
+    // Extract property data: prefer values stored in queue, fall back to GHL custom fields
+    const propertyAddress = passedPropertyAddress || contact?.customFields?.find((f: any) => f.id === 'p3NOYiInAERYbe0VsLHB')?.value;
+    const propertyCity = passedPropertyCity || contact?.customFields?.find((f: any) => f.id === 'h4UIjKQvFu7oRW4SAY8W')?.value;
+    const propertyState = passedPropertyState || contact?.customFields?.find((f: any) => f.id === '9r9OpQaxYPxqbA6Hvtx7')?.value;
+    const propertyZip = passedPropertyZip || contact?.customFields?.find((f: any) => f.id === 'hgbjsTVwcyID7umdhm2o')?.value;
+    const leadType =
+      passedLeadType ||
+      (leadTypeFieldId ? contact?.customFields?.find((f: any) => f.id === leadTypeFieldId)?.value : undefined) ||
+      contact?.customFields?.find((f: any) => f.id === 'oaf4wCuM3Ub9eGpiddrO')?.value;
     const zestimate = contact?.customFields?.find((f: any) => f.id === '7wIe1cRbZYXUnc3WOVb2')?.value;
+
+    // Guard: ensure leadType exists so email context is always known before sending
+    if (!leadType) {
+      console.warn(`⚠️ [EMAIL] Contact ${contactId} has no Lead Type — cannot establish email context. Skipping send.`);
+      return NextResponse.json(
+        { success: false, error: 'Cannot send email: missing Lead Type custom field for context.' },
+        { status: 400 }
+      );
+    }
 
     // Use placeholder conversationId - the email handler will send directly to contact
     const conversationId = 'auto';

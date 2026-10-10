@@ -168,6 +168,111 @@ async function sendGHLEmail(
   }
 }
 
+export interface LeadTypeContext {
+  normalizedType: string;
+  displayType: string;
+  situationContext: string;
+  touch1Relate: string;
+  touch4Empathy: string;
+  touch5SocialProof: string;
+  touch6Urgency: string;
+  monthlyNurtureAngle: string;
+}
+
+export function getLeadTypeContext(leadType?: string | null): LeadTypeContext {
+  const norm = (leadType || '').toUpperCase().replace(/[_\s-]+/g, ' ').trim();
+
+  if (norm.includes('PROBATE')) {
+    return {
+      normalizedType: 'PROBATE',
+      displayType: 'estate / probate',
+      situationContext: 'navigate the complexity and stress of settling estates',
+      touch1Relate: 'Show empathy for what they are going through with settling the family estate',
+      touch4Empathy: 'settling an estate is one of the hardest things a family goes through',
+      touch5SocialProof: 'navigating inherited properties and estate settlement get clarity and move forward',
+      touch6Urgency: 'probate estates have legal timelines, ongoing carrying costs, and delays can reduce the estate value',
+      monthlyNurtureAngle: 'estate settlement or property decisions take time and situations change',
+    };
+  }
+
+  if (norm.includes('FORECLOSURE')) {
+    return {
+      normalizedType: 'PREFORECLOSURE',
+      displayType: 'pre-foreclosure',
+      situationContext: 'avoid foreclosure, protect their equity, and explore their options',
+      touch1Relate: 'Show empathy for mortgage pressure and tight bank timelines',
+      touch4Empathy: 'facing impending auction dates or foreclosure timelines is incredibly stressful',
+      touch5SocialProof: 'facing pre-foreclosure timelines protect their equity and avoid auction',
+      touch6Urgency: 'foreclosure and auction timelines move fast and acting early gives far more options to protect equity',
+      monthlyNurtureAngle: 'resolving mortgage or property challenges takes time and situations change',
+    };
+  }
+
+  if (norm === 'FSBO' || norm.includes('BY OWNER')) {
+    return {
+      normalizedType: 'FSBO',
+      displayType: 'for-sale-by-owner',
+      situationContext: 'sell their home efficiently without the headache of managing showings and unqualified buyers',
+      touch1Relate: 'Show respect for their initiative selling directly while recognizing the time and stress of handling buyers and paperwork',
+      touch4Empathy: 'managing showings, tire-kickers, and endless paperwork on your own can become exhausting',
+      touch5SocialProof: 'who tried selling on their own either secure a direct cash buyer or net top dollar with serious vetted buyers',
+      touch6Urgency: 'prolonged days on market can cause buyer fatigue and lead to lowball offers',
+      monthlyNurtureAngle: 'selling on your own takes time and market conditions evolve',
+    };
+  }
+
+  if (norm.includes('TAX')) {
+    return {
+      normalizedType: 'TAX DELINQUENT',
+      displayType: 'property with municipal tax liens',
+      situationContext: 'resolve back property taxes and protect their remaining equity',
+      touch1Relate: 'Show understanding regarding mounting tax penalties and municipal liens',
+      touch4Empathy: 'dealing with mounting municipal tax liens and penalties creates unnecessary financial anxiety',
+      touch5SocialProof: 'with tax liens resolve back taxes and walk away with clean cash',
+      touch6Urgency: 'municipal tax lien interest compounds quickly and eventually leads to tax deed proceedings',
+      monthlyNurtureAngle: 'clearing property liens takes planning and situations change',
+    };
+  }
+
+  if (norm.includes('VACANT')) {
+    return {
+      normalizedType: 'VACANT',
+      displayType: 'vacant property',
+      situationContext: 'eliminate the carrying costs, maintenance, and liability of an empty house',
+      touch1Relate: 'Show understanding regarding the burdens and risks of keeping an unoccupied home',
+      touch4Empathy: 'maintaining an empty property with taxes, insurance, and upkeep is a constant drain',
+      touch5SocialProof: 'with vacant properties turn unused real estate into cash without lifting a paintbrush',
+      touch6Urgency: 'vacant properties deteriorate faster and ongoing carrying costs eat into your net proceeds every month',
+      monthlyNurtureAngle: 'maintaining an empty property is an ongoing decision and situations change',
+    };
+  }
+
+  if (norm.includes('DRIVING') || norm.includes('AS IS')) {
+    return {
+      normalizedType: 'SELL AS IS',
+      displayType: 'as-is property',
+      situationContext: 'sell a property in need of repairs or updates without spending a dollar out of pocket',
+      touch1Relate: 'Show understanding that doing expensive repairs or renovations is often not worth the headache',
+      touch4Empathy: 'facing costly home repairs or deferred maintenance can feel completely overwhelming',
+      touch5SocialProof: 'sell properties needing major work 100% as-is without doing a single repair or cleaning',
+      touch6Urgency: 'repair costs and contractor prices continue to rise while holding costs accumulate',
+      monthlyNurtureAngle: 'managing repairs or evaluating an as-is sale takes thought and situations change',
+    };
+  }
+
+  // General / Other / Default fallback — strictly NEUTRAL, NEVER mentions foreclosure or probate
+  return {
+    normalizedType: norm || 'OTHER',
+    displayType: 'property',
+    situationContext: 'explore their selling options and get clarity on property valuation',
+    touch1Relate: 'Show understanding that deciding when and how to sell is a significant financial decision',
+    touch4Empathy: 'deciding what to do with a property can feel overwhelming with all the competing options out there',
+    touch5SocialProof: 'gain total clarity on their property value and choose the right path for their timeline',
+    touch6Urgency: 'market conditions and buyer demand shift, so having clear numbers now gives you maximum flexibility',
+    monthlyNurtureAngle: 'property decisions take time and situations change',
+  };
+}
+
 // Generate AI email response using OpenAI
 async function generateEmailResponse(
   context: EmailConversationContext,
@@ -182,10 +287,7 @@ async function generateEmailResponse(
     : null;
   const isReply = context.incomingMessage !== 'initial_outreach';
 
-  const situationContext =
-    context.leadType === 'Probate'
-      ? 'navigate the complexity and stress of settling estates'
-      : 'avoid foreclosure and protect their equity';
+  const leadContext = getLeadTypeContext(context.leadType);
 
   const propertyRef = hasAddress
     ? `${context.propertyAddress} in ${context.propertyCity}`
@@ -206,7 +308,7 @@ async function generateEmailResponse(
   let systemPrompt: string;
 
   if (isReply) {
-    systemPrompt = `You are Jose Fernandez from RE/MAX Homeland Realtors responding to ${context.contactName}'s email about their ${context.leadType?.toLowerCase()} situation.
+    systemPrompt = `You are Jose Fernandez from RE/MAX Homeland Realtors responding to ${context.contactName}'s email about their ${leadContext.displayType} situation.
 
 CONTEXT:
 - Property: ${propertyRef}
@@ -216,7 +318,7 @@ THEIR EMAIL: "${context.incomingMessage}"
 
 RESPONSE STRATEGY (HOOK-RELATE-BRIDGE-ASK):
 1. Acknowledge their response directly
-2. Show you understand their situation
+2. Show you understand their situation (${leadContext.situationContext})
 3. Remind them of the two options and how a 10-minute walkthrough provides clarity
 4. Move toward scheduling the property visit
 
@@ -224,18 +326,18 @@ Keep response under 150 words. Focus on "control" and "options". Goal: get a Yes
 
 ${sharedRules}`;
   } else if (touch === 1) {
-    systemPrompt = `You are Jose Fernandez, a NJ real estate agent from RE/MAX Homeland Realtors, sending a cold outreach email to ${context.contactName} about their ${context.leadType?.toLowerCase()} property at ${propertyRef}.
+    systemPrompt = `You are Jose Fernandez, a NJ real estate agent from RE/MAX Homeland Realtors, sending a cold outreach email to ${context.contactName} about their ${leadContext.displayType} property at ${propertyRef}.
 
 GOAL: Get them to agree to a 10-minute property walkthrough so you can give them accurate numbers.
 
 WHAT YOU KNOW:
-- Lead type: ${context.leadType} (${situationContext})
+- Lead type: ${leadContext.displayType} (${leadContext.situationContext})
 - Property: ${propertyRef}
 - ${hasPropertyData ? `Cash offer: $${cashOffer?.toLocaleString()} | Retail value: $${propertyData!.zestimate?.toLocaleString()}` : 'No valuation yet — offer to assess in person'}
 
 FRAMEWORK (Hook-Relate-Bridge-Ask):
 1. Hook: Open with something that shows you saw the public notice and know their situation — don't be generic
-2. Relate: Show empathy for what they're going through (estate settlement or foreclosure pressure)
+2. Relate: ${leadContext.touch1Relate}
 3. Bridge: Present the two options (cash offer vs retail listing) as giving them control and clarity
 4. Ask: Request a 10-minute walkthrough — low commitment, no pressure
 
@@ -249,7 +351,7 @@ SUBJECT LINE: Write a short, specific subject (3-7 words) that feels personal to
 
 ${sharedRules}`;
   } else if (touch === 2) {
-    systemPrompt = `You are Jose Fernandez from RE/MAX Homeland Realtors sending a SHORT follow-up email (touch 2 of 7) to ${context.contactName} who did not respond to your first email about their ${context.leadType?.toLowerCase()} property at ${propertyRef}.
+    systemPrompt = `You are Jose Fernandez from RE/MAX Homeland Realtors sending a SHORT follow-up email (touch 2 of 7) to ${context.contactName} who did not respond to your first email about their ${leadContext.displayType} property at ${propertyRef}.
 
 Write a brief, casual 2-3 sentence follow-up. Just bump the previous email — don't repeat all the details. Acknowledge you know they're busy. Keep it under 60 words.
 
@@ -257,7 +359,7 @@ Subject: something like "Re: ${context.propertyAddress || 'Your Property'}" or "
 
 ${sharedRules}`;
   } else if (touch === 3) {
-    systemPrompt = `You are Jose Fernandez from RE/MAX Homeland Realtors sending touch 3 of 7 to ${context.contactName} about their ${context.leadType?.toLowerCase()} property at ${propertyRef}.
+    systemPrompt = `You are Jose Fernandez from RE/MAX Homeland Realtors sending touch 3 of 7 to ${context.contactName} about their ${leadContext.displayType} property at ${propertyRef}.
 
 This email leads with the financial decision they're facing. Mention the two options with numbers if available. Ask about their timeline — are they looking to move quickly or take their time? Keep it under 100 words.
 
@@ -267,32 +369,32 @@ Subject: something about their options or timeline (e.g. "Your options for ${con
 
 ${sharedRules}`;
   } else if (touch === 4) {
-    systemPrompt = `You are Jose Fernandez from RE/MAX Homeland Realtors sending touch 4 of 7 to ${context.contactName} about their ${context.leadType?.toLowerCase()} property at ${propertyRef}.
+    systemPrompt = `You are Jose Fernandez from RE/MAX Homeland Realtors sending touch 4 of 7 to ${context.contactName} about their ${leadContext.displayType} property at ${propertyRef}.
 
-This email takes an emotional/empathy angle. Acknowledge that ${context.leadType === 'Probate' ? 'settling an estate is one of the hardest things a family goes through' : 'facing foreclosure is incredibly stressful'}. Focus on reducing stress and giving them control — not just the money. Offer to be a resource even if they're not ready to decide. Keep it under 100 words.
+This email takes an emotional/empathy angle. Acknowledge that ${leadContext.touch4Empathy}. Focus on reducing stress and giving them control — not just the money. Offer to be a resource even if they're not ready to decide. Keep it under 100 words.
 
 Subject: something empathetic and low-pressure
 
 ${sharedRules}`;
   } else if (touch === 5) {
-    systemPrompt = `You are Jose Fernandez from RE/MAX Homeland Realtors sending touch 5 of 7 to ${context.contactName} about their ${context.leadType?.toLowerCase()} property at ${propertyRef}.
+    systemPrompt = `You are Jose Fernandez from RE/MAX Homeland Realtors sending touch 5 of 7 to ${context.contactName} about their ${leadContext.displayType} property at ${propertyRef}.
 
-Lead with social proof — you've helped many NJ families in the exact same ${context.leadType?.toLowerCase()} situation get clarity and move forward. Briefly mention the two options${hasPropertyData ? ` ($${cashOffer?.toLocaleString()} cash or $${propertyData!.zestimate?.toLocaleString()} retail)` : ''}. Ask if they have 10 minutes for a quick call or walkthrough. Keep it under 100 words.
+Lead with social proof — you've helped many NJ families ${leadContext.touch5SocialProof}. Briefly mention the two options${hasPropertyData ? ` ($${cashOffer?.toLocaleString()} cash or $${propertyData!.zestimate?.toLocaleString()} retail)` : ''}. Ask if they have 10 minutes for a quick call or walkthrough. Keep it under 100 words.
 
 Subject: something referencing helping other families or experience
 
 ${sharedRules}`;
   } else if (touch === 6) {
-    systemPrompt = `You are Jose Fernandez from RE/MAX Homeland Realtors sending touch 6 of 7 to ${context.contactName} about their ${context.leadType?.toLowerCase()} property at ${propertyRef}.
+    systemPrompt = `You are Jose Fernandez from RE/MAX Homeland Realtors sending touch 6 of 7 to ${context.contactName} about their ${leadContext.displayType} property at ${propertyRef}.
 
-Create gentle urgency — ${context.leadType === 'Probate' ? 'probate estates have legal timelines and delays can reduce the estate value' : 'foreclosure timelines move fast and acting early gives far more options'}. This isn't pressure — it's giving them the full picture so they can make the best decision. Remind them the 10-minute walkthrough is no obligation. Keep it under 100 words.
+Create gentle urgency — ${leadContext.touch6Urgency}. This isn't pressure — it's giving them the full picture so they can make the best decision. Remind them the 10-minute walkthrough is no obligation. Keep it under 100 words.
 
 Subject: something around timing or "before it's too late"
 
 ${sharedRules}`;
   } else if (touch === 7) {
     // Touch 7 — break-up / transition email
-    systemPrompt = `You are Jose Fernandez from RE/MAX Homeland Realtors sending a "break-up" email (touch 7) to ${context.contactName} about their ${context.leadType?.toLowerCase()} property at ${propertyRef}.
+    systemPrompt = `You are Jose Fernandez from RE/MAX Homeland Realtors sending a "break-up" email (touch 7) to ${context.contactName} about their ${leadContext.displayType} property at ${propertyRef}.
 
 Keep it very short — under 60 words. Be respectful and leave the door open permanently. Say you'll step back for now, but if they ever want to explore their options, you're a phone call away. No pressure, no pitch.
 
@@ -301,12 +403,12 @@ Subject: something like "Last note from Jose" or "Stepping back"
 ${sharedRules}`;
   } else {
     // Touch 8+ — monthly nurture email (sent every 30 days)
-    systemPrompt = `You are Jose Fernandez from RE/MAX Homeland Realtors sending a gentle monthly check-in email (long-term nurture touch ${touch}) to ${context.contactName} regarding their ${context.leadType?.toLowerCase()} property at ${propertyRef}.
+    systemPrompt = `You are Jose Fernandez from RE/MAX Homeland Realtors sending a gentle monthly check-in email (long-term nurture touch ${touch}) to ${context.contactName} regarding their ${leadContext.displayType} property at ${propertyRef}.
 
 FRAMEWORK & TONE:
 - This is a soft, long-term monthly check-in (30 days since your last note).
 - Be extremely respectful, warm, and conversational — no hard pitch or aggressive urgency.
-- Acknowledge that estate settlement or property decisions take time and situations change.
+- Acknowledge that ${leadContext.monthlyNurtureAngle}.
 - Ask if their plans for ${propertyRef} have evolved or if they have any questions about cash offer vs retail options.
 - Keep it under 75 words (body only, no signature).
 
@@ -428,11 +530,13 @@ ${sharedRules}`;
 }
 
 // Check if contact has AI enabled
-function isAIEnabled(contact: any): boolean {
-  const hasEmail = contact?.email;
-  const leadType = contact?.customFields?.find(
-    (f: any) => f.id === 'oaf4wCuM3Ub9eGpiddrO',
-  )?.value;
+function isAIEnabled(contact: any, explicitLeadType?: string, toEmail?: string): boolean {
+  const hasEmail = Boolean(contact?.email || toEmail);
+  const leadType =
+    explicitLeadType ||
+    contact?.customFields?.find(
+      (f: any) => f.id === 'oaf4wCuM3Ub9eGpiddrO',
+    )?.value;
 
   const normType = (leadType || '').toUpperCase().replace(/[_\s-]+/g, ' ').trim();
   const validLeadTypes = new Set([
@@ -497,8 +601,8 @@ export async function generateEmailAIResponse(
     }
 
     // Check if AI is enabled for this contact
-    if (!context.testMode && !isAIEnabled(context.contact)) {
-      console.log(`❌ AI disabled for contact ${context.contactId}`);
+    if (!context.testMode && !isAIEnabled(context.contact, context.leadType, context.toEmail)) {
+      console.log(`❌ AI disabled for contact ${context.contactId} (leadType: "${context.leadType}")`);
       throw new Error('AI is not enabled for this contact');
     }
 
