@@ -106,6 +106,7 @@ export const handler: Handler = async () => {
     // One queue entry per contact, using the GHL primary email only (the best address —
     // secondary emails live in email_2/email_3). Emailing every address 2-3x'd volume + bounces.
     const BATCH_SIZE = 25;
+    const queueEntries: any[] = [];
     // Extract custom field IDs for mapping
     const fieldIds = tokenData.customFieldIds || {};
     const leadTypeFieldId = fieldIds.lead_type || 'oaf4wCuM3Ub9eGpiddrO';
