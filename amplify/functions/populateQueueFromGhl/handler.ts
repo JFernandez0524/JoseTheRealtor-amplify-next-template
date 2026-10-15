@@ -125,6 +125,7 @@ export const handler: Handler = async () => {
 
         queueEntries.push({
           userId: integration.userId,
+          owner: integration.owner || tokenData.owner || undefined,
           locationId: tokenData.locationId,
           contactId: contact.id,
           contactName: `${contact.firstName || ''} ${contact.lastName || ''}`.trim(),

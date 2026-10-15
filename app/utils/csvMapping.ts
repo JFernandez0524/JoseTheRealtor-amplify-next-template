@@ -12,6 +12,10 @@
  * (no AWS / Next imports) so it can be unit-tested.
  */
 import { isEntityName } from './leadValidation';
+import {
+  classifyOwnership,
+  type OwnershipClassification,
+} from '../../amplify/functions/shared/ownershipClassifier';
 
 export type LeadType =
   | 'PROBATE'
@@ -40,6 +44,7 @@ const OWNER_NAME_FIELDS: CanonicalField[] = [
       'borrower or defendant name', 'borrower', 'defendant', 'ownership', 'owner',
       'owner 1 full name', 'owner 1 name', 'owner1 full name', 'owner1 name',
       'owner 1 - full name', 'owner1fullname', 'owner1name',
+      'firstname lastname', 'first name last name', 'defendant name',
     ],
   },
   {
@@ -81,6 +86,14 @@ const PROPERTY_ADDRESS_FIELDS: CanonicalField[] = [
     ],
   },
   {
+    key: 'ownerCounty',
+    label: 'Property County',
+    required: false,
+    aliases: [
+      'ownerCounty', 'property county', 'situs county', 'county', 'prop county',
+    ],
+  },
+  {
     key: 'ownerState',
     label: 'Property State',
     required: true,
@@ -98,6 +111,15 @@ const PROPERTY_ADDRESS_FIELDS: CanonicalField[] = [
     ],
   },
 ];
+
+const PARCEL_ID_FIELD: CanonicalField = {
+  key: 'parcelId',
+  label: 'Parcel ID / APN / Block & Lot',
+  aliases: [
+    'parcelId', 'parcel id', 'parcel-id-no', 'parcel id no', 'parcel',
+    'apn', 'block text lot text', 'blocktext-lottext', 'block lot', 'pin',
+  ],
+};
 
 const PHONE_FIELD: CanonicalField = {
   key: 'phone',
@@ -152,6 +174,7 @@ const PREFORECLOSURE_FIELDS: CanonicalField[] = [
       'open loan balance', 'loan balance',
     ],
   },
+  PARCEL_ID_FIELD,
   PHONE_FIELD,
   ESTIMATED_VALUE_FIELD,
 ];
@@ -365,6 +388,66 @@ export function parseOwnershipName(ownership: string): { firstName: string; last
   return { firstName, lastName };
 }
 
+export interface ResolvedOwnerName {
+  firstName: string;
+  lastName: string;
+  isEntity: boolean;
+}
+
+export interface ResolvedOwnerWithClassification extends ResolvedOwnerName {
+  classification: OwnershipClassification;
+}
+
+/**
+ * Resolve an owner/borrower (or admin) name with full classification metadata.
+ */
+export function resolveOwnerNameWithClassification(input: {
+  full?: string | null;
+  first?: string | null;
+  last?: string | null;
+}): ResolvedOwnerWithClassification {
+  const first = (input.first || '').trim();
+  const last = (input.last || '').trim();
+  const full = (input.full || '').trim();
+  const effectiveFull = full || `${first} ${last}`.trim();
+
+  const classification = classifyOwnership(effectiveFull);
+  const isEntity = [
+    'LLC',
+    'CORPORATION',
+    'INSTITUTIONAL',
+    'TRUST',
+    'ESTATE',
+    'OTHER_ENTITY',
+  ].includes(classification.category) || isEntityName(effectiveFull);
+
+  if (isEntity) {
+    return {
+      firstName: '',
+      lastName: effectiveFull.slice(0, 100),
+      isEntity: true,
+      classification,
+    };
+  }
+
+  if (first || last) {
+    return {
+      firstName: formatName(first),
+      lastName: formatName(last),
+      isEntity: false,
+      classification,
+    };
+  }
+
+  const parsed = parseOwnershipName(full);
+  return {
+    firstName: parsed.firstName || classification.suggestedFirstName,
+    lastName: parsed.lastName || classification.suggestedLastName,
+    isEntity: false,
+    classification,
+  };
+}
+
 /**
  * Resolve an owner/borrower (or admin) name from whichever columns the file provided — a combined
  * full-name column OR a split first/last pair — into first + last, flagging corporate/legal entities.
@@ -375,18 +458,72 @@ export function resolveOwnerName(input: {
   full?: string | null;
   first?: string | null;
   last?: string | null;
-}): { firstName: string; lastName: string; isEntity: boolean } {
-  const first = (input.first || '').trim();
-  const last = (input.last || '').trim();
-  const full = (input.full || '').trim();
-  const effectiveFull = full || `${first} ${last}`.trim();
-
-  if (effectiveFull && isEntityName(effectiveFull)) {
-    return { firstName: '', lastName: effectiveFull.slice(0, 100), isEntity: true };
-  }
-  if (first || last) {
-    return { firstName: formatName(first), lastName: formatName(last), isEntity: false };
-  }
-  const parsed = parseOwnershipName(full);
-  return { firstName: parsed.firstName, lastName: parsed.lastName, isEntity: false };
+}): ResolvedOwnerName {
+  const res = resolveOwnerNameWithClassification(input);
+  return {
+    firstName: res.firstName,
+    lastName: res.lastName,
+    isEntity: res.isEntity,
+  };
 }
+
+/**
+ * Check if a CSV row is empty or contains only delimiters/whitespace.
+ */
+export function isEmptyCsvRow(row: Record<string, any> | string[] | null | undefined): boolean {
+  if (!row) return true;
+  if (Array.isArray(row)) {
+    return row.every((c) => !c || !String(c).trim());
+  }
+  return Object.values(row).every((val) => val == null || !String(val).trim());
+}
+
+const COMMON_HEADER_TOKENS = new Set([
+  'docket', 'docket_', 'date', 'mortgageam', 'amount', 'firstnamelastname', 'firstname', 'lastname',
+  'lender', 'attorney', 'trustee', 'address', 'municipali', 'municipality', 'city', 'county', 'state',
+  'postalcode', 'zip', 'blocktextlottext', 'parcel', 'case', 'plaintiff', 'defendant', 'casenumber',
+  'recordingdate', 'loanamount', 'situsaddress', 'situscity', 'situscounty', 'situsstate', 'situszip',
+]);
+
+/**
+ * Check if a parsed row is an alternate/sub-header row (e.g. database column abbreviations).
+ */
+export function isSubHeaderRow(row: Record<string, any>): boolean {
+  if (!row || typeof row !== 'object') return false;
+  const values = Object.values(row).map((v) => norm(String(v)));
+  const matched = values.filter((v) => v && COMMON_HEADER_TOKENS.has(v)).length;
+  // If 3 or more cells match common database column abbreviations, it is a sub-header row.
+  return matched >= 3;
+}
+
+/**
+ * Filter an array of parsed CSV rows, pruning empty rows and secondary header rows.
+ */
+export function cleanCsvRows<T extends Record<string, any>>(rows: T[]): T[] {
+  return rows.filter((row) => !isEmptyCsvRow(row) && !isSubHeaderRow(row));
+}
+
+/**
+ * Escape a string or value for standard RFC-4180 CSV serialization.
+ */
+export function escapeCsvCell(val: any): string {
+  if (val == null) return '';
+  const s = String(val);
+  if (s.includes(',') || s.includes('"') || s.includes('\n') || s.includes('\r')) {
+    return `"${s.replace(/"/g, '""')}"`;
+  }
+  return s;
+}
+
+/**
+ * Serialize an array of row objects back to a clean CSV string with the given headers.
+ */
+export function serializeRowsToCsv(headers: string[], rows: Record<string, any>[]): string {
+  const headerLine = headers.map(escapeCsvCell).join(',');
+  const rowLines = rows.map((row) =>
+    headers.map((h) => escapeCsvCell(row[h])).join(',')
+  );
+  return [headerLine, ...rowLines].join('\n');
+}
+
+

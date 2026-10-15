@@ -38,7 +38,7 @@ next-env.d.ts
 # amplify
 .amplify
 amplify_outputs*
-amplifyconfiguration*google-service-account-key.json
+amplifyconfiguration*
 
 # json
 google-service-account-key.json
@@ -47,3 +47,6 @@ google-service-account-key.json
 scripts/
 *.jsonl
 *.progress.jsonl
+
+# Data files / CSVs containing lead records
+*.csv

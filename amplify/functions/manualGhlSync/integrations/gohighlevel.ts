@@ -22,7 +22,8 @@ export async function syncToGoHighLevel(
   ghlLocationId: string,
   fieldIds: Record<string, string> = {},
   opportunityFieldIds: Record<string, string> = {},
-  assignedUserId: string = ''
+  assignedUserId: string = '',
+  owner?: string
 ): Promise<string> {
   const ghl = createGhlClient(ghlToken);
 
@@ -446,6 +447,7 @@ export async function syncToGoHighLevel(
         // best-first by filterValidEmails). Emailing every address 2-3x'd volume and bounces.
         await addToOutreachQueue({
           userId,
+          owner,
           locationId: ghlLocationId,
           contactId,
           leadId: lead.id,

@@ -25,11 +25,14 @@ export async function GET(request: NextRequest) {
   cutoff.setDate(cutoff.getDate() - days);
   cutoff.setHours(0, 0, 0, 0);
 
-  // Paginate through all OutreachQueue entries for this user (owner-scoped automatically)
+  // Paginate through all OutreachQueue entries for this user (owner-scoped and userId-filtered)
   let allItems: any[] = [];
   let nextToken: string | undefined | null = null;
   do {
-    const params: Parameters<typeof cookiesClient.models.OutreachQueue.list>[0] = { limit: 1000 };
+    const params: Parameters<typeof cookiesClient.models.OutreachQueue.list>[0] = {
+      filter: { userId: { eq: user.userId } },
+      limit: 1000,
+    };
     if (nextToken) params.nextToken = nextToken;
     const result = await cookiesClient.models.OutreachQueue.list(params);
     allItems.push(...(result.data || []));

@@ -332,6 +332,19 @@ const schema = a.schema({
       isEntityOwner: a.boolean(), // Borrower is an LLC/trust/fund/corp (not an individual homeowner)
       isTaxForeclosure: a.boolean(), // Case number marked "Tax_Fore" — usually free-and-clear, higher value
 
+      // --- Universal Property Lead Classification ---
+      ownershipCategory: a.string(), // INDIVIDUAL, MULTIPLE_INDIVIDUALS, ESTATE, TRUST, LLC, CORPORATION, INSTITUTIONAL, OTHER_ENTITY, UNKNOWN
+      ownershipConfidence: a.float(),
+      ownershipVerificationStatus: a.string(), // PENDING, VERIFIED, FLAGGED
+      ownershipEvidence: a.string().array(),
+      defendantName: a.string(), // Raw imported defendant / borrower name
+      plaintiffName: a.string(), // Raw imported plaintiff / lender name
+      parcelId: a.string(), // Parcel ID / APN / Block & Lot
+      foreclosureCategory: a.string(), // MORTGAGE_FORECLOSURE, TAX_FORECLOSURE, OTHER_FORECLOSURE, UNKNOWN
+      foreclosureConfidence: a.float(),
+      foreclosureEvidence: a.string().array(),
+      sourceRawData: a.json(), // Preserves the exact original CSV row / source record
+
       // Raw + full-detail JSON captures (nothing lost; queryable without re-parsing)
       foreclosureData: a.json(), // full foreclosure object from BatchData
       openLienData: a.json(), // full openLien object (mortgages[], balances, flags)

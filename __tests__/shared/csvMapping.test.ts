@@ -6,6 +6,10 @@ import {
   resolveOwnerName,
   parseOwnershipName,
   parseColumnMapping,
+  cleanCsvRows,
+  isEmptyCsvRow,
+  isSubHeaderRow,
+  serializeRowsToCsv,
 } from '../../app/utils/csvMapping';
 
 // Real header rows from county files, to prove auto-detect maps arbitrary layouts.
@@ -22,8 +26,10 @@ describe('autoDetectMapping (preforeclosure)', () => {
   it('maps the county headers to canonical fields', () => {
     expect(mapping.ownerAddress).toBe('SITUS ADDRESS');
     expect(mapping.ownerCity).toBe('SITUS CITY');
+    expect(mapping.ownerCounty).toBe('SITUS COUNTY');
     expect(mapping.ownerState).toBe('STATE');
     expect(mapping.ownerZip).toBe('SITUS ZIP');
+    expect(mapping.parcelId).toBe('PARCEL ID NO');
     expect(mapping.ownerFullName).toBe('BORROWER OR DEFENDANT NAME');
     expect(mapping.recordingDate).toBe('RECORDING DATE');
     expect(mapping.caseNumber).toBe('CASE NUMBER');
@@ -212,3 +218,75 @@ describe('parseColumnMapping', () => {
     expect(parseColumnMapping(42)).toBeUndefined();
   });
 });
+
+describe('cleanCsvRows and sub-header / empty row pruning', () => {
+  it('identifies empty rows', () => {
+    expect(isEmptyCsvRow(null)).toBe(true);
+    expect(isEmptyCsvRow({})).toBe(true);
+    expect(isEmptyCsvRow({ col1: '', col2: '   ' })).toBe(true);
+    expect(isEmptyCsvRow(['', '  ', ''])).toBe(true);
+    expect(isEmptyCsvRow({ col1: 'val', col2: '' })).toBe(false);
+  });
+
+  it('identifies sub-header rows with database column abbreviations', () => {
+    const subHeader = {
+      'CASE NUMBER': 'DOCKET_',
+      'RECORDING-DATE': 'DATE',
+      'LOAN-AMOUNT': 'MORTGAGEAM',
+      'BORROWER-OR-DEFENDANT-NAME': 'FIRSTNAME LASTNAME',
+      'LENDER-OR-PLAINTIFF-NAME': 'LENDER',
+      'TRUSTEE-OR-DEPUTY-NAME': 'ATTORNEY',
+      'SITUS-ADDRESS': 'ADDRESS',
+      'SITUS-CITY': 'MUNICIPALI',
+      'SITUS-COUNTY': 'COUNTY',
+      'SITUS-STATE': 'STATE',
+      'SITUS-ZIP': 'POSTALCODE',
+      'PARCEL-ID-NO': 'BLOCKTEXT-LOTTEXT',
+    };
+    expect(isSubHeaderRow(subHeader)).toBe(true);
+
+    const normalRow = {
+      'CASE NUMBER': 'F-10639-26',
+      'RECORDING-DATE': '9/29/2026',
+      'LOAN-AMOUNT': '$1,229.00',
+      'BORROWER-OR-DEFENDANT-NAME': 'Christopher Thompson',
+      'LENDER-OR-PLAINTIFF-NAME': 'Trystone Capital Assets',
+      'TRUSTEE-OR-DEPUTY-NAME': 'Anthony Velasquez',
+      'SITUS-ADDRESS': '810 N Forklanding Rd Unit 310',
+      'SITUS-CITY': 'Maple Shade',
+      'SITUS-COUNTY': 'Burlington',
+      'SITUS-STATE': 'NJ',
+      'SITUS-ZIP': '08052',
+      'PARCEL-ID-NO': '1-1',
+    };
+    expect(isSubHeaderRow(normalRow)).toBe(false);
+  });
+
+  it('cleans arrays of rows by stripping subheaders and empty lines', () => {
+    const rows = [
+      { a: 'DOCKET_', b: 'DATE', c: 'MORTGAGEAM' }, // subheader
+      { a: 'F-101', b: '10/01/2026', c: '$200,000' }, // valid
+      { a: '', b: '', c: '' }, // empty comma row
+      { a: 'F-102', b: '10/02/2026', c: '$350,000' }, // valid
+    ];
+    const cleaned = cleanCsvRows(rows);
+    expect(cleaned.length).toBe(2);
+    expect(cleaned[0].a).toBe('F-101');
+    expect(cleaned[1].a).toBe('F-102');
+  });
+
+  it('serializes rows back to clean RFC-4180 CSV string with proper escaping', () => {
+    const headers = ['Name', 'Address', 'Amount'];
+    const rows = [
+      { Name: 'John Smith', Address: '123 Main St, Apt 4', Amount: '$150,000' },
+      { Name: 'Jane "Doe"', Address: '456 Oak Rd', Amount: '$200,000' },
+    ];
+    const csv = serializeRowsToCsv(headers, rows);
+    expect(csv).toBe(
+      'Name,Address,Amount\n' +
+      'John Smith,"123 Main St, Apt 4","$150,000"\n' +
+      '"Jane ""Doe""",456 Oak Rd,"$200,000"'
+    );
+  });
+});
+

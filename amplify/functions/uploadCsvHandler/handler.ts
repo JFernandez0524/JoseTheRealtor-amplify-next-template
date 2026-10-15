@@ -20,7 +20,15 @@ import {
   formatPhoneE164,
   formatZip,
 } from '../../../app/utils/leadValidation';
-import { resolveOwnerName, parseColumnMapping } from '../../../app/utils/csvMapping';
+import {
+  resolveOwnerName,
+  resolveOwnerNameWithClassification,
+  parseColumnMapping,
+  cleanCsvRows,
+  isEmptyCsvRow,
+  isSubHeaderRow,
+} from '../../../app/utils/csvMapping';
+import { classifyForeclosure } from '../shared/foreclosureClassifier';
 import { resolvePropertyWithSerp } from '../../../app/utils/serpPropertyResolver.server';
 
 const s3 = new S3Client({ region: process.env.AWS_REGION });
@@ -45,7 +53,7 @@ console.log('🔧 [CSV_UPLOAD] Environment:', {
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 const BRIDGE_API_DELAY_MS = 50;  // Optimized for fast bulk processing without exceeding Bridge API limits
 const GOOGLE_API_DELAY_MS = 20;  // ~50 QPS — well under Google's 100 QPS limit
-const MAX_UPLOAD_ROWS = 500;     // hard cap: prevents Lambda timeout and API quota exhaustion
+const MAX_UPLOAD_ROWS = 1500;    // hard cap: prevents Lambda timeout and API quota exhaustion
 const MAX_DUPLICATE_STORE = 100; // max duplicate entries to store in DynamoDB (400KB item limit)
 
 // ---------------------------------------------------------
@@ -331,6 +339,9 @@ export const handler: S3Handler = async (event) => {
       let totalRows = 0;
       const emailViolations: { rowNum: number; field: string; value: string }[] = [];
       for await (const row of countParser) {
+        if (isEmptyCsvRow(row as Record<string, any>) || isSubHeaderRow(row as Record<string, any>)) {
+          continue;
+        }
         totalRows++;
         const violation = detectEmailsInRow(row as Record<string, any>, totalRows);
         if (violation) emailViolations.push(violation);
@@ -410,6 +421,9 @@ export const handler: S3Handler = async (event) => {
       );
 
       for await (const row of parser) {
+        if (isEmptyCsvRow(row as Record<string, any>) || isSubHeaderRow(row as Record<string, any>)) {
+          continue;
+        }
         currentRow++;
         try {
           // Resolve a canonical field's value from this row: prefer the user's column mapping, then
@@ -550,14 +564,27 @@ export const handler: S3Handler = async (event) => {
             : null;
 
           // --- Owner/borrower name (combined OR split column, entity-aware — one shared resolver) ---
-          const ownerName = resolveOwnerName({
-            full: cell('ownerFullName', 'borrowerName', 'Borrower Name', 'BORROWER OR DEFENDANT NAME', 'OWNERSHIP', 'ownership'),
-            first: cell('ownerFirstName', 'ownerFirstName', 'First Name'),
-            last: cell('ownerLastName', 'ownerLastName', 'Last Name'),
+          const rawDefendant = cell(
+            'ownerFullName',
+            'borrowerName',
+            'Borrower Name',
+            'BORROWER OR DEFENDANT NAME',
+            'BORROWER-OR-DEFENDANT-NAME',
+            'OWNERSHIP',
+            'ownership'
+          );
+          const rawFirstName = cell('ownerFirstName', 'ownerFirstName', 'First Name', 'FIRSTNAME');
+          const rawLastName = cell('ownerLastName', 'ownerLastName', 'Last Name', 'LASTNAME');
+          const rawParcelId = cell('parcelId', 'parcelId', 'PARCEL-ID-NO', 'PARCEL ID NO', 'Parcel ID', 'BLOCKTEXT-LOTTEXT');
+
+          const ownerNameWithClass = resolveOwnerNameWithClassification({
+            full: rawDefendant,
+            first: rawFirstName,
+            last: rawLastName,
           });
-          const ownerFirstName = ownerName.firstName;
-          const ownerLastName = ownerName.lastName;
-          const isEntityOwner = ownerName.isEntity;
+          const ownerFirstName = ownerNameWithClass.firstName;
+          const ownerLastName = ownerNameWithClass.lastName;
+          const isEntityOwner = ownerNameWithClass.isEntity;
 
           const labels: string[] = [leadType];
           if (isEntityOwner) labels.push('ENTITY');
@@ -623,29 +650,43 @@ export const handler: S3Handler = async (event) => {
 
           if (leadType === 'PREFORECLOSURE') {
             // Authoritative county foreclosure fields — the source of truth BatchData must not overwrite.
-            // (Owner name + entity detection are handled globally above via resolveOwnerName.)
-            const rawCase = sanitize(cell('caseNumber', 'caseNumber', 'Case Number', 'CASE NUMBER'));
+            const rawCase = sanitize(cell('caseNumber', 'caseNumber', 'Case Number', 'CASE NUMBER', 'DOCKET_'));
             if (rawCase) {
               foreclosureCaseNumberCsv = rawCase;
-              if (isTaxForeclosureCase(rawCase)) {
-                isTaxForeclosure = true;
-                labels.push('TAX_FORECLOSURE');
-              }
             }
             countyFilingDate = formatDateOnly(
-              cell('recordingDate', 'recordingDate', 'Recording Date', 'RECORDING DATE')
+              cell('recordingDate', 'recordingDate', 'Recording Date', 'RECORDING DATE', 'RECORDING-DATE')
             );
             foreclosureLenderNameCsv =
-              sanitize(cell('lender', 'lender', 'Lender', 'LENDER OR PLAINTIFF NAME')) || null;
+              sanitize(cell('lender', 'lender', 'Lender', 'LENDER OR PLAINTIFF NAME', 'LENDER-OR-PLAINTIFF-NAME')) || null;
             foreclosureTrusteeCsv =
-              sanitize(cell('trustee', 'trustee', 'Trustee', 'TRUSTEE OR DEPUTY NAME')) || null;
+              sanitize(cell('trustee', 'trustee', 'Trustee', 'TRUSTEE OR DEPUTY NAME', 'TRUSTEE-OR-DEPUTY-NAME')) || null;
             foreclosureAmountCsv = parseCurrency(
-              cell('loanAmount', 'loanAmount', 'Loan Amount', 'LOAN AMOUNT')
+              cell('loanAmount', 'loanAmount', 'Loan Amount', 'LOAN AMOUNT', 'LOAN-AMOUNT', 'MORTGAGEAM')
             );
             // A fresh county recording = an active filing. Give the classifier an ACTIVE status so a
             // later stale BatchData "rescission" can't be the only signal. (Enrichment guards against
             // overwriting this with an older record — see enrichment.ts mapPropertyToLead.)
             if (countyFilingDate) foreclosureStatusCsv = 'Pre-Foreclosure — County Recording';
+          }
+
+          // Foreclosure type classification
+          const foreclosureClass = classifyForeclosure({
+            caseNumber: foreclosureCaseNumberCsv,
+            plaintiff: foreclosureLenderNameCsv,
+            trustee: foreclosureTrusteeCsv,
+            loanAmount: foreclosureAmountCsv,
+          });
+
+          if (foreclosureClass.category === 'TAX_FORECLOSURE') {
+            isTaxForeclosure = true;
+            if (!labels.includes('TAX_FORECLOSURE')) labels.push('TAX_FORECLOSURE');
+          } else if (isTaxForeclosureCase(foreclosureCaseNumberCsv || '')) {
+            isTaxForeclosure = true;
+            if (!labels.includes('TAX_FORECLOSURE')) labels.push('TAX_FORECLOSURE');
+          }
+          if (foreclosureClass.category === 'OTHER_FORECLOSURE' && !labels.includes('HOA_FORECLOSURE')) {
+            labels.push('HOA_FORECLOSURE');
           }
 
           const preSkiptracedPhone = formatPhoneNumber(cell('phone', 'phone'));
@@ -854,6 +895,19 @@ export const handler: S3Handler = async (event) => {
             isEntityOwner,
             isTaxForeclosure,
             leadLabels: labels,
+
+            // --- Universal Property Lead Classification ---
+            ownershipCategory: ownerNameWithClass.classification.category,
+            ownershipConfidence: ownerNameWithClass.classification.confidence,
+            ownershipVerificationStatus: ownerNameWithClass.classification.verificationStatus,
+            ownershipEvidence: ownerNameWithClass.classification.evidence,
+            defendantName: rawDefendant || `${ownerFirstName || ''} ${ownerLastName || ''}`.trim() || null,
+            plaintiffName: foreclosureLenderNameCsv,
+            parcelId: rawParcelId || null,
+            foreclosureCategory: foreclosureClass.category,
+            foreclosureConfidence: foreclosureClass.confidence,
+            foreclosureEvidence: foreclosureClass.evidence,
+            sourceRawData: row,
 
             // --- 🟢 County foreclosure data (authoritative source-of-truth) ---
             countyFilingDate,

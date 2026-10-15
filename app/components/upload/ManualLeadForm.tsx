@@ -9,10 +9,18 @@ import { useRouter } from 'next/navigation';
 import { useAccess } from '@/app/context/AccessContext';
 import { HiLockClosed } from 'react-icons/hi';
 import { UploadProgressModal } from './UploadProgressModal';
+import { ImportPreviewModal } from './ImportPreviewModal';
 import { fetchLeads } from '@/app/utils/aws/data/lead.client';
 import { AddressAutocomplete, ParsedAddress } from '@/app/components/address/AddressAutocomplete';
 import { sanitizeName, isValidName, formatPhoneE164, sanitizePhoneInput, NAME_MAX, makeAddressKey } from '@/app/utils/leadValidation';
-import { canonicalFields, autoDetectMapping, missingRequired, type LeadType } from '@/app/utils/csvMapping';
+import {
+  canonicalFields,
+  autoDetectMapping,
+  missingRequired,
+  cleanCsvRows,
+  serializeRowsToCsv,
+  type LeadType,
+} from '@/app/utils/csvMapping';
 import { asJson } from '@/app/utils/batchdata/enrichment';
 
 interface CsvPreview {
@@ -33,6 +41,8 @@ export function ManualLeadForm() {
   const [file, setFile] = useState<File | null>(null);
   const [uploadJobId, setUploadJobId] = useState<string | null>(null);
   const [showProgressModal, setShowProgressModal] = useState(false);
+  const [showPreviewModal, setShowPreviewModal] = useState(false);
+  const [parsedCleanRows, setParsedCleanRows] = useState<Record<string, any>[]>([]);
   const [csvPreview, setCsvPreview] = useState<CsvPreview | null>(null);
   // Whether a file is being dragged over the dropzone (drives the highlight style).
   const [isDragging, setIsDragging] = useState(false);
@@ -66,6 +76,7 @@ export function ManualLeadForm() {
     setFile(selected);
     setCsvPreview(null);
     setSourceHeaders([]);
+    setParsedCleanRows([]);
     if (selected) {
       parseFilePreview(selected);
       readHeaders(selected);
@@ -76,43 +87,56 @@ export function ManualLeadForm() {
     setCsvPreview({ rowCount: 0, duplicateCount: 0, loading: true });
     try {
       const text = await selectedFile.text();
-      const lines = text.trim().split('\n').filter(l => l.trim());
-      if (lines.length < 2) {
+      const allRows = parseCsvSync(text, {
+        columns: true,
+        trim: true,
+        bom: true,
+        skip_empty_lines: true,
+      }) as Record<string, any>[];
+
+      const cleanRows = cleanCsvRows(allRows);
+      setParsedCleanRows(cleanRows);
+
+      if (cleanRows.length === 0) {
         setCsvPreview({ rowCount: 0, duplicateCount: 0, loading: false });
         return;
       }
-      const rowCount = lines.length - 1;
+      const rowCount = cleanRows.length;
 
-      const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
-      const addrIdx = headers.indexOf('owneraddress');
-      const zipIdx = headers.indexOf('ownerzip');
-
-      if (addrIdx === -1 || zipIdx === -1) {
-        setCsvPreview({ rowCount, duplicateCount: 0, loading: false });
-        return;
-      }
-
-      const csvKeys = new Set<string>();
-      for (let i = 1; i < lines.length; i++) {
-        const cols = lines[i].split(',');
-        const key = makeAddressKey(cols[addrIdx], cols[zipIdx]);
-        if (key) csvKeys.add(key);
-      }
-
-      const existingLeads = await fetchLeads();
-      const existingKeys = new Set(
-        existingLeads
-          .map(l => makeAddressKey(l.ownerAddress, l.ownerZip))
-          .filter((k): k is string => Boolean(k))
-      );
+      // Duplicate check: detect address and zip headers
+      const firstRow = cleanRows[0] || {};
+      const addrKey = Object.keys(firstRow).find((k) => {
+        const lk = k.toLowerCase().replace(/[^a-z0-9]/g, '');
+        return lk.includes('address') || lk.includes('situs');
+      });
+      const zipKey = Object.keys(firstRow).find((k) => {
+        const lk = k.toLowerCase().replace(/[^a-z0-9]/g, '');
+        return lk.includes('zip') || lk.includes('postal');
+      });
 
       let duplicateCount = 0;
-      for (const key of csvKeys) {
-        if (existingKeys.has(key)) duplicateCount++;
+      if (addrKey && zipKey) {
+        const csvKeys = new Set<string>();
+        for (const row of cleanRows) {
+          const key = makeAddressKey(row[addrKey], row[zipKey]);
+          if (key) csvKeys.add(key);
+        }
+
+        const existingLeads = await fetchLeads();
+        const existingKeys = new Set(
+          existingLeads
+            .map((l) => makeAddressKey(l.ownerAddress, l.ownerZip))
+            .filter((k): k is string => Boolean(k))
+        );
+
+        for (const key of csvKeys) {
+          if (existingKeys.has(key)) duplicateCount++;
+        }
       }
 
       setCsvPreview({ rowCount, duplicateCount, loading: false });
-    } catch {
+    } catch (err: any) {
+      console.warn('Preview parsing error:', err);
       setCsvPreview({ rowCount: 0, duplicateCount: 0, loading: false });
     }
   };
@@ -208,7 +232,7 @@ export function ManualLeadForm() {
     }
 
     // Enforce row cap before uploading — Lambda rejects oversized files but this gives faster feedback
-    const MAX_ROWS = 500;
+    const MAX_ROWS = 1500;
     if (csvPreview && !csvPreview.loading && csvPreview.rowCount > MAX_ROWS) {
       return setMessage(`❌ File too large (${csvPreview.rowCount} rows). Maximum is ${MAX_ROWS} per upload. Split the file and upload in batches.`);
     }
@@ -224,10 +248,25 @@ export function ManualLeadForm() {
       return setMessage(`❌ Map these required columns before importing: ${missing.map(labelFor).join(', ')}`);
     }
 
+    if (parsedCleanRows.length === 0) {
+      return setMessage('❌ No valid lead rows detected in file.');
+    }
+
+    setMessage('');
+    setShowPreviewModal(true);
+  };
+
+  const handleExecuteImport = async (selectedRows: Record<string, any>[]) => {
+    if (!file || !lead.type || selectedRows.length === 0) return;
+
     setLoading(true);
     try {
       const user = await getFrontEndUser();
       if (!user) throw new Error('Session expired.');
+
+      // Serialize only the selected, filtered rows back to a clean CSV
+      const cleanCsvText = serializeRowsToCsv(sourceHeaders, selectedRows);
+      const cleanFile = new File([cleanCsvText], file.name, { type: 'text/csv' });
 
       // Unique filename prevents S3 collision if same file is re-uploaded
       const uploadFileName = `${Date.now()}-${file.name}`;
@@ -238,13 +277,12 @@ export function ManualLeadForm() {
         fileName: uploadFileName,
         leadType: lead.type.toUpperCase(),
         status: 'PENDING',
-        totalRows: 0,
+        totalRows: selectedRows.length,
         processedRows: 0,
         successCount: 0,
         duplicateCount: 0,
         errorCount: 0,
         // The user's column mapping travels with the job; the Lambda reads it to resolve each field.
-        // AWSJSON fields reject raw objects, so serialize with asJson (the Lambda parses either form).
         columnMapping: Object.keys(columnMapping).length ? asJson(columnMapping) : undefined,
         startedAt: new Date().toISOString(),
       });
@@ -257,10 +295,10 @@ export function ManualLeadForm() {
       // Wait for DynamoDB consistency (1000ms)
       await new Promise(resolve => setTimeout(resolve, 1000));
 
-      // Upload file to S3 (triggers Lambda)
+      // Upload clean file to S3 (triggers Lambda)
       await uploadData({
         path: `leadFiles/${user.userId}/${uploadFileName}`,
-        data: file,
+        data: cleanFile,
         options: {
           metadata: {
             leadtype: lead.type.toUpperCase(),
@@ -269,7 +307,7 @@ export function ManualLeadForm() {
         },
       }).result;
 
-      // Show progress modal
+      setShowPreviewModal(false);
       setUploadJobId(newJob.id);
       setShowProgressModal(true);
     } catch (err: any) {
@@ -452,7 +490,11 @@ export function ManualLeadForm() {
               disabled={loading || !file || !lead.type || !canUsePremium}
               className='w-full bg-blue-600 text-white p-3 rounded-md font-bold disabled:bg-gray-300 hover:bg-blue-700 transition-colors'
             >
-              {loading ? 'Processing...' : 'Start CSV Import'}
+              {loading
+                ? 'Processing...'
+                : csvPreview?.rowCount
+                ? `Review & Filter Leads (${csvPreview.rowCount} rows)`
+                : 'Review & Filter Leads'}
             </button>
           </div>
         </div>
@@ -630,6 +672,20 @@ export function ManualLeadForm() {
         </div>
       )}
       
+      {/* Upload Preview & Filter Modal */}
+      {showPreviewModal && file && (
+        <ImportPreviewModal
+          isOpen={showPreviewModal}
+          fileName={file.name}
+          leadType={lead.type ? lead.type.toUpperCase() : 'PREFORECLOSURE'}
+          rawRows={parsedCleanRows}
+          columnMapping={columnMapping}
+          onClose={() => setShowPreviewModal(false)}
+          onConfirmImport={handleExecuteImport}
+          isImporting={loading}
+        />
+      )}
+
       {/* Upload Progress Modal */}
       {showProgressModal && uploadJobId && (
         <UploadProgressModal jobId={uploadJobId} onClose={() => setShowProgressModal(false)} />

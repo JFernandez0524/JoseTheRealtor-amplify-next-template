@@ -23,6 +23,7 @@ const GHL_INTEGRATION_TABLE = process.env.AMPLIFY_DATA_GhlIntegration_TABLE_NAME
 type GhlIntegration = {
   id: string;
   userId: string;
+  owner?: string;
   locationId: string;
   accessToken: string;
   refreshToken: string;
@@ -44,6 +45,7 @@ export type GhlTokenResult = {
   token: string;
   locationId: string;
   integrationId: string;
+  owner: string | null;
   customFieldIds: Record<string, string> | null;
   opportunityFieldIds: Record<string, string> | null;
   agentName: string | null;
@@ -96,6 +98,7 @@ export async function getValidGhlToken(userId: string, forceRefresh: boolean = f
         token: integration.accessToken,
         locationId: integration.locationId,
         integrationId: integration.id,
+        owner: integration.owner || null,
         customFieldIds: integration.customFieldIds || null,
         opportunityFieldIds: integration.opportunityFieldIds || null,
         agentName: integration.agentName || null,
@@ -160,6 +163,7 @@ export async function getValidGhlToken(userId: string, forceRefresh: boolean = f
         token: access_token,
         locationId: integration.locationId,
         integrationId: integration.id,
+        owner: integration.owner || null,
         customFieldIds: integration.customFieldIds || null,
         opportunityFieldIds: integration.opportunityFieldIds || null,
         agentName: integration.agentName || null,
@@ -213,6 +217,7 @@ export async function getValidGhlToken(userId: string, forceRefresh: boolean = f
               token: updated.accessToken,
               locationId: updated.locationId,
               integrationId: updated.id,
+              owner: updated.owner || null,
               customFieldIds: updated.customFieldIds || null,
               opportunityFieldIds: updated.opportunityFieldIds || null,
               agentName: updated.agentName || null,

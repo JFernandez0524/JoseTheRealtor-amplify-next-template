@@ -34,10 +34,13 @@ const docClient = DynamoDBDocumentClient.from(dynamoClient, {
 });
 
 const OUTREACH_QUEUE_TABLE = process.env.AMPLIFY_DATA_OutreachQueue_TABLE_NAME;
+const GHL_INTEGRATION_TABLE = process.env.AMPLIFY_DATA_GhlIntegration_TABLE_NAME || 'GhlIntegration-ahlnflzdejd5jdrulwuqcuxm6i-NONE';
+const USER_ACCOUNT_TABLE = process.env.AMPLIFY_DATA_UserAccount_TABLE_NAME || 'UserAccount-ahlnflzdejd5jdrulwuqcuxm6i-NONE';
 
 interface OutreachQueueItem {
   id?: string;
   userId: string;
+  owner?: string; // Compound Cognito owner string (sub::username for Google, sub::sub for email/pwd)
   locationId: string;
   contactId: string;
   leadId?: string; // Links all contacts for the same PropertyLead
@@ -86,10 +89,57 @@ export async function addToOutreachQueue(item: OutreachQueueItem): Promise<strin
     console.error(`Error checking for existing queue item:`, error);
     // Continue to add if check fails
   }
+
+  // Resolve compound owner string (sub::username for Google/OAuth, sub::sub for email/password)
+  let owner = item.owner;
+  if (!owner) {
+    try {
+      const ghlRes = await docClient.send(new ScanCommand({
+        TableName: GHL_INTEGRATION_TABLE,
+        FilterExpression: 'userId = :uid',
+        ExpressionAttributeValues: { ':uid': item.userId },
+        ProjectionExpression: '#o',
+        ExpressionAttributeNames: { '#o': 'owner' },
+        Limit: 1
+      }));
+      if (ghlRes.Items?.[0]?.owner) {
+        owner = ghlRes.Items[0].owner;
+      }
+    } catch (err: any) {
+      console.warn(`⚠️ [OUTREACH_QUEUE] Could not resolve owner from GhlIntegration:`, err.message);
+    }
+
+    if (!owner) {
+      try {
+        const userRes = await docClient.send(new ScanCommand({
+          TableName: USER_ACCOUNT_TABLE,
+          FilterExpression: 'begins_with(#o, :prefix) OR #o = :uid',
+          ExpressionAttributeNames: { '#o': 'owner' },
+          ExpressionAttributeValues: {
+            ':prefix': `${item.userId}::`,
+            ':uid': item.userId
+          },
+          ProjectionExpression: '#o',
+          Limit: 1
+        }));
+        if (userRes.Items?.[0]?.owner) {
+          owner = userRes.Items[0].owner;
+        }
+      } catch (err: any) {
+        console.warn(`⚠️ [OUTREACH_QUEUE] Could not resolve owner from UserAccount:`, err.message);
+      }
+    }
+
+    if (!owner) {
+      owner = `${item.userId}::${item.userId}`;
+    }
+  }
   
   const queueItem = {
+    __typename: 'OutreachQueue',
     id,
     userId: item.userId,
+    owner,
     locationId: item.locationId,
     contactId: item.contactId,
     leadId: item.leadId, // Link to PropertyLead
@@ -114,7 +164,7 @@ export async function addToOutreachQueue(item: OutreachQueueItem): Promise<strin
     Item: queueItem,
   }));
 
-  console.log(`✅ Added contact ${item.contactId} to outreach queue`);
+  console.log(`✅ Added contact ${item.contactId} to outreach queue with owner ${owner}`);
   return id;
 }
 
