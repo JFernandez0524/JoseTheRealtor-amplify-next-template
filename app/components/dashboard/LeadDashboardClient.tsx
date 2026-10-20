@@ -25,6 +25,12 @@ import { SyncConfirmModal } from './SyncConfirmModal';
 import { DeleteConfirmModal } from './DeleteConfirmModal';
 import { SyncResultModal } from './SyncResultModal';
 import {
+  SkipTraceResultModal,
+  computeReachabilityBreakdown,
+  isLeadSyncEligible,
+  type ReachabilityBreakdown,
+} from './SkipTraceResultModal';
+import {
   getFrontEndUser,
   getFrontEndUserAttributes,
 } from '@/app/utils/aws/auth/amplifyFrontEndUser';
@@ -57,6 +63,8 @@ export default function LeadDashboardClient({}: Props) {
   const [showSyncModal, setShowSyncModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [syncCounts, setSyncCounts] = useState({ calling: 0, emailOnly: 0, digitalOnly: 0 });
+  const [syncBreakdown, setSyncBreakdown] = useState<ReachabilityBreakdown | null>(null);
+  const [syncExcludedCount, setSyncExcludedCount] = useState(0);
   const [syncEligibleIds, setSyncEligibleIds] = useState<string[]>([]);
   const [alreadySyncedCount, setAlreadySyncedCount] = useState(0);
   const [syncProgress, setSyncProgress] = useState<{ current: number; total: number } | null>(null);
@@ -64,6 +72,8 @@ export default function LeadDashboardClient({}: Props) {
   const [skippedSyncIds, setSkippedSyncIds] = useState<string[]>([]);
   const [syncResultSummary, setSyncResultSummary] = useState<{ successful: number; skipped: number; failed: number } | null>(null);
   const [showSyncResultModal, setShowSyncResultModal] = useState(false);
+  const [showSkipTraceResultModal, setShowSkipTraceResultModal] = useState(false);
+  const [skipTraceBreakdown, setSkipTraceBreakdown] = useState<ReachabilityBreakdown | null>(null);
 
   const [isLoading, setIsLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
@@ -195,14 +205,16 @@ export default function LeadDashboardClient({}: Props) {
    * (bulk status update, sync, skip trace, enrichment) this replaces a full re-list with a handful
    * of gets bounded by the selection size.
    */
-  const patchLeads = async (ids: string[]) => {
-    if (!ids?.length) return;
+  const patchLeads = async (ids: string[]): Promise<Lead[]> => {
+    if (!ids?.length) return [];
     try {
       const updated = await fetchLeadsByIds(ids);
       applyLeadUpdates(updated);
+      return updated;
     } catch (err) {
       console.error('Failed to patch leads, falling back to full refresh:', err);
       await refreshLeads();
+      return [];
     }
   };
 
@@ -623,14 +635,6 @@ export default function LeadDashboardClient({}: Props) {
     }
   };
 
-  const isOffMarketLead = (lead: Lead): boolean => {
-    const status = (lead.listingStatus || '').trim().toLowerCase();
-    if (status && status !== 'off_market') return false;
-    const labels = Array.isArray(lead.leadLabels) ? lead.leadLabels : [];
-    if (labels.some((l) => l === 'ACTIVE_MLS' || l === 'RECENTLY_SOLD')) return false;
-    return true;
-  };
-
   const handleBulkGHLSync = async () => {
     if (selectedIds.length === 0) return;
 
@@ -645,54 +649,40 @@ export default function LeadDashboardClient({}: Props) {
       return;
     }
 
-    // Categorize eligible leads by skip trace results and property value (off-market only)
+    // Strictly enforce: ONLY off-market leads with completed skip tracing (COMPLETED or NO_QUALITY_CONTACTS) can sync
     const selectedLeads = leads.filter((lead) => selectedIds.includes(lead.id));
-    const eligibleLeads = selectedLeads.filter(isOffMarketLead);
-    const nonOffMarketCount = selectedLeads.length - eligibleLeads.length;
+    const eligibleLeads = selectedLeads.filter(isLeadSyncEligible);
+    const excludedCount = selectedLeads.length - eligibleLeads.length;
 
     if (eligibleLeads.length === 0) {
       addToast({
         type: 'warning',
-        title: 'No Off-Market Leads',
-        message: 'Only off-market leads can be synced to CRM. None of the selected leads are off-market.',
+        title: 'No Eligible Leads to Sync',
+        message: 'Only off-market leads with completed skip tracing (COMPLETED or Direct Mail Only) can be synced to Launch AI. NO_MATCH and non-off-market leads are blocked.',
       });
       return;
     }
 
-    if (nonOffMarketCount > 0) {
+    if (excludedCount > 0) {
       addToast({
         type: 'info',
-        title: 'Non-Off-Market Leads Excluded',
-        message: `${nonOffMarketCount} lead${nonOffMarketCount !== 1 ? 's are' : ' is'} not off-market and will not be synced.`,
+        title: 'Ineligible Leads Excluded',
+        message: `${excludedCount} lead${excludedCount !== 1 ? 's were' : ' was'} excluded (must be off-market with completed skip trace; NO_MATCH is not synced).`,
       });
     }
 
-    const callingLeads = eligibleLeads.filter((lead) => {
-      return lead.phones && lead.phones.length > 0;
-    });
-
-    const emailOnlyLeads = eligibleLeads.filter((lead) => {
-      const value = lead.zestimate || lead.estimatedValue || 0;
-      return (
-        (!lead.phones || lead.phones.length === 0) &&
-        value >= 300000 &&
-        value <= 850000
-      );
-    });
-
-    const digitalOnlyLeads = eligibleLeads.filter((lead) => {
-      const value = lead.zestimate || lead.estimatedValue || 0;
-      return (
-        (!lead.phones || lead.phones.length === 0) &&
-        (value < 300000 || value > 850000)
-      );
-    });
-
+    const breakdown = computeReachabilityBreakdown(eligibleLeads);
     const eligibleIds = eligibleLeads.map((lead) => lead.id);
     const alreadySynced = eligibleLeads.filter((lead) => lead.ghlSyncStatus === 'SUCCESS').length;
     setAlreadySyncedCount(alreadySynced);
     setSyncEligibleIds(eligibleIds);
-    setSyncCounts({ calling: callingLeads.length, emailOnly: emailOnlyLeads.length, digitalOnly: digitalOnlyLeads.length });
+    setSyncBreakdown(breakdown);
+    setSyncExcludedCount(excludedCount);
+    setSyncCounts({
+      calling: breakdown.totalMobileLeads + breakdown.totalLandlineLeads,
+      emailOnly: breakdown.emailOnly,
+      digitalOnly: breakdown.directMailOnlyCount,
+    });
     setFailedSyncIds([]);
     setSkippedSyncIds([]);
     setShowSyncModal(true);
@@ -701,12 +691,12 @@ export default function LeadDashboardClient({}: Props) {
   const executeBulkGHLSync = async (idsToSync?: string[]) => {
     const rawIds = idsToSync ?? (syncEligibleIds.length > 0 ? syncEligibleIds : selectedIds);
     const ids = leads
-      .filter((lead) => rawIds.includes(lead.id) && isOffMarketLead(lead))
+      .filter((lead) => rawIds.includes(lead.id) && isLeadSyncEligible(lead))
       .map((lead) => lead.id);
 
     setShowSyncModal(false);
     if (ids.length === 0) {
-      addToast({ type: 'warning', title: 'No Eligible Leads', message: 'No off-market leads available to sync.' });
+      addToast({ type: 'warning', title: 'No Eligible Leads', message: 'No off-market leads with completed skip trace available to sync.' });
       return;
     }
 
@@ -826,18 +816,25 @@ export default function LeadDashboardClient({}: Props) {
         allResults.push(...results);
       }
 
-      const successful = allResults.filter((r: any) => r?.status === 'SUCCESS').length;
-      const failed = allResults.filter((r: any) => r?.status === 'FAILED' || r?.status === 'ERROR').length;
-      const noMatch = allResults.filter((r: any) => r?.status === 'NO_MATCH').length;
-      const noQuality = allResults.filter((r: any) => r?.status === 'NO_QUALITY_CONTACTS').length;
-
-      addToast({ type: 'success', title: 'Skip-trace complete!', message: `Successful: ${successful} | No Match (not charged): ${noMatch} | No Quality: ${noQuality} | Failed: ${failed}`, duration: 8000 });
-
-      setSelectedIds([]);
-
       // Refresh in place — a hard reload would wipe the toast before it can be read. Only the
-      // traced leads changed, and `idsToProcess` survives the setSelectedIds([]) above.
-      await patchLeads(idsToProcess);
+      // traced leads changed, and `idsToProcess` survives the selection update below.
+      const updatedLeads = await patchLeads(idsToProcess);
+      const breakdown = computeReachabilityBreakdown(
+        updatedLeads.length > 0 ? updatedLeads : leads.filter((l) => idsToProcess.includes(l.id))
+      );
+
+      // Keep only the sync-eligible (off-market + COMPLETED / NO_QUALITY_CONTACTS) leads selected
+      // so the user can immediately sync them without sending NO_MATCH leads.
+      setSelectedIds(breakdown.syncEligibleIds);
+      setSkipTraceBreakdown(breakdown);
+      setShowSkipTraceResultModal(true);
+
+      addToast({
+        type: 'success',
+        title: 'Skip-trace complete!',
+        message: `Matched: ${breakdown.matchedCount} | No Match (not charged): ${breakdown.noMatchCount}${breakdown.failedCount ? ` | Failed: ${breakdown.failedCount}` : ''}`,
+        duration: 8000,
+      });
     } catch (err: any) {
       console.error('Skip-trace error:', err);
       addToast({ type: 'error', title: 'Skip-trace Error', message: err.message || 'Check your network connection' });
@@ -1662,6 +1659,20 @@ export default function LeadDashboardClient({}: Props) {
         emailOnlyCount={syncCounts.emailOnly}
         digitalOnlyCount={syncCounts.digitalOnly}
         alreadySyncedCount={alreadySyncedCount}
+        excludedCount={syncExcludedCount}
+        breakdown={syncBreakdown}
+      />
+
+      {/* Post-Skip-Trace Breakdown Modal */}
+      <SkipTraceResultModal
+        isOpen={showSkipTraceResultModal}
+        onClose={() => setShowSkipTraceResultModal(false)}
+        breakdown={skipTraceBreakdown}
+        onSyncEligible={
+          skipTraceBreakdown && skipTraceBreakdown.syncEligibleIds.length > 0
+            ? () => handleBulkGHLSync()
+            : undefined
+        }
       />
 
       <DeleteConfirmModal

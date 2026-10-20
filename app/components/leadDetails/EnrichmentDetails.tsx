@@ -69,125 +69,248 @@ export function EnrichmentDetails({ lead }: { lead: Lead }) {
   const raw = parseJson((lead as any).rawEnrichmentData) || {};
   const fc = parseJson((lead as any).foreclosureData) || raw.foreclosure || {};
   const lien = parseJson((lead as any).openLienData) || raw.openLien || {};
+  const sourceRaw = parseJson((lead as any).sourceRawData) || {};
   const val = raw.valuation || {};
   const mortgages: any[] = Array.isArray(lien.mortgages) ? lien.mortgages : [];
   const history: any[] = Array.isArray(raw.mortgageHistory) ? raw.mortgageHistory : [];
   const invLiens: any[] = Array.isArray(raw.involuntaryLien?.liens) ? raw.involuntaryLien.liens : [];
+  const isEnriched = Boolean((lead as any).batchDataEnriched);
+
+  const saleDateRaw =
+    (lead as any).foreclosureAuctionDate ||
+    fc.auctionDate ||
+    sourceRaw.sales_date ||
+    sourceRaw.sale_date ||
+    null;
 
   // Recency-aware: fall back to the blob's status if the flat column is empty, then judge staleness
   // against the county filing so a years-old BatchData "rescission" doesn't read as DEAD on a fresh lead.
   const { stage, baseStage, stale } = classifyForeclosureStageWithRecency({
     ...(lead as any),
-    foreclosureStatus: (lead as any).foreclosureStatus || fc.status,
+    foreclosureStatus:
+      (lead as any).foreclosureStatus ||
+      fc.status ||
+      (saleDateRaw ? 'Scheduled Sheriff Sale' : undefined),
+    foreclosureAuctionDate: saleDateRaw,
   });
   const isEntity = (lead as any).isEntityOwner === true;
   const isTax = (lead as any).isTaxForeclosure === true;
+  const fcCategory = (lead as any).foreclosureCategory || null;
+  const fcEvidence: string[] = Array.isArray((lead as any).foreclosureEvidence)
+    ? (lead as any).foreclosureEvidence.filter(Boolean)
+    : [];
+
+  const approxUpset = sourceRaw.approx_upset ? Number(String(sourceRaw.approx_upset).replace(/[$,\s]/g, '')) : null;
+  const estUpset =
+    (lead as any).foreclosureAmount ??
+    (sourceRaw.estimated_upset ? Number(String(sourceRaw.estimated_upset).replace(/[$,\s]/g, '')) : null) ??
+    (sourceRaw.loan_amount ? Number(String(sourceRaw.loan_amount).replace(/[$,\s]/g, '')) : null) ??
+    (lead as any).foreclosureUnpaidBalance ??
+    fc.unpaidBalance ??
+    null;
+  const zestimateVal = lead.zestimate ?? lead.estimatedValue ?? val.estimatedValue ?? null;
+  const baselineUpset = estUpset ?? approxUpset;
+  const estimatedSpread =
+    zestimateVal && baselineUpset && Number.isFinite(Number(zestimateVal)) && Number.isFinite(Number(baselineUpset))
+      ? Number(zestimateVal) - Number(baselineUpset)
+      : null;
+
+  const caseNumber =
+    (lead as any).foreclosureCaseNumber ||
+    sourceRaw.court_case_number ||
+    fc.caseNumber ||
+    null;
+  const sheriffNumber = sourceRaw.sheriff_number || null;
+  const plaintiffOrLender =
+    (lead as any).plaintiffName ||
+    (lead as any).foreclosureLenderName ||
+    sourceRaw.plaintiff ||
+    fc.currentLenderName ||
+    null;
+  const defendantOrBorrower =
+    (lead as any).defendantName ||
+    sourceRaw.defendant ||
+    fc.borrowerName ||
+    [lead.ownerFirstName, lead.ownerLastName].filter(Boolean).join(' ') ||
+    null;
+  const attorneyOrTrustee =
+    (lead as any).foreclosureTrustee ||
+    sourceRaw.attorney ||
+    fc.trusteeName ||
+    null;
+  const attorneyPhone =
+    (lead as any).foreclosureTrusteePhone ||
+    sourceRaw.attorney_phone ||
+    fc.trusteePhone ||
+    null;
+  const parcelDisplay =
+    (lead as any).parcelId ||
+    sourceRaw.parcel_id ||
+    (sourceRaw.block || sourceRaw.lot
+      ? `Block ${sourceRaw.block || '—'} Lot ${sourceRaw.lot || '—'}`
+      : null);
 
   return (
     <div>
-      {/* Valuation & Equity */}
-      <Section title='Valuation & Equity'>
-        <div className='grid grid-cols-2 md:grid-cols-3 gap-4 bg-blue-50 p-4 rounded-lg border border-blue-200'>
-          <Field label='Estimated Value' value={money(lead.estimatedValue ?? val.estimatedValue)} />
-          <Field label='Value Range' value={val.priceRangeMin ? `${money(val.priceRangeMin)} – ${money(val.priceRangeMax)}` : '—'} />
-          <Field label='Confidence' value={val.confidenceScore ? `${val.confidenceScore}/100` : '—'} />
-          <Field label='Equity' value={money(lead.estimatedEquity ?? val.equityCurrentEstimatedBalance)} />
-          <Field label='Equity %' value={pct(lead.equityPercent ?? val.equityPercent)} />
-          <Field label='LTV %' value={pct(lead.ltv ?? val.ltv)} />
-        </div>
-      </Section>
-
-      {/* Foreclosure */}
-      <Section title='Foreclosure'>
-        <div className='mb-3 flex flex-wrap items-center gap-2'>
-          <span className={`px-2 py-1 text-xs font-bold rounded ${STAGE_STYLE[stage]}`}>{stage}</span>
+      {/* Sheriff Sale & Upset Summary Banner (always shown when preforeclosure data exists) */}
+      <Section title='Sheriff Sale & Foreclosure Summary'>
+        <div className='mb-4 flex flex-wrap items-center gap-2'>
+          <span className={`px-2.5 py-1 text-xs font-bold rounded ${STAGE_STYLE[stage]}`}>{stage}</span>
+          {fcCategory && (
+            <span className='px-2.5 py-1 text-xs font-bold rounded bg-indigo-100 text-indigo-800'>
+              {String(fcCategory).replace(/_/g, ' ')}
+            </span>
+          )}
+          {sourceRaw.days_until_sale && (
+            <span className='px-2.5 py-1 text-xs font-bold rounded bg-red-50 text-red-700 border border-red-200'>
+              ⏳ {sourceRaw.days_until_sale} Days Until Sale
+            </span>
+          )}
           {isTax && (
-            <span className='px-2 py-1 text-xs font-bold rounded bg-emerald-100 text-emerald-800'>
+            <span className='px-2.5 py-1 text-xs font-bold rounded bg-emerald-100 text-emerald-800'>
               🏛️ TAX FORECLOSURE
             </span>
           )}
           {isEntity && (
-            <span className='px-2 py-1 text-xs font-bold rounded bg-slate-200 text-slate-700'>
+            <span className='px-2.5 py-1 text-xs font-bold rounded bg-slate-200 text-slate-700'>
               🏢 ENTITY OWNER
             </span>
           )}
         </div>
+
+        {/* Upset vs Zestimate Financial Cards */}
+        <div className='grid grid-cols-2 md:grid-cols-4 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200 mb-5'>
+          <Field label='Sheriff Sale / Auction Date' value={saleDateRaw ? date(saleDateRaw) : '—'} />
+          <Field label='Approx. Upset' value={money(approxUpset)} />
+          <Field label='Estimated Upset / Judgment' value={money(estUpset)} />
+          <div>
+            <p className='text-xs text-gray-500 mb-0.5'>Est. Equity Spread (Zestimate − Upset)</p>
+            <p
+              className={`text-sm font-bold ${
+                estimatedSpread == null
+                  ? 'text-gray-900'
+                  : estimatedSpread >= 0
+                    ? 'text-emerald-700'
+                    : 'text-red-600'
+              }`}
+            >
+              {estimatedSpread != null ? money(estimatedSpread) : '—'}
+            </p>
+          </div>
+        </div>
+
         {stale && (
-          <div className='mb-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800'>
+          <div className='mb-4 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800'>
             ⚠️ BatchData&apos;s foreclosure record ({date((lead as any).foreclosureRecordingDate || fc.recordingDate || fc.filingDate)})
             predates the county filing ({date((lead as any).countyFilingDate)}) and reads as{' '}
             <span className='font-bold'>{baseStage}</span>. It likely reflects a prior foreclosure —
             treating this lead as <span className='font-bold'>ACTIVE</span> based on the fresh filing.
           </div>
         )}
-        <div className='grid grid-cols-2 md:grid-cols-3 gap-4'>
-          <Field label='Status' value={txt((lead as any).foreclosureStatus || fc.status)} />
-          <Field label='County Filing Date' value={date((lead as any).countyFilingDate)} />
-          <Field label='Document Type' value={txt(fc.documentType)} />
-          <Field label='Case Number' value={txt((lead as any).foreclosureCaseNumber || fc.caseNumber)} />
-          <Field label='Recording Date' value={date((lead as any).foreclosureRecordingDate || fc.recordingDate)} />
-          <Field label='Filing Date' value={date(fc.filingDate)} />
-          <Field label='Default Date' value={date((lead as any).foreclosureDefaultDate || fc.defaultDate)} />
-          <Field label='Auction Date' value={date((lead as any).foreclosureAuctionDate || fc.auctionDate)} />
-          <Field label='Unpaid Balance' value={money((lead as any).foreclosureUnpaidBalance ?? fc.unpaidBalance)} />
-          <Field label='Borrower' value={txt(fc.borrowerName)} />
-          <Field label='Trustee' value={txt((lead as any).foreclosureTrustee || fc.trusteeName)} />
-          <Field label='Trustee Phone' value={txt((lead as any).foreclosureTrusteePhone || fc.trusteePhone)} />
-          <Field label='Lender' value={txt((lead as any).foreclosureLenderName || fc.currentLenderName)} />
-        </div>
-      </Section>
 
-      {/* Open Liens / Mortgages */}
-      <Section title='Open Liens & Mortgages'>
-        <div className='grid grid-cols-2 md:grid-cols-3 gap-4 mb-3'>
-          <Field label='Total Open Lien Balance' value={money(lead.mortgageBalance ?? lien.totalOpenLienBalance)} />
-          <Field label='Open Lien Count' value={txt(lien.totalOpenLienCount)} />
-          <Field label='Loan Types' value={Array.isArray(lien.allLoanTypes) ? lien.allLoanTypes.join(', ') : '—'} />
+        <div className='grid grid-cols-1 md:grid-cols-3 gap-4'>
+          <Field label='Court Case Number' value={txt(caseNumber)} />
+          <Field label='Sheriff File Number' value={txt(sheriffNumber)} />
+          <Field label='Parcel ID (Block / Lot)' value={txt(parcelDisplay)} />
+          <Field label='Defendant / Borrower' value={txt(defendantOrBorrower)} />
+          <Field label='Attorney / Trustee' value={txt(attorneyOrTrustee)} />
+          <Field label='Attorney / Trustee Phone' value={txt(attorneyPhone)} />
+          <div className='md:col-span-3'>
+            <Field label='Plaintiff / Foreclosing Lender' value={txt(plaintiffOrLender)} />
+          </div>
+          {((lead as any).countyFilingDate || (lead as any).foreclosureRecordingDate || fc.recordingDate) && (
+            <Field
+              label='County Filing / Recording Date'
+              value={date((lead as any).countyFilingDate || (lead as any).foreclosureRecordingDate || fc.recordingDate)}
+            />
+          )}
+          {sourceRaw.property_id && (
+            <Field label='Sheriff Listing Property ID' value={txt(sourceRaw.property_id)} />
+          )}
+          {sourceRaw.occupancy_status && (
+            <Field label='Occupancy Status' value={txt(sourceRaw.occupancy_status)} />
+          )}
         </div>
-        {mortgages.length > 0 && (
-          <div className='overflow-x-auto'>
-            <table className='w-full text-xs'>
-              <thead className='bg-gray-50 text-gray-500 uppercase'>
-                <tr>
-                  <th className='px-2 py-2 text-left'>Lender</th>
-                  <th className='px-2 py-2 text-left'>Type</th>
-                  <th className='px-2 py-2 text-right'>Original</th>
-                  <th className='px-2 py-2 text-right'>Est. Balance</th>
-                  <th className='px-2 py-2 text-right'>Rate</th>
-                  <th className='px-2 py-2 text-right'>Est. Payment</th>
-                  <th className='px-2 py-2 text-left'>Due</th>
-                </tr>
-              </thead>
-              <tbody className='divide-y divide-gray-100'>
-                {mortgages.map((m, i) => (
-                  <tr key={i}>
-                    <td className='px-2 py-2 font-medium text-gray-800'>{txt(m.lenderName)}</td>
-                    <td className='px-2 py-2 text-gray-600'>{txt(m.loanType)}</td>
-                    <td className='px-2 py-2 text-right'>{money(m.loanAmount)}</td>
-                    <td className='px-2 py-2 text-right font-semibold'>{money(m.currentEstimatedBalance)}</td>
-                    <td className='px-2 py-2 text-right'>{m.currentEstimatedInterestRate ? `${m.currentEstimatedInterestRate}%` : '—'}</td>
-                    <td className='px-2 py-2 text-right'>{money(m.estimatedPaymentAmount)}</td>
-                    <td className='px-2 py-2 text-gray-600'>{date(m.dueDate)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+
+        {fcEvidence.length > 0 && (
+          <div className='mt-4 bg-indigo-50/60 border border-indigo-100 rounded-lg px-3.5 py-2.5 text-xs text-indigo-900'>
+            <p className='font-bold uppercase tracking-wider text-[10px] text-indigo-500 mb-1'>
+              Foreclosure Classification Evidence
+            </p>
+            <ul className='list-disc list-inside space-y-0.5'>
+              {fcEvidence.map((item, idx) => (
+                <li key={idx}>{item}</li>
+              ))}
+            </ul>
           </div>
         )}
       </Section>
 
-      {/* Owner & Occupancy */}
-      <Section title='Owner & Occupancy'>
-        <div className='flex flex-wrap gap-2'>
-          {(lead as any).ownerOccupied && <span className='px-2 py-1 bg-green-100 text-green-800 text-xs font-bold rounded'>Owner Occupied</span>}
-          {lead.freeAndClear && <span className='px-2 py-1 bg-purple-100 text-purple-800 text-xs font-bold rounded'>Free &amp; Clear</span>}
-          {(lead as any).hasLandline && <span className='px-2 py-1 bg-blue-100 text-blue-800 text-xs font-bold rounded'>Has Landline</span>}
-          {(lead.equityPercent ?? 0) >= 50 && <span className='px-2 py-1 bg-indigo-100 text-indigo-800 text-xs font-bold rounded'>High Equity</span>}
-          {!(lead as any).ownerOccupied && !lead.freeAndClear && !(lead as any).hasLandline && (lead.equityPercent ?? 0) < 50 && (
-            <span className='text-sm text-gray-400'>No flags</span>
-          )}
-        </div>
-      </Section>
+      {/* BatchData Enrichment Sections (only rendered when BatchData enrichment has been run) */}
+      {isEnriched && (
+        <>
+          <Section title='BatchData Valuation & Equity'>
+            <div className='grid grid-cols-2 md:grid-cols-3 gap-4 bg-blue-50 p-4 rounded-lg border border-blue-200'>
+              <Field label='Estimated Value' value={money(lead.estimatedValue ?? val.estimatedValue)} />
+              <Field label='Value Range' value={val.priceRangeMin ? `${money(val.priceRangeMin)} – ${money(val.priceRangeMax)}` : '—'} />
+              <Field label='Confidence' value={val.confidenceScore ? `${val.confidenceScore}/100` : '—'} />
+              <Field label='Equity' value={money(lead.estimatedEquity ?? val.equityCurrentEstimatedBalance)} />
+              <Field label='Equity %' value={pct(lead.equityPercent ?? val.equityPercent)} />
+              <Field label='LTV %' value={pct(lead.ltv ?? val.ltv)} />
+            </div>
+          </Section>
+
+          <Section title='Open Liens & Mortgages'>
+            <div className='grid grid-cols-2 md:grid-cols-3 gap-4 mb-3'>
+              <Field label='Total Open Lien Balance' value={money(lead.mortgageBalance ?? lien.totalOpenLienBalance)} />
+              <Field label='Open Lien Count' value={txt(lien.totalOpenLienCount)} />
+              <Field label='Loan Types' value={Array.isArray(lien.allLoanTypes) ? lien.allLoanTypes.join(', ') : '—'} />
+            </div>
+            {mortgages.length > 0 && (
+              <div className='overflow-x-auto'>
+                <table className='w-full text-xs'>
+                  <thead className='bg-gray-50 text-gray-500 uppercase'>
+                    <tr>
+                      <th className='px-2 py-2 text-left'>Lender</th>
+                      <th className='px-2 py-2 text-left'>Type</th>
+                      <th className='px-2 py-2 text-right'>Original</th>
+                      <th className='px-2 py-2 text-right'>Est. Balance</th>
+                      <th className='px-2 py-2 text-right'>Rate</th>
+                      <th className='px-2 py-2 text-right'>Est. Payment</th>
+                      <th className='px-2 py-2 text-left'>Due</th>
+                    </tr>
+                  </thead>
+                  <tbody className='divide-y divide-gray-100'>
+                    {mortgages.map((m, i) => (
+                      <tr key={i}>
+                        <td className='px-2 py-2 font-medium text-gray-800'>{txt(m.lenderName)}</td>
+                        <td className='px-2 py-2 text-gray-600'>{txt(m.loanType)}</td>
+                        <td className='px-2 py-2 text-right'>{money(m.loanAmount)}</td>
+                        <td className='px-2 py-2 text-right font-semibold'>{money(m.currentEstimatedBalance)}</td>
+                        <td className='px-2 py-2 text-right'>{m.currentEstimatedInterestRate ? `${m.currentEstimatedInterestRate}%` : '—'}</td>
+                        <td className='px-2 py-2 text-right'>{money(m.estimatedPaymentAmount)}</td>
+                        <td className='px-2 py-2 text-gray-600'>{date(m.dueDate)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </Section>
+
+          <Section title='Owner & Occupancy'>
+            <div className='flex flex-wrap gap-2'>
+              {(lead as any).ownerOccupied && <span className='px-2 py-1 bg-green-100 text-green-800 text-xs font-bold rounded'>Owner Occupied</span>}
+              {lead.freeAndClear && <span className='px-2 py-1 bg-purple-100 text-purple-800 text-xs font-bold rounded'>Free &amp; Clear</span>}
+              {(lead as any).hasLandline && <span className='px-2 py-1 bg-blue-100 text-blue-800 text-xs font-bold rounded'>Has Landline</span>}
+              {(lead.equityPercent ?? 0) >= 50 && <span className='px-2 py-1 bg-indigo-100 text-indigo-800 text-xs font-bold rounded'>High Equity</span>}
+              {!(lead as any).ownerOccupied && !lead.freeAndClear && !(lead as any).hasLandline && (lead.equityPercent ?? 0) < 50 && (
+                <span className='text-sm text-gray-400'>No flags</span>
+              )}
+            </div>
+          </Section>
+        </>
+      )}
 
       {/* Mortgage History (collapsible) */}
       {history.length > 0 && (
@@ -235,18 +358,29 @@ export function EnrichmentDetails({ lead }: { lead: Lead }) {
         </Collapsible>
       )}
 
-      {/* Full raw payload */}
+      {/* Raw Scraper / Source Payload */}
+      {Object.keys(sourceRaw).length > 0 && (
+        <Collapsible label='View County / Scraper Source Data'>
+          <pre className='text-[10px] bg-slate-900 text-slate-100 rounded-lg p-3 overflow-x-auto max-h-96'>
+            {JSON.stringify(sourceRaw, null, 2)}
+          </pre>
+        </Collapsible>
+      )}
+
+      {/* Full raw BatchData payload */}
       {Object.keys(raw).length > 0 && (
-        <Collapsible label='View full raw payload (JSON)'>
+        <Collapsible label='View BatchData Enrichment Payload (JSON)'>
           <pre className='text-[10px] bg-gray-900 text-gray-100 rounded-lg p-3 overflow-x-auto max-h-96'>
             {JSON.stringify(raw, null, 2)}
           </pre>
         </Collapsible>
       )}
 
-      <p className='text-xs text-gray-400 mt-4'>
-        Enriched on {(lead as any).batchDataEnrichedAt ? new Date((lead as any).batchDataEnrichedAt).toLocaleString() : 'N/A'} · source: BatchData
-      </p>
+      {isEnriched && (
+        <p className='text-xs text-gray-400 mt-4'>
+          Enriched on {(lead as any).batchDataEnrichedAt ? new Date((lead as any).batchDataEnrichedAt).toLocaleString() : 'N/A'} · source: BatchData
+        </p>
+      )}
     </div>
   );
 }

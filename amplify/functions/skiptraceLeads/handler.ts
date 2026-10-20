@@ -610,7 +610,12 @@ export const handler: Handler = async (event) => {
             ':rawData': rawData
           }
         }));
-        return { id: lead.id, status: 'COMPLETED' };
+        return {
+          id: lead.id,
+          status: newLandlines.length > 0 ? 'SUCCESS' : 'NO_QUALITY_CONTACTS',
+          phones: 0,
+          landlines: newLandlines.length,
+        };
       }
 
       const newPhones = [...new Set([...(lead.phones || []), ...enrichedData.foundPhones])];
@@ -636,9 +641,15 @@ export const handler: Handler = async (event) => {
       // still lands here as SUCCESS.
       const newLandlines = [...new Set([...(lead.landlinePhones || []), ...(enrichedData.foundLandlines || [])])];
 
+      const hasAnyFinalChannel = newPhones.length > 0 || newLandlines.length > 0 || newEmails.length > 0;
+      const currentLabels = (lead.leadLabels || []).filter((l: string | null) => l !== null);
+      const updatedLabels = hasAnyFinalChannel
+        ? currentLabels.filter((l: string) => l !== 'DIRECT_MAIL_ONLY')
+        : [...new Set([...currentLabels, 'DIRECT_MAIL_ONLY'])];
+
       const updateExpression = lead.type?.toUpperCase() === 'PROBATE'
-        ? 'SET phones = :phones, landlinePhones = :landlines, emails = :emails, skipTraceStatus = :status, skipTraceCompletedAt = :completedAt, skipTraceHistory = :history, rawSkipTraceData = :rawData'
-        : 'SET ownerFirstName = :firstName, ownerLastName = :lastName, phones = :phones, landlinePhones = :landlines, emails = :emails, mailingAddress = :mailingAddress, mailingCity = :mailingCity, mailingState = :mailingState, mailingZip = :mailingZip, skipTraceStatus = :status, skipTraceCompletedAt = :completedAt, skipTraceHistory = :history, rawSkipTraceData = :rawData';
+        ? 'SET phones = :phones, landlinePhones = :landlines, emails = :emails, skipTraceStatus = :status, skipTraceCompletedAt = :completedAt, skipTraceHistory = :history, leadLabels = :labels, rawSkipTraceData = :rawData'
+        : 'SET ownerFirstName = :firstName, ownerLastName = :lastName, phones = :phones, landlinePhones = :landlines, emails = :emails, mailingAddress = :mailingAddress, mailingCity = :mailingCity, mailingState = :mailingState, mailingZip = :mailingZip, skipTraceStatus = :status, skipTraceCompletedAt = :completedAt, skipTraceHistory = :history, leadLabels = :labels, rawSkipTraceData = :rawData';
 
       await docClient.send(new UpdateCommand({
         TableName: propertyLeadTableName,
@@ -659,11 +670,18 @@ export const handler: Handler = async (event) => {
           ':status': 'COMPLETED',
           ':completedAt': timestamp,
           ':history': newHistory,
+          ':labels': updatedLabels,
           ':rawData': rawData
         }
       }));
 
-      return { id: lead.id, status: 'SUCCESS', phones: newPhones.length };
+      return {
+        id: lead.id,
+        status: hasAnyFinalChannel ? 'SUCCESS' : 'NO_QUALITY_CONTACTS',
+        phones: newPhones.length,
+        landlines: newLandlines.length,
+        emails: newEmails.length,
+      };
     });
 
     const updateResults = await Promise.all(updatePromises);

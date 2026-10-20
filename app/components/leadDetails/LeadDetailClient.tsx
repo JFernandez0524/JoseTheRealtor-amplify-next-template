@@ -1224,8 +1224,8 @@ function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
             isRefreshing={isRefreshingMarketIntel}
           />
 
-          {lead.type === 'PREFORECLOSURE' && lead.batchDataEnriched && (
-            <CardWrapper title='Property Enrichment (BatchData)'>
+          {lead.type === 'PREFORECLOSURE' && (
+            <CardWrapper title={lead.batchDataEnriched ? 'Foreclosure & Property Enrichment' : 'Foreclosure & Sheriff Sale Details'}>
               <EnrichmentDetails lead={lead} />
             </CardWrapper>
           )}
@@ -1330,6 +1330,8 @@ function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
                       ghlContactId={lead.ghlContactId}
                       ghlSyncStatus={lead.ghlSyncStatus}
                       skipTraceStatus={lead.skipTraceStatus}
+                      listingStatus={lead.listingStatus}
+                      leadLabels={lead.leadLabels}
                       onSyncComplete={refreshLeadData}
                       client={client}
                     />

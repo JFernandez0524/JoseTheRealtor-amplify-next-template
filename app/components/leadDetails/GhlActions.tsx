@@ -12,6 +12,8 @@ interface GhlActionsProps {
   ghlContactId: string | null | undefined;
   ghlSyncStatus: string | null | undefined;
   skipTraceStatus: string | null | undefined;
+  listingStatus?: string | null;
+  leadLabels?: (string | null)[] | null;
   onSyncComplete: () => void;
   client: any;
 }
@@ -21,6 +23,8 @@ export function GhlActions({
   ghlContactId,
   ghlSyncStatus,
   skipTraceStatus,
+  listingStatus,
+  leadLabels,
   onSyncComplete,
   client,
 }: GhlActionsProps) {
@@ -65,13 +69,26 @@ export function GhlActions({
 
   /**
    * 🎯 THE FIX: Button Logic
-   * 1. Must be COMPLETED (has phone numbers).
-   * 2. Must not be currently syncing.
-   * 3. We NO LONGER block if status is 'SUCCESS' so we can push updates.
+   * 1. Must be off-market (not active/sold/skip/etc.)
+   * 2. Must have completed skip trace (COMPLETED or NO_QUALITY_CONTACTS). NO_MATCH is blocked.
+   * 3. Must not be currently syncing.
    */
-  const isReadyToSync = currentSkipStatus === 'COMPLETED';
+  const normListingStatus = (listingStatus || '').trim().toLowerCase();
+  const labels = Array.isArray(leadLabels) ? leadLabels : [];
+  const isOffMarket =
+    (!normListingStatus || normListingStatus === 'off_market') &&
+    !labels.some((l) => l === 'ACTIVE_MLS' || l === 'RECENTLY_SOLD');
+  const isSkipTraceCompleted =
+    currentSkipStatus === 'COMPLETED' || currentSkipStatus === 'NO_QUALITY_CONTACTS';
+  const isReadyToSync = isOffMarket && isSkipTraceCompleted;
   const canClickSync = isReadyToSync && !isSyncing;
   const isAlreadySynced = currentGhlStatus === 'SUCCESS';
+
+  const disabledLabel = !isOffMarket
+    ? `Blocked (${listingStatus || 'Not Off-Market'})`
+    : currentSkipStatus === 'NO_MATCH'
+      ? 'No Match — Cannot Sync'
+      : 'Awaiting Skip Trace';
 
   if (!hasPaidPlan) {
     return (
@@ -123,7 +140,7 @@ export function GhlActions({
               <Loader size='small' /> Updating...
             </>
           ) : !isReadyToSync ? (
-            'Awaiting Contact Info'
+            disabledLabel
           ) : isAlreadySynced ? (
             'Push Update to Launch AI'
           ) : (

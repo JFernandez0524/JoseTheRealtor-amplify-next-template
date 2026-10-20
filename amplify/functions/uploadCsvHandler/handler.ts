@@ -571,11 +571,12 @@ export const handler: S3Handler = async (event) => {
             'BORROWER OR DEFENDANT NAME',
             'BORROWER-OR-DEFENDANT-NAME',
             'OWNERSHIP',
-            'ownership'
+            'ownership',
+            'defendant'
           );
           const rawFirstName = cell('ownerFirstName', 'ownerFirstName', 'First Name', 'FIRSTNAME');
           const rawLastName = cell('ownerLastName', 'ownerLastName', 'Last Name', 'LASTNAME');
-          const rawParcelId = cell('parcelId', 'parcelId', 'PARCEL-ID-NO', 'PARCEL ID NO', 'Parcel ID', 'BLOCKTEXT-LOTTEXT');
+          const rawParcelId = cell('parcelId', 'parcelId', 'PARCEL-ID-NO', 'PARCEL ID NO', 'Parcel ID', 'BLOCKTEXT-LOTTEXT', 'parcel_id');
 
           const ownerNameWithClass = resolveOwnerNameWithClassification({
             full: rawDefendant,
@@ -603,7 +604,10 @@ export const handler: S3Handler = async (event) => {
           let foreclosureCaseNumberCsv: string | null = null;
           let foreclosureLenderNameCsv: string | null = null;
           let foreclosureTrusteeCsv: string | null = null;
+          let foreclosureTrusteePhoneCsv: string | null = null;
           let foreclosureAmountCsv: number | null = null;
+          let foreclosureUnpaidBalanceCsv: number | null = null;
+          let foreclosureAuctionDateCsv: string | null = null;
           let foreclosureStatusCsv: string | null = null;
           let isTaxForeclosure = false;
 
@@ -650,24 +654,37 @@ export const handler: S3Handler = async (event) => {
 
           if (leadType === 'PREFORECLOSURE') {
             // Authoritative county foreclosure fields — the source of truth BatchData must not overwrite.
-            const rawCase = sanitize(cell('caseNumber', 'caseNumber', 'Case Number', 'CASE NUMBER', 'DOCKET_'));
+            const rawCase = sanitize(
+              cell('caseNumber', 'caseNumber', 'Case Number', 'CASE NUMBER', 'DOCKET_', 'court_case_number', 'sheriff_number')
+            );
             if (rawCase) {
               foreclosureCaseNumberCsv = rawCase;
             }
             countyFilingDate = formatDateOnly(
               cell('recordingDate', 'recordingDate', 'Recording Date', 'RECORDING DATE', 'RECORDING-DATE')
             );
-            foreclosureLenderNameCsv =
-              sanitize(cell('lender', 'lender', 'Lender', 'LENDER OR PLAINTIFF NAME', 'LENDER-OR-PLAINTIFF-NAME')) || null;
-            foreclosureTrusteeCsv =
-              sanitize(cell('trustee', 'trustee', 'Trustee', 'TRUSTEE OR DEPUTY NAME', 'TRUSTEE-OR-DEPUTY-NAME')) || null;
-            foreclosureAmountCsv = parseCurrency(
-              cell('loanAmount', 'loanAmount', 'Loan Amount', 'LOAN AMOUNT', 'LOAN-AMOUNT', 'MORTGAGEAM')
+            foreclosureAuctionDateCsv = formatDateOnly(
+              cell('auctionDate', 'auctionDate', 'Auction Date', 'AUCTION DATE', 'sales_date', 'sale_date', 'Sale Date')
             );
-            // A fresh county recording = an active filing. Give the classifier an ACTIVE status so a
-            // later stale BatchData "rescission" can't be the only signal. (Enrichment guards against
-            // overwriting this with an older record — see enrichment.ts mapPropertyToLead.)
-            if (countyFilingDate) foreclosureStatusCsv = 'Pre-Foreclosure — County Recording';
+            foreclosureLenderNameCsv =
+              sanitize(cell('lender', 'lender', 'Lender', 'LENDER OR PLAINTIFF NAME', 'LENDER-OR-PLAINTIFF-NAME', 'plaintiff')) || null;
+            foreclosureTrusteeCsv =
+              sanitize(cell('trustee', 'trustee', 'Trustee', 'TRUSTEE OR DEPUTY NAME', 'TRUSTEE-OR-DEPUTY-NAME', 'attorney')) || null;
+            foreclosureTrusteePhoneCsv =
+              formatPhoneNumber(cell('trusteePhone', 'trusteePhone', 'attorney_phone', 'Attorney Phone')) || null;
+            foreclosureAmountCsv = parseCurrency(
+              cell('loanAmount', 'loanAmount', 'Loan Amount', 'LOAN AMOUNT', 'LOAN-AMOUNT', 'MORTGAGEAM', 'estimated_upset', 'loan_amount')
+            );
+            foreclosureUnpaidBalanceCsv = parseCurrency(
+              cell('unpaidBalance', 'unpaidBalance', 'Unpaid Balance', 'approx_upset')
+            );
+            // A fresh county recording or scheduled sheriff sale = an active filing. Give the classifier
+            // an ACTIVE status so a later stale BatchData "rescission" can't be the only signal.
+            if (foreclosureAuctionDateCsv) {
+              foreclosureStatusCsv = 'Scheduled Sheriff Sale';
+            } else if (countyFilingDate) {
+              foreclosureStatusCsv = 'Pre-Foreclosure — County Recording';
+            }
           }
 
           // Foreclosure type classification
@@ -912,11 +929,14 @@ export const handler: S3Handler = async (event) => {
             // --- 🟢 County foreclosure data (authoritative source-of-truth) ---
             countyFilingDate,
             foreclosureRecordingDate: countyFilingDate, // seed the recording date from the county filing
+            foreclosureAuctionDate: foreclosureAuctionDateCsv,
             foreclosureStatus: foreclosureStatusCsv,
             foreclosureCaseNumber: foreclosureCaseNumberCsv,
             foreclosureLenderName: foreclosureLenderNameCsv,
             foreclosureTrustee: foreclosureTrusteeCsv,
+            foreclosureTrusteePhone: foreclosureTrusteePhoneCsv,
             foreclosureAmount: foreclosureAmountCsv,
+            foreclosureUnpaidBalance: foreclosureUnpaidBalanceCsv,
 
             phones: preSkiptracedPhone ? [preSkiptracedPhone] : [],
             skipTraceStatus: preSkiptracedPhone ? 'COMPLETED' : (finalListingStatus !== 'off_market' ? 'NOT_ELIGIBLE' : 'PENDING'),

@@ -46,15 +46,15 @@ describe('resolveDialablePhone', () => {
 });
 
 describe('hasConcludedSkipTrace', () => {
-  it('is true only once a trace actually ran', () => {
-    for (const s of ['COMPLETED', 'NO_MATCH', 'NO_QUALITY_CONTACTS']) {
+  it('is true only once a trace actually ran and matched an owner', () => {
+    for (const s of ['COMPLETED', 'NO_QUALITY_CONTACTS']) {
       expect(hasConcludedSkipTrace(s)).toBe(true);
     }
   });
 
-  it('is false while a trace is pending or never happened', () => {
-    // "No contacts yet" is not "no contacts" — a trace may still find a phone or email.
-    for (const s of ['PENDING', 'FAILED', 'NOT_ELIGIBLE', '', null, undefined]) {
+  it('is false while a trace is pending, never happened, or returned NO_MATCH', () => {
+    // "No contacts yet" is not "no contacts", and NO_MATCH is not syncable/mailable.
+    for (const s of ['PENDING', 'FAILED', 'NOT_ELIGIBLE', 'NO_MATCH', '', null, undefined]) {
       expect(hasConcludedSkipTrace(s)).toBe(false);
     }
   });
@@ -83,9 +83,10 @@ describe('isCallableLead', () => {
 });
 
 describe('isDirectMailOnlyLead', () => {
-  it('mails a concluded trace that found nothing', () => {
-    expect(isDirectMailOnlyLead(lead({ skipTraceStatus: 'NO_MATCH' }))).toBe(true);
+  it('mails a concluded trace (COMPLETED or NO_QUALITY_CONTACTS) that found nothing, but NOT NO_MATCH', () => {
+    expect(isDirectMailOnlyLead(lead({ skipTraceStatus: 'COMPLETED' }))).toBe(true);
     expect(isDirectMailOnlyLead(lead({ skipTraceStatus: 'NO_QUALITY_CONTACTS' }))).toBe(true);
+    expect(isDirectMailOnlyLead(lead({ skipTraceStatus: 'NO_MATCH' }))).toBe(false);
   });
 
   it('does NOT mail a lead with a landline — it is callable', () => {

@@ -18,8 +18,8 @@
  *    up a phone or an email.
  */
 
-/** Skip-trace states that mean a trace actually ran and reached a conclusion. */
-const CONCLUDED_TRACE_STATUSES = new Set(['COMPLETED', 'NO_MATCH', 'NO_QUALITY_CONTACTS']);
+/** Skip-trace states that mean a trace actually ran and matched an owner. NO_MATCH is not syncable/mailable. */
+const CONCLUDED_TRACE_STATUSES = new Set(['COMPLETED', 'NO_QUALITY_CONTACTS']);
 
 /**
  * The tag a mail-eligible contact carries. GHL lowercases every tag, so this must be written

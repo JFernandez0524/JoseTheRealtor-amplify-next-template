@@ -80,14 +80,14 @@ export function validateLeadForSync(lead: any): { isValid: boolean; reason?: str
   }
 
   const skipTraceStatus = lead.skipTraceStatus?.toUpperCase();
-  const validStatuses = ['COMPLETED', 'NO_QUALITY_CONTACTS', 'NO_MATCH'];
+  const validStatuses = ['COMPLETED', 'NO_QUALITY_CONTACTS'];
 
   if (!skipTraceStatus || !validStatuses.includes(skipTraceStatus)) {
     return { isValid: false, reason: `Skip trace not completed (status: ${lead.skipTraceStatus || 'none'})` };
   }
 
   // COMPLETED leads with no phones/emails are still valid — they go through as direct-mail contacts
-  // (same path as NO_QUALITY_CONTACTS and NO_MATCH)
+  // (same path as NO_QUALITY_CONTACTS)
 
   return { isValid: true };
 }

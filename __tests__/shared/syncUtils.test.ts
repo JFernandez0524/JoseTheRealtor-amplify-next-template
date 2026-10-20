@@ -50,9 +50,11 @@ describe('validateLeadForSync', () => {
     expect(result.reason).toContain('Skip trace not completed');
   });
 
-  it('accepts NO_QUALITY_CONTACTS and NO_MATCH skip trace statuses for off_market leads', () => {
+  it('accepts NO_QUALITY_CONTACTS (Direct Mail Only) for off_market leads and rejects NO_MATCH', () => {
     expect(validateLeadForSync({ listingStatus: 'off_market', skipTraceStatus: 'NO_QUALITY_CONTACTS' })).toEqual({ isValid: true });
-    expect(validateLeadForSync({ listingStatus: 'off_market', skipTraceStatus: 'NO_MATCH' })).toEqual({ isValid: true });
+    const noMatchResult = validateLeadForSync({ listingStatus: 'off_market', skipTraceStatus: 'NO_MATCH' });
+    expect(noMatchResult.isValid).toBe(false);
+    expect(noMatchResult.reason).toContain('Skip trace not completed');
   });
 
   it('rejects lead with ACTIVE_MLS label even if listingStatus is unset', () => {
