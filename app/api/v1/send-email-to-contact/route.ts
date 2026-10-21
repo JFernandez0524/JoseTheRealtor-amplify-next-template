@@ -75,6 +75,8 @@ export async function POST(req: Request) {
       callOutcomeFieldId,
       leadType: passedLeadType,
       leadTypeFieldId,
+      sheriffSaleDateFieldId,
+      equitySpreadFieldId,
       propertyAddress: passedPropertyAddress,
       propertyCity: passedPropertyCity,
       propertyState: passedPropertyState,
@@ -145,6 +147,16 @@ export async function POST(req: Request) {
       (leadTypeFieldId ? contact?.customFields?.find((f: any) => f.id === leadTypeFieldId)?.value : undefined) ||
       contact?.customFields?.find((f: any) => f.id === 'oaf4wCuM3Ub9eGpiddrO')?.value;
     const zestimate = contact?.customFields?.find((f: any) => f.id === '7wIe1cRbZYXUnc3WOVb2')?.value;
+    const sheriffSaleDate = sheriffSaleDateFieldId
+      ? contact?.customFields?.find((f: any) => f.id === sheriffSaleDateFieldId)?.value
+      : undefined;
+    const rawEquitySpread = equitySpreadFieldId
+      ? contact?.customFields?.find((f: any) => f.id === equitySpreadFieldId)?.value
+      : undefined;
+    const estimatedEquitySpread =
+      rawEquitySpread !== undefined && rawEquitySpread !== null && rawEquitySpread !== '' && Number.isFinite(Number(rawEquitySpread))
+        ? Number(rawEquitySpread)
+        : undefined;
 
     // Guard: ensure leadType exists so email context is always known before sending
     if (!leadType) {
@@ -170,6 +182,8 @@ export async function POST(req: Request) {
       propertyZip,
       leadType,
       zestimate: zestimate ? parseFloat(zestimate) : undefined,
+      sheriffSaleDate,
+      estimatedEquitySpread,
       emailSignature,
       locationId: contact.locationId,
       contact,

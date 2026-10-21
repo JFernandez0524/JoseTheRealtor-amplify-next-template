@@ -451,6 +451,7 @@ backend.thanksIoWebhookHandler.addEnvironment(
 
 backend.thanksIoWebhookHandler.addEnvironment('GHL_CLIENT_ID', process.env.GHL_CLIENT_ID || '');
 backend.thanksIoWebhookHandler.addEnvironment('GHL_CLIENT_SECRET', process.env.GHL_CLIENT_SECRET || '');
+backend.thanksIoWebhookHandler.addEnvironment('THANKS_IO_API', process.env.THANKS_IO_API || '');
 
 backend.data.resources.tables['GhlIntegration'].grantReadWriteData(
   backend.thanksIoWebhookHandler.resources.lambda

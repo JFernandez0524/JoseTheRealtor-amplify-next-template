@@ -11,6 +11,7 @@
 import { useState } from 'react';
 import type { Schema } from '@/amplify/data/resource';
 import { classifyForeclosureStageWithRecency } from '@/app/utils/foreclosure';
+import { computeForeclosureFinancials } from '@/amplify/functions/shared/foreclosureFinancials';
 
 type Lead = Schema['PropertyLead']['type'];
 
@@ -76,12 +77,8 @@ export function EnrichmentDetails({ lead }: { lead: Lead }) {
   const invLiens: any[] = Array.isArray(raw.involuntaryLien?.liens) ? raw.involuntaryLien.liens : [];
   const isEnriched = Boolean((lead as any).batchDataEnriched);
 
-  const saleDateRaw =
-    (lead as any).foreclosureAuctionDate ||
-    fc.auctionDate ||
-    sourceRaw.sales_date ||
-    sourceRaw.sale_date ||
-    null;
+  const fcFin = computeForeclosureFinancials(lead);
+  const saleDateRaw = fcFin.saleDate;
 
   // Recency-aware: fall back to the blob's status if the flat column is empty, then judge staleness
   // against the county filing so a years-old BatchData "rescission" doesn't read as DEAD on a fresh lead.
@@ -100,24 +97,17 @@ export function EnrichmentDetails({ lead }: { lead: Lead }) {
     ? (lead as any).foreclosureEvidence.filter(Boolean)
     : [];
 
-  const approxUpset = sourceRaw.approx_upset ? Number(String(sourceRaw.approx_upset).replace(/[$,\s]/g, '')) : null;
-  const estUpset =
-    (lead as any).foreclosureAmount ??
-    (sourceRaw.estimated_upset ? Number(String(sourceRaw.estimated_upset).replace(/[$,\s]/g, '')) : null) ??
-    (sourceRaw.loan_amount ? Number(String(sourceRaw.loan_amount).replace(/[$,\s]/g, '')) : null) ??
-    (lead as any).foreclosureUnpaidBalance ??
-    fc.unpaidBalance ??
-    null;
-  const zestimateVal = lead.zestimate ?? lead.estimatedValue ?? val.estimatedValue ?? null;
-  const baselineUpset = estUpset ?? approxUpset;
-  const estimatedSpread =
-    zestimateVal && baselineUpset && Number.isFinite(Number(zestimateVal)) && Number.isFinite(Number(baselineUpset))
-      ? Number(zestimateVal) - Number(baselineUpset)
-      : null;
+  const approxUpset = fcFin.approxUpset;
+  const estUpset = fcFin.estimatedUpset;
+  const estimatedSpread = fcFin.equitySpread;
+  const equitySpreadPct = fcFin.equitySpreadPct;
+  const equityTier = fcFin.equityTier;
 
   const caseNumber =
     (lead as any).foreclosureCaseNumber ||
     sourceRaw.court_case_number ||
+    sourceRaw['CASE NUMBER'] ||
+    sourceRaw['Case Number'] ||
     fc.caseNumber ||
     null;
   const sheriffNumber = sourceRaw.sheriff_number || null;
@@ -125,17 +115,23 @@ export function EnrichmentDetails({ lead }: { lead: Lead }) {
     (lead as any).plaintiffName ||
     (lead as any).foreclosureLenderName ||
     sourceRaw.plaintiff ||
+    sourceRaw['LENDER-OR-PLAINTIFF-NAME'] ||
+    sourceRaw['Lender Or Plaintiff Name'] ||
     fc.currentLenderName ||
     null;
   const defendantOrBorrower =
     (lead as any).defendantName ||
     sourceRaw.defendant ||
+    sourceRaw['BORROWER-OR-DEFENDANT-NAME'] ||
+    sourceRaw['Borrower Or Defendant Name'] ||
     fc.borrowerName ||
     [lead.ownerFirstName, lead.ownerLastName].filter(Boolean).join(' ') ||
     null;
   const attorneyOrTrustee =
     (lead as any).foreclosureTrustee ||
     sourceRaw.attorney ||
+    sourceRaw['TRUSTEE-OR-DEPUTY-NAME'] ||
+    sourceRaw['Trustee Or Deputy Name'] ||
     fc.trusteeName ||
     null;
   const attorneyPhone =
@@ -146,15 +142,33 @@ export function EnrichmentDetails({ lead }: { lead: Lead }) {
   const parcelDisplay =
     (lead as any).parcelId ||
     sourceRaw.parcel_id ||
+    sourceRaw['PARCEL-ID-NO'] ||
+    sourceRaw['Parcel ID'] ||
     (sourceRaw.block || sourceRaw.lot
       ? `Block ${sourceRaw.block || '—'} Lot ${sourceRaw.lot || '—'}`
       : null);
 
   return (
     <div>
-      {/* Sheriff Sale & Upset Summary Banner (always shown when preforeclosure data exists) */}
-      <Section title='Sheriff Sale & Foreclosure Summary'>
+      {/* Sheriff Sale / Lis Pendens Summary Banner (always shown when preforeclosure data exists) */}
+      <Section
+        title={
+          fcFin.isSheriffSale
+            ? 'Sheriff Sale & Foreclosure Summary'
+            : 'Lis Pendens & Pre-Foreclosure Summary'
+        }
+      >
         <div className='mb-4 flex flex-wrap items-center gap-2'>
+          {fcFin.foreclosureSubType === 'SHERIFF_SALE' && (
+            <span className='px-2.5 py-1 text-xs font-bold rounded bg-rose-100 text-rose-800 border border-rose-300'>
+              🔨 SHERIFF SALE / AUCTION
+            </span>
+          )}
+          {fcFin.foreclosureSubType === 'LIS_PENDENS' && (
+            <span className='px-2.5 py-1 text-xs font-bold rounded bg-amber-100 text-amber-800 border border-amber-300'>
+              📋 LIS PENDENS FILING
+            </span>
+          )}
           <span className={`px-2.5 py-1 text-xs font-bold rounded ${STAGE_STYLE[stage]}`}>{stage}</span>
           {fcCategory && (
             <span className='px-2.5 py-1 text-xs font-bold rounded bg-indigo-100 text-indigo-800'>
@@ -166,7 +180,7 @@ export function EnrichmentDetails({ lead }: { lead: Lead }) {
               ⏳ {sourceRaw.days_until_sale} Days Until Sale
             </span>
           )}
-          {isTax && (
+          {(isTax || fcFin.baselineLabel === 'Tax Lien') && (
             <span className='px-2.5 py-1 text-xs font-bold rounded bg-emerald-100 text-emerald-800'>
               🏛️ TAX FORECLOSURE
             </span>
@@ -176,26 +190,74 @@ export function EnrichmentDetails({ lead }: { lead: Lead }) {
               🏢 ENTITY OWNER
             </span>
           )}
+          {equityTier === 'HIGH_EQUITY' && (
+            <span className='px-2.5 py-1 text-xs font-bold rounded bg-emerald-100 text-emerald-800 border border-emerald-300'>
+              🔥 HIGH EQUITY SPREAD{equitySpreadPct != null ? ` (${equitySpreadPct}%)` : ''}
+            </span>
+          )}
+          {equityTier === 'MODERATE_EQUITY' && (
+            <span className='px-2.5 py-1 text-xs font-bold rounded bg-teal-50 text-teal-800 border border-teal-200'>
+              ✅ POSITIVE SPREAD{equitySpreadPct != null ? ` (${equitySpreadPct}%)` : ''}
+            </span>
+          )}
+          {equityTier === 'UNDERWATER' && (
+            <span className='px-2.5 py-1 text-xs font-bold rounded bg-red-100 text-red-800 border border-red-300'>
+              ⚠️ UNDERWATER{equitySpreadPct != null ? ` (${equitySpreadPct}%)` : ''}
+            </span>
+          )}
         </div>
 
-        {/* Upset vs Zestimate Financial Cards */}
+        {/* Upset / Loan vs Zestimate Financial Cards */}
         <div className='grid grid-cols-2 md:grid-cols-4 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200 mb-5'>
-          <Field label='Sheriff Sale / Auction Date' value={saleDateRaw ? date(saleDateRaw) : '—'} />
-          <Field label='Approx. Upset' value={money(approxUpset)} />
-          <Field label='Estimated Upset / Judgment' value={money(estUpset)} />
+          {fcFin.isSheriffSale ? (
+            <>
+              <Field label='Sheriff Sale / Auction Date' value={saleDateRaw ? date(saleDateRaw) : '—'} />
+              <Field label='Approx. Upset' value={money(approxUpset)} />
+              <Field label='Estimated Upset / Judgment' value={money(estUpset ?? fcFin.baselineUpset)} />
+            </>
+          ) : (
+            <>
+              <Field
+                label='LP Recording / Filing Date'
+                value={fcFin.recordingDate ? date(fcFin.recordingDate) : '—'}
+              />
+              <Field label='Zestimate / Est. Value' value={money(fcFin.zestimateVal)} />
+              <Field
+                label={`Recorded ${fcFin.baselineLabel} Amount`}
+                value={money(fcFin.baselineUpset)}
+              />
+            </>
+          )}
           <div>
-            <p className='text-xs text-gray-500 mb-0.5'>Est. Equity Spread (Zestimate − Upset)</p>
-            <p
-              className={`text-sm font-bold ${
-                estimatedSpread == null
-                  ? 'text-gray-900'
-                  : estimatedSpread >= 0
-                    ? 'text-emerald-700'
-                    : 'text-red-600'
-              }`}
-            >
-              {estimatedSpread != null ? money(estimatedSpread) : '—'}
+            <p className='text-xs text-gray-500 mb-0.5'>
+              Est. Equity Spread (Zestimate − {fcFin.baselineLabel})
             </p>
+            <div className='flex items-baseline gap-1.5'>
+              <p
+                className={`text-sm font-bold ${
+                  estimatedSpread == null
+                    ? 'text-gray-900'
+                    : estimatedSpread >= 0
+                      ? 'text-emerald-700'
+                      : 'text-red-600'
+                }`}
+              >
+                {estimatedSpread != null ? money(estimatedSpread) : '—'}
+              </p>
+              {equitySpreadPct != null && (
+                <span
+                  className={`text-xs font-semibold ${
+                    equitySpreadPct >= 30
+                      ? 'text-emerald-600'
+                      : equitySpreadPct > 0
+                        ? 'text-teal-600'
+                        : 'text-red-500'
+                  }`}
+                >
+                  ({equitySpreadPct}%)
+                </span>
+              )}
+            </div>
           </div>
         </div>
 
@@ -218,10 +280,10 @@ export function EnrichmentDetails({ lead }: { lead: Lead }) {
           <div className='md:col-span-3'>
             <Field label='Plaintiff / Foreclosing Lender' value={txt(plaintiffOrLender)} />
           </div>
-          {((lead as any).countyFilingDate || (lead as any).foreclosureRecordingDate || fc.recordingDate) && (
+          {(fcFin.recordingDate || (lead as any).countyFilingDate || (lead as any).foreclosureRecordingDate || fc.recordingDate) && (
             <Field
               label='County Filing / Recording Date'
-              value={date((lead as any).countyFilingDate || (lead as any).foreclosureRecordingDate || fc.recordingDate)}
+              value={date(fcFin.recordingDate || (lead as any).countyFilingDate || (lead as any).foreclosureRecordingDate || fc.recordingDate)}
             />
           )}
           {sourceRaw.property_id && (

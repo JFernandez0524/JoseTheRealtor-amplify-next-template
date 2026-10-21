@@ -59,6 +59,23 @@ export type GhlTokenResult = {
 };
 
 /**
+ * Safely parses customFieldIds / opportunityFieldIds whether stored in DynamoDB as a JSON string
+ * (written by Amplify GraphQL a.json()) or a native DynamoDB Map (written by saveFieldIds).
+ */
+export function parseFieldIdsMap(val: unknown): Record<string, string> | null {
+  if (!val) return null;
+  if (typeof val === 'string') {
+    try {
+      const parsed = JSON.parse(val);
+      return parsed && typeof parsed === 'object' ? (parsed as Record<string, string>) : null;
+    } catch {
+      return null;
+    }
+  }
+  return typeof val === 'object' ? (val as Record<string, string>) : null;
+}
+
+/**
  * Gets a valid GHL access token for a user, refreshing if expired.
  * Lambda-optimized version using DynamoDB client.
  */
@@ -99,8 +116,8 @@ export async function getValidGhlToken(userId: string, forceRefresh: boolean = f
         locationId: integration.locationId,
         integrationId: integration.id,
         owner: integration.owner || null,
-        customFieldIds: integration.customFieldIds || null,
-        opportunityFieldIds: integration.opportunityFieldIds || null,
+        customFieldIds: parseFieldIdsMap(integration.customFieldIds),
+        opportunityFieldIds: parseFieldIdsMap(integration.opportunityFieldIds),
         agentName: integration.agentName || null,
         agentBrokerage: integration.agentBrokerage || null,
         agentCalendarEmail: integration.agentCalendarEmail || null,
@@ -164,8 +181,8 @@ export async function getValidGhlToken(userId: string, forceRefresh: boolean = f
         locationId: integration.locationId,
         integrationId: integration.id,
         owner: integration.owner || null,
-        customFieldIds: integration.customFieldIds || null,
-        opportunityFieldIds: integration.opportunityFieldIds || null,
+        customFieldIds: parseFieldIdsMap(integration.customFieldIds),
+        opportunityFieldIds: parseFieldIdsMap(integration.opportunityFieldIds),
         agentName: integration.agentName || null,
         agentBrokerage: integration.agentBrokerage || null,
         agentCalendarEmail: integration.agentCalendarEmail || null,
@@ -218,8 +235,8 @@ export async function getValidGhlToken(userId: string, forceRefresh: boolean = f
               locationId: updated.locationId,
               integrationId: updated.id,
               owner: updated.owner || null,
-              customFieldIds: updated.customFieldIds || null,
-              opportunityFieldIds: updated.opportunityFieldIds || null,
+              customFieldIds: parseFieldIdsMap(updated.customFieldIds),
+              opportunityFieldIds: parseFieldIdsMap(updated.opportunityFieldIds),
               agentName: updated.agentName || null,
               agentBrokerage: updated.agentBrokerage || null,
               agentCalendarEmail: updated.agentCalendarEmail || null,
@@ -294,8 +311,8 @@ export async function getIntegrationByLocationId(locationId: string): Promise<In
       userId: integration.userId,
       locationId: integration.locationId,
       integrationId: integration.id,
-      customFieldIds: integration.customFieldIds || null,
-      opportunityFieldIds: integration.opportunityFieldIds || null,
+      customFieldIds: parseFieldIdsMap(integration.customFieldIds),
+      opportunityFieldIds: parseFieldIdsMap(integration.opportunityFieldIds),
       agentName: integration.agentName || null,
       agentBrokerage: integration.agentBrokerage || null,
       agentCalendarEmail: integration.agentCalendarEmail || null,

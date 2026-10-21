@@ -51,6 +51,8 @@ export const CONTACT_FIELDS: Array<{ key: string } & FieldDef> = [
   },
   { key: 'zestimate',            name: 'Zestimate',                 dataType: 'NUMERICAL' },
   { key: 'cash_offer',           name: 'Cash Offer',                dataType: 'NUMERICAL' },
+  { key: 'sheriff_sale_date',    name: 'Sheriff Sale Date',         dataType: 'DATE' },
+  { key: 'estimated_equity_spread', name: 'Estimated Equity Spread', dataType: 'NUMERICAL' },
   { key: 'call_attempt_counter', name: 'Call Attempt or Text Counter', dataType: 'NUMERICAL' },
   { key: 'email_attempt_counter', name: 'email attempt counter',   dataType: 'NUMERICAL' },
   { key: 'mail_sent_count',      name: 'Mail Sent Count',           dataType: 'NUMERICAL' },
@@ -147,6 +149,7 @@ export const SYSTEM_TAGS: string[] = [
   // lead type markers
   'probate-lead', 'preforeclosure-lead', 'fsbo-lead',
   'tax-delinquent-lead', 'driving-for-dollars-lead', 'vacant-lead', 'other-lead',
+  'sheriff-sale-lead', 'lis-pendens-lead', 'high-equity-spread',
   // conversation / AI outreach
   'conversation:active', 'conversation:manual',
   'ready-for-human-contact', 'conversation_ended',

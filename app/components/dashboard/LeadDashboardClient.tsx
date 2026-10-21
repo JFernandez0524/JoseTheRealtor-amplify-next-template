@@ -18,6 +18,7 @@ import { useToast } from '@/app/components/leadDetails/ToastProvider';
 import { LeadTable } from './LeadTable';
 import { DashboardFilters } from './DashboardFilters';
 import { classifyForeclosureStageWithRecency } from '@/app/utils/foreclosure';
+import { computeForeclosureFinancials, resolvePropertyCounty } from '@/amplify/functions/shared/foreclosureFinancials';
 import { hasConcludedSkipTrace, isDirectMailOnlyLead } from '@/amplify/functions/shared/contactChannels';
 import { GhlConnection } from './GhlConnection';
 import { RouteExplanationModal } from './RouteExplanationModal';
@@ -278,6 +279,7 @@ export default function LeadDashboardClient({}: Props) {
           lead.ownerState?.toLowerCase().includes(search) ||
           lead.ownerZip?.includes(search) ||
           lead.ownerCounty?.toLowerCase().includes(search) ||
+          resolvePropertyCounty(lead)?.toLowerCase().includes(search) ||
           lead.adminFirstName?.toLowerCase().includes(search) ||
           lead.adminLastName?.toLowerCase().includes(search) ||
           (lead.phones &&
@@ -411,11 +413,23 @@ export default function LeadDashboardClient({}: Props) {
         // ── Foreclosure qualification (motivated-lead targeting) ──
         // Recency-aware: a stale BatchData "DEAD" record that predates the fresh county filing is
         // promoted to ACTIVE, so genuinely fresh leads stop being excluded from the Active funnel.
+        const fcFin = computeForeclosureFinancials(lead);
         const matchesForeclosureStage = (() => {
           if (!filterForeclosureStage) return true;
-          const stage = classifyForeclosureStageWithRecency(lead).stage;
+          const stage = classifyForeclosureStageWithRecency({
+            ...(lead as any),
+            foreclosureStatus:
+              (lead as any).foreclosureStatus ||
+              (fcFin.saleDate ? 'Scheduled Sheriff Sale' : undefined),
+            foreclosureAuctionDate: fcFin.saleDate,
+          }).stage;
           if (filterForeclosureStage === 'ACTIVE') return stage === 'ACTIVE' || stage === 'AUCTION';
-          if (filterForeclosureStage === 'AUCTION') return stage === 'AUCTION';
+          if (filterForeclosureStage === 'AUCTION') {
+            return fcFin.foreclosureSubType === 'SHERIFF_SALE' || stage === 'AUCTION';
+          }
+          if (filterForeclosureStage === 'LIS_PENDENS') {
+            return fcFin.foreclosureSubType === 'LIS_PENDENS' && stage !== 'DEAD';
+          }
           if (filterForeclosureStage === 'DEAD') return stage === 'DEAD';
           return true;
         })();
@@ -431,23 +445,23 @@ export default function LeadDashboardClient({}: Props) {
         // Tax foreclosure quick filter (higher-value, usually free-and-clear).
         const matchesTaxForeclosure = !filterTaxForeclosure || lead.isTaxForeclosure === true;
 
-        // Auction within N days: needs a foreclosureAuctionDate between today and today+N.
+        // Auction within N days: needs a sheriff sale / auction date between today and today+N.
         const matchesAuctionWindow = (() => {
           if (!filterAuctionWindow) return true;
-          if (!lead.foreclosureAuctionDate) return false;
-          const auction = new Date(lead.foreclosureAuctionDate).getTime();
+          if (!fcFin.saleDate) return false;
+          const auction = new Date(fcFin.saleDate).getTime();
           if (isNaN(auction)) return false;
           const now = Date.now();
           const horizon = now + Number(filterAuctionWindow) * 24 * 60 * 60 * 1000;
           return auction >= now && auction <= horizon;
         })();
 
-        // Minimum equity %.
+        // Minimum equity % (evaluates scraper Zestimate - Upset equity % or BatchData equityPercent).
         const matchesEquity = (() => {
           if (!filterMinEquity) return true;
           const min = Number(filterMinEquity);
           if (!Number.isFinite(min)) return true;
-          return (lead.equityPercent ?? -1) >= min;
+          return (fcFin.equitySpreadPct ?? lead.equityPercent ?? -1) >= min;
         })();
 
         // Date filtering for skip trace completion
@@ -529,6 +543,12 @@ export default function LeadDashboardClient({}: Props) {
         if (sortField === 'zestimate') {
           aValue = parseFloat(aValue || 0);
           bValue = parseFloat(bValue || 0);
+        } else if (sortField === 'equitySpread') {
+          aValue = computeForeclosureFinancials(a).equitySpread;
+          bValue = computeForeclosureFinancials(b).equitySpread;
+        } else if (sortField === 'ownerCounty') {
+          aValue = resolvePropertyCounty(a);
+          bValue = resolvePropertyCounty(b);
         }
 
         // Handle array sorting (phones, emails)

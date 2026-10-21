@@ -143,6 +143,8 @@ async function processTenantIntegration(integration: GHLIntegration): Promise<{ 
               callOutcomeFieldId: fieldIds.call_outcome, // enables the send route's terminal-disposition guard
               leadType: contact.leadType,
               leadTypeFieldId: fieldIds.lead_type,
+              sheriffSaleDateFieldId: fieldIds.sheriff_sale_date,
+              equitySpreadFieldId: fieldIds.estimated_equity_spread,
               propertyAddress: contact.propertyAddress,
               propertyCity: contact.propertyCity,
               propertyState: contact.propertyState,

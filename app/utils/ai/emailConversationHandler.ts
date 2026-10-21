@@ -46,6 +46,8 @@ interface EmailConversationContext {
   propertyZip?: string;
   leadType?: string;
   zestimate?: number;
+  sheriffSaleDate?: string;
+  estimatedEquitySpread?: number;
   emailSignature?: string;
   locationId: string;
   contact?: any;
@@ -293,6 +295,20 @@ async function generateEmailResponse(
     ? `${context.propertyAddress} in ${context.propertyCity}`
     : 'your property';
 
+  const foreclosureFinancialNotes: string[] = [];
+  if (leadContext.normalizedType === 'PREFORECLOSURE') {
+    if (context.sheriffSaleDate) {
+      foreclosureFinancialNotes.push(`Scheduled Sheriff Sale Date: ${context.sheriffSaleDate}`);
+    }
+    if (typeof context.estimatedEquitySpread === 'number' && context.estimatedEquitySpread > 0) {
+      foreclosureFinancialNotes.push(
+        `Estimated Equity to Protect (Market Value minus Upset): ~$${Math.round(context.estimatedEquitySpread).toLocaleString()}`,
+      );
+    }
+  }
+  const foreclosureContextLine =
+    foreclosureFinancialNotes.length > 0 ? `\n- ${foreclosureFinancialNotes.join('\n- ')}` : '';
+
   const offerLines = hasPropertyData
     ? `• AS-IS CASH OFFER: $${cashOffer?.toLocaleString()} (quick close, no repairs needed)\n• RETAIL LISTING: $${propertyData!.zestimate?.toLocaleString()} (maximum value, traditional sale)`
     : `• AS-IS CASH OFFER: [we determine after a quick walkthrough]\n• RETAIL LISTING: [market value, traditional sale]`;
@@ -312,7 +328,7 @@ async function generateEmailResponse(
 
 CONTEXT:
 - Property: ${propertyRef}
-${hasPropertyData ? `- Cash Offer: $${cashOffer?.toLocaleString()}\n- Retail Value: $${propertyData!.zestimate?.toLocaleString()}` : '- No valuation data yet'}
+${hasPropertyData ? `- Cash Offer: $${cashOffer?.toLocaleString()}\n- Retail Value: $${propertyData!.zestimate?.toLocaleString()}` : '- No valuation data yet'}${foreclosureContextLine}
 
 THEIR EMAIL: "${context.incomingMessage}"
 
@@ -333,7 +349,7 @@ GOAL: Get them to agree to a 10-minute property walkthrough so you can give them
 WHAT YOU KNOW:
 - Lead type: ${leadContext.displayType} (${leadContext.situationContext})
 - Property: ${propertyRef}
-- ${hasPropertyData ? `Cash offer: $${cashOffer?.toLocaleString()} | Retail value: $${propertyData!.zestimate?.toLocaleString()}` : 'No valuation yet — offer to assess in person'}
+- ${hasPropertyData ? `Cash offer: $${cashOffer?.toLocaleString()} | Retail value: $${propertyData!.zestimate?.toLocaleString()}` : 'No valuation yet — offer to assess in person'}${foreclosureContextLine}
 
 FRAMEWORK (Hook-Relate-Bridge-Ask):
 1. Hook: Open with something that shows you saw the public notice and know their situation — don't be generic

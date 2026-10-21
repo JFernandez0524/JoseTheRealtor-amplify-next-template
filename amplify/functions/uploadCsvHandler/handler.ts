@@ -442,6 +442,19 @@ export const handler: S3Handler = async (event) => {
           const rawPropAddr = sanitize(cell('ownerAddress', 'ownerAddress', 'Property Address'));
           const rawPropCity = sanitize(cell('ownerCity', 'ownerCity'));
           const rawPropState = sanitize(cell('ownerState', 'ownerState'));
+          const rawPropCounty = sanitize(
+            cell(
+              'ownerCounty',
+              'ownerCounty',
+              'Property County',
+              'County',
+              'COUNTY',
+              'county',
+              'Situs County',
+              'SITUS-COUNTY',
+              'SITUS COUNTY',
+            ),
+          );
 
           const rawAdminZip = leadType === 'PROBATE' ? formatZip(cell('adminZip', 'adminZip')) : '';
           const rawAdminAddr = leadType === 'PROBATE' ? sanitize(cell('adminAddress', 'adminAddress', 'Mailing Address')) : '';
@@ -543,7 +556,7 @@ export const handler: S3Handler = async (event) => {
           const finalPropState = std?.state || rawPropState; // Use standardized state (NJ vs New Jersey)
           // Strip +4 from zip codes (keep only 5 digits)
           const finalPropZip = (std?.zip || rawPropZip)?.split('-')[0];
-          const finalPropCounty = std?.county || null;
+          const finalPropCounty = std?.county || (rawPropCounty ? toTitleCase(rawPropCounty) : null);
 
           const standardizedAddress = propValidation
             ? {

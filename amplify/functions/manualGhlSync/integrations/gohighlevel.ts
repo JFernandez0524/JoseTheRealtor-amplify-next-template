@@ -8,6 +8,11 @@ import {
   labelsForSync,
   resolveDialablePhone,
 } from '../../shared/contactChannels';
+import {
+  computeForeclosureFinancials,
+  resolvePropertyCounty,
+  toIsoDateOnly,
+} from '../../shared/foreclosureFinancials';
 import { DBLead } from '../../../../app/utils/aws/data/lead.server';
 
 // 🎯 Updated parameters for "1 Phone = 1 Contact" strategy
@@ -85,12 +90,16 @@ export async function syncToGoHighLevel(
     const normMailState = (mailingState || '').trim().toUpperCase();
     const isOutOfStateAdmin = Boolean(normPropState && normMailState && normPropState !== normMailState);
 
+    // 🏛️ Foreclosure / Sheriff Sale financials & Universal County resolution
+    const fcFinancials = computeForeclosureFinancials(lead);
+    const resolvedCounty = resolvePropertyCounty(lead);
+
     const customFieldValues: Record<string, any> = {
       property_address: propAddress,
       property_city:    propCity,
       property_state:   propState,
       property_zip:     propZip,
-      property_county: lead.ownerCounty ? toTitleCase(lead.ownerCounty) : undefined,
+      property_county:  resolvedCounty || undefined,
       // Prefer the direct zpid URL from Bridge API; fall back to address-based search URL
       zillow_link: lead.zillowUrl
         || (lead.zillowZpid ? `https://www.zillow.com/homes/${lead.zillowZpid}_zpid/` : null)
@@ -119,8 +128,10 @@ export async function syncToGoHighLevel(
       skiptracestatus: lead.skipTraceStatus?.toUpperCase() || 'PENDING',
       listing_status: lead.listingStatus || 'off market',
       lead_source_id: lead.id, // 🎯 Shared Lead ID for suppression workflows
-      zestimate: zestimateValue, // Full market value (listing value)
-      cash_offer: cashOfferValue, // 70% cash offer (as-is value)
+      zestimate: zestimateValue || undefined, // Full market value (listing value)
+      cash_offer: cashOfferValue || undefined, // 70% cash offer (as-is value)
+      sheriff_sale_date: toIsoDateOnly(fcFinancials.saleDate) || undefined,
+      estimated_equity_spread: fcFinancials.equitySpread != null ? fcFinancials.equitySpread : undefined,
       // 🏠 Property tier based on value
       property_tier: (() => {
         const value = lead.zestimate || lead.estimatedValue || 0;
@@ -148,7 +159,7 @@ export async function syncToGoHighLevel(
     };
 
     const customFields = Object.keys(customFieldValues)
-      .filter((key) => customFieldValues[key] && fieldIds[key])
+      .filter((key) => customFieldValues[key] !== undefined && customFieldValues[key] !== null && customFieldValues[key] !== '' && fieldIds[key])
       .map((key) => ({
         id: fieldIds[key],
         value: String(customFieldValues[key]),
@@ -168,6 +179,9 @@ export async function syncToGoHighLevel(
     tags.push('App:Synced');
     if (isAIPlan) tags.push('App:AI-Enabled');
     if (isOutOfStateAdmin) tags.push('out_of_state_admin');
+    if (fcFinancials.equityTier === 'HIGH_EQUITY') tags.push('high-equity-spread');
+    if (fcFinancials.foreclosureSubType === 'SHERIFF_SALE') tags.push('sheriff-sale-lead');
+    if (fcFinancials.foreclosureSubType === 'LIS_PENDENS') tags.push('lis-pendens-lead');
 
     // 🏷️ LEAD TYPE TAG
     const leadTypeTagMap: Record<string, string> = {

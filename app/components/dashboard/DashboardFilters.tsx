@@ -202,7 +202,15 @@ export function DashboardFilters({
       reset: () => setFilterHasPhone(''),
     },
     filterListingStatus && { label: `Listing: ${filterListingStatus}`, reset: () => setFilterListingStatus('') },
-    filterForeclosureStage && { label: `Stage: ${filterForeclosureStage}`, reset: () => setFilterForeclosureStage('') },
+    filterForeclosureStage && {
+      label:
+        filterForeclosureStage === 'AUCTION'
+          ? '🔨 Sheriff Sale / Auction'
+          : filterForeclosureStage === 'LIS_PENDENS'
+            ? '📋 Lis Pendens Only'
+            : `Stage: ${filterForeclosureStage}`,
+      reset: () => setFilterForeclosureStage(''),
+    },
     filterAuctionWindow && { label: `Auction: Next ${filterAuctionWindow}d`, reset: () => setFilterAuctionWindow('') },
     filterMinEquity && { label: `Equity ≥ ${filterMinEquity}%`, reset: () => setFilterMinEquity('') },
     (filterMinValue || filterMaxValue) && {
@@ -298,6 +306,36 @@ export function DashboardFilters({
             title='Quick Filter: Equity >= 30%, Active Foreclosure & Off-Market'
           >
             🔥 Top Deals (&gt;30% Equity)
+          </button>
+
+          <button
+            onClick={() =>
+              setFilterForeclosureStage(filterForeclosureStage === 'AUCTION' ? '' : 'AUCTION')
+            }
+            className={`px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 border ${
+              filterForeclosureStage === 'AUCTION'
+                ? 'bg-rose-600 text-white border-rose-700 shadow-sm'
+                : 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100'
+            }`}
+            title='Quick Filter: Sheriff Sale / Auction Leads Only'
+          >
+            🔨 Sheriff Sales
+          </button>
+
+          <button
+            onClick={() =>
+              setFilterForeclosureStage(
+                filterForeclosureStage === 'LIS_PENDENS' ? '' : 'LIS_PENDENS',
+              )
+            }
+            className={`px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 border ${
+              filterForeclosureStage === 'LIS_PENDENS'
+                ? 'bg-amber-600 text-white border-amber-700 shadow-sm'
+                : 'bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100'
+            }`}
+            title='Quick Filter: Lis Pendens Filings Only (No Auction Date Yet)'
+          >
+            📋 Lis Pendens
           </button>
 
           <button
@@ -451,7 +489,8 @@ export function DashboardFilters({
                 >
                   <option value=''>All Stages</option>
                   <option value='ACTIVE'>Active (NOD · Lis Pendens · Auction)</option>
-                  <option value='AUCTION'>Facing Auction only</option>
+                  <option value='AUCTION'>🔨 Sheriff Sale / Auction Only</option>
+                  <option value='LIS_PENDENS'>📋 Lis Pendens Only (No Auction Date)</option>
                   <option value='DEAD'>Dead (Rescinded · Released)</option>
                 </select>
               </div>

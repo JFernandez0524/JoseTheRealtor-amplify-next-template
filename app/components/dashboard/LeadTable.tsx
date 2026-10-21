@@ -8,6 +8,7 @@ import { updateLead, fetchLead } from '@/app/utils/aws/data/lead.client';
 import { AddressAutocomplete, ParsedAddress } from '@/app/components/address/AddressAutocomplete';
 import { type Schema } from '@/amplify/data/resource';
 import { addressesMatch } from '@/app/utils/leadValidation';
+import { computeForeclosureFinancials, resolvePropertyCounty } from '@/amplify/functions/shared/foreclosureFinancials';
 
 // Format listing status for display
 const formatListingStatus = (status: string | null | undefined): string => {
@@ -423,6 +424,7 @@ export function LeadTable({
               {renderSortableHeader('ownerCity', 'City/State/Zip', 'bg-blue-50')}
               {renderSortableHeader('ownerCounty', 'County', 'bg-blue-50')}
               {renderSortableHeader('zestimate', 'Zestimate', 'bg-yellow-50')}
+              {renderSortableHeader('equitySpread', 'Equity Spread / Debt', 'bg-yellow-50')}
               {renderSortableHeader('listingStatus', (
                 <div className='flex items-center gap-1' title='Automated web estimate — verify listing status on local MLS'>
                   <span>Listing Status</span>
@@ -443,7 +445,7 @@ export function LeadTable({
             {isLoading ? (
               <tr>
                 <td
-                  colSpan={18}
+                  colSpan={19}
                   className='px-6 py-10 text-center text-gray-500'
                 >
                   <div className='flex flex-col items-center'>
@@ -455,7 +457,7 @@ export function LeadTable({
             ) : leads.length === 0 ? (
               <tr>
                 <td
-                  colSpan={18}
+                  colSpan={19}
                   className='px-6 py-10 text-center text-gray-500'
                 >
                   <div className='text-lg mb-2'>📭 No leads found</div>
@@ -500,9 +502,35 @@ export function LeadTable({
                   </td>
 
                   <td className='px-4 py-4 whitespace-nowrap text-sm'>
-                    <span className='px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800 capitalize'>
-                      {lead.type}
-                    </span>
+                    {(() => {
+                      const fcSub =
+                        lead.type === 'PREFORECLOSURE'
+                          ? computeForeclosureFinancials(lead).foreclosureSubType
+                          : null;
+                      return (
+                        <div className='flex flex-col items-start gap-1'>
+                          <span className='px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800 capitalize'>
+                            {lead.type}
+                          </span>
+                          {fcSub === 'SHERIFF_SALE' && (
+                            <span
+                              className='px-1.5 py-0.5 inline-flex items-center text-[10px] font-bold rounded bg-rose-100 text-rose-800 border border-rose-200'
+                              title='Scheduled Sheriff Sale / Foreclosure Auction'
+                            >
+                              🔨 SHERIFF SALE
+                            </span>
+                          )}
+                          {fcSub === 'LIS_PENDENS' && (
+                            <span
+                              className='px-1.5 py-0.5 inline-flex items-center text-[10px] font-bold rounded bg-amber-100 text-amber-800 border border-amber-200'
+                              title='Lis Pendens / Pre-Foreclosure Filing (No Auction Date Yet)'
+                            >
+                              📋 LIS PENDENS
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </td>
 
                   <td className='px-4 py-4 whitespace-nowrap text-sm'>
@@ -635,7 +663,7 @@ export function LeadTable({
 
                   {/* County Column */}
                   <td className='px-4 py-4 whitespace-nowrap text-sm text-gray-900 bg-blue-50/30'>
-                    {lead.ownerCounty || '-'}
+                    {resolvePropertyCounty(lead) || '-'}
                   </td>
 
                   {/* Zestimate Column */}
@@ -775,6 +803,69 @@ export function LeadTable({
                         </div>
                       </div>
                     )}
+                  </td>
+
+                  {/* Equity Spread / Debt Column */}
+                  <td className='px-4 py-4 whitespace-nowrap text-xs bg-yellow-50/30'>
+                    {(() => {
+                      const fcFin = computeForeclosureFinancials(lead);
+                      if (
+                        fcFin.equitySpread == null &&
+                        fcFin.baselineUpset == null &&
+                        !fcFin.saleDate &&
+                        !fcFin.recordingDate
+                      ) {
+                        return <span className='text-gray-400'>-</span>;
+                      }
+                      return (
+                        <div className='flex flex-col gap-0.5'>
+                          {fcFin.equitySpread != null ? (
+                            <div className='flex items-center gap-1.5'>
+                              <span
+                                className={`font-bold text-sm ${
+                                  fcFin.equitySpread >= 0 ? 'text-emerald-700' : 'text-red-600'
+                                }`}
+                              >
+                                {fcFin.equitySpread < 0
+                                  ? `-$${Math.abs(fcFin.equitySpread).toLocaleString()}`
+                                  : `$${fcFin.equitySpread.toLocaleString()}`}
+                              </span>
+                              {fcFin.equitySpreadPct != null && (
+                                <span
+                                  className={`px-1.5 py-0.5 rounded font-bold text-[10px] ${
+                                    fcFin.equityTier === 'HIGH_EQUITY'
+                                      ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                                      : fcFin.equityTier === 'MODERATE_EQUITY'
+                                        ? 'bg-teal-50 text-teal-800 border border-teal-200'
+                                        : 'bg-red-100 text-red-800 border border-red-300'
+                                  }`}
+                                >
+                                  {fcFin.equityTier === 'HIGH_EQUITY' && '🔥 '}
+                                  {fcFin.equityTier === 'UNDERWATER' && '⚠️ '}
+                                  {fcFin.equitySpreadPct}%
+                                </span>
+                              )}
+                            </div>
+                          ) : (
+                            <span className='text-gray-400'>No spread</span>
+                          )}
+                          {fcFin.baselineUpset != null && (
+                            <span className='text-[11px] text-gray-500'>
+                              {fcFin.baselineLabel}: ${fcFin.baselineUpset.toLocaleString()}
+                            </span>
+                          )}
+                          {fcFin.saleDate ? (
+                            <span className='text-[10px] text-rose-800 font-medium'>
+                              📅 Sale: {new Date(fcFin.saleDate).toLocaleDateString()}
+                            </span>
+                          ) : fcFin.recordingDate ? (
+                            <span className='text-[10px] text-amber-800 font-medium'>
+                              📋 LP Filed: {new Date(fcFin.recordingDate).toLocaleDateString()}
+                            </span>
+                          ) : null}
+                        </div>
+                      );
+                    })()}
                   </td>
 
                   {/* Listing Status Column */}

@@ -3,7 +3,7 @@ import { DynamoDBDocumentClient, GetCommand, UpdateCommand, ScanCommand } from '
 import { validateEnv } from '../shared/config';
 import { syncToGoHighLevel } from './integrations/gohighlevel';
 import { getValidGhlToken, saveFieldIds } from '../shared/ghlTokenManager';
-import { provisionCustomFields, provisionOpportunityFields, provisionTags } from '../shared/ghlFieldProvisioner';
+import { CONTACT_FIELDS, provisionCustomFields, provisionOpportunityFields, provisionTags } from '../shared/ghlFieldProvisioner';
 import { validateLeadForSync, updateLeadSyncStatus, SyncResult } from '../shared/syncUtils';
 import { filterValidEmails } from '../shared/emailValidator';
 
@@ -66,25 +66,28 @@ async function processGhlSync(lead: any, groups: string[] = [], ownerId: string 
   let oppFieldIds: Record<string, string> = ghlData.opportunityFieldIds || {};
 
   // Auto-provision fields for existing users who connected before multi-tenant migration
-  if (!ghlData.customFieldIds) {
-    console.log(`🔧 [GHL_SYNC] No customFieldIds stored — provisioning on-the-fly for location ${ghlLocationId}`);
+  // or when newly defined CONTACT_FIELDS (e.g., property_county, sheriff_sale_date, estimated_equity_spread)
+  // are not yet cached in customFieldIds.
+  const hasMissingContactFields = CONTACT_FIELDS.some((f) => !fieldIds[f.key]);
+  if (!ghlData.customFieldIds || hasMissingContactFields) {
+    console.log(`🔧 [GHL_SYNC] Provisioning/backfilling customFieldIds on-the-fly for location ${ghlLocationId}`);
     try {
       const [provisionedFields, provisionedOppFields] = await Promise.all([
         provisionCustomFields(ghlLocationId, ghlToken),
-        provisionOpportunityFields(ghlLocationId, ghlToken),
+        Object.keys(oppFieldIds).length > 0 ? Promise.resolve(oppFieldIds) : provisionOpportunityFields(ghlLocationId, ghlToken),
         // Also create tags so tag-triggered workflows resolve for new users (returns void).
         // NOTE: custom call dispositions are NOT API-provisionable (GHL has no public
         // endpoint — returns 404); they come from the GHL snapshot or manual setup.
         provisionTags(ghlLocationId, ghlToken),
       ]);
-      fieldIds = provisionedFields;
-      oppFieldIds = provisionedOppFields;
+      fieldIds = { ...fieldIds, ...provisionedFields };
+      oppFieldIds = { ...oppFieldIds, ...provisionedOppFields };
       // Persist for future syncs (fire-and-forget — don't block sync)
       saveFieldIds(ghlData.integrationId, fieldIds, oppFieldIds).catch(err =>
         console.error(`⚠️ [GHL_SYNC] Failed to persist field IDs:`, err)
       );
     } catch (err) {
-      console.error(`⚠️ [GHL_SYNC] On-the-fly provisioning failed — sync may use empty field IDs:`, err);
+      console.error(`⚠️ [GHL_SYNC] On-the-fly provisioning failed — sync may use partial field IDs:`, err);
     }
   }
 
