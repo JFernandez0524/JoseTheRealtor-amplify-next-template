@@ -27,7 +27,7 @@ export const handler: Handler = async (event) => {
 
     // When a recipient scans a QR code, Thanks.io automatically adds them to the "All QR Scans"
     // (#302538 -> Monthly Market Update Postcard) list. Remove them from the active cold drip
-    // lists (#302546 Probate, #309826 Preforeclosure) so they don't keep getting cold follow-up
+    // lists (#302546 Probate, #309826 Lis Pendens, #337586 Auction) so they don't keep getting cold follow-up
     // letters (like the Day 42 breakup letter) after engaging.
     if (eventType === 'scans.scan_update' && data) {
       await removeRecipientFromColdListsOnScan(data);
@@ -158,7 +158,8 @@ async function handleQRScan(contactId: string, data: any) {
 // (Thanks.io's built-in "All QR Scans" list #302538 automatically takes over for Monthly Market Updates)
 const COLD_DRIP_MAILING_LIST_IDS = [
   302546, // Probate Mailing List
-  309826, // Preforeclosure Mailing List
+  309826, // Preforeclosure - Lis Pendens
+  337586, // Preforeclosure - Auction
 ];
 
 async function removeRecipientFromColdListsOnScan(data: any) {

@@ -25,6 +25,7 @@ import { RouteExplanationModal } from './RouteExplanationModal';
 import { SyncConfirmModal } from './SyncConfirmModal';
 import { DeleteConfirmModal } from './DeleteConfirmModal';
 import { SyncResultModal } from './SyncResultModal';
+import { ThanksIoModal } from './ThanksIoModal';
 import {
   SkipTraceResultModal,
   computeReachabilityBreakdown,
@@ -75,6 +76,7 @@ export default function LeadDashboardClient({}: Props) {
   const [showSyncResultModal, setShowSyncResultModal] = useState(false);
   const [showSkipTraceResultModal, setShowSkipTraceResultModal] = useState(false);
   const [skipTraceBreakdown, setSkipTraceBreakdown] = useState<ReachabilityBreakdown | null>(null);
+  const [showThanksIoModal, setShowThanksIoModal] = useState(false);
 
   const [isLoading, setIsLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
@@ -1106,6 +1108,27 @@ export default function LeadDashboardClient({}: Props) {
     }
   };
 
+  const handleOpenThanksIo = () => {
+    if (selectedIds.length === 0) {
+      addToast({ type: 'warning', title: 'No leads selected', message: 'Select leads to send to Thanks.io.' });
+      return;
+    }
+    setShowThanksIoModal(true);
+  };
+
+  const handleThanksIoSent = async (result: { sent: number; sentIds: string[]; failed: any[]; excluded: any[]; list: { label: string } }) => {
+    setShowThanksIoModal(false);
+    const failedCount = result.failed?.length || 0;
+    addToast({
+      type: failedCount > 0 ? 'warning' : 'success',
+      title: `Thanks.io: ${result.list.label}`,
+      message: `Added ${result.sent} lead${result.sent !== 1 ? 's' : ''}${failedCount ? ` | Failed: ${failedCount}` : ''}`,
+      duration: 8000,
+    });
+    if (result.sentIds?.length) await patchLeads(result.sentIds);
+    setSelectedIds([]);
+  };
+
   const handleSyncListingStatus = async () => {
     if (!confirm('Sync listing_status field to all existing Launch AI contacts?\n\nThis will update contacts that were synced before the field was created.')) return;
 
@@ -1389,6 +1412,7 @@ export default function LeadDashboardClient({}: Props) {
         handleBulkDirectMail={handleBulkDirectMail}
         handlePopulateQueue={handlePopulateQueue}
         handleAddToDoorKnock={handleAddToDoorKnock}
+        handleOpenThanksIo={handleOpenThanksIo}
         handleSyncListingStatus={handleSyncListingStatus}
         handleDelete={handleDeleteLeads}
         handleExport={() => addToast({ type: 'info', title: 'Export', message: 'Exporting leads to CSV...' })}
@@ -1400,6 +1424,13 @@ export default function LeadDashboardClient({}: Props) {
 
       {/* GHL Connection Status */}
       <GhlConnection />
+
+      <ThanksIoModal
+        isOpen={showThanksIoModal}
+        leadIds={selectedIds}
+        onClose={() => setShowThanksIoModal(false)}
+        onSent={handleThanksIoSent}
+      />
 
       {/* Wallet Status Bar */}
       <div className='flex justify-end items-center gap-4 px-2'>

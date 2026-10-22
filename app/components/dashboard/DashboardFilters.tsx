@@ -77,6 +77,8 @@ type Props = {
   handleBulkDirectMail: () => Promise<void>;
   handlePopulateQueue: () => Promise<void>;
   handleAddToDoorKnock: () => Promise<void>;
+  /** Opens the manual "Send to Thanks.io" modal for the selected leads. */
+  handleOpenThanksIo?: () => void;
   handleSyncListingStatus: () => Promise<void>;
   handleDelete: () => Promise<void>;
   handleExport: () => void;
@@ -144,6 +146,7 @@ export function DashboardFilters({
   handleBulkDirectMail,
   handlePopulateQueue,
   handleAddToDoorKnock,
+  handleOpenThanksIo,
   handleSyncListingStatus,
   handleDelete,
   handleExport,
@@ -786,6 +789,17 @@ export function DashboardFilters({
             >
               🚪 Add to Door Knock
             </button>
+
+            {/* Manual Thanks.io send — user picks the mailing list in the modal */}
+            {handleOpenThanksIo && (
+              <button
+                onClick={handleOpenThanksIo}
+                disabled={isPopulatingQueue || isSkipTracing || isGhlSyncing}
+                className='text-xs font-bold px-3 py-1.5 rounded-xl bg-teal-600 text-white hover:bg-teal-700 transition shadow-sm w-full sm:w-auto'
+              >
+                📬 Send to Thanks.io
+              </button>
+            )}
 
             {/* Export Button */}
             <button
