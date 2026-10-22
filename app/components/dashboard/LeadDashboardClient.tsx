@@ -271,269 +271,203 @@ export default function LeadDashboardClient({}: Props) {
 
   // --- Filter Logic ---
   const filteredLeads = useMemo(() => {
+    const search = searchQuery.trim().toLowerCase();
+
     return leads
       .filter((lead) => {
-        const search = searchQuery.toLowerCase();
-        const matchesSearch =
-          lead.ownerAddress?.toLowerCase().includes(search) ||
-          lead.ownerLastName?.toLowerCase().includes(search) ||
-          lead.ownerFirstName?.toLowerCase().includes(search) ||
-          lead.ownerCity?.toLowerCase().includes(search) ||
-          lead.ownerState?.toLowerCase().includes(search) ||
-          lead.ownerZip?.includes(search) ||
-          lead.ownerCounty?.toLowerCase().includes(search) ||
-          resolvePropertyCounty(lead)?.toLowerCase().includes(search) ||
-          lead.adminFirstName?.toLowerCase().includes(search) ||
-          lead.adminLastName?.toLowerCase().includes(search) ||
-          (lead.phones &&
-            lead.phones.some((phone) => phone?.includes(search))) ||
-          (lead.emails &&
-            lead.emails.some((email) =>
-              email?.toLowerCase().includes(search)
-            )) ||
-          (lead.customTags &&
-            lead.customTags.some((tag) => tag?.toLowerCase().includes(search)));
+        // 1. Instant short-circuits on cheap scalar/enum properties
+        if (filterType && lead.type !== filterType) return false;
+        if (filterSource && lead.uploadSource !== filterSource) return false;
 
-        const matchesType = !filterType || lead.type === filterType;
-        const matchesOutOfStateAdmin = (() => {
-          if (!filterOutOfStateAdmin) return true;
-          const propState = (((lead as any).propertyState || (lead.standardizedAddress as any)?.state || lead.ownerState || '') as string).trim().toUpperCase();
-          const mailState = ((lead.mailingState || (lead as any).batchDataMailingAddress?.mailingState || '') as string).trim().toUpperCase();
-          const isOutOfState = Boolean(propState && mailState && propState !== mailState);
-          return filterOutOfStateAdmin === 'YES' ? isOutOfState : !isOutOfState;
-        })();
-        const matchesStatus = (() => {
-          if (!filterStatus) return true;
+        if (filterListingStatus) {
+          if (filterListingStatus === 'NULL') {
+            if (lead.listingStatus) return false;
+          } else if (lead.listingStatus !== filterListingStatus) {
+            return false;
+          }
+        }
+
+        if (filterCrmStatus) {
+          if (filterCrmStatus === 'NULL') {
+            if (lead.ghlSyncStatus) return false;
+          } else if (lead.ghlSyncStatus !== filterCrmStatus) {
+            return false;
+          }
+        }
+
+        // Direct mail status filter (has thanksio list tag)
+        if (filterDirectMail) {
+          const isMailed = Array.isArray(lead.customTags) && lead.customTags.some((t) => t?.startsWith('thanksio:'));
+          if (filterDirectMail === 'MAILED' ? !isMailed : isMailed) return false;
+        }
+
+        // Owner type: hide corporate/entity-owned properties by default (user targets individuals).
+        if (filterOwnerType === 'ENTITIES_ONLY') {
+          if (lead.isEntityOwner !== true) return false;
+        } else if (filterOwnerType !== 'INCLUDE_ENTITIES') {
+          if (lead.isEntityOwner === true) return false;
+        }
+
+        // Tax foreclosure quick filter
+        if (filterTaxForeclosure && lead.isTaxForeclosure !== true) return false;
+
+        // Skip trace status filter
+        if (filterStatus) {
           const statusUpper = (lead.skipTraceStatus || '').toUpperCase();
           const hasMobile = Boolean(lead.phones && lead.phones.length > 0);
           const hasLandline = Boolean(lead.landlinePhones && lead.landlinePhones.length > 0);
           const hasEmail = Boolean(lead.emails && lead.emails.length > 0);
 
           if (filterStatus === 'PENDING') {
-            return statusUpper === 'PENDING' || !lead.skipTraceStatus;
+            if (statusUpper !== 'PENDING' && lead.skipTraceStatus) return false;
+          } else if (filterStatus === 'FAILED') {
+            if (statusUpper !== 'FAILED') return false;
+          } else if (filterStatus === 'COMPLETED') {
+            if (!hasConcludedSkipTrace(lead.skipTraceStatus)) return false;
+          } else if (filterStatus === 'LANDLINE_ONLY') {
+            if (!(hasConcludedSkipTrace(lead.skipTraceStatus) && !hasMobile && hasLandline)) return false;
+          } else if (filterStatus === 'DIRECT_MAIL_ONLY') {
+            if (!isDirectMailOnlyLead(lead)) return false;
+          } else if (filterStatus === 'NO_QUALITY_CONTACTS') {
+            if (!(statusUpper === 'NO_QUALITY_CONTACTS' || (hasConcludedSkipTrace(lead.skipTraceStatus) && !hasMobile && !hasLandline && !hasEmail))) return false;
+          } else if (filterStatus === 'NO_MATCH') {
+            if (statusUpper !== 'NO_MATCH') return false;
+          } else if (statusUpper !== filterStatus.toUpperCase()) {
+            return false;
           }
-          if (filterStatus === 'FAILED') {
-            return statusUpper === 'FAILED';
-          }
-          if (filterStatus === 'COMPLETED') {
-            return hasConcludedSkipTrace(lead.skipTraceStatus);
-          }
-          if (filterStatus === 'LANDLINE_ONLY') {
-            return hasConcludedSkipTrace(lead.skipTraceStatus) && !hasMobile && hasLandline;
-          }
-          if (filterStatus === 'DIRECT_MAIL_ONLY') {
-            return isDirectMailOnlyLead(lead);
-          }
-          if (filterStatus === 'NO_QUALITY_CONTACTS') {
-            return statusUpper === 'NO_QUALITY_CONTACTS' || (hasConcludedSkipTrace(lead.skipTraceStatus) && !hasMobile && !hasLandline && !hasEmail);
-          }
-          if (filterStatus === 'NO_MATCH') {
-            return statusUpper === 'NO_MATCH';
-          }
-          return statusUpper === filterStatus.toUpperCase();
-        })();
+        }
 
-        const matchesCrm =
-          !filterCrmStatus ||
-          (filterCrmStatus === 'NULL'
-            ? !lead.ghlSyncStatus
-            : lead.ghlSyncStatus === filterCrmStatus);
-
-        const matchesPhone = (() => {
-          if (!filterHasPhone) return true;
+        // Phone / channel filter
+        if (filterHasPhone) {
           const hasMobile = Boolean(lead.phones && lead.phones.length > 0);
           const hasLandline = Boolean(lead.landlinePhones && lead.landlinePhones.length > 0);
 
           if (filterHasPhone === 'HAS_PHONE' || filterHasPhone === 'HAS_ANY_PHONE') {
-            return hasMobile || hasLandline;
+            if (!hasMobile && !hasLandline) return false;
+          } else if (filterHasPhone === 'HAS_MOBILE') {
+            if (!hasMobile) return false;
+          } else if (filterHasPhone === 'HAS_LANDLINE') {
+            if (!hasLandline) return false;
+          } else if (filterHasPhone === 'LANDLINE_ONLY') {
+            if (hasMobile || !hasLandline) return false;
+          } else if (filterHasPhone === 'DIRECT_MAIL_ONLY') {
+            if (!isDirectMailOnlyLead(lead)) return false;
+          } else if (filterHasPhone === 'NO_PHONE') {
+            if (hasMobile || hasLandline) return false;
           }
-          if (filterHasPhone === 'HAS_MOBILE') {
-            return hasMobile;
-          }
-          if (filterHasPhone === 'HAS_LANDLINE') {
-            return hasLandline;
-          }
-          if (filterHasPhone === 'LANDLINE_ONLY') {
-            return !hasMobile && hasLandline;
-          }
-          if (filterHasPhone === 'DIRECT_MAIL_ONLY') {
-            return isDirectMailOnlyLead(lead);
-          }
-          if (filterHasPhone === 'NO_PHONE') {
-            return !hasMobile && !hasLandline;
-          }
-          return true;
-        })();
+        }
 
-        const matchesListingStatus =
-          !filterListingStatus ||
-          (filterListingStatus === 'NULL'
-            ? !lead.listingStatus
-            : lead.listingStatus === filterListingStatus);
+        // Out of state admin
+        if (filterOutOfStateAdmin) {
+          const propState = (((lead as any).propertyState || (lead.standardizedAddress as any)?.state || lead.ownerState || '') as string).trim().toUpperCase();
+          const mailState = ((lead.mailingState || (lead as any).batchDataMailingAddress?.mailingState || '') as string).trim().toUpperCase();
+          const isOutOfState = Boolean(propState && mailState && propState !== mailState);
+          if (filterOutOfStateAdmin === 'YES' ? !isOutOfState : isOutOfState) return false;
+        }
 
-        const matchesDateAdded = (() => {
-          if (!filterDateAdded && !filterDateAddedTo) return true;
+        // Data quality
+        if (filterDataQuality) {
+          if (filterDataQuality === 'INVALID' && lead.validationStatus !== 'INVALID') return false;
+          if (filterDataQuality === 'NO_ZESTIMATE' && lead.zestimate != null) return false;
+        }
+
+        // Date added
+        if (filterDateAdded || filterDateAddedTo) {
           if (!lead.createdAt) return false;
           const leadDate = new Date(lead.createdAt).toISOString().split('T')[0];
-          
-          // Debug logging
-          if (filterDateAdded || filterDateAddedTo) {
-            console.log('Date filter check:', {
-              leadDate,
-              filterDateAdded,
-              filterDateAddedTo,
-              matches: (filterDateAdded && filterDateAddedTo) 
-                ? (leadDate >= filterDateAdded && leadDate <= filterDateAddedTo)
-                : filterDateAdded 
-                  ? leadDate >= filterDateAdded
-                  : leadDate <= filterDateAddedTo
-            });
-          }
-          
-          if (filterDateAdded && filterDateAddedTo) {
-            return leadDate >= filterDateAdded && leadDate <= filterDateAddedTo;
-          } else if (filterDateAdded) {
-            return leadDate >= filterDateAdded;
-          } else if (filterDateAddedTo) {
-            return leadDate <= filterDateAddedTo;
-          }
-          return true;
-        })();
+          if (filterDateAdded && leadDate < filterDateAdded) return false;
+          if (filterDateAddedTo && leadDate > filterDateAddedTo) return false;
+        }
 
-        const matchesSource = !filterSource || lead.uploadSource === filterSource;
-
-        // Data-quality: surface leads that need attention. INVALID = Google couldn't confirm the
-        // address; NO_ZESTIMATE = no Zillow valuation (a broader set — includes VALID leads Zillow
-        // simply has no data for). Distinct filters, not the same set.
-        const matchesDataQuality =
-          !filterDataQuality ||
-          (filterDataQuality === 'INVALID'
-            ? lead.validationStatus === 'INVALID'
-            : filterDataQuality === 'NO_ZESTIMATE'
-              ? lead.zestimate == null
-              : true);
-
-        // ── Foreclosure qualification (motivated-lead targeting) ──
-        // Recency-aware: a stale BatchData "DEAD" record that predates the fresh county filing is
-        // promoted to ACTIVE, so genuinely fresh leads stop being excluded from the Active funnel.
-        const fcFin = computeForeclosureFinancials(lead);
-        const matchesForeclosureStage = (() => {
-          if (!filterForeclosureStage) return true;
-          const stage = classifyForeclosureStageWithRecency({
-            ...(lead as any),
-            foreclosureStatus:
-              (lead as any).foreclosureStatus ||
-              (fcFin.saleDate ? 'Scheduled Sheriff Sale' : undefined),
-            foreclosureAuctionDate: fcFin.saleDate,
-          }).stage;
-          if (filterForeclosureStage === 'ACTIVE') return stage === 'ACTIVE' || stage === 'AUCTION';
-          if (filterForeclosureStage === 'AUCTION') {
-            return fcFin.foreclosureSubType === 'SHERIFF_SALE' || stage === 'AUCTION';
-          }
-          if (filterForeclosureStage === 'LIS_PENDENS') {
-            return fcFin.foreclosureSubType === 'LIS_PENDENS' && stage !== 'DEAD';
-          }
-          if (filterForeclosureStage === 'DEAD') return stage === 'DEAD';
-          return true;
-        })();
-
-        // Owner type: hide corporate/entity-owned properties by default (user targets individuals).
-        const matchesOwnerType =
-          filterOwnerType === 'INCLUDE_ENTITIES'
-            ? true
-            : filterOwnerType === 'ENTITIES_ONLY'
-              ? lead.isEntityOwner === true
-              : lead.isEntityOwner !== true; // default 'INDIVIDUALS'
-
-        // Tax foreclosure quick filter (higher-value, usually free-and-clear).
-        const matchesTaxForeclosure = !filterTaxForeclosure || lead.isTaxForeclosure === true;
-
-        // Auction within N days: needs a sheriff sale / auction date between today and today+N.
-        const matchesAuctionWindow = (() => {
-          if (!filterAuctionWindow) return true;
-          if (!fcFin.saleDate) return false;
-          const auction = new Date(fcFin.saleDate).getTime();
-          if (isNaN(auction)) return false;
-          const now = Date.now();
-          const horizon = now + Number(filterAuctionWindow) * 24 * 60 * 60 * 1000;
-          return auction >= now && auction <= horizon;
-        })();
-
-        // Minimum equity % (evaluates scraper Zestimate - Upset equity % or BatchData equityPercent).
-        const matchesEquity = (() => {
-          if (!filterMinEquity) return true;
-          const min = Number(filterMinEquity);
-          if (!Number.isFinite(min)) return true;
-          return (fcFin.equitySpreadPct ?? lead.equityPercent ?? -1) >= min;
-        })();
-
-        // Date filtering for skip trace completion
-        const matchesDateRange = (() => {
-          if (!skipTraceFromDate && !skipTraceToDate) return true;
+        // Skip trace date range
+        if (skipTraceFromDate || skipTraceToDate) {
           if (!lead.skipTraceCompletedAt) return false;
+          const completedDate = new Date(lead.skipTraceCompletedAt).toISOString().split('T')[0];
+          if (skipTraceFromDate && completedDate < skipTraceFromDate) return false;
+          if (skipTraceToDate && completedDate > skipTraceToDate) return false;
+        }
 
-          const completedDate = new Date(lead.skipTraceCompletedAt)
-            .toISOString()
-            .split('T')[0];
-          const fromMatch =
-            !skipTraceFromDate || completedDate >= skipTraceFromDate;
-          const toMatch = !skipTraceToDate || completedDate <= skipTraceToDate;
-
-          return fromMatch && toMatch;
-        })();
-
-        // Minimum & Maximum Property Value ($) filter
-        const matchesPropertyValue = (() => {
-          if (!filterMinValue && !filterMaxValue) return true;
+        // Property value ($)
+        if (filterMinValue || filterMaxValue) {
           const val = lead.zestimate || lead.estimatedValue || 0;
           if (!val) return false;
-          const min = filterMinValue ? Number(filterMinValue) : null;
-          const max = filterMaxValue ? Number(filterMaxValue) : null;
-          if (min != null && val < min) return false;
-          if (max != null && val > max) return false;
-          return true;
-        })();
+          if (filterMinValue && val < Number(filterMinValue)) return false;
+          if (filterMaxValue && val > Number(filterMaxValue)) return false;
+        }
 
         // Condo filter
-        const matchesCondo = (() => {
-          if (!filterCondoOnly) return true;
-          if (lead.leadLabels?.includes('CONDO')) return true;
-          try {
-            const d = typeof lead.homeDetails === 'string' ? JSON.parse(lead.homeDetails) : lead.homeDetails;
-            return d?.propertyType && /\bcondos?\b|\bco-op\b|\bcondominiums?\b/i.test(d.propertyType);
-          } catch {
-            return false;
+        if (filterCondoOnly) {
+          if (!lead.leadLabels?.includes('CONDO')) {
+            try {
+              const d = typeof lead.homeDetails === 'string' ? JSON.parse(lead.homeDetails) : lead.homeDetails;
+              if (!d?.propertyType || !/\bcondos?\b|\bco-op\b|\bcondominiums?\b/i.test(d.propertyType)) return false;
+            } catch {
+              return false;
+            }
           }
-        })();
+        }
 
-        // Direct mail status filter (has thanksio list tag)
-        const matchesDirectMail = (() => {
-          if (!filterDirectMail) return true;
-          const isMailed = Array.isArray(lead.customTags) && lead.customTags.some((t) => t?.startsWith('thanksio:'));
-          return filterDirectMail === 'MAILED' ? isMailed : !isMailed;
-        })();
+        // 2. Foreclosure / Equity calculations (ONLY run if active filter requires it!)
+        if (filterForeclosureStage || filterAuctionWindow || filterMinEquity) {
+          const fcFin = computeForeclosureFinancials(lead);
 
-        return (
-          matchesSearch &&
-          matchesType &&
-          matchesOutOfStateAdmin &&
-          matchesStatus &&
-          matchesCrm &&
-          matchesPhone &&
-          matchesListingStatus &&
-          matchesForeclosureStage &&
-          matchesAuctionWindow &&
-          matchesEquity &&
-          matchesPropertyValue &&
-          matchesCondo &&
-          matchesDateAdded &&
-          matchesSource &&
-          matchesDataQuality &&
-          matchesOwnerType &&
-          matchesTaxForeclosure &&
-          matchesDateRange &&
-          matchesDirectMail
-        );
+          if (filterForeclosureStage) {
+            const stage = classifyForeclosureStageWithRecency({
+              ...(lead as any),
+              foreclosureStatus:
+                (lead as any).foreclosureStatus ||
+                (fcFin.saleDate ? 'Scheduled Sheriff Sale' : undefined),
+              foreclosureAuctionDate: fcFin.saleDate,
+            }).stage;
+            if (filterForeclosureStage === 'ACTIVE') {
+              if (stage !== 'ACTIVE' && stage !== 'AUCTION') return false;
+            } else if (filterForeclosureStage === 'AUCTION') {
+              if (fcFin.foreclosureSubType !== 'SHERIFF_SALE' && stage !== 'AUCTION') return false;
+            } else if (filterForeclosureStage === 'LIS_PENDENS') {
+              if (fcFin.foreclosureSubType !== 'LIS_PENDENS' || stage === 'DEAD') return false;
+            } else if (filterForeclosureStage === 'DEAD') {
+              if (stage !== 'DEAD') return false;
+            }
+          }
+
+          if (filterAuctionWindow) {
+            if (!fcFin.saleDate) return false;
+            const auction = new Date(fcFin.saleDate).getTime();
+            if (isNaN(auction)) return false;
+            const now = Date.now();
+            const horizon = now + Number(filterAuctionWindow) * 24 * 60 * 60 * 1000;
+            if (auction < now || auction > horizon) return false;
+          }
+
+          if (filterMinEquity) {
+            const min = Number(filterMinEquity);
+            if (Number.isFinite(min)) {
+              const eq = fcFin.equitySpreadPct ?? lead.equityPercent ?? -1;
+              if (eq < min) return false;
+            }
+          }
+        }
+
+        // 3. Search query (ONLY evaluated if user entered text!)
+        if (search) {
+          const matches =
+            lead.ownerAddress?.toLowerCase().includes(search) ||
+            lead.ownerLastName?.toLowerCase().includes(search) ||
+            lead.ownerFirstName?.toLowerCase().includes(search) ||
+            lead.ownerCity?.toLowerCase().includes(search) ||
+            lead.ownerState?.toLowerCase().includes(search) ||
+            lead.ownerZip?.includes(search) ||
+            lead.ownerCounty?.toLowerCase().includes(search) ||
+            resolvePropertyCounty(lead)?.toLowerCase().includes(search) ||
+            lead.adminFirstName?.toLowerCase().includes(search) ||
+            lead.adminLastName?.toLowerCase().includes(search) ||
+            (lead.phones && lead.phones.some((phone) => phone?.includes(search))) ||
+            (lead.emails && lead.emails.some((email) => email?.toLowerCase().includes(search))) ||
+            (lead.customTags && lead.customTags.some((tag) => tag?.toLowerCase().includes(search)));
+          if (!matches) return false;
+        }
+
+        return true;
       })
       .sort((a, b) => {
         // Sort the filtered results
@@ -596,6 +530,10 @@ export default function LeadDashboardClient({}: Props) {
     filterForeclosureStage,
     filterAuctionWindow,
     filterMinEquity,
+    filterMinValue,
+    filterMaxValue,
+    filterDirectMail,
+    filterOutOfStateAdmin,
     filterDateAdded,
     filterDateAddedTo,
     filterSource,
@@ -637,6 +575,10 @@ export default function LeadDashboardClient({}: Props) {
     filterForeclosureStage,
     filterAuctionWindow,
     filterMinEquity,
+    filterMinValue,
+    filterMaxValue,
+    filterDirectMail,
+    filterOutOfStateAdmin,
     filterSource,
     filterDataQuality,
     filterOwnerType,

@@ -363,6 +363,20 @@ export function DashboardFilters({
           </button>
 
           <button
+            onClick={() =>
+              setFilterDirectMail?.(filterDirectMail === 'MAILED' ? '' : 'MAILED')
+            }
+            className={`px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 border ${
+              filterDirectMail === 'MAILED'
+                ? 'bg-teal-600 text-white border-teal-700 shadow-sm'
+                : 'bg-teal-50 text-teal-800 border-teal-200 hover:bg-teal-100'
+            }`}
+            title='Quick Filter: Show properties already mailed via Thanks.io'
+          >
+            📬 Mailed
+          </button>
+
+          <button
             onClick={() => setShowAdvanced(!showAdvanced)}
             className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 border ${
               showAdvanced || activeFilters.length > 0
@@ -388,7 +402,7 @@ export function DashboardFilters({
       </div>
 
       {/* 💊 Row 2: Top-Level Quick Filter Pills */}
-      <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 pt-2 border-t border-slate-100'>
+      <div className='grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-2.5 pt-2 border-t border-slate-100'>
         {/* 1. Lead Type */}
         <select
           value={filterType}
@@ -458,6 +472,17 @@ export function DashboardFilters({
           <option value='PENDING'>Launch AI Pending</option>
           <option value='FAILED'>Launch AI Failed</option>
           <option value='NULL'>Needs Launch AI Sync</option>
+        </select>
+
+        {/* 5. Direct Mail Status */}
+        <select
+          value={filterDirectMail || ''}
+          onChange={(e) => setFilterDirectMail?.(e.target.value as '' | 'MAILED' | 'NOT_MAILED')}
+          className='border border-slate-300 rounded-xl px-3 py-2 text-xs font-semibold focus:ring-2 focus:ring-teal-500 outline-none w-full bg-white text-slate-700'
+        >
+          <option value=''>📬 All Direct Mail</option>
+          <option value='MAILED'>📬 Mailed (Thanks.io)</option>
+          <option value='NOT_MAILED'>📭 Not Mailed Yet</option>
         </select>
       </div>
 
