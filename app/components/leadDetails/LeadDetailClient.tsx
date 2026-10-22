@@ -6,6 +6,7 @@ import axios from 'axios';
 import {
   GoogleMap,
   MarkerF,
+  StreetViewPanorama,
 } from '@react-google-maps/api';
 import { useGoogleMaps } from '../GoogleMapsProvider';
 import { Loader } from '@aws-amplify/ui-react';
@@ -655,6 +656,71 @@ function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
       ? { lat: Number(lead.latitude), lng: Number(lead.longitude) }
       : null;
 
+  // 📷 Street View State
+  const [mapMode, setMapMode] = useState<'streetview' | 'map'>('streetview');
+  const [hasStreetView, setHasStreetView] = useState<boolean | null>(null);
+  const [streetViewHeading, setStreetViewHeading] = useState<number | null>(null);
+
+  // Check Street View availability and calculate heading towards the property
+  useEffect(() => {
+    if (
+      !isMapLoaded ||
+      !mapCenter ||
+      typeof window === 'undefined' ||
+      typeof google === 'undefined' ||
+      !google.maps
+    ) {
+      return;
+    }
+
+    const sv = new google.maps.StreetViewService();
+    const targetLatLng = new google.maps.LatLng(mapCenter.lat, mapCenter.lng);
+
+    sv.getPanorama(
+      {
+        location: targetLatLng,
+        radius: 100,
+        preference: google.maps.StreetViewPreference.NEAREST,
+        source: google.maps.StreetViewSource.OUTDOOR,
+      },
+      (data, status) => {
+        if (status === google.maps.StreetViewStatus.OK && data?.location?.latLng) {
+          setHasStreetView(true);
+          // Calculate heading from street capture point toward house coordinate
+          if (google.maps.geometry?.spherical) {
+            const heading = google.maps.geometry.spherical.computeHeading(
+              data.location.latLng,
+              targetLatLng
+            );
+            setStreetViewHeading(heading);
+          }
+          setMapMode('streetview');
+        } else {
+          setHasStreetView(false);
+          setMapMode('map');
+        }
+      }
+    );
+  }, [isMapLoaded, mapCenter?.lat, mapCenter?.lng]);
+
+  const streetViewOptions = useMemo(() => {
+    if (!mapCenter) return undefined;
+    return {
+      position: mapCenter,
+      visible: true,
+      enableCloseButton: false,
+      addressControl: false,
+      fullscreenControl: true,
+      motionTracking: false,
+      linksControl: true,
+      panControl: true,
+      zoomControl: true,
+      ...(streetViewHeading !== null
+        ? { pov: { heading: streetViewHeading, pitch: 0 } }
+        : {}),
+    };
+  }, [mapCenter?.lat, mapCenter?.lng, streetViewHeading]);
+
   const getCleanAddress = (val: any) => {
     if (typeof val !== 'string' || !val.trim()) return '';
     if (val.trim().startsWith('{')) {
@@ -738,6 +804,39 @@ function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
           {/* MAP & HERO - Mobile Optimized */}
           <section className='bg-white rounded-2xl md:rounded-3xl shadow-sm border border-slate-200 overflow-hidden'>
             <div className='h-[250px] md:h-[350px] bg-slate-100 relative'>
+              {/* Toggle Controls (Street View vs Map View) */}
+              {isMapLoaded && mapCenter && (
+                <div className='absolute top-3 right-3 z-10 flex items-center bg-white/95 backdrop-blur-sm rounded-xl p-1 shadow-md border border-slate-200 text-xs font-bold'>
+                  <button
+                    type='button'
+                    onClick={() => setMapMode('streetview')}
+                    disabled={hasStreetView === false}
+                    className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-all ${
+                      mapMode === 'streetview'
+                        ? 'bg-blue-600 text-white shadow-sm'
+                        : hasStreetView === false
+                        ? 'text-slate-400 cursor-not-allowed opacity-60'
+                        : 'text-slate-700 hover:bg-slate-100'
+                    }`}
+                    title={hasStreetView === false ? 'Street View unavailable at this location' : 'House Street View'}
+                  >
+                    📷 House Street View
+                  </button>
+                  <button
+                    type='button'
+                    onClick={() => setMapMode('map')}
+                    className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-all ${
+                      mapMode === 'map'
+                        ? 'bg-blue-600 text-white shadow-sm'
+                        : 'text-slate-700 hover:bg-slate-100'
+                    }`}
+                    title='Standard Overhead Map View'
+                  >
+                    🗺️ Map View
+                  </button>
+                </div>
+              )}
+
               {!isMapLoaded ? (
                 <MapSkeleton />
               ) : mapCenter ? (
@@ -752,7 +851,10 @@ function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
                     gestureHandling: 'cooperative'
                   }}
                 >
-                  <MarkerF position={mapCenter} />
+                  {mapMode === 'streetview' && hasStreetView && streetViewOptions && (
+                    <StreetViewPanorama options={streetViewOptions} />
+                  )}
+                  {mapMode === 'map' && <MarkerF position={mapCenter} />}
                 </GoogleMap>
               ) : (
                 <div className='flex items-center justify-center h-full text-slate-400 font-bold uppercase text-[10px] tracking-widest'>

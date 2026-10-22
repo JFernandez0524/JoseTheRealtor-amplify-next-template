@@ -4,10 +4,10 @@ import { type Schema } from '../../../../amplify/data/resource';
 import { ddbDocClient } from './dynamoClient.server';
 import { GetCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 
-// Use DynamoDB direct access only when the table name env var is set (dedicated Lambda functions).
-// Amplify SSR hosting also runs in Lambda but doesn't have this env var — use cookiesClient there.
-const PROPERTY_LEAD_TABLE_NAME = process.env.AMPLIFY_DATA_PropertyLead_TABLE_NAME || '';
-const IS_LAMBDA_CONTEXT = !!PROPERTY_LEAD_TABLE_NAME;
+// Use DynamoDB direct access for reliable server-side mutations across SSR and Lambdas.
+const PROPERTY_LEAD_TABLE_NAME =
+  process.env.AMPLIFY_DATA_PropertyLead_TABLE_NAME || 'PropertyLead-ahlnflzdejd5jdrulwuqcuxm6i-NONE';
+const IS_LAMBDA_CONTEXT = true;
 
 // --- Reusable Types ---
 
