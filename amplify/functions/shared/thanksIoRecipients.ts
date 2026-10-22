@@ -31,6 +31,8 @@ export interface ThanksIoListConfig {
   requiresSaleDate: boolean;
   /** The letter for this list prints %CUSTOM6% (equity) — a lead without positive equity can't be sent. */
   requiresEquity: boolean;
+  /** Minimum required equity percentage (e.g. 30 for 30%+ equity). */
+  minEquityPct?: number;
 }
 
 export const THANKS_IO_LISTS: Record<ThanksIoListKey, ThanksIoListConfig> = {
@@ -41,6 +43,7 @@ export const THANKS_IO_LISTS: Record<ThanksIoListKey, ThanksIoListConfig> = {
     leadType: 'PREFORECLOSURE',
     requiresSaleDate: true,
     requiresEquity: true,
+    minEquityPct: 30,
   },
   PREFORECLOSURE_LIS_PENDENS: {
     key: 'PREFORECLOSURE_LIS_PENDENS',
@@ -192,14 +195,44 @@ export function buildThanksIoRecipient(
     return { ok: false, reason: `Lead type ${lead.type || 'unknown'} does not belong on "${list.label}"` };
   }
 
-  const listing = String(lead.listingStatus || 'off_market').toLowerCase();
-  if (BLOCKED_LISTING_STATUSES.has(listing)) {
-    return { ok: false, reason: `Listing status is "${listing}"` };
+  const rawListing = lead.listingStatus === undefined || lead.listingStatus === null
+    ? 'off_market'
+    : lead.listingStatus;
+  const listing = String(rawListing).toLowerCase().trim().replace(/[\s_-]+/g, '');
+  if (listing !== 'offmarket') {
+    return { ok: false, reason: `Listing status is "${lead.listingStatus}" (only off-market leads are eligible for mail)` };
   }
 
   const labels: string[] = (lead.leadLabels || []).filter(Boolean);
   if (labels.some((l) => ['DNC', 'Do_Not_Call', 'Not_Interested'].includes(l))) {
     return { ok: false, reason: 'Lead is marked DNC / Not Interested' };
+  }
+
+  // Check Call Outcome (GHL field sync / cached outcome).
+  // Wrong Number is a phone-level issue, so direct mail is still permitted.
+  const outreach = parseJsonSafe(lead.ghlOutreachData);
+  const callOutcome = clean(outreach.callOutcome || lead.callOutcome);
+  if (callOutcome) {
+    const o = callOutcome.toLowerCase();
+    const isWrongNumber = o.includes('wrong number') || o.includes('disconnected') || o.includes('invalid number') || o.includes('incorrect number');
+    if (!isWrongNumber) {
+      const blockedDispositions = [
+        'not interested',
+        'not for sale',
+        'not selling',
+        'dnc',
+        'do not call',
+        'unsubscribe',
+        'remove',
+        'sold already',
+        'sold',
+        'listed with realtor',
+        'listed',
+      ];
+      if (blockedDispositions.some((b) => o.includes(b))) {
+        return { ok: false, reason: `Call Outcome is "${callOutcome}"` };
+      }
+    }
   }
 
   if ((lead.customTags || []).includes(thanksIoListTag(list.id))) {
@@ -230,6 +263,12 @@ export function buildThanksIoRecipient(
 
   let equityText: string | undefined;
   if (fin.equitySpread != null && fin.equitySpread > 0) {
+    if (list.minEquityPct != null && (fin.equitySpreadPct == null || fin.equitySpreadPct < list.minEquityPct)) {
+      return {
+        ok: false,
+        reason: `Estimated equity ${fin.equitySpreadPct != null ? `${fin.equitySpreadPct}%` : 'unknown'} is below the required ${list.minEquityPct}% minimum`,
+      };
+    }
     equityText = formatCurrency(fin.equitySpread);
   } else if (list.requiresEquity) {
     return { ok: false, reason: 'No positive estimated equity (missing Zestimate or debt amount, or underwater)' };

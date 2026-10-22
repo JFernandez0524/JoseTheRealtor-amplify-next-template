@@ -58,6 +58,8 @@ type Props = {
   setFilterTaxForeclosure: (val: boolean) => void;
   filterCondoOnly?: boolean;
   setFilterCondoOnly?: (val: boolean) => void;
+  filterDirectMail?: string;
+  setFilterDirectMail?: (val: '' | 'MAILED' | 'NOT_MAILED') => void;
   skipTraceFromDate: string;
   setSkipTraceFromDate: (val: string) => void;
   skipTraceToDate: string;
@@ -132,6 +134,8 @@ export function DashboardFilters({
   setFilterTaxForeclosure,
   filterCondoOnly = false,
   setFilterCondoOnly,
+  filterDirectMail = '',
+  setFilterDirectMail,
   skipTraceFromDate,
   setSkipTraceFromDate,
   skipTraceToDate,
@@ -224,6 +228,10 @@ export function DashboardFilters({
     filterOwnerType !== 'INDIVIDUALS' && { label: `Owner: ${filterOwnerType}`, reset: () => setFilterOwnerType('INDIVIDUALS') },
     filterTaxForeclosure && { label: '🏛️ Tax Foreclosure', reset: () => setFilterTaxForeclosure(false) },
     filterCondoOnly && { label: '🏢 Condos Only', reset: () => setFilterCondoOnly?.(false) },
+    filterDirectMail && {
+      label: filterDirectMail === 'MAILED' ? '📬 Mailed' : '📭 Not Mailed',
+      reset: () => setFilterDirectMail?.(''),
+    },
     filterSource && { label: `Source: ${filterSource}`, reset: () => setFilterSource('') },
     (filterDateAdded || filterDateAddedTo) && {
       label: `Added: ${filterDateAdded || 'Any'} - ${filterDateAddedTo || 'Any'}`,
@@ -253,6 +261,7 @@ export function DashboardFilters({
     setFilterOwnerType('INDIVIDUALS');
     setFilterTaxForeclosure(false);
     setFilterCondoOnly?.(false);
+    setFilterDirectMail?.('');
     setSkipTraceFromDate('');
     setSkipTraceToDate('');
   };
@@ -593,6 +602,19 @@ export function DashboardFilters({
                   <option value='INDIVIDUALS'>👤 Individuals Only (Default)</option>
                   <option value='INCLUDE_ENTITIES'>Include Entities (LLC/Trust)</option>
                   <option value='ENTITIES_ONLY'>🏢 Entities Only</option>
+                </select>
+              </div>
+
+              <div>
+                <label className='text-[11px] text-slate-500 mb-1 block'>Direct Mail Status:</label>
+                <select
+                  value={filterDirectMail}
+                  onChange={(e) => setFilterDirectMail?.(e.target.value as any)}
+                  className='border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs w-full bg-white outline-none'
+                >
+                  <option value=''>All Mail Statuses</option>
+                  <option value='MAILED'>📬 Mailed (Thanks.io)</option>
+                  <option value='NOT_MAILED'>📭 Not Mailed Yet</option>
                 </select>
               </div>
             </div>

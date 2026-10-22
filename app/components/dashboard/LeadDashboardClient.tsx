@@ -105,6 +105,7 @@ export default function LeadDashboardClient({}: Props) {
   const [filterOutOfStateAdmin, setFilterOutOfStateAdmin] = useState('');
   const [filterTaxForeclosure, setFilterTaxForeclosure] = useState(false);
   const [filterCondoOnly, setFilterCondoOnly] = useState(false);
+  const [filterDirectMail, setFilterDirectMail] = useState<'MAILED' | 'NOT_MAILED' | ''>('');
   const [skipTraceFromDate, setSkipTraceFromDate] = useState('');
   const [skipTraceToDate, setSkipTraceToDate] = useState('');
 
@@ -505,6 +506,13 @@ export default function LeadDashboardClient({}: Props) {
           }
         })();
 
+        // Direct mail status filter (has thanksio list tag)
+        const matchesDirectMail = (() => {
+          if (!filterDirectMail) return true;
+          const isMailed = Array.isArray(lead.customTags) && lead.customTags.some((t) => t?.startsWith('thanksio:'));
+          return filterDirectMail === 'MAILED' ? isMailed : !isMailed;
+        })();
+
         return (
           matchesSearch &&
           matchesType &&
@@ -523,7 +531,8 @@ export default function LeadDashboardClient({}: Props) {
           matchesDataQuality &&
           matchesOwnerType &&
           matchesTaxForeclosure &&
-          matchesDateRange
+          matchesDateRange &&
+          matchesDirectMail
         );
       })
       .sort((a, b) => {
@@ -1387,6 +1396,8 @@ export default function LeadDashboardClient({}: Props) {
         setFilterTaxForeclosure={setFilterTaxForeclosure}
         filterCondoOnly={filterCondoOnly}
         setFilterCondoOnly={setFilterCondoOnly}
+        filterDirectMail={filterDirectMail}
+        setFilterDirectMail={setFilterDirectMail}
         skipTraceFromDate={skipTraceFromDate}
         setSkipTraceFromDate={setSkipTraceFromDate}
         skipTraceToDate={skipTraceToDate}

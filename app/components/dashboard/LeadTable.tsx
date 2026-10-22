@@ -623,6 +623,14 @@ export function LeadTable({
                           55+
                         </span>
                       )}
+                      {Array.isArray(lead.customTags) && lead.customTags.some((t) => t?.startsWith('thanksio:')) && (
+                        <span
+                          className='text-[10px] bg-teal-100 text-teal-800 border border-teal-300 px-1.5 py-0.5 rounded font-bold whitespace-nowrap'
+                          title='Sent to Thanks.io Direct Mail'
+                        >
+                          📬 MAILED
+                        </span>
+                      )}
                       {lead.leadLabels?.includes('HOA_PROPERTY') && (
                         <span
                           className='text-[10px] bg-blue-100 text-blue-800 border border-blue-300 px-1.5 py-0.5 rounded font-bold'

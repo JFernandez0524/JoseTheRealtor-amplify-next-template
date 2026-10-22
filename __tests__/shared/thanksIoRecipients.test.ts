@@ -114,12 +114,76 @@ describe('buildThanksIoRecipient', () => {
     }
   });
 
-  it('rejects wrong lead type, blocked listing statuses, DNC, and repeat sends', () => {
+  it('strictly requires off-market listing status, rejecting all other statuses', () => {
+    const list = THANKS_IO_LISTS.PREFORECLOSURE_AUCTION;
+    expect(buildThanksIoRecipient(auctionLead({ listingStatus: 'off_market' }), list, NOW).ok).toBe(true);
+    expect(buildThanksIoRecipient(auctionLead({ listingStatus: 'off market' }), list, NOW).ok).toBe(true);
+    for (const status of ['active', 'sold', 'pending', 'skip', 'fsbo', 'auction', 'door_knock', 'unknown', '']) {
+      const res = buildThanksIoRecipient(auctionLead({ listingStatus: status }), list, NOW);
+      expect(res.ok).toBe(false);
+      if (!res.ok) expect(res.reason).toMatch(/only off-market/i);
+    }
+  });
+
+  it('rejects leads with < 30% equity on auction list, but accepts >= 30%', () => {
+    const list = THANKS_IO_LISTS.PREFORECLOSURE_AUCTION;
+    // 46% equity ($745,200 zestimate, $399,000 debt -> $346,200 spread)
+    expect(buildThanksIoRecipient(auctionLead(), list, NOW).ok).toBe(true);
+
+    // 10% equity ($600,000 zestimate, $540,000 debt -> $60,000 spread)
+    const lowEquity = buildThanksIoRecipient(
+      auctionLead({ zestimate: 600000, foreclosureAmount: 540000 }),
+      list,
+      NOW,
+    );
+    expect(lowEquity.ok).toBe(false);
+    if (!lowEquity.ok) expect(lowEquity.reason).toMatch(/below the required 30% minimum/i);
+  });
+
+  it('handles Call Outcome correctly: allows Wrong Number for mail, blocks terminal dispositions', () => {
+    const list = THANKS_IO_LISTS.PREFORECLOSURE_AUCTION;
+
+    // Wrong number -> phone issue, mail IS allowed
+    const wrongNum = buildThanksIoRecipient(
+      auctionLead({ ghlOutreachData: { callOutcome: 'Wrong Number / Disconnected / Invalid Number' } }),
+      list,
+      NOW,
+    );
+    expect(wrongNum.ok).toBe(true);
+
+    // Terminal prospect/property dispositions -> mail BLOCKED
+    for (const outcome of [
+      'Not Interested',
+      'not for sale',
+      'DNC',
+      'do not call',
+      'Unsubscribe',
+      'Sold Already',
+      'Listed With Realtor',
+    ]) {
+      const blocked = buildThanksIoRecipient(
+        auctionLead({ ghlOutreachData: { callOutcome: outcome } }),
+        list,
+        NOW,
+      );
+      expect(blocked.ok).toBe(false);
+      if (!blocked.ok) expect(blocked.reason).toMatch(new RegExp(`Call Outcome is "${outcome}"`, 'i'));
+    }
+
+    // Normal non-negative outcomes -> mail allowed
+    for (const normal of ['Left Voicemail', 'No Answer', 'Spoke - Follow Up']) {
+      const okRes = buildThanksIoRecipient(
+        auctionLead({ ghlOutreachData: { callOutcome: normal } }),
+        list,
+        NOW,
+      );
+      expect(okRes.ok).toBe(true);
+    }
+  });
+
+  it('rejects wrong lead type, DNC labels, and repeat sends', () => {
     const list = THANKS_IO_LISTS.PREFORECLOSURE_AUCTION;
     expect(buildThanksIoRecipient(auctionLead({ type: 'PROBATE' }), list, NOW).ok).toBe(false);
-    for (const status of ['active', 'sold', 'pending', 'skip']) {
-      expect(buildThanksIoRecipient(auctionLead({ listingStatus: status }), list, NOW).ok).toBe(false);
-    }
     expect(buildThanksIoRecipient(auctionLead({ leadLabels: ['DNC'] }), list, NOW).ok).toBe(false);
     expect(
       buildThanksIoRecipient(auctionLead({ customTags: [thanksIoListTag(337586)] }), list, NOW).ok,
