@@ -85,20 +85,20 @@ export function ThanksIoModal({ isOpen, leadIds, onClose, onSent }: Props) {
   };
 
   return (
-    <div className='fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4' onClick={onClose}>
+    <div className='fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-2 sm:p-4' onClick={onClose}>
       <div
-        className='bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col'
+        className='bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[92vh] sm:max-h-[85vh] flex flex-col'
         onClick={(e) => e.stopPropagation()}
       >
-        <div className='px-6 py-4 border-b border-slate-200'>
-          <h2 className='text-lg font-bold text-slate-900'>📬 Send to Thanks.io</h2>
+        <div className='px-4 sm:px-6 py-3.5 sm:py-4 border-b border-slate-200'>
+          <h2 className='text-base sm:text-lg font-bold text-slate-900'>📬 Send to Thanks.io</h2>
           <p className='text-xs text-slate-500 mt-0.5'>
             {leadIds.length} lead{leadIds.length !== 1 ? 's' : ''} selected. Pick the mailing list — nothing is sent
             until you confirm.
           </p>
         </div>
 
-        <div className='px-6 py-4 space-y-4 overflow-y-auto'>
+        <div className='px-4 sm:px-6 py-3.5 sm:py-4 space-y-4 overflow-y-auto'>
           <div>
             <label className='text-xs font-semibold text-slate-700 mb-1 block'>Mailing list</label>
             <select
@@ -120,27 +120,27 @@ export function ThanksIoModal({ isOpen, leadIds, onClose, onSent }: Props) {
 
           {preview && (
             <div className='space-y-3'>
-              <div className='grid grid-cols-2 gap-3'>
-                <div className='rounded-xl bg-emerald-50 border border-emerald-200 p-3'>
-                  <div className='text-2xl font-bold text-emerald-700'>{preview.eligibleCount}</div>
-                  <div className='text-xs text-emerald-800'>Will be added to {preview.list.label}</div>
+              <div className='grid grid-cols-2 gap-2 sm:gap-3'>
+                <div className='rounded-xl bg-emerald-50 border border-emerald-200 p-2.5 sm:p-3'>
+                  <div className='text-xl sm:text-2xl font-bold text-emerald-700'>{preview.eligibleCount}</div>
+                  <div className='text-[11px] sm:text-xs text-emerald-800 leading-tight'>Will be added to {preview.list.label}</div>
                 </div>
-                <div className='rounded-xl bg-slate-50 border border-slate-200 p-3'>
-                  <div className='text-2xl font-bold text-slate-700'>{preview.excluded.length}</div>
-                  <div className='text-xs text-slate-600'>Excluded</div>
+                <div className='rounded-xl bg-slate-50 border border-slate-200 p-2.5 sm:p-3'>
+                  <div className='text-xl sm:text-2xl font-bold text-slate-700'>{preview.excluded.length}</div>
+                  <div className='text-[11px] sm:text-xs text-slate-600 leading-tight'>Excluded</div>
                 </div>
               </div>
 
               {preview.eligible.length > 0 && (
                 <details className='text-xs' open={preview.eligible.length <= 10}>
                   <summary className='font-semibold text-slate-700 cursor-pointer'>Eligible leads</summary>
-                  <ul className='mt-2 space-y-1'>
+                  <ul className='mt-2 space-y-1.5'>
                     {preview.eligible.map((e) => (
-                      <li key={e.id} className='flex justify-between gap-3 border-b border-slate-100 py-1'>
-                        <span className='truncate'>
+                      <li key={e.id} className='flex flex-col sm:flex-row sm:justify-between sm:items-center gap-0.5 sm:gap-3 border-b border-slate-100 py-1'>
+                        <span className='truncate font-medium text-slate-800'>
                           {e.name} — {e.address}
                         </span>
-                        <span className='whitespace-nowrap text-slate-500'>
+                        <span className='text-[11px] sm:text-xs text-slate-500 whitespace-nowrap'>
                           {e.saleDate ? `📅 ${e.saleDate} · ` : ''}
                           {e.equity ? `💰 ${e.equity}` : ''}
                         </span>
@@ -153,11 +153,11 @@ export function ThanksIoModal({ isOpen, leadIds, onClose, onSent }: Props) {
               {preview.excluded.length > 0 && (
                 <details className='text-xs'>
                   <summary className='font-semibold text-slate-700 cursor-pointer'>Excluded leads &amp; reasons</summary>
-                  <ul className='mt-2 space-y-1'>
+                  <ul className='mt-2 space-y-1.5'>
                     {preview.excluded.map((x) => (
-                      <li key={x.id} className='flex justify-between gap-3 border-b border-slate-100 py-1'>
-                        <span className='truncate'>{x.address || x.id}</span>
-                        <span className='text-amber-700 text-right'>{x.reason}</span>
+                      <li key={x.id} className='flex flex-col sm:flex-row sm:justify-between sm:items-center gap-0.5 sm:gap-3 border-b border-slate-100 py-1'>
+                        <span className='truncate font-medium text-slate-800'>{x.address || x.id}</span>
+                        <span className='text-[11px] sm:text-xs text-amber-700 font-semibold sm:text-right'>{x.reason}</span>
                       </li>
                     ))}
                   </ul>
@@ -167,18 +167,18 @@ export function ThanksIoModal({ isOpen, leadIds, onClose, onSent }: Props) {
           )}
         </div>
 
-        <div className='px-6 py-4 border-t border-slate-200 flex justify-end gap-2'>
+        <div className='px-4 sm:px-6 py-3.5 sm:py-4 border-t border-slate-200 flex flex-col-reverse sm:flex-row sm:justify-end gap-2'>
           <button
             onClick={onClose}
             disabled={isSending}
-            className='text-sm font-semibold px-4 py-2 rounded-xl bg-slate-100 text-slate-700 hover:bg-slate-200'
+            className='w-full sm:w-auto text-sm font-semibold px-4 py-2.5 sm:py-2 rounded-xl bg-slate-100 text-slate-700 hover:bg-slate-200 transition text-center'
           >
             Cancel
           </button>
           <button
             onClick={handleConfirm}
             disabled={!preview || preview.eligibleCount === 0 || isSending || isLoadingPreview}
-            className='text-sm font-semibold px-4 py-2 rounded-xl bg-teal-600 text-white hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed'
+            className='w-full sm:w-auto text-sm font-semibold px-4 py-2.5 sm:py-2 rounded-xl bg-teal-600 text-white hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed transition text-center shadow-sm'
           >
             {isSending
               ? 'Sending…'

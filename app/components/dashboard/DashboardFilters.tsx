@@ -288,7 +288,7 @@ export function DashboardFilters({
           )}
         </div>
 
-        <div className='flex items-center gap-2 justify-end flex-wrap'>
+        <div className='flex items-center gap-1.5 sm:gap-2 justify-start sm:justify-end flex-wrap'>
           <button
             onClick={() => {
               setFilterMinValue('300000');
