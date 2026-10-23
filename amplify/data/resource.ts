@@ -508,6 +508,9 @@ const schema = a.schema({
       
       crmLocationId: a.string(),
       crmApiKey: a.string(),
+      thanksIoApiKey: a.string(),
+      thanksIoAccountEmail: a.string(),
+      thanksIoPartnerConfirmed: a.boolean().default(false),
       totalLeadsSynced: a.integer().default(0),
       totalSkipsPerformed: a.integer().default(0),
     })

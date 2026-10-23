@@ -9,6 +9,7 @@ import {
 } from '@/app/utils/aws/auth/amplifyServerUtils.server';
 import { getUserAccount } from '@/app/utils/aws/data/userAccount.server';
 import GhlSettingsCard from '@/app/components/profile/GhlSettingsCard';
+import ThanksIoSettingsCard from '@/app/components/profile/ThanksIoSettingsCard';
 import GhlProfileSettings from '@/app/components/profile/GhlProfileSettings';
 import EmailTemplateSettings from '@/app/components/profile/EmailTemplateSettings';
 import AccountDataManagement from '@/app/components/profile/AccountDataManagement';
@@ -143,6 +144,9 @@ export default async function ProfilePage() {
 
         {/* GHL Integration Settings Card */}
         <GhlSettingsCard />
+
+        {/* Direct Mail (Thanks.io) Integration Settings Card */}
+        <ThanksIoSettingsCard />
 
         {/* Consolidated GHL Profile & Campaign (identity, assignment, campaign resources) */}
         <Suspense fallback={null}>

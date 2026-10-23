@@ -151,12 +151,16 @@ export default function CostBreakdownPage() {
 
         {/* Thanks.io */}
         <section>
-          <h2 className="text-2xl font-bold text-gray-900 mb-2 text-center">📮 Thanks.io — Direct Mail (Optional Add-On)</h2>
+          <h2 className="text-2xl font-bold text-gray-900 mb-2 text-center">📮 Thanks.io — Direct Mail ($0/mo Software via Partner Link)</h2>
           <p className="text-gray-600 text-center mb-8 max-w-2xl mx-auto">
-            Automated handwritten direct mail with QR code tracking. Requires Thanks.io Business plan subscription $50/month.
+            Automated handwritten direct mail with live QR code tracking. The software integration is included at <strong>$0/month</strong> when you sign up via our{' '}
+            <a href="https://dashboard.thanks.io/r/W6R43LEQ" target="_blank" rel="noopener noreferrer" className="text-blue-600 underline font-semibold">
+              official partner link
+            </a>
+            . You pay Thanks.io directly for actual print and postage with zero platform markup.
           </p>
           <div className="bg-white rounded-xl p-8 shadow-sm border border-gray-200 max-w-3xl mx-auto">
-            <h4 className="text-sm font-semibold text-gray-700 mb-4">Per-Piece Pricing (Business Plan, includes postage)</h4>
+            <h4 className="text-sm font-semibold text-gray-700 mb-4">Wholesale Per-Piece Pricing (Includes printing &amp; First-Class postage)</h4>
             <div className="grid sm:grid-cols-2 gap-3 mb-6">
               {[
                 { label: '4×6 Postcard', cost: '~$0.73' },
@@ -172,6 +176,8 @@ export default function CostBreakdownPage() {
             </div>
             <h4 className="text-sm font-semibold text-gray-700 mb-3">How It Integrates With Our App</h4>
             <ul className="space-y-2 text-sm text-gray-600">
+              <li className="flex gap-2"><span className="text-green-500">✓</span>Multi-tenant: connects directly to your personal Thanks.io account</li>
+              <li className="flex gap-2"><span className="text-green-500">✓</span>Works with any lead type (Probate, Preforeclosure, Absentee, Tax Delinquent, etc.)</li>
               <li className="flex gap-2"><span className="text-green-500">✓</span>Webhook tracking — know exactly when mail is delivered</li>
               <li className="flex gap-2"><span className="text-green-500">✓</span>QR code scan detection — instant hot lead alerts</li>
               <li className="flex gap-2"><span className="text-green-500">✓</span>Automatic pipeline stage updates (Touch 1 → Touch 2 → Touch 3 → Engaged)</li>

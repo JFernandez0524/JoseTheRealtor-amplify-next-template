@@ -236,4 +236,59 @@ describe('buildThanksIoRecipient', () => {
       expect(res.payload.custom8).toBeUndefined();
     }
   });
+
+  it('allows arbitrary lead types (tax delinquent, absentee, vacant) on dynamic user lists', () => {
+    const dynamicList = {
+      id: 999999,
+      label: 'My Custom Absentee Postcards',
+    };
+
+    // Tax Delinquent lead
+    const taxLead = {
+      id: 'tax-1',
+      type: 'TAX_DELINQUENT',
+      ownerFirstName: 'Robert',
+      ownerLastName: 'Smith',
+      ownerAddress: '100 Main St',
+      ownerCity: 'Freehold',
+      ownerState: 'NJ',
+      ownerZip: '07728',
+      listingStatus: 'off_market',
+      zestimate: 450000,
+    };
+    const taxRes = buildThanksIoRecipient(taxLead, dynamicList, NOW);
+    expect(taxRes.ok).toBe(true);
+    if (taxRes.ok) {
+      expect(taxRes.payload.mailing_list_id).toBe(999999);
+      expect(taxRes.payload.name).toBe('Robert Smith');
+      expect(taxRes.payload.address).toBe('100 Main St');
+      expect(taxRes.payload.custom2).toBe('450000');
+    }
+
+    // Absentee Owner lead
+    const absenteeLead = {
+      id: 'absentee-1',
+      type: 'ABSENTEE_OWNER',
+      ownerFirstName: 'Mary',
+      ownerLastName: 'Johnson',
+      ownerAddress: '12 Rental Way',
+      ownerCity: 'Toms River',
+      ownerState: 'NJ',
+      ownerZip: '08753',
+      mailingAddress: '55 Florida Sun Blvd',
+      mailingCity: 'Miami',
+      mailingState: 'FL',
+      mailingZip: '33101',
+      listingStatus: 'off_market',
+    };
+    const absenteeRes = buildThanksIoRecipient(absenteeLead, dynamicList, NOW);
+    expect(absenteeRes.ok).toBe(true);
+    if (absenteeRes.ok) {
+      expect(absenteeRes.payload.name).toBe('Mary Johnson');
+      expect(absenteeRes.payload.address).toBe('55 Florida Sun Blvd');
+      expect(absenteeRes.payload.city).toBe('Miami');
+      expect(absenteeRes.payload.province).toBe('FL');
+      expect(absenteeRes.payload.custom3).toBe('12 Rental Way');
+    }
+  });
 });

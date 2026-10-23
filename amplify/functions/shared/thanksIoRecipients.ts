@@ -27,15 +27,15 @@ export const THANKS_IO_API_BASE = 'https://api.thanks.io/api/v2';
 export type ThanksIoListKey = 'PREFORECLOSURE_AUCTION' | 'PREFORECLOSURE_LIS_PENDENS' | 'PROBATE';
 
 export interface ThanksIoListConfig {
-  key: ThanksIoListKey;
+  key?: string;
   id: number;
   label: string;
-  /** Lead type this list accepts (leads of any other type are rejected). */
-  leadType: 'PREFORECLOSURE' | 'PROBATE';
+  /** Lead type this list accepts (if omitted or 'ALL', any lead type is accepted). */
+  leadType?: string;
   /** The letter for this list prints %CUSTOM5% (sale date) — a lead without a future sale date can't be sent. */
-  requiresSaleDate: boolean;
+  requiresSaleDate?: boolean;
   /** The letter for this list prints %CUSTOM6% (equity) — a lead without positive equity can't be sent. */
-  requiresEquity: boolean;
+  requiresEquity?: boolean;
   /** Minimum required equity percentage (e.g. 30 for 30%+ equity). */
   minEquityPct?: number;
 }
@@ -203,9 +203,12 @@ export function buildThanksIoRecipient(
 ): BuildRecipientResult {
   if (!lead) return { ok: false, reason: 'Lead not found' };
 
-  const leadType = String(lead.type || '').toUpperCase().replace(/[_\s-]+/g, '');
-  if (leadType !== list.leadType) {
-    return { ok: false, reason: `Lead type ${lead.type || 'unknown'} does not belong on "${list.label}"` };
+  if (list.leadType && list.leadType !== 'ALL') {
+    const leadType = String(lead.type || '').toUpperCase().replace(/[_\s-]+/g, '');
+    const expectedType = String(list.leadType).toUpperCase().replace(/[_\s-]+/g, '');
+    if (leadType !== expectedType) {
+      return { ok: false, reason: `Lead type ${lead.type || 'unknown'} does not belong on "${list.label}"` };
+    }
   }
 
   const rawListing = lead.listingStatus === undefined || lead.listingStatus === null
@@ -252,7 +255,9 @@ export function buildThanksIoRecipient(
     return { ok: false, reason: `Already added to "${list.label}"` };
   }
 
-  const isProbate = list.leadType === 'PROBATE';
+  const isProbate =
+    list.leadType === 'PROBATE' ||
+    String(lead.type || '').toUpperCase().replace(/[_\s-]+/g, '') === 'PROBATE';
   const name = resolveRecipientName(lead, isProbate);
   if (!name) return { ok: false, reason: 'Missing recipient name' };
 

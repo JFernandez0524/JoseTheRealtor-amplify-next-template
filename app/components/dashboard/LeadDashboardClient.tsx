@@ -1073,7 +1073,7 @@ export default function LeadDashboardClient({}: Props) {
     addToast({
       type: failedCount > 0 ? 'warning' : 'success',
       title: `Thanks.io: ${result.list.label}`,
-      message: `Added ${result.sent} lead${result.sent !== 1 ? 's' : ''}${failedCount ? ` | Failed: ${failedCount}` : ''}`,
+      message: `Added ${result.sent} lead${result.sent !== 1 ? 's' : ''}${failedCount ? ` | Failed: ${failedCount}` : ''}. View print & postal tracking in your Thanks.io Orders portal.`,
       duration: 8000,
     });
     if (result.sentIds?.length) await patchLeads(result.sentIds);

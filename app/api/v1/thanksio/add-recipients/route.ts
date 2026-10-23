@@ -1,22 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { AuthGetCurrentUserServer } from '@/app/utils/aws/auth/amplifyServerUtils.server';
+import { AuthGetCurrentUserServer, AuthGetUserGroupsServer } from '@/app/utils/aws/auth/amplifyServerUtils.server';
 import { getLeadsByIds, updateLead } from '@/app/utils/aws/data/lead.server';
+import { getThanksIoSettings } from '@/app/utils/aws/data/thanksIoIntegration.server';
 import {
   THANKS_IO_API_BASE,
   buildThanksIoRecipient,
   getThanksIoList,
   thanksIoListTag,
+  type ThanksIoListConfig,
 } from '@/amplify/functions/shared/thanksIoRecipients';
 
 const MAX_LEADS_PER_REQUEST = 200;
 
 /**
  * POST /api/v1/thanksio/add-recipients
- * Body: { leadIds: string[], mailingListId: number, dryRun?: boolean }
+ * Body: { leadIds: string[], mailingListId: number, mailingListLabel?: string, dryRun?: boolean }
  *
- * MANUAL ONLY — adds the user-selected leads to the user-selected Thanks.io mailing list. Nothing
- * calls this automatically. `dryRun: true` validates and returns the eligible/excluded breakdown
- * without contacting Thanks.io (the modal uses it to preview before confirming).
+ * MANUAL ONLY — adds the user-selected leads to the user-selected Thanks.io mailing list.
+ * MULTI-TENANT: Uses the calling tenant's personal Thanks.io API key.
+ * `dryRun: true` validates and returns the eligible/excluded breakdown without contacting Thanks.io.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -24,15 +26,32 @@ export async function POST(request: NextRequest) {
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     const userId = user.userId;
 
-    const apiKey = process.env.THANKS_IO_API;
+    const thanksSettings = await getThanksIoSettings(userId);
+    let apiKey = thanksSettings.apiKey;
+
+    // Admin fallback for testing if no personal key is set
     if (!apiKey) {
-      return NextResponse.json({ error: 'Thanks.io API key (THANKS_IO_API) is not configured' }, { status: 500 });
+      const groups = await AuthGetUserGroupsServer();
+      if (groups.includes('ADMINS') && process.env.THANKS_IO_API) {
+        apiKey = process.env.THANKS_IO_API;
+      }
+    }
+
+    if (!apiKey) {
+      return NextResponse.json(
+        {
+          error: 'NOT_CONNECTED',
+          message: 'Please connect your Thanks.io account using our partner link in Profile Settings.',
+        },
+        { status: 400 },
+      );
     }
 
     const body = await request.json();
-    const { leadIds, mailingListId, dryRun } = body as {
+    const { leadIds, mailingListId, mailingListLabel, dryRun } = body as {
       leadIds: string[];
       mailingListId: number;
+      mailingListLabel?: string;
       dryRun?: boolean;
     };
 
@@ -43,10 +62,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: `Send at most ${MAX_LEADS_PER_REQUEST} leads at a time` }, { status: 400 });
     }
 
-    const list = getThanksIoList(Number(mailingListId));
-    if (!list) {
-      return NextResponse.json({ error: `Unknown Thanks.io mailing list: ${mailingListId}` }, { status: 400 });
-    }
+    // Resolve known list configuration or accept dynamic custom list from user's account
+    const list: ThanksIoListConfig = getThanksIoList(Number(mailingListId)) || {
+      id: Number(mailingListId),
+      label: mailingListLabel || `Mailing List #${mailingListId}`,
+    };
 
     const leads = await getLeadsByIds(leadIds);
 
