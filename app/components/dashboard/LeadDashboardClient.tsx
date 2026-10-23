@@ -102,6 +102,7 @@ export default function LeadDashboardClient({}: Props) {
   const [filterDataQuality, setFilterDataQuality] = useState('');
   // Owner type: 'INDIVIDUALS' (default, hides entities), 'INCLUDE_ENTITIES', or 'ENTITIES_ONLY'.
   const [filterOwnerType, setFilterOwnerType] = useState('INDIVIDUALS');
+  const [filterCounty, setFilterCounty] = useState('');
   const [filterOutOfStateAdmin, setFilterOutOfStateAdmin] = useState('');
   const [filterTaxForeclosure, setFilterTaxForeclosure] = useState(false);
   const [filterCondoOnly, setFilterCondoOnly] = useState(false);
@@ -269,6 +270,24 @@ export default function LeadDashboardClient({}: Props) {
     }
   }, [searchParams, router]);
 
+  // List of unique counties detected in leads for quick dashboard filtering
+  const availableCounties = useMemo(() => {
+    const set = new Set<string>();
+    leads.forEach((l) => {
+      const c = resolvePropertyCounty(l) || l.ownerCounty;
+      if (c && c.trim()) {
+        const clean = c.replace(/\s+county$/i, '').trim();
+        const formatted = clean
+          .toLowerCase()
+          .split(' ')
+          .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+          .join(' ');
+        set.add(formatted);
+      }
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [leads]);
+
   // --- Filter Logic ---
   const filteredLeads = useMemo(() => {
     const search = searchQuery.trim().toLowerCase();
@@ -405,6 +424,13 @@ export default function LeadDashboardClient({}: Props) {
               return false;
             }
           }
+        }
+
+        // County filter
+        if (filterCounty) {
+          const rawC = resolvePropertyCounty(lead) || lead.ownerCounty || '';
+          const cleanLeadCounty = rawC.replace(/\s+county$/i, '').trim().toLowerCase();
+          if (cleanLeadCounty !== filterCounty.toLowerCase().trim()) return false;
         }
 
         // 2. Foreclosure / Equity calculations (ONLY run if active filter requires it!)
@@ -1332,6 +1358,9 @@ export default function LeadDashboardClient({}: Props) {
         setFilterDataQuality={setFilterDataQuality}
         filterOwnerType={filterOwnerType}
         setFilterOwnerType={setFilterOwnerType}
+        filterCounty={filterCounty}
+        setFilterCounty={setFilterCounty}
+        availableCounties={availableCounties}
         filterOutOfStateAdmin={filterOutOfStateAdmin}
         setFilterOutOfStateAdmin={setFilterOutOfStateAdmin}
         filterTaxForeclosure={filterTaxForeclosure}

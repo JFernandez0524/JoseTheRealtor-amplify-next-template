@@ -60,6 +60,9 @@ type Props = {
   setFilterCondoOnly?: (val: boolean) => void;
   filterDirectMail?: string;
   setFilterDirectMail?: (val: '' | 'MAILED' | 'NOT_MAILED') => void;
+  filterCounty?: string;
+  setFilterCounty?: (val: string) => void;
+  availableCounties?: string[];
   skipTraceFromDate: string;
   setSkipTraceFromDate: (val: string) => void;
   skipTraceToDate: string;
@@ -136,6 +139,9 @@ export function DashboardFilters({
   setFilterCondoOnly,
   filterDirectMail = '',
   setFilterDirectMail,
+  filterCounty = '',
+  setFilterCounty,
+  availableCounties = [],
   skipTraceFromDate,
   setSkipTraceFromDate,
   skipTraceToDate,
@@ -169,6 +175,7 @@ export function DashboardFilters({
 
   const activeFilters = [
     filterType && { label: `Type: ${filterType}`, reset: () => setFilterType('') },
+    filterCounty && { label: `📍 County: ${filterCounty}`, reset: () => setFilterCounty?.('') },
     filterOutOfStateAdmin && {
       label: filterOutOfStateAdmin === 'YES' ? '🗺️ Out-of-State Admin' : '🏠 In-State Admin',
       reset: () => setFilterOutOfStateAdmin?.(''),
@@ -402,7 +409,7 @@ export function DashboardFilters({
       </div>
 
       {/* 💊 Row 2: Top-Level Quick Filter Pills */}
-      <div className='grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-2.5 pt-2 border-t border-slate-100'>
+      <div className='grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-7 gap-2.5 pt-2 border-t border-slate-100'>
         {/* 1. Lead Type */}
         <select
           value={filterType}
@@ -417,6 +424,20 @@ export function DashboardFilters({
           <option value='DRIVING_FOR_DOLLARS'>Driving For Dollars</option>
           <option value='VACANT'>Vacant</option>
           <option value='OTHER'>Other</option>
+        </select>
+
+        {/* 📍 County Filter */}
+        <select
+          value={filterCounty || ''}
+          onChange={(e) => setFilterCounty?.(e.target.value)}
+          className='border border-slate-300 rounded-xl px-3 py-2 text-xs font-semibold focus:ring-2 focus:ring-amber-500 outline-none w-full bg-white text-slate-700'
+        >
+          <option value=''>📍 All Counties {availableCounties.length ? `(${availableCounties.length})` : ''}</option>
+          {availableCounties.map((c) => (
+            <option key={c} value={c}>
+              📍 {c} County
+            </option>
+          ))}
         </select>
 
         {/* 🗺️ Out of State Admin Filter */}

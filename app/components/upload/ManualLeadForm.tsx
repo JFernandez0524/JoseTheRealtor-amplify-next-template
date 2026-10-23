@@ -9,7 +9,6 @@ import { useRouter } from 'next/navigation';
 import { useAccess } from '@/app/context/AccessContext';
 import { HiLockClosed } from 'react-icons/hi';
 import { UploadProgressModal } from './UploadProgressModal';
-import { ImportPreviewModal } from './ImportPreviewModal';
 import { fetchLeads } from '@/app/utils/aws/data/lead.client';
 import { AddressAutocomplete, ParsedAddress } from '@/app/components/address/AddressAutocomplete';
 import { sanitizeName, isValidName, formatPhoneE164, sanitizePhoneInput, NAME_MAX, makeAddressKey } from '@/app/utils/leadValidation';
@@ -41,7 +40,6 @@ export function ManualLeadForm() {
   const [file, setFile] = useState<File | null>(null);
   const [uploadJobId, setUploadJobId] = useState<string | null>(null);
   const [showProgressModal, setShowProgressModal] = useState(false);
-  const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [parsedCleanRows, setParsedCleanRows] = useState<Record<string, any>[]>([]);
   const [csvPreview, setCsvPreview] = useState<CsvPreview | null>(null);
   // Whether a file is being dragged over the dropzone (drives the highlight style).
@@ -253,7 +251,8 @@ export function ManualLeadForm() {
     }
 
     setMessage('');
-    setShowPreviewModal(true);
+    // Direct fast import without preview modal friction
+    await handleExecuteImport(parsedCleanRows);
   };
 
   const handleExecuteImport = async (selectedRows: Record<string, any>[]) => {
@@ -264,7 +263,7 @@ export function ManualLeadForm() {
       const user = await getFrontEndUser();
       if (!user) throw new Error('Session expired.');
 
-      // Serialize only the selected, filtered rows back to a clean CSV
+      // Serialize rows back to clean CSV
       const cleanCsvText = serializeRowsToCsv(sourceHeaders, selectedRows);
       const cleanFile = new File([cleanCsvText], file.name, { type: 'text/csv' });
 
@@ -307,7 +306,6 @@ export function ManualLeadForm() {
         },
       }).result;
 
-      setShowPreviewModal(false);
       setUploadJobId(newJob.id);
       setShowProgressModal(true);
     } catch (err: any) {
@@ -672,20 +670,6 @@ export function ManualLeadForm() {
         </div>
       )}
       
-      {/* Upload Preview & Filter Modal */}
-      {showPreviewModal && file && (
-        <ImportPreviewModal
-          isOpen={showPreviewModal}
-          fileName={file.name}
-          leadType={lead.type ? lead.type.toUpperCase() : 'PREFORECLOSURE'}
-          rawRows={parsedCleanRows}
-          columnMapping={columnMapping}
-          onClose={() => setShowPreviewModal(false)}
-          onConfirmImport={handleExecuteImport}
-          isImporting={loading}
-        />
-      )}
-
       {/* Upload Progress Modal */}
       {showProgressModal && uploadJobId && (
         <UploadProgressModal jobId={uploadJobId} onClose={() => setShowProgressModal(false)} />
