@@ -94,8 +94,34 @@ export function ImportPreviewModal({
       const city = cell('ownerCity');
       const state = cell('ownerState');
       const zip = cell('ownerZip');
-      const county = cell('ownerCounty');
       const parcelId = cell('parcelId');
+
+      // Extract county: check mapped 'ownerCounty' first, then common raw CSV headers
+      let rawCounty = cell('ownerCounty');
+      if (!rawCounty) {
+        for (const [k, v] of Object.entries(row)) {
+          const lk = k.toLowerCase().replace(/[^a-z0-9]/g, '');
+          if (
+            ['county', 'propertycounty', 'situscounty', 'ownercounty', 'cty'].includes(lk) &&
+            v != null &&
+            String(v).trim()
+          ) {
+            rawCounty = String(v).trim();
+            break;
+          }
+        }
+      }
+
+      // Normalize county name (remove trailing " county" and title-case)
+      let normalizedCounty = rawCounty;
+      if (normalizedCounty) {
+        normalizedCounty = normalizedCounty.replace(/\s+county$/i, '').trim();
+        normalizedCounty = normalizedCounty
+          .toLowerCase()
+          .split(' ')
+          .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+          .join(' ');
+      }
 
       const ownerDisplayName =
         `${ownerResolved.firstName || ''} ${ownerResolved.lastName || ''}`.trim() ||
@@ -117,7 +143,7 @@ export function ImportPreviewModal({
         cityDisplay: city,
         stateDisplay: state,
         zipDisplay: zip,
-        countyDisplay: county,
+        countyDisplay: normalizedCounty || '',
         parcelIdDisplay: parcelId,
         ownerDisplayName,
         ownership: ownerResolved.classification,
@@ -138,14 +164,16 @@ export function ImportPreviewModal({
     return s;
   });
 
+  const [countyFilter, setCountyFilter] = useState<string>('ALL');
   const [ownershipFilter, setOwnershipFilter] = useState<string>('ALL');
   const [foreclosureFilter, setForeclosureFilter] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Counts for badges
+  // Counts for badges & filters
   const stats = useMemo(() => {
     const ownershipCounts: Record<string, number> = {};
     const foreclosureCounts: Record<string, number> = {};
+    const countyCounts: Record<string, number> = {};
 
     initialClassifiedRows.forEach((r) => {
       const oc = r.ownership.category;
@@ -153,15 +181,24 @@ export function ImportPreviewModal({
 
       const fc = r.foreclosure.category;
       foreclosureCounts[fc] = (foreclosureCounts[fc] || 0) + 1;
+
+      const c = r.countyDisplay ? r.countyDisplay.trim() : 'Unknown';
+      countyCounts[c] = (countyCounts[c] || 0) + 1;
     });
 
-    return { ownershipCounts, foreclosureCounts };
+    return { ownershipCounts, foreclosureCounts, countyCounts };
   }, [initialClassifiedRows]);
 
   // Filtered rows for the table view
   const visibleRows = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
     return initialClassifiedRows.filter((r) => {
+      if (countyFilter !== 'ALL') {
+        const rowCounty = (r.countyDisplay || 'Unknown').toLowerCase();
+        if (rowCounty !== countyFilter.toLowerCase()) {
+          return false;
+        }
+      }
       if (ownershipFilter !== 'ALL' && r.ownership.category !== ownershipFilter) {
         return false;
       }
@@ -171,16 +208,24 @@ export function ImportPreviewModal({
       if (q) {
         const matchesAddress = r.addressDisplay.toLowerCase().includes(q);
         const matchesCity = r.cityDisplay.toLowerCase().includes(q);
+        const matchesCounty = r.countyDisplay.toLowerCase().includes(q);
         const matchesOwner = r.ownerDisplayName.toLowerCase().includes(q);
         const matchesCase = r.caseNumber.toLowerCase().includes(q);
         const matchesLender = r.lender.toLowerCase().includes(q);
-        if (!matchesAddress && !matchesCity && !matchesOwner && !matchesCase && !matchesLender) {
+        if (
+          !matchesAddress &&
+          !matchesCity &&
+          !matchesCounty &&
+          !matchesOwner &&
+          !matchesCase &&
+          !matchesLender
+        ) {
           return false;
         }
       }
       return true;
     });
-  }, [initialClassifiedRows, ownershipFilter, foreclosureFilter, searchQuery]);
+  }, [initialClassifiedRows, countyFilter, ownershipFilter, foreclosureFilter, searchQuery]);
 
   if (!isOpen) return null;
 
@@ -408,6 +453,58 @@ export function ImportPreviewModal({
               ))}
             </div>
           )}
+
+          {/* County Filter */}
+          {Object.keys(stats.countyCounts).length > 0 && (
+            <div className='flex flex-wrap items-center gap-2 pt-1 border-t border-gray-100'>
+              <span className='text-xs font-semibold uppercase tracking-wider text-gray-400'>
+                County:
+              </span>
+              <button
+                type='button'
+                onClick={() => setCountyFilter('ALL')}
+                className={`rounded-full px-2.5 py-1 text-xs font-medium transition-colors ${
+                  countyFilter === 'ALL'
+                    ? 'bg-amber-600 text-white font-bold'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                All Counties ({initialClassifiedRows.length})
+              </button>
+              {Object.entries(stats.countyCounts)
+                .sort((a, b) => b[1] - a[1])
+                .map(([countyName, count]) => (
+                  <button
+                    key={countyName}
+                    type='button'
+                    onClick={() => setCountyFilter(countyName)}
+                    className={`rounded-full px-2.5 py-1 text-xs font-medium border transition-colors ${
+                      countyFilter.toLowerCase() === countyName.toLowerCase()
+                        ? 'bg-amber-100 text-amber-900 border-amber-300 ring-2 ring-amber-500 font-bold'
+                        : 'bg-white text-gray-700 border-gray-200 hover:bg-amber-50'
+                    }`}
+                  >
+                    📍 {countyName} ({count})
+                  </button>
+                ))}
+              {Object.keys(stats.countyCounts).length > 6 && (
+                <select
+                  value={countyFilter}
+                  onChange={(e) => setCountyFilter(e.target.value)}
+                  className='ml-auto rounded-md border border-gray-300 bg-white px-2 py-1 text-xs text-gray-700 outline-none focus:ring-1 focus:ring-amber-500'
+                >
+                  <option value='ALL'>Filter by County…</option>
+                  {Object.entries(stats.countyCounts)
+                    .sort((a, b) => a[0].localeCompare(b[0]))
+                    .map(([c, count]) => (
+                      <option key={c} value={c}>
+                        {c} ({count})
+                      </option>
+                    ))}
+                </select>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Table View */}
@@ -468,9 +565,18 @@ export function ImportPreviewModal({
                       </td>
                       <td className='px-4 py-3'>
                         <div className='font-semibold text-gray-900'>{r.addressDisplay}</div>
-                        <div className='text-gray-500'>
-                          {r.cityDisplay}, {r.stateDisplay} {r.zipDisplay}
-                          {r.parcelIdDisplay ? ` • Parcel: ${r.parcelIdDisplay}` : ''}
+                        <div className='text-gray-500 flex items-center gap-1.5 flex-wrap mt-0.5'>
+                          <span>
+                            {r.cityDisplay ? `${r.cityDisplay}, ` : ''}{r.stateDisplay} {r.zipDisplay}
+                          </span>
+                          {r.countyDisplay && (
+                            <span className='inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-50 text-amber-800 border border-amber-200'>
+                              📍 {r.countyDisplay} County
+                            </span>
+                          )}
+                          {r.parcelIdDisplay && (
+                            <span className='text-gray-400 text-[10px]'>Parcel: {r.parcelIdDisplay}</span>
+                          )}
                         </div>
                       </td>
                       <td className='px-4 py-3'>
