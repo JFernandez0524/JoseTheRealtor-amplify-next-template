@@ -214,6 +214,7 @@ export const handler: S3Handler = async (event) => {
     let currentRow = 0;
     let successCount = 0;
     let duplicateCount = 0;
+    let errorCount = 0;
     const duplicateLeads: any[] = [];
     let ownerId = '';
     let jobId = '';
@@ -280,6 +281,26 @@ export const handler: S3Handler = async (event) => {
           ':updated': new Date().toISOString(),
         }
       }));
+
+      const updateProgress = async () => {
+        try {
+          await docClient.send(new UpdateCommand({
+            TableName: csvUploadJobTableName,
+            Key: { id: jobId },
+            UpdateExpression: 'SET processedRows = :processed, successCount = :success, duplicateCount = :duplicate, errorCount = :errors, duplicateLeads = :duplicates, updatedAt = :updated',
+            ExpressionAttributeValues: {
+              ':processed': currentRow,
+              ':success': successCount,
+              ':duplicate': duplicateCount,
+              ':errors': errorCount,
+              ':duplicates': duplicateLeads,
+              ':updated': new Date().toISOString(),
+            }
+          }));
+        } catch (progressErr: any) {
+          console.warn(`⚠️ Failed to update job progress for row ${currentRow}:`, progressErr?.message);
+        }
+      };
 
       // 🛡️ 2. MEMBERSHIP PROTECTION GUARD
       try {
@@ -512,18 +533,7 @@ export const handler: S3Handler = async (event) => {
             duplicateCount++;
 
             if (currentRow % 5 === 0 || currentRow === totalRows) {
-              await docClient.send(new UpdateCommand({
-                TableName: csvUploadJobTableName,
-                Key: { id: jobId },
-                UpdateExpression: 'SET processedRows = :processed, successCount = :success, duplicateCount = :duplicate, duplicateLeads = :duplicates, updatedAt = :updated',
-                ExpressionAttributeValues: {
-                  ':processed': currentRow,
-                  ':success': successCount,
-                  ':duplicate': duplicateCount,
-                  ':duplicates': duplicateLeads,
-                  ':updated': new Date().toISOString(),
-                }
-              }));
+              await updateProgress();
             }
 
             continue;
@@ -762,18 +772,7 @@ export const handler: S3Handler = async (event) => {
             duplicateCount++;
 
             if (currentRow % 5 === 0 || currentRow === totalRows) {
-              await docClient.send(new UpdateCommand({
-                TableName: csvUploadJobTableName,
-                Key: { id: jobId },
-                UpdateExpression: 'SET processedRows = :processed, successCount = :success, duplicateCount = :duplicate, duplicateLeads = :duplicates, updatedAt = :updated',
-                ExpressionAttributeValues: {
-                  ':processed': currentRow,
-                  ':success': successCount,
-                  ':duplicate': duplicateCount,
-                  ':duplicates': duplicateLeads,
-                  ':updated': new Date().toISOString(),
-                }
-              }));
+              await updateProgress();
             }
 
             continue; // Skip this lead
@@ -942,7 +941,7 @@ export const handler: S3Handler = async (event) => {
             // --- 🟢 County foreclosure data (authoritative source-of-truth) ---
             countyFilingDate,
             foreclosureRecordingDate: countyFilingDate, // seed the recording date from the county filing
-            foreclosureAuctionDate: foreclosureAuctionDateCsv,
+            ...(foreclosureAuctionDateCsv ? { foreclosureAuctionDate: foreclosureAuctionDateCsv } : {}),
             foreclosureStatus: foreclosureStatusCsv,
             foreclosureCaseNumber: foreclosureCaseNumberCsv,
             foreclosureLenderName: foreclosureLenderNameCsv,
@@ -1002,6 +1001,13 @@ export const handler: S3Handler = async (event) => {
             updatedAt: new Date().toISOString(),
           };
 
+          // 🛡️ DynamoDB GSI Key Guard: Attributes in Global Secondary Indexes
+          // (such as foreclosureAuctionDate) CANNOT be null ({ NULL: true }) in DynamoDB.
+          // If null or undefined, delete the property so DynamoDB treats it as a sparse index.
+          if (!(leadItem as any).foreclosureAuctionDate) {
+            delete (leadItem as any).foreclosureAuctionDate;
+          }
+
           await docClient.send(new PutCommand({
             TableName: propertyLeadTableName,
             Item: leadItem
@@ -1017,23 +1023,13 @@ export const handler: S3Handler = async (event) => {
           }
 
           successCount++;
-
-          if (currentRow % 5 === 0 || currentRow === totalRows) {
-            await docClient.send(new UpdateCommand({
-              TableName: csvUploadJobTableName,
-              Key: { id: jobId },
-              UpdateExpression: 'SET processedRows = :processed, successCount = :success, duplicateCount = :duplicate, duplicateLeads = :duplicates, updatedAt = :updated',
-              ExpressionAttributeValues: {
-                ':processed': currentRow,
-                ':success': successCount,
-                ':duplicate': duplicateCount,
-                ':duplicates': duplicateLeads,
-                ':updated': new Date().toISOString(),
-              }
-            }));
-          }
         } catch (rowError: any) {
+          errorCount++;
           console.error(`❌ Row ${currentRow} failed:`, rowError.message);
+        }
+
+        if (currentRow % 5 === 0 || currentRow === totalRows) {
+          await updateProgress();
         }
       }
 
@@ -1060,7 +1056,7 @@ export const handler: S3Handler = async (event) => {
           ':success': successCount,
           ':duplicate': duplicateCount,
           ':duplicates': duplicateLeads,
-          ':errors': currentRow - successCount - duplicateCount,
+          ':errors': errorCount,
           ':processed': currentRow,
           ':warnings': warnings,
           ':completed': new Date().toISOString(),
