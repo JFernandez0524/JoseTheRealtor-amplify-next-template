@@ -260,6 +260,16 @@ export default function ThanksIoSettingsCard() {
           </form>
         </div>
       )}
+
+      {/* Affiliate & Legal Compliance Notice */}
+      <div className='pt-3 border-t border-slate-100 text-[11px] text-slate-400 space-y-1 leading-relaxed'>
+        <p>
+          <strong>Affiliate &amp; Compliance Notice:</strong> We are an independent partner of Thanks.io and may receive referral credit or compensation when you register via our partner link.
+        </p>
+        <p>
+          Users are solely responsible for ensuring their direct mail templates, return addresses, and copy comply with USPS domestic mail standards, state real estate licensing requirements, and the Fair Housing Act.
+        </p>
+      </div>
     </div>
   );
 }

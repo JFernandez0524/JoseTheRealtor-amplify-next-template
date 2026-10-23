@@ -183,6 +183,9 @@ export default function CostBreakdownPage() {
               <li className="flex gap-2"><span className="text-green-500">✓</span>Automatic pipeline stage updates (Touch 1 → Touch 2 → Touch 3 → Engaged)</li>
               <li className="flex gap-2"><span className="text-green-500">✓</span>Leads without phone numbers auto-tagged for direct mail routing</li>
             </ul>
+            <p className="mt-4 pt-3 border-t border-gray-100 text-[11px] text-gray-400">
+              *Affiliate Disclosure: When you register via our partner link, we may receive compensation or partner credits from Thanks.io. This partnership enables us to provide the direct mail integration software at $0 extra monthly cost.
+            </p>
           </div>
         </section>
 

@@ -110,6 +110,12 @@ export default function ReportsTabs() {
                 Our app automates lead data and delivery webhooks, but we do not host a public website for your leads. In your Thanks.io postcard or letter templates, make sure to set the <strong>QR Code destination URL</strong> to your own website, landing page, or GoHighLevel booking calendar.
               </p>
             </div>
+
+            <div className='pt-2 border-t border-slate-100 text-[11px] text-slate-400 space-y-1'>
+              <p>
+                <strong>Affiliate &amp; Compliance Notice:</strong> We are an independent partner of Thanks.io and may receive compensation when you register via our partner link. Users are responsible for ensuring mail pieces comply with USPS standards, state real estate licensing guidelines, and the Fair Housing Act.
+              </p>
+            </div>
           </div>
         </div>
       )}
