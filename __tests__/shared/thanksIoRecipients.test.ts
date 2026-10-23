@@ -62,7 +62,21 @@ describe('buildThanksIoRecipient', () => {
       custom4: 'Old Bridge',
       custom5: 'December 2, 2026',
       custom6: '$346,200',
+      custom7: '399000',
+      custom8: '2026-12-02',
     });
+  });
+
+  it('keeps QR landing fields URL-safe and consistent with the printed equity', () => {
+    const res = buildThanksIoRecipient(auctionLead(), THANKS_IO_LISTS.PREFORECLOSURE_AUCTION, NOW);
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    const { custom2, custom6, custom7, custom8 } = res.payload;
+    expect(custom7).toMatch(/^\d+$/);
+    expect(custom8).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    // Landing page computes zest − debt; must equal the equity printed in the letter
+    const pageEquity = Number(custom2) - Number(custom7);
+    expect(`$${pageEquity.toLocaleString('en-US')}`).toBe(custom6);
   });
 
   it('mails absentee owners at their mailing address but keeps the property in custom3/4', () => {
@@ -111,6 +125,8 @@ describe('buildThanksIoRecipient', () => {
     if (res.ok) {
       expect(res.payload.custom5).toBeUndefined();
       expect(res.payload.custom6).toBe('$346,200');
+      expect(res.payload.custom7).toBe('399000');
+      expect(res.payload.custom8).toBeUndefined();
     }
   });
 
@@ -216,6 +232,8 @@ describe('buildThanksIoRecipient', () => {
       expect(res.payload.name).toBe('John Doe');
       expect(res.payload.address).toBe('77 Oak Ave');
       expect(res.payload.custom3).toBe('5 Elm St');
+      expect(res.payload.custom7).toBeUndefined();
+      expect(res.payload.custom8).toBeUndefined();
     }
   });
 });

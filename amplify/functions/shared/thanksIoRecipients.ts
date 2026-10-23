@@ -12,6 +12,11 @@
  *   custom4 → Property city    (%CUSTOM4%)
  *   custom5 → Sheriff sale date, e.g. "December 2, 2026"   (%CUSTOM5%, auction letter only)
  *   custom6 → Estimated equity, e.g. "$346,200"           (%CUSTOM6%)
+ *   custom7 → Debt baseline as plain digits, e.g. "399000" — upset (auction) or loan amount
+ *             (lis pendens). URL-safe: used only in the QR landing URL (&debt=%CUSTOM7%); the
+ *             landing page computes equity as custom2 − custom7 (same formula as custom6).
+ *   custom8 → Sheriff sale date ISO, e.g. "2026-12-02" — URL-safe twin of custom5 for the QR
+ *             landing URL (&sale=%CUSTOM8%, auction letter only)
  *
  * USED BY: app/api/v1/thanksio/add-recipients/route.ts
  */
@@ -91,6 +96,8 @@ export interface ThanksIoRecipientPayload {
   custom4?: string;
   custom5?: string;
   custom6?: string;
+  custom7?: string;
+  custom8?: string;
 }
 
 export type BuildRecipientResult =
@@ -130,6 +137,12 @@ export function parseSaleDate(raw?: string | null): Date | null {
 /** "December 2, 2026" — reads naturally inside a handwritten letter. */
 export function formatSaleDateForLetter(d: Date): string {
   return d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+}
+
+/** "2026-12-02" — URL-safe sale date for the QR landing page (custom8). */
+export function formatSaleDateIso(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
 export function formatCurrency(n: number): string {
@@ -251,6 +264,7 @@ export function buildThanksIoRecipient(
   const fin = computeForeclosureFinancials(lead);
 
   let saleDateText: string | undefined;
+  let saleDateIso: string | undefined;
   if (list.requiresSaleDate) {
     const saleDate = parseSaleDate(fin.saleDate);
     if (!saleDate) return { ok: false, reason: 'No sheriff sale date on file' };
@@ -259,6 +273,7 @@ export function buildThanksIoRecipient(
       return { ok: false, reason: `Sheriff sale date ${fin.saleDate} has already passed` };
     }
     saleDateText = formatSaleDateForLetter(saleDate);
+    saleDateIso = formatSaleDateIso(saleDate);
   }
 
   let equityText: string | undefined;
@@ -276,6 +291,12 @@ export function buildThanksIoRecipient(
 
   const zestimate = lead.zestimate || lead.estimatedValue;
 
+  // Debt baseline for the QR landing page's "Your numbers" card (preforeclosure lists only)
+  const debtDigits =
+    list.leadType === 'PREFORECLOSURE' && fin.baselineUpset != null && fin.baselineUpset > 0
+      ? String(Math.round(fin.baselineUpset))
+      : undefined;
+
   const payload: ThanksIoRecipientPayload = {
     mailing_list_id: list.id,
     name,
@@ -291,6 +312,8 @@ export function buildThanksIoRecipient(
     custom4: toTitleCase(lead.ownerCity) || undefined,
     custom5: saleDateText,
     custom6: equityText,
+    custom7: debtDigits,
+    custom8: saleDateIso,
   };
 
   return { ok: true, payload };
