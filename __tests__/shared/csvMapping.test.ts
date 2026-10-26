@@ -190,6 +190,39 @@ describe('parseOwnershipName', () => {
       lastName: 'Campbell',
     });
   });
+
+  it('cleans court scraped auction names with legal alias chains (A/k/a)', () => {
+    expect(parseOwnershipName('Christopher Jones A/k/a Christoph Jones A/k/a Christoph E. Jones; .')).toEqual({
+      firstName: 'Christopher',
+      lastName: 'Jones',
+    });
+  });
+
+  it('strips leading dots and bullets from scraped auction names', () => {
+    expect(parseOwnershipName('    . Michael George Locacio')).toEqual({
+      firstName: 'Michael George',
+      lastName: 'Locacio',
+    });
+    expect(parseOwnershipName('. Jane Doe')).toEqual({
+      firstName: 'Jane',
+      lastName: 'Doe',
+    });
+  });
+
+  it('cleans court ET AL and trailing semicolons/punctuation without leaving trailing commas', () => {
+    expect(parseOwnershipName('Allen Ariza, et al')).toEqual({
+      firstName: 'Allen',
+      lastName: 'Ariza',
+    });
+    expect(parseOwnershipName('Smith, John; .')).toEqual({
+      firstName: 'John',
+      lastName: 'Smith',
+    });
+    expect(parseOwnershipName('John Doe A/K/A Johnny Doe')).toEqual({
+      firstName: 'John',
+      lastName: 'Doe',
+    });
+  });
 });
 
 describe('parseColumnMapping', () => {

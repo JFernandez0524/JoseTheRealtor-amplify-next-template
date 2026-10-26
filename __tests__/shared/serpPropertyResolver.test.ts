@@ -614,5 +614,51 @@ describe('serpPropertyResolver', () => {
       expect(result.hoaFee).toBe(441);
       expect(result.zpid).toBe('39333989');
     });
+
+    it('correctly classifies off-market pre-foreclosure with old MLS# and Homes.com price snippet (269 Center Grove Rd example)', () => {
+      const organic: SerpOrganicResult[] = [
+        {
+          title: '269 Center Grove Rd, Randolph, NJ 07869',
+          link: 'https://www.realtor.com/realestateandhomes-detail/269-Center-Grove-Rd_Randolph_NJ_07869_M50214-12912',
+          snippet: '269 Center Grove Rd, Randolph, NJ 07869 · Property type. Single Family · Last sold. $599.8K in 2021 · Garage. 3 Cars.',
+        },
+        {
+          title: '269 Center Grove Rd, Randolph, NJ 07869',
+          link: 'https://www.zillow.com/homedetails/269-Center-Grove-Rd-Randolph-NJ-07869/39488135_zpid/',
+          snippet: 'Est. $1,175,000. 5beds. 5baths. 6,800sqft. 269 Center Grove Rd, Randolph, NJ 07869. SingleFamily. Built in 1890. 2 Acres Lot. $1,175,000 Zestimate®. $173/sqft.',
+        },
+        {
+          title: 'Sheriff Sale - 269 Center Grove Road, Randolph, NJ 07869',
+          link: 'https://www.morriscountynj.gov/Home/Tabs/Public-Legal-Notices/Public-Legal-Notices/26001714',
+          snippet: 'Sheriff Sale - 269 Center Grove Road, Randolph, NJ 07869 · 269 Center Grove Road Randolph Twp, NJ 07869 · 609 250 0700.',
+        },
+        {
+          title: '269 Center Grove Rd, Randolph, NJ 07869',
+          link: 'https://www.homes.com/property/269-center-grove-rd-randolph-nj/2wyn24ktem90b/',
+          snippet: 'Priced at $1114777 - 269 Center Grove Rd, Randolph, NJ 07869 - 1200 sqft home Browse photos, take a 3D tour & see transaction details about this recently ...',
+        },
+        {
+          title: '269 CENTER GROVE Rd, Randolph, NJ 07869',
+          link: 'https://www.redfin.com/NJ/Randolph/269-Center-Grove-Rd-07869/home/37313069',
+          snippet: '5 beds, 3.5 baths house located at 269 CENTER GROVE Rd, Randolph, NJ 07869-2008 sold for $599800 on Mar 9, 2021. MLS# 3670897.',
+        },
+        {
+          title: '269 Center Grove Rd, Randolph, NJ 07869',
+          link: 'https://www.compass.com/homedetails/269-Center-Grove-Rd-Randolph-NJ-07869/158SWK_pid/',
+          snippet: '269 Center Grove Rd, Randolph, NJ 07869 is a single family home not currently listed. This is a 5-bed, 4-bath property and last sold on 2021-03-09 for ...',
+        },
+        {
+          title: '269 Center Grove Rd, Randolph, NJ 07869 | 25 Photos',
+          link: 'https://www.movoto.com/randolph-nj/269-center-grove-rd-randolph-nj-07869-451_3670897/',
+          snippet: 'Off-market: $599800 - 269 Center Grove Rd, Randolph, NJ 07869 is a 5 bed, 87120 sqft lot, Other, with an estimated value of $1100000.',
+        },
+      ];
+
+      const result = parseSerpResults('269 Center Grove Road, Randolph, NJ 07869', organic);
+      expect(result.listingStatus).toBe('off_market');
+      expect(result.lastSaleDate).toBe('2021-03-09');
+      expect(result.lastSaleAmount).toBe(599800);
+      expect(result.zpid).toBe('39488135');
+    });
   });
 });

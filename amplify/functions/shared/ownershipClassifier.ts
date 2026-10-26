@@ -203,8 +203,16 @@ export function classifyOwnership(
     };
   }
 
-  // Normalize excessive internal whitespace
-  let cleanName = rawName.replace(/\s+/g, ' ').trim();
+  // Normalize excessive internal whitespace and strip scraper bullets/artifacts/aliases
+  let cleanName = rawName
+    .replace(/^[\s.,;:*_\-/#\\|~`!@$%^&()+=<>[\]{}•"']+/g, '')
+    .replace(
+      /\b(?:A[\/.]?K[\/.]?A|F[\/.]?K[\/.]?A|N[\/.]?K[\/.]?A|ALSO\s+KNOWN\s+AS|FORMERLY\s+KNOWN\s+AS|NOW\s+KNOWN\s+AS)\b.*$/i,
+      ''
+    )
+    .replace(/[\s.;:*_\-/#\\|~`!@$%^&()+=<>[\]{}•"']+$/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
 
   // Strip obvious noise prefixes/suffixes while capturing clues
   const evidence: string[] = [];
@@ -438,19 +446,24 @@ function parseSingleIndividualName(nameStr: string): { firstName: string; lastNa
  * Helper to parse multiple individuals (e.g. "John & Mary Smith", "John Smith and Jane Doe", "Smith, John & Mary")
  */
 function parseMultipleIndividualNames(nameStr: string): { firstName: string; lastName: string } {
-  // Strip deed noise
+  // Strip deed noise and dangling commas
   let cleaned = nameStr
     .replace(/\([^)]*\)/g, ' ')
     .replace(/\b(ET\s*UX|ET\s*VIR|ET\s*AL(S)?|WIFE|HUSBAND|HW|WF)\b/gi, '')
+    .replace(/,\s*$/g, '')
+    .replace(/^[\s.,;:*_\-/#\\|~`!@$%^&()+=<>[\]{}•"']+/g, '')
+    .replace(/[\s.,;:*_\-/#\\|~`!@$%^&()+=<>[\]{}•"']+$/g, '')
     .replace(/\s+/g, ' ')
     .trim();
 
-  // If "Smith, John & Mary"
+  // If "Smith, John & Mary" (ignore single-person trailing comma cases)
   if (cleaned.includes(',')) {
-    const parts = cleaned.split(',').map((p) => p.trim());
-    const lastName = formatPersonalName(parts[0]);
-    const firstNames = formatPersonalName(parts.slice(1).join(' '));
-    return { firstName: firstNames, lastName };
+    const parts = cleaned.split(',').map((p) => p.trim()).filter(Boolean);
+    if (parts.length >= 2) {
+      const lastName = formatPersonalName(parts[0]);
+      const firstNames = formatPersonalName(parts.slice(1).join(' '));
+      return { firstName: firstNames, lastName };
+    }
   }
 
   // If "John & Mary Smith"

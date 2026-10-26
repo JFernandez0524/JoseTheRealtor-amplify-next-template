@@ -361,7 +361,11 @@ export function parseSerpResults(
     }
 
     // 11. Explicit Off-Market Signals
-    if (/is\s+(?:currently\s+)?not\s+for\s+sale|is\s+currently\s+off\s*market|off\s*market/i.test(text)) {
+    if (
+      /is\s+(?:currently\s+)?not\s+for\s+sale|is\s+currently\s+off[-_\s]*market|off[-_\s]*market|not\s+(?:currently\s+)?(?:for\s+sale|listed)|not\s+on\s+the\s+market/i.test(
+        text
+      )
+    ) {
       isExplicitOffMarket = true;
     }
 
@@ -427,9 +431,12 @@ export function parseSerpResults(
     }
 
     // 14. Active / For Sale Detection & List Price
+    const hasPastSaleSnippetContext = /(?:recently\s+(?:sold|closed)|transaction\s+details\s+about\s+this\s+recently|last\s+sold)\b/i.test(text);
     const listPriceMatch =
       text.match(/(?:photos\s+of\s+this\s+)\$([0-9.]+[km]|[0-9,]+)/i) ||
-      text.match(/(?:listed\s+(?:at|for)|list\s+price(?:\s+is|\s+of|:)?|for\s+sale\s*(?:at|for|:)?|priced\s+at)\s*\$?([0-9.]+[km]|[0-9,]+)/i) ||
+      (!hasPastSaleSnippetContext
+        ? text.match(/(?:listed\s+(?:at|for)|list\s+price(?:\s+is|\s+of|:)?|for\s+sale\s*(?:at|for|:)?|priced\s+at)\s*\$?([0-9.]+[km]|[0-9,]+)/i)
+        : null) ||
       text.match(/(?:for\s+sale:?\s*)\$([0-9,]{5,})/i) ||
       snippet.match(/^\s*(?:[A-Za-z]+\s+\d{1,2},?\s+\d{4}\s*[-—]\s*)?\$([0-9.]+[km]|[0-9,]+)\s+\d+\s+beds?/i);
     if (listPriceMatch) {
@@ -443,7 +450,8 @@ export function parseSerpResults(
 
     const hasActiveIndicator =
       hasMlsInTitle ||
-      /(?:^|\b)(?:for\s+sale(?:\s*[-:]|\b)|active\s+(?:listing|mls)|currently\s+listed|is\s+(?:for\s+sale|listed)|listed\s+as\s+active|on\s+the\s+market|home\s+for\s+sale|priced\s+at\s+\$[0-9,]+)/i.test(text) ||
+      /(?:^|\b)(?:for\s+sale(?:\s*[-:]|\b)|active\s+(?:listing|mls)|currently\s+listed|is\s+(?:for\s+sale|listed)|listed\s+as\s+active|on\s+the\s+market|home\s+for\s+sale)/i.test(text) ||
+      (!hasPastSaleSnippetContext && /(?:priced\s+at\s+\$[0-9,]+)/i.test(text)) ||
       (/zillow\s+has\s+\d+\s+photos\s+of\s+this\s+\$[0-9,]+/i.test(text)) ||
       (/^\s*(?:[A-Za-z]+\s+\d{1,2},?\s+\d{4}\s*[-—]\s*)?\$[0-9,]+\s+\d+\s+beds/i.test(snippet) && !isExplicitOffMarket);
 

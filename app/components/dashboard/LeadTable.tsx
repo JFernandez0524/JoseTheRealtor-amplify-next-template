@@ -150,6 +150,43 @@ export function LeadTable({
   const [zestimateError, setZestimateError] = useState('');
   const [zestimateNotice, setZestimateNotice] = useState(''); // non-error info (e.g. "no Zillow data")
 
+  // Inline Owner Name Editing State
+  const [editingOwnerLeadId, setEditingOwnerLeadId] = useState<string | null>(null);
+  const [ownerFirstInput, setOwnerFirstInput] = useState('');
+  const [ownerLastInput, setOwnerLastInput] = useState('');
+  const [isSavingOwner, setIsSavingOwner] = useState(false);
+
+  const startEditingOwner = (lead: Lead) => {
+    setEditingOwnerLeadId(lead.id);
+    setOwnerFirstInput(lead.ownerFirstName || '');
+    setOwnerLastInput(lead.ownerLastName || '');
+  };
+
+  const cancelEditingOwner = () => {
+    setEditingOwnerLeadId(null);
+    setOwnerFirstInput('');
+    setOwnerLastInput('');
+  };
+
+  const saveOwnerName = async (leadId: string) => {
+    if (isSavingOwner) return;
+    setIsSavingOwner(true);
+    try {
+      const updated = await updateLead(leadId, {
+        ownerFirstName: ownerFirstInput.trim() || null,
+        ownerLastName: ownerLastInput.trim() || null,
+      });
+      if (onLeadUpdated && updated) {
+        onLeadUpdated([updated]);
+      }
+      setEditingOwnerLeadId(null);
+    } catch (err) {
+      console.error('Failed to update owner name:', err);
+    } finally {
+      setIsSavingOwner(false);
+    }
+  };
+
   const closeZestimateEditor = () => {
     setEditingZestimateLead(null);
     setZestimateUrlInput('');
@@ -560,8 +597,90 @@ export function LeadTable({
                     )}
                   </td>
 
-                  <td className='px-4 py-4 whitespace-nowrap text-sm text-gray-900 bg-blue-50/30'>
-                    {lead.ownerFirstName} {lead.ownerLastName}
+                  <td
+                    className='px-4 py-3 whitespace-nowrap text-sm text-gray-900 bg-blue-50/30'
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    {editingOwnerLeadId === lead.id ? (
+                      <div className='flex items-center gap-1.5' onClick={(e) => e.stopPropagation()}>
+                        <input
+                          type='text'
+                          value={ownerFirstInput}
+                          onChange={(e) => setOwnerFirstInput(e.target.value)}
+                          placeholder='First'
+                          disabled={isSavingOwner}
+                          className='w-24 px-1.5 py-1 text-xs border border-blue-400 rounded focus:ring-1 focus:ring-blue-500 focus:outline-none bg-white'
+                          autoFocus
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              saveOwnerName(lead.id);
+                            } else if (e.key === 'Escape') {
+                              e.preventDefault();
+                              cancelEditingOwner();
+                            }
+                          }}
+                        />
+                        <input
+                          type='text'
+                          value={ownerLastInput}
+                          onChange={(e) => setOwnerLastInput(e.target.value)}
+                          placeholder='Last'
+                          disabled={isSavingOwner}
+                          className='w-28 px-1.5 py-1 text-xs border border-blue-400 rounded focus:ring-1 focus:ring-blue-500 focus:outline-none bg-white'
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              saveOwnerName(lead.id);
+                            } else if (e.key === 'Escape') {
+                              e.preventDefault();
+                              cancelEditingOwner();
+                            }
+                          }}
+                        />
+                        <button
+                          type='button'
+                          disabled={isSavingOwner}
+                          onClick={() => saveOwnerName(lead.id)}
+                          className='p-1 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 rounded transition disabled:opacity-50'
+                          title='Save (Enter)'
+                        >
+                          {isSavingOwner ? (
+                            <span className='inline-block w-3.5 h-3.5 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin' />
+                          ) : (
+                            '✓'
+                          )}
+                        </button>
+                        <button
+                          type='button'
+                          disabled={isSavingOwner}
+                          onClick={cancelEditingOwner}
+                          className='p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition disabled:opacity-50'
+                          title='Cancel (Esc)'
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ) : (
+                      <div className='flex items-center justify-between group/owner gap-2'>
+                        <span className='truncate max-w-[200px]' title={`${lead.ownerFirstName || ''} ${lead.ownerLastName || ''}`.trim() || 'N/A'}>
+                          {`${lead.ownerFirstName || ''} ${lead.ownerLastName || ''}`.trim() || (
+                            <span className='text-gray-400 italic text-xs'>N/A</span>
+                          )}
+                        </span>
+                        <button
+                          type='button'
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            startEditingOwner(lead);
+                          }}
+                          className='opacity-0 group-hover/owner:opacity-100 p-1 text-gray-400 hover:text-blue-600 hover:bg-blue-100/50 rounded transition text-xs'
+                          title='Edit owner name'
+                        >
+                          ✏️
+                        </button>
+                      </div>
+                    )}
                   </td>
 
                   <td className='px-4 py-4 whitespace-nowrap text-sm text-gray-900 bg-blue-50/30'>

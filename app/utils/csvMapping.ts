@@ -275,14 +275,53 @@ export function parseColumnMapping(raw: unknown): Record<string, string> | undef
 
 // ---- Name parsing (moved here so client + Lambda share one implementation) ----
 
+/**
+ * Cleans court/sheriff/auction scraped name artifacts:
+ * - Strips leading non-alphanumeric punctuation (dots, dashes, bullets, semicolons, asterisks)
+ * - Strips legal aliases: A/K/A, F/K/A, N/K/A, AKA, Also Known As, etc. keeping the primary name
+ * - Strips court noise: ET AL, ET UX, ET VIR (and leading commas like ", et al")
+ * - Strips trailing punctuation / noise (e.g. "; .", ";", ",", ".")
+ */
+export function cleanCourtScrapedName(name: string): string {
+  if (!name || typeof name !== 'string') return '';
+  let s = name.trim();
+
+  // Strip leading non-alphanumeric characters (dots, dashes, bullets, asterisks, semicolons, quotes)
+  s = s.replace(/^[\s.,;:*_\-/#\\|~`!@$%^&()+=<>[\]{}•"']+/g, '');
+
+  // Strip legal aliases: a/k/a, f/k/a, n/k/a, aka, fka, nka, also known as, formerly known as, etc.
+  // The primary debtor/owner is before the first alias clause
+  s = s.replace(
+    /\b(?:A[\/.]?K[\/.]?A|F[\/.]?K[\/.]?A|N[\/.]?K[\/.]?A|ALSO\s+KNOWN\s+AS|FORMERLY\s+KNOWN\s+AS|NOW\s+KNOWN\s+AS)\b.*$/i,
+    ''
+  );
+
+  // Strip ET AL / ET UX / ET VIR clauses along with optional leading comma (e.g. ", et al")
+  s = s.replace(/,?\s*\b(?:ET\s*AL(?:S)?|ET\s*UX|ET\s*VIR)\b/gi, '');
+
+  // Strip trailing punctuation / noise (e.g. "; .", ";", ",", ".")
+  s = s.replace(/[\s.,;:*_\-/#\\|~`!@$%^&()+=<>[\]{}•"']+$/g, '');
+
+  // Collapse internal whitespace
+  return s.replace(/\s+/g, ' ').trim();
+}
+
 /** Capitalize a single name token: first letter upper, rest lower; strips tags/control chars, caps 50. */
 export function formatName(val: string | null | undefined): string {
   if (!val || typeof val !== 'string') return '';
-  const s = val.replace(/<[^>]*>?/gm, '').replace(/\0/g, '').trim().slice(0, 50);
+  const trimmed = val
+    .trim()
+    .replace(/^[\s.,;:*_\-/#\\|~`!@$%^&()+=<>[\]{}•"']+/g, '');
+  const s = trimmed.replace(/<[^>]*>?/gm, '').replace(/\0/g, '').trim().slice(0, 50);
   if (!s) return '';
   return s
     .split(/\s+/)
-    .map((w) => (w ? w.charAt(0).toUpperCase() + w.slice(1).toLowerCase() : ''))
+    .map((w) => {
+      if (/^[A-Za-z]\.$/.test(w)) return w.toUpperCase();
+      const cleanW = w.replace(/^[^A-Za-z0-9]+|[^A-Za-z0-9]+$/g, '');
+      return cleanW ? cleanW.charAt(0).toUpperCase() + cleanW.slice(1).toLowerCase() : '';
+    })
+    .filter(Boolean)
     .join(' ');
 }
 
@@ -293,10 +332,13 @@ export function formatName(val: string | null | undefined): string {
 export function parseOwnershipName(ownership: string): { firstName: string; lastName: string } {
   if (!ownership) return { firstName: '', lastName: '' };
 
-  // 1. Strip parentheticals like (DECEASED), (DECEASED HUSBAND), (DEC), (WIFE), (HUSBAND), (), etc.
-  let cleaned = ownership.replace(/\([^)]*\)/g, ' ');
+  // 1. Clean court/auction scraper artifacts (legal aliases, leading dots/bullets, trailing punctuation)
+  let cleaned = cleanCourtScrapedName(ownership);
 
-  // 2. Normalize joiners (+ or AND -> &) and strip real estate deed noise
+  // 2. Strip parentheticals like (DECEASED), (DECEASED HUSBAND), (DEC), (WIFE), (HUSBAND), (), etc.
+  cleaned = cleaned.replace(/\([^)]*\)/g, ' ');
+
+  // 3. Normalize joiners (+ or AND -> &) and strip real estate deed noise
   cleaned = cleaned
     .replace(/\s*\+\s*/g, ' & ')
     .replace(/\bAND\b/gi, '&')
@@ -306,6 +348,8 @@ export function parseOwnershipName(ownership: string): { firstName: string; last
     .replace(/&\s*(WF|WIFE|HW|HUSBAND)\b/gi, '')
     .replace(/\b(WF|WIFE|HW|HUSBAND)\b/gi, '')
     .replace(/\b(ESTATE|TRUST|TRUSTEE|EXEC|EXECUTOR|C\/O|%)\b/gi, '')
+    .replace(/^[\s.,;:*_\-/#\\|~`!@$%^&()+=<>[\]{}•"']+/g, '')
+    .replace(/[\s.,;:*_\-/#\\|~`!@$%^&()+=<>[\]{}•"']+$/g, '')
     .replace(/\s+/g, ' ')
     .trim();
 
@@ -406,9 +450,9 @@ export function resolveOwnerNameWithClassification(input: {
   first?: string | null;
   last?: string | null;
 }): ResolvedOwnerWithClassification {
-  const first = (input.first || '').trim();
-  const last = (input.last || '').trim();
-  const full = (input.full || '').trim();
+  const first = cleanCourtScrapedName(input.first || '');
+  const last = cleanCourtScrapedName(input.last || '');
+  const full = cleanCourtScrapedName(input.full || '');
   const effectiveFull = full || `${first} ${last}`.trim();
 
   const classification = classifyOwnership(effectiveFull);
