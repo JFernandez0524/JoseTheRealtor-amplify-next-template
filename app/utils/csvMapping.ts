@@ -14,8 +14,15 @@
 import { isEntityName } from './leadValidation';
 import {
   classifyOwnership,
+  cleanCourtScrapedName,
+  formatPersonalName,
+  parseOwnershipName,
   type OwnershipClassification,
 } from '../../amplify/functions/shared/ownershipClassifier';
+
+// Re-export universal shared name utilities for backwards compatibility
+export { cleanCourtScrapedName, parseOwnershipName, formatPersonalName };
+export const formatName = formatPersonalName;
 
 export type LeadType =
   | 'PROBATE'
@@ -273,164 +280,7 @@ export function parseColumnMapping(raw: unknown): Record<string, string> | undef
   return undefined;
 }
 
-// ---- Name parsing (moved here so client + Lambda share one implementation) ----
-
-/**
- * Cleans court/sheriff/auction scraped name artifacts:
- * - Strips leading non-alphanumeric punctuation (dots, dashes, bullets, semicolons, asterisks)
- * - Strips legal aliases: A/K/A, F/K/A, N/K/A, AKA, Also Known As, etc. keeping the primary name
- * - Strips court noise: ET AL, ET UX, ET VIR (and leading commas like ", et al")
- * - Strips trailing punctuation / noise (e.g. "; .", ";", ",", ".")
- */
-export function cleanCourtScrapedName(name: string): string {
-  if (!name || typeof name !== 'string') return '';
-  let s = name.trim();
-
-  // Strip leading non-alphanumeric characters (dots, dashes, bullets, asterisks, semicolons, quotes)
-  s = s.replace(/^[\s.,;:*_\-/#\\|~`!@$%^&()+=<>[\]{}•"']+/g, '');
-
-  // Strip legal aliases: a/k/a, f/k/a, n/k/a, aka, fka, nka, also known as, formerly known as, etc.
-  // The primary debtor/owner is before the first alias clause
-  s = s.replace(
-    /\b(?:A[\/.]?K[\/.]?A|F[\/.]?K[\/.]?A|N[\/.]?K[\/.]?A|ALSO\s+KNOWN\s+AS|FORMERLY\s+KNOWN\s+AS|NOW\s+KNOWN\s+AS)\b.*$/i,
-    ''
-  );
-
-  // Strip ET AL / ET UX / ET VIR clauses along with optional leading comma (e.g. ", et al")
-  s = s.replace(/,?\s*\b(?:ET\s*AL(?:S)?|ET\s*UX|ET\s*VIR)\b/gi, '');
-
-  // Strip trailing punctuation / noise (e.g. "; .", ";", ",", ".")
-  s = s.replace(/[\s.,;:*_\-/#\\|~`!@$%^&()+=<>[\]{}•"']+$/g, '');
-
-  // Collapse internal whitespace
-  return s.replace(/\s+/g, ' ').trim();
-}
-
-/** Capitalize a single name token: first letter upper, rest lower; strips tags/control chars, caps 50. */
-export function formatName(val: string | null | undefined): string {
-  if (!val || typeof val !== 'string') return '';
-  const trimmed = val
-    .trim()
-    .replace(/^[\s.,;:*_\-/#\\|~`!@$%^&()+=<>[\]{}•"']+/g, '');
-  const s = trimmed.replace(/<[^>]*>?/gm, '').replace(/\0/g, '').trim().slice(0, 50);
-  if (!s) return '';
-  return s
-    .split(/\s+/)
-    .map((w) => {
-      if (/^[A-Za-z]\.$/.test(w)) return w.toUpperCase();
-      const cleanW = w.replace(/^[^A-Za-z0-9]+|[^A-Za-z0-9]+$/g, '');
-      return cleanW ? cleanW.charAt(0).toUpperCase() + cleanW.slice(1).toLowerCase() : '';
-    })
-    .filter(Boolean)
-    .join(' ');
-}
-
-/**
- * Parse a combined owner/ownership string into first + last name. Handles "LAST, FIRST", "FIRST
- * MIDDLE LAST", multiple people joined by "&", "+", or "AND", parentheticals, and deed abbreviations.
- */
-export function parseOwnershipName(ownership: string): { firstName: string; lastName: string } {
-  if (!ownership) return { firstName: '', lastName: '' };
-
-  // 1. Clean court/auction scraper artifacts (legal aliases, leading dots/bullets, trailing punctuation)
-  let cleaned = cleanCourtScrapedName(ownership);
-
-  // 2. Strip parentheticals like (DECEASED), (DECEASED HUSBAND), (DEC), (WIFE), (HUSBAND), (), etc.
-  cleaned = cleaned.replace(/\([^)]*\)/g, ' ');
-
-  // 3. Normalize joiners (+ or AND -> &) and strip real estate deed noise
-  cleaned = cleaned
-    .replace(/\s*\+\s*/g, ' & ')
-    .replace(/\bAND\b/gi, '&')
-    .replace(/\bET\s*UX\b/gi, '')
-    .replace(/\bET\s*VIR\b/gi, '')
-    .replace(/\bET\s*AL(S)?\b/gi, '')
-    .replace(/&\s*(WF|WIFE|HW|HUSBAND)\b/gi, '')
-    .replace(/\b(WF|WIFE|HW|HUSBAND)\b/gi, '')
-    .replace(/\b(ESTATE|TRUST|TRUSTEE|EXEC|EXECUTOR|C\/O|%)\b/gi, '')
-    .replace(/^[\s.,;:*_\-/#\\|~`!@$%^&()+=<>[\]{}•"']+/g, '')
-    .replace(/[\s.,;:*_\-/#\\|~`!@$%^&()+=<>[\]{}•"']+$/g, '')
-    .replace(/\s+/g, ' ')
-    .trim();
-
-  if (!cleaned) return { firstName: '', lastName: '' };
-
-  if (cleaned.includes('&')) {
-    const people = cleaned.split('&').map((p) => p.trim()).filter(Boolean);
-    const firstNames: string[] = [];
-    const lastNames: string[] = [];
-
-    for (let i = 0; i < people.length; i++) {
-      const person = people[i];
-      if (person.includes(',')) {
-        const parts = person.split(',').map((s) => s.trim());
-        lastNames.push(formatName(parts[0]));
-        firstNames.push(formatName(parts.slice(1).join(' ')));
-      } else {
-        const words = person.split(/\s+/).filter((w) => w.length > 0);
-        if (words.length === 1) {
-          if (i < people.length - 1) {
-            firstNames.push(formatName(words[0]));
-          } else {
-            lastNames.push(formatName(words[0]));
-          }
-        } else {
-          const suffixes = ['JR', 'SR', 'II', 'III', 'IV', 'V'];
-          const lastWordRaw = words[words.length - 1].replace(/\./g, '');
-          const lastWord = lastWordRaw.toUpperCase();
-
-          const isMiddleInitial = lastWordRaw.length === 1 && i < people.length - 1;
-
-          if (isMiddleInitial) {
-            firstNames.push(words.map((w) => formatName(w)).join(' '));
-          } else {
-            const lastNameIndex = suffixes.includes(lastWord) ? words.length - 2 : words.length - 1;
-            if (lastNameIndex <= 0) {
-              firstNames.push(words.map((w) => formatName(w)).join(' '));
-            } else {
-              firstNames.push(words.slice(0, lastNameIndex).map((w) => formatName(w)).join(' '));
-              lastNames.push(formatName(words[lastNameIndex]));
-            }
-          }
-        }
-      }
-    }
-
-    let finalFirst = firstNames.filter(Boolean).join(' & ');
-    let finalLast = lastNames.filter(Boolean).join(' & ');
-
-    if (!finalFirst && finalLast) {
-      finalFirst = finalLast;
-      finalLast = '';
-    }
-
-    return {
-      firstName: finalFirst,
-      lastName: finalLast,
-    };
-  }
-
-  if (cleaned.includes(',')) {
-    const parts = cleaned.split(',').map((s) => s.trim());
-    const lastPart = parts[0];
-    const firstPart = parts.slice(1).join(' ').trim();
-    return { firstName: formatName(firstPart || ''), lastName: formatName(lastPart || '') };
-  }
-
-  const words = cleaned.split(/\s+/).filter((w) => w.length > 0);
-  if (words.length === 0) return { firstName: '', lastName: '' };
-  if (words.length === 1) return { firstName: '', lastName: formatName(words[0]) };
-
-  const lastWord = words[words.length - 1].toUpperCase().replace(/\./g, '');
-  const suffixes = ['JR', 'SR', 'II', 'III', 'IV', 'V', 'ESQ', 'MD', 'PHD', 'DDS'];
-  let lastNameIndex = words.length - 1;
-  if (suffixes.includes(lastWord)) lastNameIndex = words.length - 2;
-  if (lastNameIndex <= 0) return { firstName: '', lastName: formatName(words[0]) };
-
-  const firstName = words.slice(0, lastNameIndex).map((w) => formatName(w)).join(' ');
-  const lastName = formatName(words[lastNameIndex]);
-  return { firstName, lastName };
-}
+// ---- Name parsing (delegated to universal ownershipClassifier library) ----
 
 export interface ResolvedOwnerName {
   firstName: string;

@@ -1,7 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import {
   classifyOwnership,
+  cleanCourtScrapedName,
   formatPersonalName,
+  parseOwnershipName,
   type OwnershipClassification,
 } from '../../amplify/functions/shared/ownershipClassifier';
 
@@ -146,5 +148,74 @@ describe('classifyOwnership', () => {
     const res2 = classifyOwnership(null);
     expect(res2.category).toBe('UNKNOWN');
     expect(res2.requiresManualReview).toBe(true);
+  });
+
+  it('cleans court scraped auction names with legal alias chains (A/k/a)', () => {
+    const res = classifyOwnership('Christopher Jones A/k/a Christoph Jones A/k/a Christoph E. Jones; .');
+    expect(res.category).toBe('INDIVIDUAL');
+    expect(res.suggestedFirstName).toBe('Christopher');
+    expect(res.suggestedLastName).toBe('Jones');
+  });
+
+  it('strips leading dots and bullets from scraped auction names', () => {
+    const res1 = classifyOwnership('    . Michael George Locacio');
+    expect(res1.category).toBe('INDIVIDUAL');
+    expect(res1.suggestedFirstName).toBe('Michael George');
+    expect(res1.suggestedLastName).toBe('Locacio');
+
+    const res2 = classifyOwnership('. Jane Doe');
+    expect(res2.category).toBe('INDIVIDUAL');
+    expect(res2.suggestedFirstName).toBe('Jane');
+    expect(res2.suggestedLastName).toBe('Doe');
+  });
+
+  it('cleans court ET AL and trailing semicolons/punctuation without leaving trailing commas', () => {
+    const res1 = classifyOwnership('Allen Ariza, et al');
+    expect(res1.category).toBe('MULTIPLE_INDIVIDUALS');
+    expect(res1.suggestedFirstName).toBe('Allen');
+    expect(res1.suggestedLastName).toBe('Ariza');
+
+    const res2 = classifyOwnership('Smith, John; .');
+    expect(res2.category).toBe('INDIVIDUAL');
+    expect(res2.suggestedFirstName).toBe('John');
+    expect(res2.suggestedLastName).toBe('Smith');
+  });
+});
+
+describe('cleanCourtScrapedName', () => {
+  it('strips leading dots, bullets, and symbols', () => {
+    expect(cleanCourtScrapedName('    . Michael George Locacio')).toBe('Michael George Locacio');
+    expect(cleanCourtScrapedName('. Jane Doe')).toBe('Jane Doe');
+    expect(cleanCourtScrapedName('* Robert Smith')).toBe('Robert Smith');
+  });
+
+  it('strips legal alias chains (A/k/a, F/k/a, etc.)', () => {
+    expect(
+      cleanCourtScrapedName('Christopher Jones A/k/a Christoph Jones A/k/a Christoph E. Jones; .')
+    ).toBe('Christopher Jones');
+    expect(cleanCourtScrapedName('John Doe A/K/A Johnny Doe')).toBe('John Doe');
+  });
+
+  it('strips trailing punctuation and court noise', () => {
+    expect(cleanCourtScrapedName('Allen Ariza, et al')).toBe('Allen Ariza');
+    expect(cleanCourtScrapedName('Smith, John; .')).toBe('Smith, John');
+  });
+});
+
+describe('parseOwnershipName', () => {
+  it('parses noisy scraped names into first and last name', () => {
+    expect(
+      parseOwnershipName('Christopher Jones A/k/a Christoph Jones A/k/a Christoph E. Jones; .')
+    ).toEqual({ firstName: 'Christopher', lastName: 'Jones' });
+
+    expect(parseOwnershipName('    . Michael George Locacio')).toEqual({
+      firstName: 'Michael George',
+      lastName: 'Locacio',
+    });
+
+    expect(parseOwnershipName('Allen Ariza, et al')).toEqual({
+      firstName: 'Allen',
+      lastName: 'Ariza',
+    });
   });
 });

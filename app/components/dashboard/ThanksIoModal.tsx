@@ -7,6 +7,7 @@ type MailingListOption = {
   id: number;
   label: string;
   totalRecipients?: number;
+  isSuppression?: boolean;
 };
 
 type Preview = {
@@ -291,8 +292,10 @@ export function ThanksIoModal({ isOpen, leadIds, onClose, onSent }: Props) {
                 >
                   <option value=''>Choose your mailing list…</option>
                   {lists.map((l) => (
-                    <option key={l.id} value={l.id}>
-                      {l.label} (#{l.id})
+                    <option key={l.id} value={l.id} disabled={l.isSuppression}>
+                      {l.isSuppression
+                        ? `🚫 [Suppression List] ${l.label} (#${l.id})`
+                        : `${l.label} (#${l.id})${typeof l.totalRecipients === 'number' && l.totalRecipients > 0 ? ` · ${l.totalRecipients.toLocaleString()} recipients` : ''}`}
                     </option>
                   ))}
                 </select>

@@ -57,11 +57,12 @@ export async function GET() {
     const json = await res.json();
     const rawLists = Array.isArray(json?.data) ? json.data : Array.isArray(json) ? json : [];
 
-    // Map the user's real Thanks.io mailing lists
+    // Map the user's real Thanks.io mailing lists (friendly name is in 'description')
     const userLists = rawLists.map((item: any) => ({
       id: Number(item.id),
-      label: item.name || item.title || `Mailing List #${item.id}`,
+      label: item.description?.trim() || item.name?.trim() || item.title?.trim() || `Mailing List #${item.id}`,
       totalRecipients: item.total_recipients ?? item.recipients_count ?? 0,
+      isSuppression: Boolean(item.is_suppression_list),
     }));
 
     // If their account is new and has no lists yet, provide fallback recommendations
