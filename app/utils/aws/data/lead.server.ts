@@ -7,7 +7,6 @@ import { GetCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 // Use DynamoDB direct access for reliable server-side mutations across SSR and Lambdas.
 const PROPERTY_LEAD_TABLE_NAME =
   process.env.AMPLIFY_DATA_PropertyLead_TABLE_NAME || 'PropertyLead-ahlnflzdejd5jdrulwuqcuxm6i-NONE';
-const IS_LAMBDA_CONTEXT = true;
 
 // --- Reusable Types ---
 
@@ -123,34 +122,26 @@ export async function createLead(leadData: CreateLeadInput): Promise<DBLead> {
  */
 export async function getLead(id: string): Promise<DBLead | null> {
   try {
-    if (IS_LAMBDA_CONTEXT) {
-      // 🛑 LAMBDA / DYNAMODB IMPLEMENTATION
-      console.log(`[DB] Using DynamoDB client for fetch: ${id}`);
-      const command = new GetCommand({
-        TableName: PROPERTY_LEAD_TABLE_NAME,
-        Key: { id },
-      });
-      const { Item } = await ddbDocClient.send(command);
-      if (!Item) {
-        console.warn(`⚠️ Lead not found in DynamoDB: ${id}`);
+    // 1. Try cookiesClient (Next.js SSR / API Route authenticated client)
+    try {
+      const { data: lead, errors } = await cookiesClient.models.PropertyLead.get({ id });
+      if (!errors && lead) {
+        return lead as DBLead;
       }
-      return (Item as DBLead) || null;
-    } else {
-      // ✅ NEXT.JS / AMPLIFY IMPLEMENTATION
-      console.log(`[DB] Using cookiesClient for fetch: ${id}`);
-      const { data: lead, errors } =
-        await cookiesClient.models.PropertyLead.get({
-          id,
-        });
-      if (errors) {
-        console.error(`❌ Amplify errors fetching lead ${id}:`, errors);
-        throw new Error(errors.map((e: any) => e.message).join(', '));
-      }
-      if (!lead) {
-        console.warn(`⚠️ Lead not found in Amplify: ${id}`);
-      }
-      return lead as DBLead;
+    } catch {
+      // Outside request cookie context (e.g. standalone Lambda) — fall through to DynamoDB
     }
+
+    // 2. DynamoDB direct access (for Lambda execution with IAM role)
+    const command = new GetCommand({
+      TableName: PROPERTY_LEAD_TABLE_NAME,
+      Key: { id },
+    });
+    const { Item } = await ddbDocClient.send(command);
+    if (!Item) {
+      console.warn(`⚠️ Lead not found: ${id}`);
+    }
+    return (Item as DBLead) || null;
   } catch (error: any) {
     console.error(`❌ getLead error for ${id}:`, error.message);
     return null;
@@ -183,58 +174,51 @@ export async function getLeadsByIds(ids: string[]): Promise<DBLead[]> {
  */
 export async function updateLead(leadData: UpdateLeadInput): Promise<DBLead> {
   try {
-    if (IS_LAMBDA_CONTEXT) {
-      // 🛑 LAMBDA / DYNAMODB IMPLEMENTATION
-      const { id, ...attributesToUpdate } = leadData;
-
-      let UpdateExpression = 'set ';
-      const ExpressionAttributeValues: Record<string, any> = {};
-
-      // 💥 NEW: We need ExpressionAttributeNames to map the alias (#name) to the actual attribute name (name)
-      const ExpressionAttributeNames: Record<string, string> = {};
-
-      const keys = Object.keys(attributesToUpdate) as UpdatableLeadKeys[];
-
-      for (const key of keys) {
-        const value = attributesToUpdate[key];
-        if (value !== undefined) {
-          const attributeKey = key as string;
-
-          // 1. Alias the name with '#' for the UpdateExpression
-          UpdateExpression += `#${attributeKey} = :${attributeKey}, `;
-
-          // 2. Map the alias (#attributeKey) to the real attribute name
-          ExpressionAttributeNames[`#${attributeKey}`] = attributeKey;
-
-          // 3. Set the value
-          ExpressionAttributeValues[`:${attributeKey}`] = value;
-        }
-      }
-      UpdateExpression = UpdateExpression.slice(0, -2); // Remove trailing comma and space
-
-      if (Object.keys(ExpressionAttributeValues).length === 0) {
-        throw new Error('No valid fields provided for update.');
-      }
-
-      const command = new UpdateCommand({
-        TableName: PROPERTY_LEAD_TABLE_NAME,
-        Key: { id },
-        UpdateExpression,
-        ExpressionAttributeValues,
-        ExpressionAttributeNames, // 💥 ADD THIS OBJECT TO THE COMMAND
-        ReturnValues: 'ALL_NEW',
-      });
-      const { Attributes } = await ddbDocClient.send(command);
-      return Attributes as DBLead;
-    } else {
-      // ✅ NEXT.JS / AMPLIFY IMPLEMENTATION
+    // 1. Try cookiesClient (Next.js SSR / API Route path)
+    try {
       const { data: updatedLead, errors } =
         await cookiesClient.models.PropertyLead.update(leadData);
-      if (errors) {
-        throw new Error(errors.map((e: any) => e.message).join(', '));
+      if (!errors && updatedLead) {
+        return updatedLead as DBLead;
       }
-      return updatedLead as DBLead;
+    } catch {
+      // Outside request cookie context (e.g. standalone Lambda) — fall through to DynamoDB
     }
+
+    // 2. DynamoDB direct access (for Lambda execution with IAM role)
+    const { id, ...attributesToUpdate } = leadData;
+
+    let UpdateExpression = 'set ';
+    const ExpressionAttributeValues: Record<string, any> = {};
+    const ExpressionAttributeNames: Record<string, string> = {};
+
+    const keys = Object.keys(attributesToUpdate) as UpdatableLeadKeys[];
+
+    for (const key of keys) {
+      const value = attributesToUpdate[key];
+      if (value !== undefined) {
+        const attributeKey = key as string;
+        UpdateExpression += `#${attributeKey} = :${attributeKey}, `;
+        ExpressionAttributeNames[`#${attributeKey}`] = attributeKey;
+        ExpressionAttributeValues[`:${attributeKey}`] = value;
+      }
+    }
+    UpdateExpression = UpdateExpression.slice(0, -2); // Remove trailing comma and space
+
+    if (Object.keys(ExpressionAttributeValues).length === 0) {
+      throw new Error('No valid fields provided for update.');
+    }
+
+    const command = new UpdateCommand({
+      TableName: PROPERTY_LEAD_TABLE_NAME,
+      Key: { id },
+      UpdateExpression,
+      ExpressionAttributeValues,
+      ExpressionAttributeNames,
+      ReturnValues: 'ALL_NEW',
+    });
+    const { Attributes } = await ddbDocClient.send(command);
+    return Attributes as DBLead;
   } catch (error: any) {
     console.error(`❌ updateLead error (ID: ${leadData.id}):`, error.message);
     throw error;
