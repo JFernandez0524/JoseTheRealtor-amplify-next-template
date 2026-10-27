@@ -47,8 +47,7 @@ export const THANKS_IO_LISTS: Record<ThanksIoListKey, ThanksIoListConfig> = {
     label: 'Preforeclosure - Auction',
     leadType: 'PREFORECLOSURE',
     requiresSaleDate: true,
-    requiresEquity: true,
-    minEquityPct: 30,
+    requiresEquity: false,
   },
   PREFORECLOSURE_LIS_PENDENS: {
     key: 'PREFORECLOSURE_LIS_PENDENS',
@@ -56,7 +55,7 @@ export const THANKS_IO_LISTS: Record<ThanksIoListKey, ThanksIoListConfig> = {
     label: 'Preforeclosure - Lis Pendens',
     leadType: 'PREFORECLOSURE',
     requiresSaleDate: false,
-    requiresEquity: true,
+    requiresEquity: false,
   },
   PROBATE: {
     key: 'PROBATE',

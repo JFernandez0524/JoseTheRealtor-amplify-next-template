@@ -105,14 +105,16 @@ describe('buildThanksIoRecipient', () => {
     expect(past.ok).toBe(false);
   });
 
-  it('rejects leads without positive equity on equity-based lists', () => {
+  it('allows leads without positive equity when equity requirement is not enforced', () => {
     const res = buildThanksIoRecipient(
       auctionLead({ foreclosureAuctionDate: null, foreclosureAmount: 900000 }),
       THANKS_IO_LISTS.PREFORECLOSURE_LIS_PENDENS,
       NOW,
     );
-    expect(res.ok).toBe(false);
-    if (!res.ok) expect(res.reason).toMatch(/equity/i);
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      expect(res.payload.custom6).toBeUndefined();
+    }
   });
 
   it('allows lis pendens leads with equity and omits the sale date', () => {
@@ -141,7 +143,7 @@ describe('buildThanksIoRecipient', () => {
     }
   });
 
-  it('rejects leads with < 30% equity on auction list, but accepts >= 30%', () => {
+  it('accepts auction leads regardless of equity percentage (user decides which leads to send)', () => {
     const list = THANKS_IO_LISTS.PREFORECLOSURE_AUCTION;
     // 46% equity ($745,200 zestimate, $399,000 debt -> $346,200 spread)
     expect(buildThanksIoRecipient(auctionLead(), list, NOW).ok).toBe(true);
@@ -152,8 +154,10 @@ describe('buildThanksIoRecipient', () => {
       list,
       NOW,
     );
-    expect(lowEquity.ok).toBe(false);
-    if (!lowEquity.ok) expect(lowEquity.reason).toMatch(/below the required 30% minimum/i);
+    expect(lowEquity.ok).toBe(true);
+    if (lowEquity.ok) {
+      expect(lowEquity.payload.custom6).toBe('$60,000');
+    }
   });
 
   it('handles Call Outcome correctly: allows Wrong Number for mail, blocks terminal dispositions', () => {

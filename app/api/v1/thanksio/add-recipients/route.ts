@@ -81,14 +81,18 @@ export async function POST(request: NextRequest) {
     }
 
     const eligible: { lead: (typeof leads)[number]; payload: any }[] = [];
-    const excluded: { id: string; address: string; reason: string }[] = [];
+    const excluded: { id: string; name: string; address: string; reason: string }[] = [];
 
     for (const lead of leads) {
       const result = buildThanksIoRecipient(lead, list);
       if (result.ok) {
         eligible.push({ lead, payload: result.payload });
       } else {
-        excluded.push({ id: lead.id, address: lead.ownerAddress || '', reason: result.reason });
+        const ownerName =
+          [lead.ownerFirstName, lead.ownerLastName].filter(Boolean).join(' ') ||
+          [lead.adminFirstName, lead.adminLastName].filter(Boolean).join(' ') ||
+          '';
+        excluded.push({ id: lead.id, name: ownerName, address: lead.ownerAddress || '', reason: result.reason });
       }
     }
 

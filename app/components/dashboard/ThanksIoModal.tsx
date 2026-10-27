@@ -14,7 +14,7 @@ type Preview = {
   list: { id: number; label: string };
   eligibleCount: number;
   eligible: { id: string; name: string; address: string; saleDate: string | null; equity: string | null }[];
-  excluded: { id: string; address: string; reason: string }[];
+  excluded: { id: string; name?: string; address: string; reason: string }[];
 };
 
 type Props = {
@@ -347,7 +347,7 @@ export function ThanksIoModal({ isOpen, leadIds, onClose, onSent }: Props) {
                   )}
 
                   {preview.excluded.length > 0 && (
-                    <details className='text-xs'>
+                    <details className='text-xs' open={preview.eligibleCount === 0 || preview.excluded.length <= 10}>
                       <summary className='font-semibold text-slate-700 cursor-pointer'>
                         Excluded leads &amp; reasons ({preview.excluded.length})
                       </summary>
@@ -357,7 +357,9 @@ export function ThanksIoModal({ isOpen, leadIds, onClose, onSent }: Props) {
                             key={x.id}
                             className='flex flex-col sm:flex-row sm:justify-between sm:items-center gap-0.5 sm:gap-3 border-b border-slate-100 py-1'
                           >
-                            <span className='truncate font-medium text-slate-800'>{x.address || x.id}</span>
+                            <span className='truncate font-medium text-slate-800'>
+                              {x.name ? `${x.name} — ` : ''}{x.address || x.id}
+                            </span>
                             <span className='text-[11px] sm:text-xs text-amber-700 font-semibold sm:text-right'>
                               {x.reason}
                             </span>
