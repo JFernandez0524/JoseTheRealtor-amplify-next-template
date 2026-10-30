@@ -163,20 +163,22 @@ RE/MAX Agent`;
 
   const getDefaultPreforeclosureTemplate = () => `{firstName},
 
-I noticed your property at {propertyAddress} and wanted to reach out with some options that might help your situation.
+I noticed public notices filed regarding {propertyAddress} and wanted to reach out as a helpful local resource.
 
-Based on current market data:
+In New Jersey, homeowners facing mortgage or lien challenges have specific legal rights and options that lenders don't always explain:
 
-AS-IS CASH OFFER: {cashOffer} (Quick close, no repairs needed)
-RETAIL LISTING: {zestimate} (Maximum market value if you have time)
+• NJ FORECLOSURE MEDIATION: The NJ Superior Court offers a free, court-sponsored mediation program to help you negotiate loan modifications directly with your lender.
+• RETENTION OPTIONS: Reinstatement, forbearance, and loan workouts are often available to help you stay in your home.
+• STATUTORY PROTECTIONS: You have legal protections under the NJ Fair Foreclosure Act, including the right to two 14-day Sheriff Sale adjournments.
+• EQUITY PROTECTION: If you have equity in the property, ensuring it is preserved rather than compromised at an auction.
 
-We can close quickly with no repairs needed, or we can help you list it for full market value if you prefer.
+Also, please note: county public notices often lag behind reality. If you have already resolved, reinstated, or paid off this mortgage (such as a second mortgage or junior lien), please disregard this note and congratulations!
 
-Would you be open to a quick conversation about your options?
+If you would like a free copy of the NJ Foreclosure Homeowner Guide or have any questions about your timeline, feel free to reply to this email.
 
 Best regards,
 Jose Fernandez
-RE/MAX Agent`;
+RE/MAX Homeland Realtors`;
 
   const handleSave = async () => {
     if (!integration) {

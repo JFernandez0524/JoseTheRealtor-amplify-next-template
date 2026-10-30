@@ -109,6 +109,12 @@ describe('detectCallOutcomeFromMessage', () => {
     expect(detectCallOutcomeFromMessage('Please stop')).toBe('Not Interested');
     expect(detectCallOutcomeFromMessage('unsubscribe')).toBe('Not Interested');
     expect(detectCallOutcomeFromMessage('take me off your list')).toBe('Not Interested');
+    // Paid off / loan resolved / second mortgage / objection to buying
+    expect(detectCallOutcomeFromMessage("It's been paid and you can't buy my house not for that price.  That was a second mortgage.")).toBe('Not Interested');
+    expect(detectCallOutcomeFromMessage('The mortgage was already paid off.')).toBe('Not Interested');
+    expect(detectCallOutcomeFromMessage('That was a 2nd mortgage and it is paid')).toBe('Not Interested');
+    expect(detectCallOutcomeFromMessage('You cannot buy my house')).toBe('Not Interested');
+    expect(detectCallOutcomeFromMessage('Not buying our house!')).toBe('Not Interested');
   });
 
   it('detects DNC strictly from explicit phone/calling objections', () => {

@@ -201,12 +201,12 @@ export function getLeadTypeContext(leadType?: string | null): LeadTypeContext {
     return {
       normalizedType: 'PREFORECLOSURE',
       displayType: 'pre-foreclosure',
-      situationContext: 'avoid foreclosure, protect their equity, and explore their options',
-      touch1Relate: 'Show empathy for mortgage pressure and tight bank timelines',
-      touch4Empathy: 'facing impending auction dates or foreclosure timelines is incredibly stressful',
-      touch5SocialProof: 'facing pre-foreclosure timelines protect their equity and avoid auction',
-      touch6Urgency: 'foreclosure and auction timelines move fast and acting early gives far more options to protect equity',
-      monthlyNurtureAngle: 'resolving mortgage or property challenges takes time and situations change',
+      situationContext: 'understand NJ foreclosure rights, explore options to stay in the home, avoid foreclosure, and protect their equity',
+      touch1Relate: 'Acknowledge how overwhelming notice letters can be, and note that public records often lag behind if already resolved or paid',
+      touch4Empathy: 'facing foreclosure notices or mortgage challenges is stressful, but NJ homeowners have strong legal rights and court mediation programs',
+      touch5SocialProof: 'navigating NJ pre-foreclosure timelines explore loan modification, mediation, and protect their hard-earned equity',
+      touch6Urgency: 'NJ foreclosure and auction timelines require timely action so homeowners do not forfeit statutory mediation or adjournment rights',
+      monthlyNurtureAngle: 'resolving mortgage challenges or reviewing property decisions takes time and situations change',
     };
   }
 
@@ -322,9 +322,34 @@ async function generateEmailResponse(
 - Return JSON with "subject" and "body" fields only`;
 
   let systemPrompt: string;
+  const isPreforeclosure = leadContext.normalizedType === 'PREFORECLOSURE';
 
   if (isReply) {
-    systemPrompt = `You are Jose Fernandez from RE/MAX Homeland Realtors responding to ${context.contactName}'s email about their ${leadContext.displayType} situation.
+    if (isPreforeclosure) {
+      systemPrompt = `You are Jose Fernandez from RE/MAX Homeland Realtors responding to ${context.contactName}'s email regarding their property at ${propertyRef}.
+
+CONTEXT:
+- Property: ${propertyRef}${foreclosureContextLine}
+
+THEIR EMAIL: "${context.incomingMessage}"
+
+GUIDELINES FOR PRE-FORECLOSURE REPLIES:
+1. If they mention the loan, mortgage, second mortgage, or lien has been paid, cured, or resolved:
+   - Congratulate them genuinely!
+   - Acknowledge that county court/lis pendens records often lag behind reality by weeks or months.
+   - Apologize for reaching out based on outdated public notices, confirm that our records are updated, and assure them no further outreach will be sent.
+2. If they object to selling or buying ("can't buy my house", "not for that price", "not selling"):
+   - Respect their position immediately. Clarify that you are a local licensed RE/MAX resource and advocate, NOT an opportunistic investor trying to buy houses cheap.
+   - Apologize for any misunderstanding, confirm their removal, and wish them well.
+3. If they are seeking guidance or exploring options:
+   - Provide helpful, factual information on NJ homeowner options (NJ Foreclosure Mediation Program through Superior Court, loan modification, equity protection).
+   - Keep it supportive, clear, and pressure-free.
+
+Keep response under 120 words.
+
+${sharedRules}`;
+    } else {
+      systemPrompt = `You are Jose Fernandez from RE/MAX Homeland Realtors responding to ${context.contactName}'s email about their ${leadContext.displayType} situation.
 
 CONTEXT:
 - Property: ${propertyRef}
@@ -341,18 +366,42 @@ RESPONSE STRATEGY (HOOK-RELATE-BRIDGE-ASK):
 Keep response under 150 words. Focus on "control" and "options". Goal: get a Yes/No/Maybe on a property visit.
 
 ${sharedRules}`;
+    }
   } else if (touch === 1) {
-    systemPrompt = `You are Jose Fernandez, a NJ real estate agent from RE/MAX Homeland Realtors, sending a cold outreach email to ${context.contactName} about their ${leadContext.displayType} property at ${propertyRef}.
+    if (isPreforeclosure) {
+      systemPrompt = `You are Jose Fernandez, a licensed NJ real estate agent from RE/MAX Homeland Realtors, reaching out to ${context.contactName} regarding public notices filed for ${propertyRef}.
+
+CRITICAL MANDATE:
+- LEAD WITH VALUE, HELPFUL INFORMATION, AND NJ HOMEOWNER RIGHTS.
+- DO NOT ASK THEM TO SELL. DO NOT PITCH A CASH OFFER. DO NOT ASK FOR A WALKTHROUGH.
+- The selling conversation will come later if they ever decide staying is not feasible. The immediate goal is to provide genuine guidance as a local advocate.
+
+KEY CONTEXT & NJ HOMEOWNER RIGHTS TO SHARE:
+1. Public Notice Lag: Acknowledge that county public notices (Lis Pendens) are matter of public record, but they often lag weeks behind reality. If they've already resolved, reinstated, or paid off the balance (such as a second mortgage or junior lien), congratulate them and apologize for reaching out based on outdated records.
+2. Options to Stay: Note that keeping the home is usually the first priority through loan reinstatement, forbearance, or a loan modification.
+3. NJ Foreclosure Mediation: Inform them that the NJ Superior Court offers a free, court-sponsored Foreclosure Mediation Program to help homeowners negotiate directly with lenders.
+4. Equity Protection: If staying isn't feasible down the road, emphasize that protecting their hard-earned equity is paramount, rather than letting it be wiped out at a sheriff sale.
+5. Low-Pressure Resource: Offer to share a free NJ Homeowner Foreclosure Resource Guide or answer questions about court timelines.
+
+TONE & STYLE:
+- Empathetic, respectful, professional, and community-minded — NOT a wholesaler or opportunistic buyer.
+- Keep it under 130 words (body only, no signature).
+- No "Hi" or "Hello" — open with their name followed by a comma (e.g. "${context.contactName},").
+- Subject Line: Helpful, non-alarmist, personal (e.g. "Resources for ${context.propertyAddress || 'your property'}" or "NJ homeowner options regarding ${context.propertyAddress || 'your property'}").
+
+${sharedRules}`;
+    } else {
+      systemPrompt = `You are Jose Fernandez, a NJ real estate agent from RE/MAX Homeland Realtors, sending a cold outreach email to ${context.contactName} about their ${leadContext.displayType} property at ${propertyRef}.
 
 GOAL: Get them to agree to a 10-minute property walkthrough so you can give them accurate numbers.
 
 WHAT YOU KNOW:
 - Lead type: ${leadContext.displayType} (${leadContext.situationContext})
 - Property: ${propertyRef}
-- ${hasPropertyData ? `Cash offer: $${cashOffer?.toLocaleString()} | Retail value: $${propertyData!.zestimate?.toLocaleString()}` : 'No valuation yet — offer to assess in person'}${foreclosureContextLine}
+- ${hasPropertyData ? `Cash offer: $${cashOffer?.toLocaleString()} | Retail value: $${propertyData!.zestimate?.toLocaleString()}` : 'No valuation yet — offer to assess in person'}
 
 FRAMEWORK (Hook-Relate-Bridge-Ask):
-1. Hook: Open with something that shows you saw the public notice and know their situation — don't be generic
+1. Hook: Open with something that shows you know their situation — don't be generic
 2. Relate: ${leadContext.touch1Relate}
 3. Bridge: Present the two options (cash offer vs retail listing) as giving them control and clarity
 4. Ask: Request a 10-minute walkthrough — low commitment, no pressure
@@ -366,16 +415,37 @@ TONE & STYLE:
 SUBJECT LINE: Write a short, specific subject (3-7 words) that feels personal to their property or situation. Vary it — don't always use "Clarity on [address]". Examples: address-based, question-based, outcome-based.
 
 ${sharedRules}`;
+    }
   } else if (touch === 2) {
-    systemPrompt = `You are Jose Fernandez from RE/MAX Homeland Realtors sending a SHORT follow-up email (touch 2 of 7) to ${context.contactName} who did not respond to your first email about their ${leadContext.displayType} property at ${propertyRef}.
+    if (isPreforeclosure) {
+      systemPrompt = `You are Jose Fernandez from RE/MAX Homeland Realtors sending a SHORT follow-up email (touch 2 of 7) to ${context.contactName} regarding their property at ${propertyRef}.
+
+Write a brief, casual 2-3 sentence follow-up. Acknowledge that they receive a lot of bank notices and mail right now. Ask if they had a chance to see your note about NJ foreclosure mediation and homeowner resources, or if they have any questions about the timeline. Keep it under 60 words.
+
+Subject: something like "Quick note regarding ${context.propertyAddress || 'your property'}" or "Re: NJ homeowner resources"
+
+${sharedRules}`;
+    } else {
+      systemPrompt = `You are Jose Fernandez from RE/MAX Homeland Realtors sending a SHORT follow-up email (touch 2 of 7) to ${context.contactName} who did not respond to your first email about their ${leadContext.displayType} property at ${propertyRef}.
 
 Write a brief, casual 2-3 sentence follow-up. Just bump the previous email — don't repeat all the details. Acknowledge you know they're busy. Keep it under 60 words.
 
 Subject: something like "Re: ${context.propertyAddress || 'Your Property'}" or "Quick follow-up"
 
 ${sharedRules}`;
+    }
   } else if (touch === 3) {
-    systemPrompt = `You are Jose Fernandez from RE/MAX Homeland Realtors sending touch 3 of 7 to ${context.contactName} about their ${leadContext.displayType} property at ${propertyRef}.
+    if (isPreforeclosure) {
+      systemPrompt = `You are Jose Fernandez from RE/MAX Homeland Realtors sending touch 3 of 7 to ${context.contactName} about their property at ${propertyRef}.
+
+This email focuses on EQUITY PROTECTION & FINANCIAL CLARITY.
+Explain that whether they plan to stay in the home through loan modification or eventually transition, having an accurate picture of their real market value vs what is owed is vital. In New Jersey, letting a property go to auction without knowing the numbers can wipe out tens of thousands in accumulated equity. Offer to provide an equity assessment with zero obligation so they know where they stand. Keep it under 100 words.
+
+Subject: something about equity protection or understanding their property numbers (e.g. "Protecting your equity at ${context.propertyAddress || 'your property'}")
+
+${sharedRules}`;
+    } else {
+      systemPrompt = `You are Jose Fernandez from RE/MAX Homeland Realtors sending touch 3 of 7 to ${context.contactName} about their ${leadContext.displayType} property at ${propertyRef}.
 
 This email leads with the financial decision they're facing. Mention the two options with numbers if available. Ask about their timeline — are they looking to move quickly or take their time? Keep it under 100 words.
 
@@ -384,35 +454,66 @@ ${offerLines}
 Subject: something about their options or timeline (e.g. "Your options for ${context.propertyAddress || 'the property'}")
 
 ${sharedRules}`;
+    }
   } else if (touch === 4) {
-    systemPrompt = `You are Jose Fernandez from RE/MAX Homeland Realtors sending touch 4 of 7 to ${context.contactName} about their ${leadContext.displayType} property at ${propertyRef}.
+    if (isPreforeclosure) {
+      systemPrompt = `You are Jose Fernandez from RE/MAX Homeland Realtors sending touch 4 of 7 to ${context.contactName} about their property at ${propertyRef}.
+
+This email takes an empathetic approach. Acknowledge that dealing with lender paperwork, notices, and uncertain timelines is deeply stressful. Remind them that NJ homeowners have statutory rights under the NJ Fair Foreclosure Act (including two 14-day Sheriff Sale adjournments by right and access to court mediation). Offer to be a confidential sounding board to help them sort through options. Keep it under 100 words.
+
+Subject: something empathetic and low-pressure (e.g. "Here to help navigate options for ${context.propertyAddress || 'your property'}")
+
+${sharedRules}`;
+    } else {
+      systemPrompt = `You are Jose Fernandez from RE/MAX Homeland Realtors sending touch 4 of 7 to ${context.contactName} about their ${leadContext.displayType} property at ${propertyRef}.
 
 This email takes an emotional/empathy angle. Acknowledge that ${leadContext.touch4Empathy}. Focus on reducing stress and giving them control — not just the money. Offer to be a resource even if they're not ready to decide. Keep it under 100 words.
 
 Subject: something empathetic and low-pressure
 
 ${sharedRules}`;
+    }
   } else if (touch === 5) {
-    systemPrompt = `You are Jose Fernandez from RE/MAX Homeland Realtors sending touch 5 of 7 to ${context.contactName} about their ${leadContext.displayType} property at ${propertyRef}.
+    if (isPreforeclosure) {
+      systemPrompt = `You are Jose Fernandez from RE/MAX Homeland Realtors sending touch 5 of 7 to ${context.contactName} about their property at ${propertyRef}.
+
+Lead with social proof and community experience — you have helped many NJ families navigate foreclosure notices, explore court-sponsored mediation, or protect their remaining equity so they didn't walk away empty-handed. Ask if they'd like to spend 5-10 minutes on a quick call to get clarity on their timeline and options. Keep it under 100 words.
+
+Subject: something referencing helping local NJ homeowners (e.g. "How we've helped NJ homeowners in similar situations")
+
+${sharedRules}`;
+    } else {
+      systemPrompt = `You are Jose Fernandez from RE/MAX Homeland Realtors sending touch 5 of 7 to ${context.contactName} about their ${leadContext.displayType} property at ${propertyRef}.
 
 Lead with social proof — you've helped many NJ families ${leadContext.touch5SocialProof}. Briefly mention the two options${hasPropertyData ? ` ($${cashOffer?.toLocaleString()} cash or $${propertyData!.zestimate?.toLocaleString()} retail)` : ''}. Ask if they have 10 minutes for a quick call or walkthrough. Keep it under 100 words.
 
 Subject: something referencing helping other families or experience
 
 ${sharedRules}`;
+    }
   } else if (touch === 6) {
-    systemPrompt = `You are Jose Fernandez from RE/MAX Homeland Realtors sending touch 6 of 7 to ${context.contactName} about their ${leadContext.displayType} property at ${propertyRef}.
+    if (isPreforeclosure) {
+      systemPrompt = `You are Jose Fernandez from RE/MAX Homeland Realtors sending touch 6 of 7 to ${context.contactName} about their property at ${propertyRef}.
+
+Create gentle, constructive timeline awareness — ${leadContext.touch6Urgency}. Emphasize that taking action early gives them the broadest set of options (loan workouts, court mediation, or protecting equity). Remind them you are here with no pressure or obligation. Keep it under 100 words.
+
+Subject: something around timing and protecting options (e.g. "Keeping your options open for ${context.propertyAddress || 'your property'}")
+
+${sharedRules}`;
+    } else {
+      systemPrompt = `You are Jose Fernandez from RE/MAX Homeland Realtors sending touch 6 of 7 to ${context.contactName} about their ${leadContext.displayType} property at ${propertyRef}.
 
 Create gentle urgency — ${leadContext.touch6Urgency}. This isn't pressure — it's giving them the full picture so they can make the best decision. Remind them the 10-minute walkthrough is no obligation. Keep it under 100 words.
 
 Subject: something around timing or "before it's too late"
 
 ${sharedRules}`;
+    }
   } else if (touch === 7) {
     // Touch 7 — break-up / transition email
     systemPrompt = `You are Jose Fernandez from RE/MAX Homeland Realtors sending a "break-up" email (touch 7) to ${context.contactName} about their ${leadContext.displayType} property at ${propertyRef}.
 
-Keep it very short — under 60 words. Be respectful and leave the door open permanently. Say you'll step back for now, but if they ever want to explore their options, you're a phone call away. No pressure, no pitch.
+Keep it very short — under 60 words. Be respectful and leave the door open permanently. Say you'll step back for now, but if they ever want to explore their options or need guidance on NJ property rights, you're a phone call away. No pressure, no pitch.
 
 Subject: something like "Last note from Jose" or "Stepping back"
 
@@ -662,9 +763,19 @@ export async function generateEmailAIResponse(
         await ghlAddTags(context.accessToken, context.contactId, ['not_for_sale', 'conversation_ended']);
       }
 
+      const msgLower = (context.incomingMessage || '').toLowerCase();
+      const isPaidOrSecondMortgage =
+        msgLower.includes('paid') ||
+        msgLower.includes('second mortgage') ||
+        msgLower.includes('2nd mortgage');
+
+      const stopBody = isPaidOrSecondMortgage
+        ? `${context.contactName},\n\nThank you for letting me know, and congratulations on having that resolved! County public notices often lag behind reality by weeks, and I apologize for reaching out based on outdated records. I've updated our records so you won't receive any further emails regarding this property.\n\nWishing you all the best!\n\nJose Fernandez\nRE/MAX Homeland Realtors\n(732) 810-0182`
+        : `${context.contactName},\n\nThank you for letting me know. I've updated our records so you won't receive any further emails. If you ever have questions or want to explore options in the future, feel free to reach out. Wishing you all the best!\n\nJose Fernandez\nRE/MAX Homeland Realtors\n(732) 810-0182`;
+
       const stopEmail = {
         subject: `Re: ${context.propertyAddress || 'Your Property'}`,
-        body: `${context.contactName},\n\nThank you for letting me know. If you ever have questions or want to explore options in the future, feel free to reach out. Wishing you all the best!\n\nJose Fernandez\nRE/MAX Homeland Realtors\n(732) 810-0182`,
+        body: stopBody,
       };
 
       if (context.accessToken) {

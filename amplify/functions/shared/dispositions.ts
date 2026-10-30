@@ -131,7 +131,7 @@ export function detectCallOutcomeFromMessage(message: string | null | undefined)
     return 'Wrong Number / Disconnected / Invalid Number';
   }
 
-  // 5. Not Interested / General Opt-Out / Stop / Leave Me Alone
+  // 5. Not Interested / General Opt-Out / Stop / Leave Me Alone / Paid Off / Second Mortgage
   // Halts automated AI outreach immediately, but preserves the phone number from being permanently blacklisted
   if (
     msg.includes('leave me alone') ||
@@ -162,7 +162,23 @@ export function detectCallOutcomeFromMessage(message: string | null | undefined)
     msg.includes('do not contact') ||
     msg.includes("don't contact") ||
     msg.includes('dont contact') ||
-    msg.includes('never contact')
+    msg.includes('never contact') ||
+    // Paid off / loan resolved / second mortgage / objection to buying
+    msg.includes('been paid') ||
+    msg.includes('already paid') ||
+    msg.includes('paid off') ||
+    msg.includes('paid it') ||
+    msg.includes('paid up') ||
+    msg.includes('is paid') ||
+    msg.includes('was paid') ||
+    msg.includes('paid in full') ||
+    msg.includes("can't buy") ||
+    msg.includes('cant buy') ||
+    msg.includes('cannot buy') ||
+    msg.includes('not buying') ||
+    msg.includes('not for that price') ||
+    msg.includes('second mortgage') ||
+    msg.includes('2nd mortgage')
   ) {
     return 'Not Interested';
   }
