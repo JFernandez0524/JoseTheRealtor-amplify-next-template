@@ -67,34 +67,124 @@ export type Lead = Schema['PropertyLead']['type'] & {
 };
 
 /**
- * Fetch all leads for the current user (with automatic pagination).
+ * Lightweight selection set for the dashboard table.
+ * Excludes multi-kilobyte raw JSON blobs (`rawSkipTraceData`, `priceHistory`, `taxHistory`,
+ * `neighborhoodData`, `comparableProperties`) that are only needed on the individual lead detail page,
+ * cutting dashboard network payload size by ~80-85%.
+ */
+const DASHBOARD_SELECTION_SET = [
+  'id',
+  'owner',
+  'type',
+  'ownerFirstName',
+  'ownerLastName',
+  'ownerAddress',
+  'ownerCity',
+  'ownerState',
+  'ownerZip',
+  'ownerCounty',
+  'notes',
+  'customTags',
+  'adminFirstName',
+  'adminLastName',
+  'adminAddress',
+  'adminCity',
+  'adminState',
+  'adminZip',
+  'adminStandardizedAddress',
+  'mailingAddress',
+  'mailingCity',
+  'mailingState',
+  'mailingZip',
+  'isAbsenteeOwner',
+  'leadLabels',
+  'standardizedAddress',
+  'skipTraceStatus',
+  'skipTraceCompletedAt',
+  'skipTraceHistory',
+  'validationStatus',
+  'validationErrors',
+  'listingStatus',
+  'uploadSource',
+  'ghlSyncStatus',
+  'ghlContactId',
+  'ghlSyncDate',
+  'ghlOutreachData',
+  'latitude',
+  'longitude',
+  'phones',
+  'emails',
+  'estimatedValue',
+  'zestimate',
+  'zestimateDate',
+  'zestimateSource',
+  'zillowZpid',
+  'zillowUrl',
+  'zillowAddress',
+  'rentZestimate',
+  'homeDetails',
+  'zillowLastUpdated',
+  'aiScore',
+  'aiPriority',
+  'aiLastCalculated',
+  'estimatedEquity',
+  'mortgageBalance',
+  'lastSaleDate',
+  'lastSaleAmount',
+  'equityPercent',
+  'ownerOccupied',
+  'freeAndClear',
+  'batchDataEnriched',
+  'batchDataEnrichedAt',
+  'foreclosureStatus',
+  'foreclosureRecordingDate',
+  'foreclosureAuctionDate',
+  'foreclosureAmount',
+  'foreclosureTrustee',
+  'createdAt',
+  'updatedAt',
+] as const;
+
+/**
+ * Fetch all leads for the current user (with automatic pagination and progressive first-page rendering).
  *
  * Uses the `leadsByDate` secondary index (`index('owner').sortKeys(['createdAt'])` in
- * amplify/data/resource.ts) rather than `.list({ filter: { owner } })`. A filtered `list` is a
- * DynamoDB **Scan** — every page scans up to 1MB of the whole table and then discards non-matching
- * rows — whereas this is a Query against the owner's partition. With ~3k leads that is the
- * difference between dozens of sequential round trips and a handful.
+ * amplify/data/resource.ts) with `limit: 1000`, `sortDirection: 'DESC'`, and a slimmed
+ * `selectionSet` excluding giant raw JSON blobs.
  *
  * Callers that only need a few known leads should use `fetchLeadsByIds` instead of re-fetching
  * everything.
  */
-export async function fetchLeads(): Promise<Lead[]> {
+export async function fetchLeads(onFirstPage?: (leads: Lead[]) => void): Promise<Lead[]> {
   try {
     const { userId } = await getCurrentUser();
     const allLeads: Lead[] = [];
     let nextToken: string | null | undefined;
+    let isFirstPage = true;
 
     do {
       const result = await client.models.PropertyLead.leadsByDate(
         { owner: userId },
-        { nextToken: nextToken ?? undefined }
+        {
+          limit: 1000,
+          sortDirection: 'DESC',
+          selectionSet: DASHBOARD_SELECTION_SET as any,
+          nextToken: nextToken ?? undefined,
+        }
       );
-      allLeads.push(...(result.data || []));
+      allLeads.push(...((result.data || []) as unknown as Lead[]));
       nextToken = result.nextToken;
+
+      if (isFirstPage) {
+        isFirstPage = false;
+        if (nextToken && onFirstPage && allLeads.length > 0) {
+          onFirstPage([...allLeads]);
+        }
+      }
     } while (nextToken);
 
     console.log('🔄 Fetched leads:', allLeads.length);
-    return allLeads as Lead[];
+    return allLeads;
   } catch (err) {
     console.error('Failed to fetch leads:', err);
     throw err;

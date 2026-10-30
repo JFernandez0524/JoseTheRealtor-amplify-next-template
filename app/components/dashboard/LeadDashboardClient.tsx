@@ -147,11 +147,14 @@ export default function LeadDashboardClient({}: Props) {
     }
   }, []);
 
-  // Fetch leads on mount (no real-time subscription to prevent memory leak)
+  // Fetch leads on mount with progressive first-page rendering (no real-time subscription or 60s full-table polling)
   useEffect(() => {
     async function loadLeads() {
       try {
-        const data = await fetchLeads();
+        const data = await fetchLeads((firstBatch) => {
+          setLeads(firstBatch);
+          setIsLoading(false);
+        });
         setLeads(data);
         setIsLoading(false);
         console.log('📊 Loaded leads:', data.length);
@@ -167,26 +170,6 @@ export default function LeadDashboardClient({}: Props) {
     }
     loadLeads();
   }, []);
-
-  // Background refresh every 60 seconds to keep data fresh
-  useEffect(() => {
-    const interval = setInterval(async () => {
-      // Skip refresh during processing operations
-      if (isProcessing) return;
-      
-      try {
-        const data = await fetchLeads();
-        setLeads(data);
-        console.log('🔄 Background refresh:', data.length, 'leads');
-      } catch (err) {
-        console.error('Background refresh failed:', err);
-      }
-    }, 60000); // 60 seconds
-
-    return () => clearInterval(interval);
-  }, [isProcessing]);
-
-
 
   // Full re-fetch of every lead. Expensive (paginates the owner's whole partition) — only use it
   // when the set of changed rows isn't known. Prefer patchLeads / applyLeadUpdates.
@@ -476,6 +459,17 @@ export default function LeadDashboardClient({}: Props) {
 
         // 3. Search query (ONLY evaluated if user entered text!)
         if (search) {
+          const searchWithoutCounty = search.replace(/\bcounty\b/i, '').trim();
+          const resolvedCountyLower = (resolvePropertyCounty(lead) || lead.ownerCounty || '')
+            .replace(/\s+county$/i, '')
+            .trim()
+            .toLowerCase();
+          const countyMatches = Boolean(
+            resolvedCountyLower &&
+              (resolvedCountyLower.includes(search) ||
+                (searchWithoutCounty && resolvedCountyLower.includes(searchWithoutCounty)))
+          );
+
           const matches =
             lead.ownerAddress?.toLowerCase().includes(search) ||
             lead.ownerLastName?.toLowerCase().includes(search) ||
@@ -483,8 +477,7 @@ export default function LeadDashboardClient({}: Props) {
             lead.ownerCity?.toLowerCase().includes(search) ||
             lead.ownerState?.toLowerCase().includes(search) ||
             lead.ownerZip?.includes(search) ||
-            lead.ownerCounty?.toLowerCase().includes(search) ||
-            resolvePropertyCounty(lead)?.toLowerCase().includes(search) ||
+            countyMatches ||
             lead.adminFirstName?.toLowerCase().includes(search) ||
             lead.adminLastName?.toLowerCase().includes(search) ||
             (lead.phones && lead.phones.some((phone) => phone?.includes(search))) ||
@@ -560,6 +553,7 @@ export default function LeadDashboardClient({}: Props) {
     filterMaxValue,
     filterDirectMail,
     filterOutOfStateAdmin,
+    filterCounty,
     filterDateAdded,
     filterDateAddedTo,
     filterSource,
@@ -605,6 +599,9 @@ export default function LeadDashboardClient({}: Props) {
     filterMaxValue,
     filterDirectMail,
     filterOutOfStateAdmin,
+    filterCounty,
+    filterDateAdded,
+    filterDateAddedTo,
     filterSource,
     filterDataQuality,
     filterOwnerType,
@@ -1130,19 +1127,35 @@ export default function LeadDashboardClient({}: Props) {
     }
   };
 
-  const handleDownloadSkipTraced = () => {
+  const handleDownloadSkipTraced = async () => {
     if (selectedIds.length === 0) {
       addToast({ type: 'warning', title: 'No leads selected', message: 'Please select leads to download.' });
       return;
     }
 
-    const selectedLeads = filteredLeads.filter((lead) =>
+    let selectedLeads = filteredLeads.filter((lead) =>
       selectedIds.includes(lead.id)
     );
 
     if (selectedLeads.length === 0) {
       addToast({ type: 'warning', title: 'No leads found', message: 'No selected leads found.' });
       return;
+    }
+
+    // Fetch full lead records on-demand if rawSkipTraceData was omitted from the lightweight dashboard query
+    const needsFullFetch = selectedLeads.some(
+      (lead) => lead.skipTraceStatus === 'COMPLETED' && !lead.rawSkipTraceData
+    );
+    if (needsFullFetch) {
+      try {
+        const fullLeads = await fetchLeadsByIds(selectedLeads.map((l) => l.id));
+        if (fullLeads.length > 0) {
+          const fullById = new Map(fullLeads.map((l) => [l.id, l]));
+          selectedLeads = selectedLeads.map((l) => fullById.get(l.id) || l);
+        }
+      } catch (err) {
+        console.warn('Could not fetch full rawSkipTraceData for export, falling back to cached fields:', err);
+      }
     }
 
     const formatPhone = (phone: string | null) => {
