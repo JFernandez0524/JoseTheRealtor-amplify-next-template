@@ -40,8 +40,9 @@ describe('validateLeadForSync', () => {
     }
   });
 
-  it('rejects lead if skip trace is not completed even if off_market', () => {
+  it('rejects non-auction lead if skip trace is not completed even if off_market', () => {
     const lead = {
+      type: 'PROBATE',
       listingStatus: 'off_market',
       skipTraceStatus: 'PENDING',
     };
@@ -50,9 +51,39 @@ describe('validateLeadForSync', () => {
     expect(result.reason).toContain('Skip trace not completed');
   });
 
-  it('accepts NO_QUALITY_CONTACTS (Direct Mail Only) for off_market leads and rejects NO_MATCH', () => {
-    expect(validateLeadForSync({ listingStatus: 'off_market', skipTraceStatus: 'NO_QUALITY_CONTACTS' })).toEqual({ isValid: true });
-    const noMatchResult = validateLeadForSync({ listingStatus: 'off_market', skipTraceStatus: 'NO_MATCH' });
+  it('rejects lis pendens lead if skip trace is not completed', () => {
+    const lead = {
+      type: 'PREFORECLOSURE',
+      foreclosureStatus: 'Lis Pendens',
+      listingStatus: 'off_market',
+      skipTraceStatus: 'PENDING',
+    };
+    const result = validateLeadForSync(lead);
+    expect(result.isValid).toBe(false);
+    expect(result.reason).toContain('Skip trace not completed');
+  });
+
+  it('accepts preforeclosure auction lead even if skip trace is pending or no match', () => {
+    const lead = {
+      type: 'PREFORECLOSURE',
+      foreclosureAuctionDate: '2026-12-01',
+      listingStatus: 'off_market',
+      skipTraceStatus: 'PENDING',
+    };
+    expect(validateLeadForSync(lead)).toEqual({ isValid: true });
+
+    const noMatchLead = {
+      type: 'PREFORECLOSURE',
+      foreclosureAuctionDate: '2026-12-01',
+      listingStatus: 'off_market',
+      skipTraceStatus: 'NO_MATCH',
+    };
+    expect(validateLeadForSync(noMatchLead)).toEqual({ isValid: true });
+  });
+
+  it('accepts NO_QUALITY_CONTACTS (Direct Mail Only) for off_market leads and rejects NO_MATCH for non-auction leads', () => {
+    expect(validateLeadForSync({ type: 'PROBATE', listingStatus: 'off_market', skipTraceStatus: 'NO_QUALITY_CONTACTS' })).toEqual({ isValid: true });
+    const noMatchResult = validateLeadForSync({ type: 'PROBATE', listingStatus: 'off_market', skipTraceStatus: 'NO_MATCH' });
     expect(noMatchResult.isValid).toBe(false);
     expect(noMatchResult.reason).toContain('Skip trace not completed');
   });

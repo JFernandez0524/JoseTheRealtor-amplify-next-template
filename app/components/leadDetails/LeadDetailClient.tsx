@@ -1435,6 +1435,7 @@ function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
                       skipTraceStatus={lead.skipTraceStatus}
                       listingStatus={lead.listingStatus}
                       leadLabels={lead.leadLabels}
+                      lead={lead}
                       onSyncComplete={refreshLeadData}
                       client={client}
                     />

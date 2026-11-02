@@ -654,7 +654,7 @@ export default function LeadDashboardClient({}: Props) {
       addToast({
         type: 'warning',
         title: 'No Eligible Leads to Sync',
-        message: 'Only off-market leads with completed skip tracing (COMPLETED or Direct Mail Only) can be synced to Launch AI. NO_MATCH and non-off-market leads are blocked.',
+        message: 'Only off-market leads (or Preforeclosure Auction leads for direct mail) can be synced to Launch AI.',
       });
       return;
     }
@@ -663,7 +663,7 @@ export default function LeadDashboardClient({}: Props) {
       addToast({
         type: 'info',
         title: 'Ineligible Leads Excluded',
-        message: `${excludedCount} lead${excludedCount !== 1 ? 's were' : ' was'} excluded (must be off-market with completed skip trace; NO_MATCH is not synced).`,
+        message: `${excludedCount} lead${excludedCount !== 1 ? 's were' : ' was'} excluded (must be off-market; Lis Pendens, Probate, and FSBO require completed skip trace).`,
       });
     }
 
@@ -692,7 +692,7 @@ export default function LeadDashboardClient({}: Props) {
 
     setShowSyncModal(false);
     if (ids.length === 0) {
-      addToast({ type: 'warning', title: 'No Eligible Leads', message: 'No off-market leads with completed skip trace available to sync.' });
+      addToast({ type: 'warning', title: 'No Eligible Leads', message: 'No eligible off-market leads available to sync.' });
       return;
     }
 

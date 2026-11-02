@@ -298,17 +298,21 @@ export function DashboardFilters({
         <div className='flex items-center gap-1.5 sm:gap-2 justify-start sm:justify-end flex-wrap'>
           <button
             onClick={() => {
-              setFilterMinValue('300000');
-              setFilterMaxValue('850000');
+              if (filterMinValue || filterMaxValue) {
+                setFilterMinValue('');
+                setFilterMaxValue('');
+              } else {
+                setShowAdvanced(true);
+              }
             }}
             className={`px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 border ${
-              filterMinValue === '300000' && filterMaxValue === '850000'
+              filterMinValue || filterMaxValue
                 ? 'bg-blue-600 text-white border-blue-700 shadow-sm'
                 : 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100'
             }`}
-            title='Quick Filter: Property Value $300k - $850k Sweet Spot'
+            title='Property Value Filter — click to customize in Advanced Filters'
           >
-            💵 $300k – $850k
+            💵 {filterMinValue || filterMaxValue ? `Price: ${filterMinValue ? `$${(Number(filterMinValue)/1000).toFixed(0)}k` : '$0'} – ${filterMaxValue ? `$${(Number(filterMaxValue)/1000).toFixed(0)}k` : 'Any'}` : 'Price Filter'}
           </button>
 
           <button
@@ -565,6 +569,33 @@ export function DashboardFilters({
                   <option value='60'>Next 60 days</option>
                   <option value='90'>Next 90 days</option>
                 </select>
+              </div>
+
+              <div className='grid grid-cols-2 gap-2'>
+                <div>
+                  <label className='text-[11px] text-slate-500 mb-1 block'>Min Price ($):</label>
+                  <input
+                    type='number'
+                    min={0}
+                    step={10000}
+                    value={filterMinValue}
+                    onChange={(e) => setFilterMinValue(e.target.value)}
+                    placeholder='Min Value (e.g. 200000)'
+                    className='border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs w-full bg-white outline-none'
+                  />
+                </div>
+                <div>
+                  <label className='text-[11px] text-slate-500 mb-1 block'>Max Price ($):</label>
+                  <input
+                    type='number'
+                    min={0}
+                    step={10000}
+                    value={filterMaxValue}
+                    onChange={(e) => setFilterMaxValue(e.target.value)}
+                    placeholder='Max Value (e.g. 1000000)'
+                    className='border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs w-full bg-white outline-none'
+                  />
+                </div>
               </div>
 
               <div>

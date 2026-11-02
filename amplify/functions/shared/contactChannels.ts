@@ -18,6 +18,8 @@
  *    up a phone or an email.
  */
 
+import { computeForeclosureFinancials } from './foreclosureFinancials';
+
 /** Skip-trace states that mean a trace actually ran and matched an owner. NO_MATCH is not syncable/mailable. */
 const CONCLUDED_TRACE_STATUSES = new Set(['COMPLETED', 'NO_QUALITY_CONTACTS']);
 
@@ -62,6 +64,8 @@ export interface LeadChannels {
   landlinePhones?: (string | null)[] | null;
   emails?: (string | null)[] | null;
   skipTraceStatus?: string | null;
+  type?: string | null;
+  [key: string]: any;
 }
 
 const any = (list: (string | null)[] | null | undefined): boolean =>
@@ -83,14 +87,22 @@ export function hasAnyContactChannel(lead: LeadChannels): boolean {
 }
 
 /**
- * Direct mail is the last resort: only for a lead whose skip trace has concluded and turned up no
- * phone, no landline and no email.
- *
- * Note this is about *eligibility by channel*. The property-value window is a separate filter
- * applied by the caller.
+ * Direct mail is the last resort: for leads whose skip trace has concluded without phone/email,
+ * or Preforeclosure Auction leads that can be mailed immediately before or alongside skip-tracing.
  */
 export function isDirectMailOnlyLead(lead: LeadChannels): boolean {
-  return hasConcludedSkipTrace(lead.skipTraceStatus) && !hasAnyContactChannel(lead);
+  if (hasAnyContactChannel(lead)) return false;
+
+  if (hasConcludedSkipTrace(lead.skipTraceStatus)) return true;
+
+  const isPreforeclosure =
+    String(lead.type || '').toUpperCase().replace(/[_\s-]+/g, '') === 'PREFORECLOSURE';
+  if (isPreforeclosure) {
+    const fin = computeForeclosureFinancials(lead);
+    if (fin.isSheriffSale) return true;
+  }
+
+  return false;
 }
 
 /**

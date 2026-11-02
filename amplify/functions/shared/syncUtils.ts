@@ -10,6 +10,7 @@
  *   (leads with no skip trace result are skipped; direct-mail-only leads are valid)
  */
 import { DynamoDBDocumentClient, UpdateCommand } from '@aws-sdk/lib-dynamodb';
+import { computeForeclosureFinancials } from './foreclosureFinancials';
 
 export type SyncResult = {
   status: 'SUCCESS' | 'SKIPPED' | 'FAILED' | 'ERROR' | 'NO_CHANGE';
@@ -79,6 +80,18 @@ export function validateLeadForSync(lead: any): { isValid: boolean; reason?: str
     };
   }
 
+  // Check if lead is a Preforeclosure Auction (Sheriff Sale) lead
+  const isPreforeclosure =
+    String(lead.type || '').toUpperCase().replace(/[_\s-]+/g, '') === 'PREFORECLOSURE';
+  const fin = computeForeclosureFinancials(lead);
+  const isAuctionLead = isPreforeclosure && fin.isSheriffSale;
+
+  // Preforeclosure Auction leads are exempt from skip trace requirements (time-sensitive direct mail workflow)
+  if (isAuctionLead) {
+    return { isValid: true };
+  }
+
+  // All other leads (Lis Pendens, Probate, FSBO, etc.) require a completed skip trace
   const skipTraceStatus = lead.skipTraceStatus?.toUpperCase();
   const validStatuses = ['COMPLETED', 'NO_QUALITY_CONTACTS'];
 

@@ -83,10 +83,24 @@ describe('isCallableLead', () => {
 });
 
 describe('isDirectMailOnlyLead', () => {
-  it('mails a concluded trace (COMPLETED or NO_QUALITY_CONTACTS) that found nothing, but NOT NO_MATCH', () => {
+  it('mails a concluded trace (COMPLETED or NO_QUALITY_CONTACTS) that found nothing, but NOT NO_MATCH for non-auction', () => {
     expect(isDirectMailOnlyLead(lead({ skipTraceStatus: 'COMPLETED' }))).toBe(true);
     expect(isDirectMailOnlyLead(lead({ skipTraceStatus: 'NO_QUALITY_CONTACTS' }))).toBe(true);
-    expect(isDirectMailOnlyLead(lead({ skipTraceStatus: 'NO_MATCH' }))).toBe(false);
+    expect(isDirectMailOnlyLead(lead({ type: 'PROBATE', skipTraceStatus: 'NO_MATCH' }))).toBe(false);
+  });
+
+  it('mails preforeclosure auction leads without contacts even if skip trace is pending or no match', () => {
+    expect(isDirectMailOnlyLead(lead({
+      type: 'PREFORECLOSURE',
+      foreclosureAuctionDate: '2026-12-01',
+      skipTraceStatus: 'PENDING',
+    }))).toBe(true);
+
+    expect(isDirectMailOnlyLead(lead({
+      type: 'PREFORECLOSURE',
+      foreclosureAuctionDate: '2026-12-01',
+      skipTraceStatus: 'NO_MATCH',
+    }))).toBe(true);
   });
 
   it('does NOT mail a lead with a landline — it is callable', () => {
@@ -106,12 +120,11 @@ describe('isDirectMailOnlyLead', () => {
     expect(isDirectMailOnlyLead(lead({ phones: ['5551112222'] }))).toBe(false);
   });
 
-  it('does NOT mail an untraced lead, even with no contacts', () => {
-    // 35 PENDING and 9 FAILED leads would otherwise start receiving mail before anyone had
-    // looked for a phone number for them.
-    expect(isDirectMailOnlyLead(lead({ skipTraceStatus: 'PENDING' }))).toBe(false);
-    expect(isDirectMailOnlyLead(lead({ skipTraceStatus: 'FAILED' }))).toBe(false);
-    expect(isDirectMailOnlyLead(lead({ skipTraceStatus: 'NOT_ELIGIBLE' }))).toBe(false);
+  it('does NOT mail an untraced non-auction lead, even with no contacts', () => {
+    // Untraced non-auction leads should not receive mail before looking for a phone number
+    expect(isDirectMailOnlyLead(lead({ type: 'PROBATE', skipTraceStatus: 'PENDING' }))).toBe(false);
+    expect(isDirectMailOnlyLead(lead({ type: 'PROBATE', skipTraceStatus: 'FAILED' }))).toBe(false);
+    expect(isDirectMailOnlyLead(lead({ type: 'PROBATE', skipTraceStatus: 'NOT_ELIGIBLE' }))).toBe(false);
   });
 
   it('needs every channel absent, not just one', () => {

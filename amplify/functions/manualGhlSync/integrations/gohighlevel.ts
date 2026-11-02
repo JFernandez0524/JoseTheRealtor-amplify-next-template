@@ -216,8 +216,8 @@ export async function syncToGoHighLevel(
       if (isAllowedUser && primaryEmail) {
         tags.push(AI_OUTREACH_TAG); // Enable AI email outreach (EMAIL ONLY - requires email address)
       }
-    } else if (specificPhone) {
-      tags.push('Data:OriginalUpload'); // Phone was in original upload
+    } else {
+      tags.push('Data:OriginalUpload'); // Phone or direct-mail contact from original upload
     }
     
     // 🚨 BILLING STATUS CHECK (bypass for admins)
@@ -225,9 +225,8 @@ export async function syncToGoHighLevel(
       tags.push('App:Billing-Hold');
     }
     
-    // 🛡️ PROPERTY VALUE FILTER - Only mid-range properties get direct mail ($300k-$850k)
-    const propertyValue = lead.zestimate || lead.estimatedValue || 0;
-    const isDirectMailEligible = propertyValue >= 300000 && propertyValue <= 850000;
+    // 🛡️ DIRECT MAIL ELIGIBILITY - All valid off-market addresses chosen for mail are eligible
+    const isDirectMailEligible = true;
 
     // 🔢 Multi-Phone-Lead tag only for leads with multiple phones
     const hasMultiplePhones = lead.phones && lead.phones.length > 1;

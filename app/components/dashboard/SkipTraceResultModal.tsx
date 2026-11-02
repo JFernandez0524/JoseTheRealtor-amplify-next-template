@@ -1,5 +1,7 @@
 'use client';
 
+import { computeForeclosureFinancials } from '@/amplify/functions/shared/foreclosureFinancials';
+
 export interface ReachabilityLead {
   id: string;
   ownerAddress?: string | null;
@@ -11,8 +13,10 @@ export interface ReachabilityLead {
   skipTraceStatus?: string | null;
   listingStatus?: string | null;
   leadLabels?: (string | null)[] | null;
+  type?: string | null;
   zestimate?: number | null;
   estimatedValue?: number | null;
+  [key: string]: any;
 }
 
 export interface ReachabilityBreakdown {
@@ -53,6 +57,15 @@ export function isLeadOffMarket(lead: ReachabilityLead): boolean {
 
 export function isLeadSyncEligible(lead: ReachabilityLead): boolean {
   if (!isLeadOffMarket(lead)) return false;
+
+  // Preforeclosure Auction (Sheriff Sale) leads are eligible for GHL direct mail sync without skip trace
+  const isPreforeclosure =
+    String(lead.type || '').toUpperCase().replace(/[_\s-]+/g, '') === 'PREFORECLOSURE';
+  if (isPreforeclosure) {
+    const fin = computeForeclosureFinancials(lead);
+    if (fin.isSheriffSale) return true;
+  }
+
   const skipStatus = (lead.skipTraceStatus || '').trim().toUpperCase();
   return skipStatus === 'COMPLETED' || skipStatus === 'NO_QUALITY_CONTACTS';
 }

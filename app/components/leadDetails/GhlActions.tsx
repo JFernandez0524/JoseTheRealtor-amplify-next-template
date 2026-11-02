@@ -5,6 +5,7 @@
 import { useState } from 'react';
 import { Loader } from '@aws-amplify/ui-react';
 import { useAccess } from '@/app/context/AccessContext';
+import { computeForeclosureFinancials } from '@/amplify/functions/shared/foreclosureFinancials';
 import Link from 'next/link';
 
 interface GhlActionsProps {
@@ -14,6 +15,8 @@ interface GhlActionsProps {
   skipTraceStatus: string | null | undefined;
   listingStatus?: string | null;
   leadLabels?: (string | null)[] | null;
+  leadType?: string | null;
+  lead?: any;
   onSyncComplete: () => void;
   client: any;
 }
@@ -25,6 +28,8 @@ export function GhlActions({
   skipTraceStatus,
   listingStatus,
   leadLabels,
+  leadType,
+  lead,
   onSyncComplete,
   client,
 }: GhlActionsProps) {
@@ -80,7 +85,14 @@ export function GhlActions({
     !labels.some((l) => l === 'ACTIVE_MLS' || l === 'RECENTLY_SOLD');
   const isSkipTraceCompleted =
     currentSkipStatus === 'COMPLETED' || currentSkipStatus === 'NO_QUALITY_CONTACTS';
-  const isReadyToSync = isOffMarket && isSkipTraceCompleted;
+
+  // Preforeclosure Auction leads can sync for direct mail without prior skip trace
+  const isPreforeclosure =
+    String(leadType || lead?.type || '').toUpperCase().replace(/[_\s-]+/g, '') === 'PREFORECLOSURE';
+  const fin = lead ? computeForeclosureFinancials(lead) : null;
+  const isAuction = isPreforeclosure && (fin ? fin.isSheriffSale : true);
+
+  const isReadyToSync = isOffMarket && (isSkipTraceCompleted || isAuction);
   const canClickSync = isReadyToSync && !isSyncing;
   const isAlreadySynced = currentGhlStatus === 'SUCCESS';
 
