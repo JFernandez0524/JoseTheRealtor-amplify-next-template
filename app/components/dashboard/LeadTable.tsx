@@ -136,6 +136,7 @@ export function LeadTable({
   const tableRef = React.useRef<HTMLDivElement>(null);
   const modalRef = React.useRef<HTMLDivElement>(null);
   const [editingLead, setEditingLead] = useState<Lead | null>(null);
+  const [editingAddressType, setEditingAddressType] = useState<'PROPERTY' | 'MAILING'>('PROPERTY');
   const [isSaving, setIsSaving] = useState(false);
   // The corrected address the user picked from the Google autocomplete (null until they select one).
   const [selectedAddress, setSelectedAddress] = useState<ParsedAddress | null>(null);
@@ -285,15 +286,43 @@ export function LeadTable({
     }
   };
 
-  const handleEditAddress = (lead: Lead) => {
+  const handleEditAddress = (lead: Lead, type: 'PROPERTY' | 'MAILING' = 'PROPERTY') => {
     setEditingLead(lead);
+    setEditingAddressType(type);
     setSelectedAddress(null);
-    setManualStreet(lead.ownerAddress || '');
-    setManualCity(lead.ownerCity || '');
-    setManualState(lead.ownerState || '');
-    setManualZip(lead.ownerZip || '');
-    setShowManualFields(false);
+    if (type === 'MAILING') {
+      setManualStreet(lead.mailingAddress || '');
+      setManualCity(lead.mailingCity || '');
+      setManualState(lead.mailingState || '');
+      setManualZip(lead.mailingZip || '');
+      setShowManualFields(true);
+    } else {
+      setManualStreet(lead.ownerAddress || '');
+      setManualCity(lead.ownerCity || '');
+      setManualState(lead.ownerState || '');
+      setManualZip(lead.ownerZip || '');
+      setShowManualFields(false);
+    }
     setIsSaving(false);
+  };
+
+  const switchEditingAddressType = (type: 'PROPERTY' | 'MAILING') => {
+    if (!editingLead) return;
+    setEditingAddressType(type);
+    setSelectedAddress(null);
+    if (type === 'MAILING') {
+      setManualStreet(editingLead.mailingAddress || '');
+      setManualCity(editingLead.mailingCity || '');
+      setManualState(editingLead.mailingState || '');
+      setManualZip(editingLead.mailingZip || '');
+      setShowManualFields(true);
+    } else {
+      setManualStreet(editingLead.ownerAddress || '');
+      setManualCity(editingLead.ownerCity || '');
+      setManualState(editingLead.ownerState || '');
+      setManualZip(editingLead.ownerZip || '');
+      setShowManualFields(false);
+    }
   };
 
   const handleSaveAddress = async () => {
@@ -311,6 +340,47 @@ export function LeadTable({
 
     setIsSaving(true);
     try {
+      if (editingAddressType === 'MAILING') {
+        const propStreet = editingLead.ownerAddress || '';
+        const propZip = editingLead.ownerZip || '';
+        const isSame =
+          addressesMatch(street, propStreet) &&
+          (!zip || !propZip || zip.slice(0, 5) === propZip.slice(0, 5));
+        const isAbsenteeOwner = !isSame;
+        const cleanLabels = (editingLead.leadLabels || []).filter((l): l is string => Boolean(l));
+        const leadLabels = isAbsenteeOwner
+          ? cleanLabels.includes('ABSENTEE')
+            ? cleanLabels
+            : [...cleanLabels, 'ABSENTEE']
+          : cleanLabels.filter((l) => l !== 'ABSENTEE');
+
+        const updates: Record<string, any> = {
+          mailingAddress: street,
+          mailingCity: city,
+          mailingState: state,
+          mailingZip: zip || null,
+          isAbsenteeOwner,
+          leadLabels,
+        };
+
+        if (editingLead.type === 'PROBATE') {
+          updates.adminAddress = street;
+          updates.adminCity = city;
+          updates.adminState = state;
+          updates.adminZip = zip || null;
+        }
+
+        const updatedLead = await updateLead(editingLead.id, updates);
+        setEditingLead(null);
+
+        if (onLeadUpdated && updatedLead) {
+          onLeadUpdated([{ ...editingLead, ...(updatedLead as Lead), ...updates }]);
+        } else if (onRefresh) {
+          await onRefresh();
+        }
+        return;
+      }
+
       const resolvedCounty = selectedAddress?.county || editingLead.ownerCounty || null;
       const res = await fetch('/api/v1/update-lead-address', {
         method: 'POST',
@@ -1168,23 +1238,74 @@ export function LeadTable({
           }}
         >
           <div ref={modalRef} className='bg-white rounded-lg p-6 max-w-md w-full'>
-            <h3 className='text-lg font-bold mb-1'>Edit Address</h3>
+            <h3 className='text-lg font-bold mb-2'>Edit Address</h3>
+
+            <div className='flex gap-2 mb-3 bg-gray-100 p-1 rounded-lg'>
+              <button
+                type='button'
+                onClick={() => switchEditingAddressType('PROPERTY')}
+                className={`flex-1 py-1.5 px-3 text-xs font-semibold rounded-md transition ${
+                  editingAddressType === 'PROPERTY'
+                    ? 'bg-white text-blue-600 shadow-sm'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                🏠 Property Address
+              </button>
+              <button
+                type='button'
+                onClick={() => switchEditingAddressType('MAILING')}
+                className={`flex-1 py-1.5 px-3 text-xs font-semibold rounded-md transition ${
+                  editingAddressType === 'MAILING'
+                    ? 'bg-white text-blue-600 shadow-sm'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                📬 Mailing Address
+              </button>
+            </div>
+
             <p className='text-xs text-gray-500 mb-4'>
-              Start typing and pick the correct address from the dropdown. Choosing a Google-suggested
-              address clears the invalid-address flag.
+              {editingAddressType === 'PROPERTY'
+                ? 'Start typing and pick the correct property address from the dropdown. Choosing a Google-suggested address clears the invalid-address flag.'
+                : 'Search with Google Places or edit the fields below to update the owner mailing address for direct mail.'}
             </p>
             <div className='space-y-3'>
               <div>
-                <label className='block text-sm font-medium text-gray-500 mb-1'>Current address</label>
+                <label className='block text-sm font-medium text-gray-500 mb-1'>
+                  {editingAddressType === 'PROPERTY' ? 'Current property address' : 'Current mailing address'}
+                </label>
                 <p className='text-sm text-gray-700 bg-gray-50 border border-gray-200 rounded-md px-3 py-2'>
-                  {[editingLead.ownerAddress, editingLead.ownerCity, editingLead.ownerState, editingLead.ownerZip]
-                    .filter(Boolean).join(', ') || '—'}
+                  {(editingAddressType === 'PROPERTY'
+                    ? [editingLead.ownerAddress, editingLead.ownerCity, editingLead.ownerState, editingLead.ownerZip]
+                    : [editingLead.mailingAddress, editingLead.mailingCity, editingLead.mailingState, editingLead.mailingZip]
+                  ).filter(Boolean).join(', ') || '—'}
                 </p>
               </div>
               <div>
-                <label className='block text-sm font-medium text-gray-700 mb-1'>New address *</label>
+                <div className='flex items-center justify-between mb-1'>
+                  <label className='block text-sm font-medium text-gray-700'>
+                    {editingAddressType === 'PROPERTY' ? 'New property address *' : 'New mailing address *'}
+                  </label>
+                  {editingAddressType === 'MAILING' && editingLead.ownerAddress && (
+                    <button
+                      type='button'
+                      onClick={() => {
+                        setSelectedAddress(null);
+                        setManualStreet(editingLead.ownerAddress || '');
+                        setManualCity(editingLead.ownerCity || '');
+                        setManualState(editingLead.ownerState || '');
+                        setManualZip(editingLead.ownerZip || '');
+                        setShowManualFields(true);
+                      }}
+                      className='text-xs font-semibold text-blue-600 hover:text-blue-800 underline'
+                    >
+                      Same as Property Address
+                    </button>
+                  )}
+                </div>
                 <AddressAutocomplete
-                  key={editingLead.id}
+                  key={`${editingLead.id}-${editingAddressType}`}
                   onSelect={(addr) => {
                     setSelectedAddress(addr);
                     setManualStreet(addr.street);
@@ -1271,8 +1392,10 @@ export function LeadTable({
                     </svg>
                     Updating...
                   </>
-                ) : (
+                ) : editingAddressType === 'PROPERTY' ? (
                   'Save & Refresh Zestimate'
+                ) : (
+                  'Save Mailing Address'
                 )}
               </button>
               <button

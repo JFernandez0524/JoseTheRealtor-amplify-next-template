@@ -961,6 +961,7 @@ function LeadDetailClient({ initialLead }: { initialLead: Lead }) {
             <CardWrapper
               title='Owner & Contacts'
               isEditable
+              initialEditing={isCoreInfoEditing}
               onEditToggle={setIsCoreInfoEditing}
             >
               <CoreLeadInfo

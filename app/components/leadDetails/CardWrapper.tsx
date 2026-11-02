@@ -1,6 +1,6 @@
 // app/components/leadDetails/CardWrapper.tsx
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { FaPencilAlt } from 'react-icons/fa';
 
 interface CardWrapperProps {
@@ -19,6 +19,10 @@ export function CardWrapper({
   isEditable = false,
 }: CardWrapperProps) {
   const [isEditing, setIsEditing] = useState(initialEditing);
+
+  useEffect(() => {
+    setIsEditing(initialEditing);
+  }, [initialEditing]);
 
   const toggleEdit = () => {
     const newState = !isEditing;
