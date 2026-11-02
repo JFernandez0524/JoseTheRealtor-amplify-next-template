@@ -10,6 +10,9 @@ import {
   type ThanksIoListConfig,
 } from '@/amplify/functions/shared/thanksIoRecipients';
 
+export const dynamic = 'force-dynamic';
+export const maxDuration = 300;
+
 const MAX_LEADS_PER_REQUEST = 200;
 
 /**
@@ -114,7 +117,15 @@ export async function POST(request: NextRequest) {
     const sent: string[] = [];
     const failed: { id: string; address: string; reason: string }[] = [];
 
-    for (const { lead, payload } of eligible) {
+    for (let i = 0; i < eligible.length; i++) {
+      const { lead, payload } = eligible[i];
+
+      // Pacing delay (1.5s) between sequential requests so Thanks.io's event bus treats each
+      // lead as an individual recipient addition rather than bundling into an "added by upload" batch.
+      if (i > 0) {
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+      }
+
       try {
         const res = await fetch(`${THANKS_IO_API_BASE}/recipients`, {
           method: 'POST',
@@ -131,6 +142,10 @@ export async function POST(request: NextRequest) {
           throw new Error(`Thanks.io ${res.status}: ${errText.slice(0, 200)}`);
         }
 
+        const data = await res.json().catch(() => ({}));
+        const thanksRecipientId = data?.id ?? data?.data?.id;
+
+        console.log(`📬 [THANKS.IO] Added lead ${lead.id} to list ${list.id} (Thanks.io recipient id: ${thanksRecipientId || 'unknown'})`);
         sent.push(lead.id);
 
         // Record the send so the same lead can't be mailed onto this list twice.
