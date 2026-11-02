@@ -44,13 +44,17 @@ export function AccessProvider({ children }: { children: ReactNode }) {
 
   const checkAccess = useCallback(async () => {
     try {
-      const [session, attributes] = await Promise.all([
-        fetchAuthSession(),
-        fetchUserAttributes(),
-      ]);
+      const session = await fetchAuthSession();
+
+      if (!session.tokens) {
+        setAccess({ ...defaultAccess, isLoading: false });
+        return;
+      }
+
+      const attributes = await fetchUserAttributes();
 
       const groups =
-        (session.tokens?.accessToken.payload['cognito:groups'] as string[]) ||
+        (session.tokens.accessToken.payload['cognito:groups'] as string[]) ||
         [];
       const userId = session.userSub;
       const userEmail = attributes.email;
@@ -110,7 +114,15 @@ export function AccessProvider({ children }: { children: ReactNode }) {
         credits: userCredits,
         isLoading: false,
       });
-    } catch (error) {
+    } catch (error: any) {
+      if (
+        error?.name === 'UserUnAuthenticatedException' ||
+        error?.name === 'UserNotAuthenticatedException' ||
+        error?.message?.includes('User needs to be authenticated')
+      ) {
+        setAccess({ ...defaultAccess, isLoading: false });
+        return;
+      }
       console.error('Access Check Error:', error);
       setAccess({ ...defaultAccess, isLoading: false });
     }

@@ -1,6 +1,7 @@
 import '@aws-amplify/ui-react/styles.css';
 import './globals.css';
 import { Inter } from 'next/font/google';
+import ConfigureAmplifyClientSide from './components/ConfigureAmplify';
 import AuthProvider from './components/AuthProvider';
 import Navbar from './components/Navbar';
 import { ConversationsProvider } from './context/ConversationsContext';
@@ -45,6 +46,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
             />
           </noscript>
         )}
+        <ConfigureAmplifyClientSide />
         <AuthProvider>
           <ToastProvider>
           <AccessProvider>
