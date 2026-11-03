@@ -2,7 +2,14 @@ import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand, UpdateCommand, ScanCommand } from '@aws-sdk/lib-dynamodb';
 import { validateEnv } from '../shared/config';
 import { syncToGoHighLevel } from './integrations/gohighlevel';
-import { getValidGhlToken, saveFieldIds } from '../shared/ghlTokenManager';
+import {
+  getValidGhlToken,
+  saveFieldIds,
+  acquireProvisioningLock,
+  releaseProvisioningLock,
+  waitForProvisioningCompletion,
+  parseFieldIdsMap,
+} from '../shared/ghlTokenManager';
 import { CONTACT_FIELDS, provisionCustomFields, provisionOpportunityFields, provisionTags } from '../shared/ghlFieldProvisioner';
 import { validateLeadForSync, updateLeadSyncStatus, SyncResult } from '../shared/syncUtils';
 import { filterValidEmails } from '../shared/emailValidator';
@@ -70,24 +77,35 @@ async function processGhlSync(lead: any, groups: string[] = [], ownerId: string 
   // are not yet cached in customFieldIds.
   const hasMissingContactFields = CONTACT_FIELDS.some((f) => !fieldIds[f.key]);
   if (!ghlData.customFieldIds || hasMissingContactFields) {
-    console.log(`🔧 [GHL_SYNC] Provisioning/backfilling customFieldIds on-the-fly for location ${ghlLocationId}`);
-    try {
-      const [provisionedFields, provisionedOppFields] = await Promise.all([
-        provisionCustomFields(ghlLocationId, ghlToken),
-        Object.keys(oppFieldIds).length > 0 ? Promise.resolve(oppFieldIds) : provisionOpportunityFields(ghlLocationId, ghlToken),
-        // Also create tags so tag-triggered workflows resolve for new users (returns void).
-        // NOTE: custom call dispositions are NOT API-provisionable (GHL has no public
-        // endpoint — returns 404); they come from the GHL snapshot or manual setup.
-        provisionTags(ghlLocationId, ghlToken),
-      ]);
-      fieldIds = { ...fieldIds, ...provisionedFields };
-      oppFieldIds = { ...oppFieldIds, ...provisionedOppFields };
-      // Persist for future syncs (fire-and-forget — don't block sync)
-      saveFieldIds(ghlData.integrationId, fieldIds, oppFieldIds).catch(err =>
-        console.error(`⚠️ [GHL_SYNC] Failed to persist field IDs:`, err)
-      );
-    } catch (err) {
-      console.error(`⚠️ [GHL_SYNC] On-the-fly provisioning failed — sync may use partial field IDs:`, err);
+    console.log(`🔧 [GHL_SYNC] Missing custom fields detected for location ${ghlLocationId}, attempting to acquire lock...`);
+    const hasLock = await acquireProvisioningLock(ghlData.integrationId);
+    if (hasLock) {
+      console.log(`🔒 [GHL_SYNC] Acquired provisioning lock for location ${ghlLocationId}`);
+      try {
+        const [provisionedFields, provisionedOppFields] = await Promise.all([
+          provisionCustomFields(ghlLocationId, ghlToken),
+          Object.keys(oppFieldIds).length > 0 ? Promise.resolve(oppFieldIds) : provisionOpportunityFields(ghlLocationId, ghlToken),
+          // Also create tags so tag-triggered workflows resolve for new users (returns void).
+          provisionTags(ghlLocationId, ghlToken),
+        ]);
+        fieldIds = { ...fieldIds, ...provisionedFields };
+        oppFieldIds = { ...oppFieldIds, ...provisionedOppFields };
+        await releaseProvisioningLock(ghlData.integrationId, fieldIds, oppFieldIds);
+        console.log(`✅ [GHL_SYNC] Provisioning complete and lock released for location ${ghlLocationId}`);
+      } catch (err: any) {
+        console.error(`⚠️ [GHL_SYNC] On-the-fly provisioning failed — releasing lock:`, err);
+        await releaseProvisioningLock(ghlData.integrationId);
+      }
+    } else {
+      console.log(`⏳ [GHL_SYNC] Another concurrent worker is provisioning fields; waiting for completion...`);
+      const updated = await waitForProvisioningCompletion(ghlData.integrationId);
+      if (updated) {
+        const refreshedFields = parseFieldIdsMap(updated.customFieldIds);
+        const refreshedOppFields = parseFieldIdsMap(updated.opportunityFieldIds);
+        if (refreshedFields) fieldIds = { ...fieldIds, ...refreshedFields };
+        if (refreshedOppFields) oppFieldIds = { ...oppFieldIds, ...refreshedOppFields };
+        console.log(`✅ [GHL_SYNC] Successfully refreshed field IDs from concurrent worker`);
+      }
     }
   }
 

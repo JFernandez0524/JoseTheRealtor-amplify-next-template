@@ -9,7 +9,7 @@
  */
 
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, ScanCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, GetCommand, ScanCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { provisionCustomFields, provisionOpportunityFields } from './ghlFieldProvisioner';
 import axios from 'axios';
 
@@ -39,6 +39,8 @@ type GhlIntegration = {
   aiExamples?: string;
   openAiApiKey?: string;
   dialerUserId?: string;
+  isProvisioning?: boolean;
+  provisioningStartedAt?: string;
 };
 
 export type GhlTokenResult = {
@@ -345,3 +347,95 @@ export async function saveFieldIds(
     }
   }));
 }
+
+/**
+ * Attempts to acquire an exclusive lock on GhlIntegration for field provisioning.
+ * Uses a 30-second TTL to prevent deadlocks if a Lambda execution crashes.
+ * Returns true if the lock was acquired, false if another worker holds it.
+ */
+export async function acquireProvisioningLock(integrationId: string): Promise<boolean> {
+  const now = new Date();
+  const lockExpiry = new Date(now.getTime() - 30_000).toISOString();
+  try {
+    await docClient.send(new UpdateCommand({
+      TableName: GHL_INTEGRATION_TABLE,
+      Key: { id: integrationId },
+      UpdateExpression: 'SET isProvisioning = :true, provisioningStartedAt = :now',
+      ConditionExpression: 'attribute_not_exists(isProvisioning) OR isProvisioning = :false OR provisioningStartedAt < :expiry',
+      ExpressionAttributeValues: {
+        ':true': true,
+        ':false': false,
+        ':now': now.toISOString(),
+        ':expiry': lockExpiry,
+      },
+    }));
+    return true;
+  } catch (err: any) {
+    if (err.name === 'ConditionalCheckFailedException') {
+      return false;
+    }
+    console.error('⚠️ [TOKEN_MANAGER] Failed to acquire provisioning lock:', err.message || err);
+    return false;
+  }
+}
+
+/**
+ * Releases the provisioning lock and optionally updates field IDs atomically.
+ */
+export async function releaseProvisioningLock(
+  integrationId: string,
+  customFieldIds?: Record<string, string>,
+  opportunityFieldIds?: Record<string, string>
+): Promise<void> {
+  try {
+    let updateExpression = 'SET isProvisioning = :false, provisioningStartedAt = :null, updatedAt = :ts';
+    const expressionAttributeValues: Record<string, any> = {
+      ':false': false,
+      ':null': null,
+      ':ts': new Date().toISOString(),
+    };
+    if (customFieldIds) {
+      updateExpression += ', customFieldIds = :cfids';
+      expressionAttributeValues[':cfids'] = customFieldIds;
+    }
+    if (opportunityFieldIds) {
+      updateExpression += ', opportunityFieldIds = :ofids';
+      expressionAttributeValues[':ofids'] = opportunityFieldIds;
+    }
+    await docClient.send(new UpdateCommand({
+      TableName: GHL_INTEGRATION_TABLE,
+      Key: { id: integrationId },
+      UpdateExpression: updateExpression,
+      ExpressionAttributeValues: expressionAttributeValues,
+    }));
+  } catch (err: any) {
+    console.error('⚠️ [TOKEN_MANAGER] Failed to release provisioning lock:', err.message || err);
+  }
+}
+
+/**
+ * Polls DynamoDB until another worker's active provisioning completes (or maxWaitMs expires).
+ */
+export async function waitForProvisioningCompletion(integrationId: string, maxWaitMs = 10_000): Promise<GhlIntegration | null> {
+  const startTime = Date.now();
+  const pollIntervalMs = 500;
+  while (Date.now() - startTime < maxWaitMs) {
+    await new Promise(res => setTimeout(res, pollIntervalMs));
+    try {
+      const { Item } = await docClient.send(new GetCommand({
+        TableName: GHL_INTEGRATION_TABLE,
+        Key: { id: integrationId },
+      }));
+      if (Item) {
+        const item = Item as any;
+        if (!item.isProvisioning) {
+          return item as GhlIntegration;
+        }
+      }
+    } catch (err: any) {
+      console.warn('⚠️ [TOKEN_MANAGER] Error polling provisioning status:', err.message || err);
+    }
+  }
+  return null;
+}
+

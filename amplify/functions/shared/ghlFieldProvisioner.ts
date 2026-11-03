@@ -181,13 +181,13 @@ export function tagsToCreate(desired: string[], existingNames: string[]): string
   return desired.filter((t) => !existing.has(t.toLowerCase().trim()));
 }
 
-async function fetchExistingContactFields(locationId: string, token: string): Promise<Array<{ id: string; name: string }>> {
+async function fetchExistingContactFields(locationId: string, token: string): Promise<Array<{ id: string; name: string; fieldKey?: string }>> {
   const ghl = createGhlClient(token);
   const res = await ghl.get(`/locations/${locationId}/customFields`, { params: { model: 'contact' } });
   return res.data?.customFields || [];
 }
 
-async function fetchExistingOpportunityFields(locationId: string, token: string): Promise<Array<{ id: string; name: string }>> {
+async function fetchExistingOpportunityFields(locationId: string, token: string): Promise<Array<{ id: string; name: string; fieldKey?: string }>> {
   const ghl = createGhlClient(token);
   const res = await ghl.get(`/locations/${locationId}/customFields`, { params: { model: 'opportunity' } });
   return res.data?.customFields || [];
@@ -218,6 +218,11 @@ export async function provisionCustomFields(locationId: string, token: string): 
   console.log(`🔧 [PROVISIONER] Provisioning contact custom fields for location ${locationId}`);
   const existing = await fetchExistingContactFields(locationId, token);
   const existingByName = new Map(existing.map(f => [f.name.toLowerCase().trim(), f.id]));
+  const existingByFieldKey = new Map(
+    existing
+      .filter(f => f.fieldKey)
+      .map(f => [f.fieldKey!.toLowerCase().trim(), f.id])
+  );
 
   const result: Record<string, string> = {};
 
@@ -228,7 +233,8 @@ export async function provisionCustomFields(locationId: string, token: string): 
 
     let existingId = existingByName.get(normalizedName)
       || existingByName.get(spaceName)
-      || existingByName.get(underscoreName);
+      || existingByName.get(underscoreName)
+      || existingByFieldKey.get(`contact.${field.key.toLowerCase().trim()}`);
 
     // Fallbacks for legacy/alternative naming
     if (!existingId && field.key === 'call_attempt_counter') {
@@ -260,11 +266,17 @@ export async function provisionOpportunityFields(locationId: string, token: stri
   console.log(`🔧 [PROVISIONER] Provisioning opportunity custom fields for location ${locationId}`);
   const existing = await fetchExistingOpportunityFields(locationId, token);
   const existingByName = new Map(existing.map(f => [f.name.toLowerCase().trim(), f.id]));
+  const existingByFieldKey = new Map(
+    existing
+      .filter(f => f.fieldKey)
+      .map(f => [f.fieldKey!.toLowerCase().trim(), f.id])
+  );
 
   const result: Record<string, string> = {};
 
   for (const field of OPPORTUNITY_FIELDS) {
-    const existingId = existingByName.get(field.name.toLowerCase().trim());
+    const existingId = existingByName.get(field.name.toLowerCase().trim())
+      || existingByFieldKey.get(`opportunity.${field.key.toLowerCase().trim()}`);
     if (existingId) {
       result[field.key] = existingId;
     } else {
