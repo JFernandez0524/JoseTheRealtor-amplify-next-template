@@ -193,14 +193,16 @@ export async function createGhlIntegration(userId: string, tokenData: {
   try {
     const { access_token, refresh_token, expires_in, locationId, customFieldIds, opportunityFieldIds } = tokenData;
 
-    // 1. Delete any existing integrations for this user
+    // 1. Fetch any existing integration for this user to preserve configuration across reconnects
     console.log(`🔄 Checking for existing integrations for user ${userId}...`);
     const { data: existingIntegrations } = await cookiesClient.models.GhlIntegration.list({
       filter: { userId: { eq: userId } }
     });
 
+    const previous = existingIntegrations && existingIntegrations.length > 0 ? existingIntegrations[0] : null;
+
     if (existingIntegrations && existingIntegrations.length > 0) {
-      console.log(`⚠️ Found ${existingIntegrations.length} existing integration(s), deleting...`);
+      console.log(`⚠️ Found ${existingIntegrations.length} existing integration(s), cleaning up while preserving settings...`);
       
       for (const integration of existingIntegrations) {
         await cookiesClient.models.GhlIntegration.delete({
@@ -210,10 +212,10 @@ export async function createGhlIntegration(userId: string, tokenData: {
       }
     }
 
-    // 2. Create new active integration
+    // 2. Create new active integration, carrying forward profile and campaign settings
     await cookiesClient.models.GhlIntegration.create({
       userId: userId,
-      locationId: locationId || 'default',
+      locationId: locationId || previous?.locationId || 'default',
       accessToken: access_token,
       refreshToken: refresh_token,
       tokenType: 'Bearer',
@@ -222,8 +224,21 @@ export async function createGhlIntegration(userId: string, tokenData: {
       isActive: true,
       dailyMessageCount: 0,
       hourlyMessageCount: 0,
-      customFieldIds: customFieldIds ? JSON.stringify(customFieldIds) : undefined,
-      opportunityFieldIds: opportunityFieldIds ? JSON.stringify(opportunityFieldIds) : undefined,
+      customFieldIds: customFieldIds ? JSON.stringify(customFieldIds) : previous?.customFieldIds,
+      opportunityFieldIds: opportunityFieldIds ? JSON.stringify(opportunityFieldIds) : previous?.opportunityFieldIds,
+      agentName: previous?.agentName,
+      agentBrokerage: previous?.agentBrokerage,
+      agentCalendarEmail: previous?.agentCalendarEmail,
+      campaignPhone: previous?.campaignPhone,
+      campaignEmail: previous?.campaignEmail,
+      campaignCalendarId: previous?.campaignCalendarId,
+      dialerUserId: previous?.dialerUserId,
+      openAiApiKey: previous?.openAiApiKey,
+      aiPersona: previous?.aiPersona,
+      aiExamples: previous?.aiExamples,
+      emailSignature: previous?.emailSignature,
+      timezone: previous?.timezone || 'America/New_York',
+      onboardingCompletedAt: previous?.onboardingCompletedAt,
     });
 
     console.log('✅ GHL integration created for user:', userId);

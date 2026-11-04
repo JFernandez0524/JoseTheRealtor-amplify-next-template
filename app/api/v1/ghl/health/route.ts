@@ -1,7 +1,11 @@
 import { NextResponse } from 'next/server';
 import axios from 'axios';
 import { AuthGetCurrentUserServer } from '@/app/utils/aws/auth/amplifyServerUtils.server';
-import { getValidGhlToken } from '@/amplify/functions/shared/ghlTokenManager';
+import {
+  getValidGhlToken,
+  getGhlIntegration,
+  refreshGhlToken,
+} from '@/app/utils/aws/data/ghlIntegration.server';
 
 /**
  * GET /api/v1/ghl/health
@@ -18,11 +22,9 @@ export async function GET() {
 
     const userId = user.userId;
 
-    // 1. Fetch valid token
-    let tokenData = await getValidGhlToken(userId);
-    let recovered = false;
-
-    if (!tokenData) {
+    // 1. Fetch user integration record
+    const integration = await getGhlIntegration(userId);
+    if (!integration) {
       return NextResponse.json(
         {
           status: 'DISCONNECTED',
@@ -32,27 +34,48 @@ export async function GET() {
       );
     }
 
-    // 2. Ping GHL API to verify real-time token health
+    // 2. Fetch or refresh valid token
+    let token = await getValidGhlToken(userId);
+    let recovered = false;
+
+    if (!token && integration.refreshToken) {
+      token = await refreshGhlToken(integration.id, integration.refreshToken);
+      if (token) recovered = true;
+    }
+
+    if (!token) {
+      return NextResponse.json(
+        {
+          status: 'REAUTH_REQUIRED',
+          message:
+            'GHL authorization token has expired or been revoked. Please reconnect Launch AI.',
+          locationId: integration.locationId,
+        },
+        { status: 200 }
+      );
+    }
+
+    // 3. Ping GHL API to verify real-time token health
     try {
       await axios.get(
-        `https://services.leadconnectorhq.com/locations/${tokenData.locationId}`,
+        `https://services.leadconnectorhq.com/locations/${integration.locationId}`,
         {
           headers: {
-            Authorization: `Bearer ${tokenData.token}`,
+            Authorization: `Bearer ${token}`,
             Version: '2021-07-28',
           },
         }
       );
     } catch (apiError: any) {
       // If GHL returned 401 Unauthorized, attempt forced token auto-recovery
-      if (apiError.response?.status === 401) {
+      if (apiError.response?.status === 401 && integration.refreshToken) {
         console.warn(
           `⚠️ GHL API returned 401 for user ${userId}. Attempting auto-recovery token refresh...`
         );
-        const refreshedData = await getValidGhlToken(userId, true);
+        const refreshedToken = await refreshGhlToken(integration.id, integration.refreshToken);
 
-        if (refreshedData) {
-          tokenData = refreshedData;
+        if (refreshedToken) {
+          token = refreshedToken;
           recovered = true;
           console.log(`✅ Token auto-recovered successfully for user ${userId}`);
         } else {
@@ -61,7 +84,7 @@ export async function GET() {
               status: 'REAUTH_REQUIRED',
               message:
                 'GHL authorization token has expired or been revoked. Please reconnect Launch AI.',
-              locationId: tokenData.locationId,
+              locationId: integration.locationId,
             },
             { status: 200 }
           );
@@ -74,17 +97,27 @@ export async function GET() {
       }
     }
 
+    // Parse customFieldIds if stored as JSON string
+    let parsedCustomFieldIds = integration.customFieldIds;
+    if (typeof parsedCustomFieldIds === 'string') {
+      try {
+        parsedCustomFieldIds = JSON.parse(parsedCustomFieldIds);
+      } catch {
+        parsedCustomFieldIds = null;
+      }
+    }
+
     return NextResponse.json({
       status: 'HEALTHY',
-      locationId: tokenData.locationId,
-      integrationId: tokenData.integrationId,
+      locationId: integration.locationId,
+      integrationId: integration.id,
       recovered,
       customFieldsConfigured: Boolean(
-        tokenData.customFieldIds && Object.keys(tokenData.customFieldIds).length > 0
+        parsedCustomFieldIds && Object.keys(parsedCustomFieldIds).length > 0
       ),
-      agentName: tokenData.agentName || null,
-      campaignCalendarId: tokenData.campaignCalendarId || null,
-      dialerUserId: tokenData.dialerUserId || null,
+      agentName: integration.agentName || null,
+      campaignCalendarId: integration.campaignCalendarId || null,
+      dialerUserId: integration.dialerUserId || null,
     });
   } catch (error: any) {
     console.error('Error checking GHL integration health:', error);
