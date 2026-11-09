@@ -17,11 +17,12 @@ import {
   cleanCourtScrapedName,
   formatPersonalName,
   parseOwnershipName,
+  isDeceasedOwner,
   type OwnershipClassification,
 } from '../../amplify/functions/shared/ownershipClassifier';
 
 // Re-export universal shared name utilities for backwards compatibility
-export { cleanCourtScrapedName, parseOwnershipName, formatPersonalName };
+export { cleanCourtScrapedName, parseOwnershipName, formatPersonalName, isDeceasedOwner };
 export const formatName = formatPersonalName;
 
 export type LeadType =

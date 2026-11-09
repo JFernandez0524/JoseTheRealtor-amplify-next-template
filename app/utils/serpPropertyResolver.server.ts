@@ -52,6 +52,7 @@ export interface SerpResolutionResult {
   data: SerpPropertyData | null;
   bridgeValuation?: any | null;
   error?: string;
+  isCreditDepleted?: boolean;
 }
 
 /**
@@ -645,11 +646,22 @@ export async function resolvePropertyWithSerp(params: {
       bridgeValuation,
     };
   } catch (error: any) {
-    console.error('❌ [SERP_RESOLVER] Error querying Serper:', error.message);
+    const errorMsg = error?.response?.data?.message || error?.message || '';
+    const isCreditDepleted =
+      error?.response?.status === 400 &&
+      (typeof errorMsg === 'string' && errorMsg.toLowerCase().includes('not enough credit'));
+
+    if (isCreditDepleted) {
+      console.warn('⛔ [SERP_RESOLVER] Serper search credits depleted (400 Not enough credits). Please refill credits at serper.dev.');
+    } else {
+      console.error('❌ [SERP_RESOLVER] Error querying Serper:', error.message);
+    }
+
     return {
       success: false,
       data: null,
       error: error.message,
+      isCreditDepleted,
     };
   }
 }

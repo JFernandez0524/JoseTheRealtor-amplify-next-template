@@ -1,4 +1,4 @@
-import { S3Handler } from 'aws-lambda';
+import { S3Handler, Context } from 'aws-lambda';
 import {
   S3Client,
   GetObjectCommand,
@@ -191,7 +191,7 @@ async function preloadExistingLeadKeys(
 // 🚀 MAIN S3 HANDLER
 // ---------------------------------------------------------
 
-export const handler: S3Handler = async (event) => {
+export const handler: S3Handler = async (event, context: Context) => {
   const autoBucketName = event.Records[0].s3.bucket.name;
   console.log(`Bucket Name: ${autoBucketName}`);
 
@@ -222,6 +222,9 @@ export const handler: S3Handler = async (event) => {
     // module-level: Lambda reuses warm containers, and module state would keep the breaker tripped
     // long after the credential is renewed.
     let bridgeAuthFailed = false;
+    // Circuit breaker for the Serper search API (depleted credits). Deliberately per-invocation,
+    // NOT module-level so Lambda container reuses do not hold stale tripped state.
+    let serperDepleted = false;
     // User's column mapping (canonicalField -> source header) from the upload UI; undefined for legacy
     // uploads, in which case the per-row `cell()` helper falls back to hardcoded header aliases.
     let columnMapping: Record<string, string> | undefined;
@@ -441,11 +444,8 @@ export const handler: S3Handler = async (event) => {
         parse({ columns: true, skip_empty_lines: true, trim: true, bom: true })
       );
 
-      for await (const row of parser) {
-        if (isEmptyCsvRow(row as Record<string, any>) || isSubHeaderRow(row as Record<string, any>)) {
-          continue;
-        }
-        currentRow++;
+      // Helper to process a single CSV row
+      const processRow = async (row: Record<string, any>, rowNum: number): Promise<'SUCCESS' | 'DUPLICATE' | 'ERROR'> => {
         try {
           // Resolve a canonical field's value from this row: prefer the user's column mapping, then
           // fall back to the given legacy header aliases (so pre-mapping uploads still work).
@@ -530,13 +530,12 @@ export const handler: S3Handler = async (event) => {
               });
             }
 
-            duplicateCount++;
+            return 'DUPLICATE';
+          }
 
-            if (currentRow % 5 === 0 || currentRow === totalRows) {
-              await updateProgress();
-            }
-
-            continue;
+          // Register key immediately (before any await) so intra-chunk duplicates are caught synchronously
+          if (earlyDupKey) {
+            existingAddressKeys.add(earlyDupKey);
           }
 
           const cleanCity = cleanCityForGeocoding(rawPropCity);
@@ -769,13 +768,7 @@ export const handler: S3Handler = async (event) => {
               });
             }
 
-            duplicateCount++;
-
-            if (currentRow % 5 === 0 || currentRow === totalRows) {
-              await updateProgress();
-            }
-
-            continue; // Skip this lead
+            return 'DUPLICATE';
           }
           // 🏠 Fetch Zestimate data during upload — only for addresses Google could confirm. No point
           // attaching a valuation to an unconfirmed address (it would likely match the wrong parcel);
@@ -828,7 +821,7 @@ export const handler: S3Handler = async (event) => {
 
           // 🔎 Proactive SERP Property & Listing Status Resolution (Serper.dev)
           let serpData: any = null;
-          if (addressUsable && process.env.SERPER_API_KEY) {
+          if (addressUsable && process.env.SERPER_API_KEY && !serperDepleted) {
             try {
               const zestimateStreet = standardizedAddress?.street || finalPropAddr;
               const zestimateCity = standardizedAddress?.city || finalPropCity;
@@ -842,7 +835,10 @@ export const handler: S3Handler = async (event) => {
                 skipBridgeLookup: !!zillowData,
               });
 
-              if (serpRes.success && serpRes.data) {
+              if (serpRes.isCreditDepleted) {
+                serperDepleted = true;
+                console.warn('⛔ [SERP_RESOLVER] Serper search credits depleted — tripping circuit breaker for remaining rows.');
+              } else if (serpRes.success && serpRes.data) {
                 serpData = serpRes.data;
                 const resolvedZestimate =
                   serpRes.bridgeValuation?.zestimate ??
@@ -868,7 +864,13 @@ export const handler: S3Handler = async (event) => {
                 }
               }
             } catch (serpErr: any) {
-              console.warn('⚠️ [SERP_RESOLVER] Serper resolution failed:', serpErr.message);
+              const errorMsg = serpErr?.response?.data?.message || serpErr?.message || '';
+              if (serpErr?.response?.status === 400 && typeof errorMsg === 'string' && errorMsg.toLowerCase().includes('not enough credit')) {
+                serperDepleted = true;
+                console.warn('⛔ [SERP_RESOLVER] Serper search credits depleted (caught in handler) — tripping circuit breaker.');
+              } else {
+                console.warn('⚠️ [SERP_RESOLVER] Serper resolution failed:', serpErr.message);
+              }
             }
           }
 
@@ -1021,16 +1023,100 @@ export const handler: S3Handler = async (event) => {
             existingKeyToId.set(dupKey, leadItem.id);
             existingKeyToData.set(dupKey, summarizeExistingLead(leadItem));
           }
+          if (earlyDupKey) {
+            existingKeyToId.set(earlyDupKey, leadItem.id);
+            existingKeyToData.set(earlyDupKey, summarizeExistingLead(leadItem));
+          }
 
-          successCount++;
+          return 'SUCCESS';
+
+
         } catch (rowError: any) {
-          errorCount++;
-          console.error(`❌ Row ${currentRow} failed:`, rowError.message);
+          console.error(`❌ Row ${rowNum} failed:`, rowError?.message || rowError);
+          return 'ERROR';
         }
+      };
 
-        if (currentRow % 5 === 0 || currentRow === totalRows) {
+      // Process rows in concurrent chunks
+      const CHUNK_SIZE = 5;
+      let currentChunk: { row: Record<string, any>; rowNum: number }[] = [];
+      let timedOutGracefully = false;
+
+      const processChunk = async (chunk: { row: Record<string, any>; rowNum: number }[]) => {
+        const results = await Promise.allSettled(
+          chunk.map((item) => processRow(item.row, item.rowNum))
+        );
+
+        for (const res of results) {
+          if (res.status === 'fulfilled') {
+            if (res.value === 'SUCCESS') successCount++;
+            else if (res.value === 'DUPLICATE') duplicateCount++;
+            else if (res.value === 'ERROR') errorCount++;
+          } else {
+            errorCount++;
+            console.error('❌ Chunk row failed unexpectedly:', res.reason);
+          }
+        }
+      };
+
+      for await (const row of parser) {
+        if (isEmptyCsvRow(row as Record<string, any>) || isSubHeaderRow(row as Record<string, any>)) {
+          continue;
+        }
+        currentRow++;
+        currentChunk.push({ row: row as Record<string, any>, rowNum: currentRow });
+
+        if (currentChunk.length >= CHUNK_SIZE) {
+          // Check remaining execution time before starting next batch
+          if (context && typeof context.getRemainingTimeInMillis === 'function') {
+            if (context.getRemainingTimeInMillis() < 45_000) {
+              console.warn(
+                `⏰ Lambda execution approaching 15-minute limit (${context.getRemainingTimeInMillis()}ms left). Halting processing safely.`
+              );
+              timedOutGracefully = true;
+              break;
+            }
+          }
+
+          await processChunk(currentChunk);
+          currentChunk = [];
           await updateProgress();
         }
+      }
+
+      // Process any trailing rows in the final chunk
+      if (!timedOutGracefully && currentChunk.length > 0) {
+        await processChunk(currentChunk);
+        currentChunk = [];
+        await updateProgress();
+      }
+
+      if (timedOutGracefully) {
+        const timeoutMessage =
+          `Upload safely paused after importing ${successCount} leads because it approached the 15-minute AWS execution limit. ` +
+          `${totalRows - currentRow} rows remain. Re-uploading this file will quickly import the remaining leads as duplicates are automatically skipped.`;
+        console.warn(`⚠️ ${timeoutMessage}`);
+
+        await docClient.send(new UpdateCommand({
+          TableName: csvUploadJobTableName,
+          Key: { id: jobId },
+          UpdateExpression: 'SET #status = :status, errorMessage = :error, successCount = :success, duplicateCount = :duplicate, duplicateLeads = :duplicates, errorCount = :errors, processedRows = :processed, completedAt = :completed, updatedAt = :updated',
+          ExpressionAttributeNames: {
+            '#status': 'status'
+          },
+          ExpressionAttributeValues: {
+            ':status': 'FAILED',
+            ':error': timeoutMessage,
+            ':success': successCount,
+            ':duplicate': duplicateCount,
+            ':duplicates': duplicateLeads,
+            ':errors': errorCount,
+            ':processed': currentRow,
+            ':completed': new Date().toISOString(),
+            ':updated': new Date().toISOString(),
+          }
+        }));
+        return;
       }
 
       // 5. Update job record as completed. Warnings are for a job that imported successfully but
@@ -1041,6 +1127,13 @@ export const handler: S3Handler = async (event) => {
           'Zestimates unavailable: the Bridge/Zillow API rejected our credentials (401). ' +
             'Leads were imported without valuation data — renew BRIDGE_API_KEY, then refresh ' +
             'Zestimates from each lead’s detail page.'
+        );
+      }
+      if (serperDepleted) {
+        warnings.push(
+          'Listing status & ZPID resolution paused: your Serper.dev search credits are depleted. ' +
+            'Leads were imported without real-time listing checks or SERP-based Zestimates — ' +
+            'please refill credits at serper.dev.'
         );
       }
 

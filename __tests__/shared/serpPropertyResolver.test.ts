@@ -1,5 +1,5 @@
 // __tests__/shared/serpPropertyResolver.test.ts
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import {
   parseSerpResults,
   normalizeDateToIso,
@@ -7,6 +7,7 @@ import {
   normalizeStreetForSearch,
   extractAddressParts,
   isResultMatchingAddress,
+  resolvePropertyWithSerp,
   type SerpOrganicResult,
 } from '@/app/utils/serpPropertyResolver.server';
 
@@ -659,6 +660,39 @@ describe('serpPropertyResolver', () => {
       expect(result.lastSaleDate).toBe('2021-03-09');
       expect(result.lastSaleAmount).toBe(599800);
       expect(result.zpid).toBe('39488135');
+    });
+  });
+
+  describe('resolvePropertyWithSerp credit exhaustion', () => {
+    it('detects 400 Not enough credits and flags isCreditDepleted: true', async () => {
+      const axios = (await import('axios')).default;
+      const originalPost = axios.post;
+      const prevKey = process.env.SERPER_API_KEY;
+      process.env.SERPER_API_KEY = 'mock-key';
+
+      try {
+        axios.post = vi.fn().mockRejectedValue({
+          response: {
+            status: 400,
+            data: { message: 'Not enough credits', statusCode: 400 },
+          },
+          message: 'Request failed with status code 400',
+        }) as any;
+
+        const res = await resolvePropertyWithSerp({
+          address: '100 Main St',
+          city: 'Freehold',
+          state: 'NJ',
+          zip: '07728',
+        });
+
+        expect(res.success).toBe(false);
+        expect(res.isCreditDepleted).toBe(true);
+        expect(res.error).toBe('Request failed with status code 400');
+      } finally {
+        axios.post = originalPost;
+        process.env.SERPER_API_KEY = prevKey;
+      }
     });
   });
 });

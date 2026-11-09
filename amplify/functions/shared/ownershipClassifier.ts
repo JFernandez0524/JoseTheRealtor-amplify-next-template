@@ -59,6 +59,14 @@ function capitalize(word: string): string {
 }
 
 /**
+ * Detects if a scraped name indicates a deceased homeowner or estate situation.
+ */
+export function isDeceasedOwner(name: string | null | undefined): boolean {
+  if (!name || typeof name !== 'string') return false;
+  return /\b(deceased|dec(')?d|dec\b|estate(\s+of)?)\b/i.test(name);
+}
+
+/**
  * Cleans court/sheriff/auction scraped name artifacts:
  * - Strips leading non-alphanumeric punctuation (dots, dashes, bullets, semicolons, asterisks)
  * - Strips legal aliases: A/K/A, F/K/A, N/K/A, AKA, Also Known As, etc. keeping the primary name
@@ -87,6 +95,9 @@ export function cleanCourtScrapedName(
   if (!options?.preserveCourtJoiners) {
     s = s.replace(/,?\s*\b(?:ET\s*AL(?:S)?|ET\s*UX|ET\s*VIR)\b/gi, '');
   }
+
+  // Strip unclosed parentheticals at the end (e.g. "(deceased", "(dec'd", "(dec")
+  s = s.replace(/\s*\([^)]*$/g, '');
 
   // Strip trailing punctuation / noise (e.g. "; .", ";", ",", ".")
   s = s.replace(/[\s.,;:*_\-/#\\|~`!@$%^&()+=<>[\]{}•"']+$/g, '');
@@ -131,6 +142,8 @@ export function parseOwnershipName(ownership: string | null | undefined): { firs
 
   // 2. Strip parentheticals like (DECEASED), (DECEASED HUSBAND), (DEC), (WIFE), (HUSBAND), (), etc.
   cleaned = cleaned.replace(/\([^)]*\)/g, ' ');
+  // Also strip unclosed parentheticals at the end (e.g. "(deceased", "(dec'd")
+  cleaned = cleaned.replace(/\s*\([^)]*$/g, ' ');
 
   // 3. Normalize joiners (+ or AND -> &) and strip real estate deed noise
   cleaned = cleaned
