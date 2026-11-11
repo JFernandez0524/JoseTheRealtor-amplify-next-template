@@ -470,7 +470,31 @@ export default function LeadDashboardClient({}: Props) {
                 (searchWithoutCounty && resolvedCountyLower.includes(searchWithoutCounty)))
           );
 
+          const ownerFullName = `${lead.ownerFirstName || ''} ${lead.ownerLastName || ''}`.trim().toLowerCase();
+          const adminFullName = `${lead.adminFirstName || ''} ${lead.adminLastName || ''}`.trim().toLowerCase();
+
+          // Tokenized search: if user entered multiple words (e.g. "Eric Greer" or "123 Main"),
+          // check that every word appears somewhere across the lead's searchable fields
+          const searchTokens = search.split(/\s+/).filter(Boolean);
+          const searchableFields = [
+            ownerFullName,
+            adminFullName,
+            lead.ownerAddress?.toLowerCase(),
+            lead.ownerCity?.toLowerCase(),
+            lead.ownerState?.toLowerCase(),
+            lead.ownerZip,
+            lead.mailingAddress?.toLowerCase(),
+            lead.mailingCity?.toLowerCase(),
+            resolvedCountyLower,
+            ...(lead.phones || []),
+            ...((lead as any).landlinePhones || []),
+            ...(lead.emails || []).map((e) => e?.toLowerCase()),
+            ...(lead.customTags || []).map((t) => t?.toLowerCase()),
+          ].filter(Boolean) as string[];
+
           const matches =
+            ownerFullName.includes(search) ||
+            adminFullName.includes(search) ||
             lead.ownerAddress?.toLowerCase().includes(search) ||
             lead.ownerLastName?.toLowerCase().includes(search) ||
             lead.ownerFirstName?.toLowerCase().includes(search) ||
@@ -481,8 +505,10 @@ export default function LeadDashboardClient({}: Props) {
             lead.adminFirstName?.toLowerCase().includes(search) ||
             lead.adminLastName?.toLowerCase().includes(search) ||
             (lead.phones && lead.phones.some((phone) => phone?.includes(search))) ||
+            ((lead as any).landlinePhones && (lead as any).landlinePhones.some((phone: string) => phone?.includes(search))) ||
             (lead.emails && lead.emails.some((email) => email?.toLowerCase().includes(search))) ||
-            (lead.customTags && lead.customTags.some((tag) => tag?.toLowerCase().includes(search)));
+            (lead.customTags && lead.customTags.some((tag) => tag?.toLowerCase().includes(search))) ||
+            (searchTokens.length > 1 && searchTokens.every((token) => searchableFields.some((f) => f.includes(token))));
           if (!matches) return false;
         }
 
