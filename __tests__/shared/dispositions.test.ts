@@ -83,6 +83,24 @@ describe('detectCallOutcomeFromMessage', () => {
     expect(detectCallOutcomeFromMessage('We are working with a realtor')).toBe('Listed With Realtor');
     expect(detectCallOutcomeFromMessage('It is already listed')).toBe('Listed With Realtor');
     expect(detectCallOutcomeFromMessage("Got your email.  We have hired a realtor for my dad's property.")).toBe('Listed With Realtor');
+    expect(detectCallOutcomeFromMessage('Listed with an agent right now')).toBe('Listed With Realtor');
+  });
+
+  it('does NOT misclassify "email listed" / wrong-contact / quoted-signature emails as Listed With Realtor', () => {
+    // Regression: lead jTonE12YhcNBEQzprV0r (Amanda Ricci)
+    const amandaEmail =
+      '<div dir="auto">Good Afternoon,<div dir="auto"> I am not Jaime Ricci and I am not connected at all to this property. Can you please remove me from whatever list has my email listed for this property?</div><div dir="auto">Thank You, Amanda Ricci</div></div>' +
+      '<div class="gmail_quote"><div class="gmail_attr">On Mon, Nov 16, 2026, 12:04 PM Jose Fernandez Remax Agent &lt;jose@example.com&gt; wrote:</div>' +
+      '<blockquote class="gmail_quote">RE/MAX Homeland Realtors</blockquote></div>';
+    expect(detectCallOutcomeFromMessage(amandaEmail)).toBe('Wrong Number / Disconnected / Invalid Number');
+
+    expect(detectCallOutcomeFromMessage('Take me off whatever list has my email listed')).toBe('Not Interested');
+    expect(detectCallOutcomeFromMessage('I am not a realtor')).not.toBe('Listed With Realtor');
+    expect(
+      detectCallOutcomeFromMessage(
+        'Tell me more\n\nOn Mon, Nov 16, 2026 at 12:04 PM Jose Fernandez Remax Agent wrote:\n> RE/MAX Homeland Realtors',
+      ),
+    ).toBe(null);
   });
 
   it('detects Sold Already', () => {

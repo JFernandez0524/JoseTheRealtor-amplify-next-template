@@ -74,11 +74,68 @@ export function isDncDisposition(callOutcome: string | null | undefined): boolea
 }
 
 /**
+ * Strip quoted email reply threads and HTML markup so outbound signatures
+ * (e.g. "Jose Fernandez Remax Agent", "RE/MAX Homeland Realtors") are never
+ * scanned as part of the lead's reply.
+ */
+function stripQuotedReplyAndHtml(raw: string): string {
+  let text = raw
+    // Cut off Gmail / standard HTML quote blocks
+    .split(/<div\s+[^>]*class=["']?[^"']*gmail_quote/i)[0]
+    .split(/<blockquote\b/i)[0]
+    // Replace block/break tags with newlines, strip remaining HTML tags
+    .replace(/<(?:br|\/p|\/div|\/li|\/tr)\s*\/?>/gi, '\n')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>');
+
+  // Cut off plain-text reply headers ("On Mon, Nov 16... wrote:", "-----Original Message-----")
+  text = text
+    .split(/\n\s*On\s+(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun|\d{1,2}\/\d{1,2})[^\n]*wrote:/i)[0]
+    .split(/\n\s*-{3,}\s*Original Message\s*-{3,}/i)[0];
+
+  // Drop quoted `>` lines
+  text = text
+    .split('\n')
+    .filter((line) => !line.trimStart().startsWith('>'))
+    .join(' ');
+
+  return text.replace(/\s+/g, ' ').trim();
+}
+
+function isListedWithRealtorMessage(msg: string): boolean {
+  // Explicit realtor / real estate agent mentions (excluding negations like "not a realtor")
+  if (/\brealtors?\b/.test(msg) && !/\b(?:not\s+a|no|without\s+a)\s+realtor\b/.test(msg)) {
+    return true;
+  }
+  if (/\b(?:real\s+estate\s+agent|listing\s+agent)\b/.test(msg)) {
+    return true;
+  }
+  if (
+    /\b(?:have|has|had|hired|using|working\s+with|signed\s+with|represented\s+by|got|with)\s+(?:a|an|my|our|the)\s+(?:realtor|agent|broker)\b/.test(msg) ||
+    /\bmy\s+agent\b/.test(msg)
+  ) {
+    return true;
+  }
+  // Property-listing phrases only (avoids false positives like "my email listed" or "number listed")
+  if (
+    /\b(?:is|it'?s|house\s+is|home\s+is|property\s+is|already|currently)\s+listed\b/.test(msg) ||
+    /\blisted\s+(?:the\s+|my\s+|our\s+|this\s+|it\s+)?(?:with|by|on\s+the\s+market|for\s+sale)\b/.test(msg)
+  ) {
+    return true;
+  }
+  return false;
+}
+
+/**
  * Detect the appropriate GHL "Call Outcome" picklist string from an incoming lead message.
  */
 export function detectCallOutcomeFromMessage(message: string | null | undefined): string | null {
   if (!message || typeof message !== 'string') return null;
-  const msg = message.trim().toLowerCase();
+  const msg = stripQuotedReplyAndHtml(message).toLowerCase();
+  if (!msg) return null;
 
   // 1. Explicit Phone DNC: Reserved specifically for explicit telemarketing / calling objections
   if (
@@ -98,20 +155,12 @@ export function detectCallOutcomeFromMessage(message: string | null | undefined)
     return 'DNC';
   }
 
-  // 2. Realtor / Agent representation
-  if (msg.includes('realtor') || msg.includes('listed') || msg.includes('agent')) {
-    return 'Listed With Realtor';
-  }
-
-  // 3. Already Sold
-  if (msg.includes('sold')) {
-    return 'Sold Already';
-  }
-
-  // 4. Wrong Number / Not Owner
+  // 2. Wrong Number / Not Owner / Not Connected (checked before Realtor so "email listed" / wrong-contact replies aren't misclassified)
   if (
     msg.includes('wrong number') ||
     msg.includes('wrong person') ||
+    msg.includes('wrong email') ||
+    msg.includes('wrong address') ||
     msg.includes('incorrect number') ||
     msg.includes('not my property') ||
     msg.includes('not my house') ||
@@ -126,9 +175,22 @@ export function detectCallOutcomeFromMessage(message: string | null | undefined)
     msg.includes('wrong contact') ||
     msg.includes("doesn't belong to me") ||
     msg.includes('does not belong to me') ||
-    msg.includes('not mine')
+    msg.includes('not mine') ||
+    /\bnot\s+connected\s+(?:at\s+all\s+)?to\s+(?:this|the|that)\s+(?:property|house|home)\b/.test(msg) ||
+    /\bno\s+connection\s+to\s+(?:this|the|that)\s+(?:property|house|home)\b/.test(msg) ||
+    /\bnever\s+lived\s+(?:there|at)\b/.test(msg)
   ) {
     return 'Wrong Number / Disconnected / Invalid Number';
+  }
+
+  // 3. Realtor / Agent representation
+  if (isListedWithRealtorMessage(msg)) {
+    return 'Listed With Realtor';
+  }
+
+  // 4. Already Sold
+  if (msg.includes('sold')) {
+    return 'Sold Already';
   }
 
   // 5. Not Interested / General Opt-Out / Stop / Leave Me Alone / Paid Off / Second Mortgage
