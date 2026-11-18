@@ -1,9 +1,19 @@
 'use client';
 
-import React, { createContext, useContext, ReactNode, useState, useEffect, useCallback } from 'react';
+import React, {
+  createContext,
+  useContext,
+  ReactNode,
+  useState,
+  useEffect,
+  useCallback,
+  useRef,
+} from 'react';
 import { Hub } from 'aws-amplify/utils';
+import { fetchAuthSession } from 'aws-amplify/auth';
 import { client } from '@/app/utils/aws/data/frontEndClient';
 import { getFrontEndUser } from '@/app/utils/aws/auth/amplifyFrontEndUser';
+import { resolveGhlConnection } from './ghlConnection';
 
 interface GhlContextType {
   isConnected: boolean;
@@ -25,60 +35,50 @@ const GhlContext = createContext<GhlContextType>(defaultGhl);
 
 export function GhlProvider({ children }: { children: ReactNode }) {
   const [ghl, setGhl] = useState<GhlContextType>(defaultGhl);
+  const requestIdRef = useRef(0);
 
   const checkConnection = useCallback(async () => {
-    try {
-      const user = await getFrontEndUser();
-      if (!user) {
-        setGhl({ ...defaultGhl, isLoading: false });
-        return;
-      }
+    const requestId = ++requestIdRef.current;
 
-      const { data: integrations } = await client.models.GhlIntegration.list({
-        filter: { 
-          userId: { eq: user.userId },
-          isActive: { eq: true }
-        }
+    try {
+      const resolved = await resolveGhlConnection({
+        getUser: getFrontEndUser,
+        ensureSession: async () => {
+          try {
+            const session = await fetchAuthSession();
+            return Boolean(session.tokens);
+          } catch {
+            return false;
+          }
+        },
+        listIntegrations: async (userId) => {
+          const { data, errors } = await client.models.GhlIntegration.list({
+            filter: {
+              userId: { eq: userId },
+              isActive: { eq: true },
+            },
+          });
+          return { data, errors };
+        },
+        refreshToken: async () => {
+          const res = await fetch('/api/v1/oauth/refresh', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+          });
+          return { ok: res.ok, status: res.status };
+        },
       });
 
-      if (integrations && integrations.length > 0) {
-        const integration = integrations[0];
-        const isExpired = new Date(integration.expiresAt) < new Date();
-        
-        if (isExpired && integration.refreshToken) {
-          // Auto-refresh expired token
-          console.log('🔄 GHL token expired, auto-refreshing...');
-          try {
-            const refreshResponse = await fetch('/api/v1/oauth/refresh', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' }
-            });
+      if (requestId !== requestIdRef.current) return;
 
-            if (refreshResponse.ok) {
-              console.log('✅ GHL token refreshed successfully');
-              // Re-check connection after refresh
-              await checkConnection();
-              return;
-            } else {
-              console.error('❌ GHL token refresh failed');
-            }
-          } catch (refreshError) {
-            console.error('❌ GHL token refresh error:', refreshError);
-          }
-        }
-        
-        setGhl({
-          isConnected: !isExpired,
-          locationId: integration.locationId || null,
-          integrationId: integration.id,
-          isLoading: false,
-          refreshConnection: checkConnection,
-        });
-      } else {
-        setGhl({ ...defaultGhl, isLoading: false, refreshConnection: checkConnection });
-      }
+      setGhl({
+        ...resolved,
+        isLoading: false,
+        refreshConnection: checkConnection,
+      });
     } catch (error) {
       console.error('Error checking GHL connection:', error);
+      if (requestId !== requestIdRef.current) return;
       setGhl({ ...defaultGhl, isLoading: false, refreshConnection: checkConnection });
     }
   }, []);
@@ -92,14 +92,15 @@ export function GhlProvider({ children }: { children: ReactNode }) {
         setGhl((prev) => ({ ...prev, isLoading: true }));
         checkConnection();
       } else if (payload.event === 'signedOut') {
+        requestIdRef.current++;
         setGhl({ ...defaultGhl, isLoading: false });
       }
     });
-    
+
     // Re-check when window regains focus (after OAuth redirect)
     const handleFocus = () => checkConnection();
     window.addEventListener('focus', handleFocus);
-    
+
     return () => {
       unsubscribe();
       window.removeEventListener('focus', handleFocus);

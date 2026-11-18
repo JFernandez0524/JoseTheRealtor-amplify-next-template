@@ -209,6 +209,12 @@ export function ThanksIoModal({ isOpen, leadIds, onClose, onSent }: Props) {
         {/* NOT CONNECTED / ONBOARDING VIEW */}
         {isConnected === false && (
           <div className='px-4 sm:px-6 py-5 overflow-y-auto space-y-4'>
+            {error && (
+              <div className='bg-red-50 border border-red-200 rounded-xl p-3 text-xs font-medium text-red-700'>
+                {error}
+              </div>
+            )}
+
             <div className='bg-blue-50 border border-blue-200 rounded-xl p-4 text-xs text-blue-900 space-y-2'>
               <p className='font-semibold text-sm text-blue-950'>
                 💡 Free Direct Mail Integration (Partner Access)

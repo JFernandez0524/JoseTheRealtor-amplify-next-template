@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { AuthGetCurrentUserServer } from '@/app/utils/aws/auth/amplifyServerUtils.server';
 import { saveThanksIoSettings, deleteThanksIoSettings } from '@/app/utils/aws/data/thanksIoIntegration.server';
-import { THANKS_IO_API_BASE } from '@/amplify/functions/shared/thanksIoRecipients';
+import {
+  THANKS_IO_API_BASE,
+  normalizeThanksIoToken,
+  extractThanksIoErrorMessage,
+} from '@/amplify/functions/shared/thanksIoRecipients';
 
 /**
  * POST /api/v1/thanksio/connect
@@ -15,7 +19,7 @@ export async function POST(request: NextRequest) {
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const body = await request.json();
-    const apiKey = typeof body.apiKey === 'string' ? body.apiKey.trim() : '';
+    const apiKey = typeof body.apiKey === 'string' ? normalizeThanksIoToken(body.apiKey) : '';
     const accountEmail = typeof body.accountEmail === 'string' ? body.accountEmail.trim() : undefined;
 
     if (!apiKey) {
@@ -32,10 +36,8 @@ export async function POST(request: NextRequest) {
       });
 
       if (!verifyRes.ok) {
-        return NextResponse.json(
-          { error: 'Invalid Thanks.io API key. Please check your token from your Thanks.io dashboard and try again.' },
-          { status: 400 },
-        );
+        const message = await extractThanksIoErrorMessage(verifyRes);
+        return NextResponse.json({ error: message }, { status: 400 });
       }
     } catch (testErr: any) {
       console.error('❌ [THANKS.IO] Verification request failed:', testErr.message);

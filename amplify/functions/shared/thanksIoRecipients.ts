@@ -322,3 +322,42 @@ export function buildThanksIoRecipient(
 
   return { ok: true, payload };
 }
+
+/**
+ * Normalizes a user-pasted Thanks.io API token by trimming whitespace and
+ * stripping an accidental leading "Bearer " prefix.
+ */
+export function normalizeThanksIoToken(raw: string): string {
+  return raw.trim().replace(/^Bearer\s+/i, '').trim();
+}
+
+/**
+ * Extracts a human-readable error message from a non-OK Thanks.io API response.
+ * Maps 401/403 to an invalid-key prompt, and surfaces Thanks.io's JSON `message`
+ * or `error` (e.g., suspended account) for other status codes.
+ */
+export async function extractThanksIoErrorMessage(
+  res: Pick<Response, 'status' | 'text'>
+): Promise<string> {
+  if (res.status === 401 || res.status === 403) {
+    return 'Invalid Thanks.io API key. Please check your token from your Thanks.io dashboard and try again.';
+  }
+
+  try {
+    const raw = await res.text();
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      const detail =
+        (typeof parsed?.message === 'string' && parsed.message.trim()) ||
+        (typeof parsed?.error === 'string' && parsed.error.trim()) ||
+        (Array.isArray(parsed?.errors) && typeof parsed.errors[0] === 'string' && parsed.errors[0].trim());
+      if (detail) {
+        return `Thanks.io: ${detail}`;
+      }
+    }
+  } catch {
+    // Fall through to generic status message
+  }
+
+  return `Thanks.io returned status ${res.status}.`;
+}

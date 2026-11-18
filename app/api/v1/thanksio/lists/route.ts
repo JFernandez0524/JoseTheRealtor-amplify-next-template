@@ -1,7 +1,11 @@
 import { NextResponse } from 'next/server';
 import { AuthGetCurrentUserServer, AuthGetUserGroupsServer } from '@/app/utils/aws/auth/amplifyServerUtils.server';
 import { getThanksIoSettings } from '@/app/utils/aws/data/thanksIoIntegration.server';
-import { THANKS_IO_API_BASE, THANKS_IO_LISTS } from '@/amplify/functions/shared/thanksIoRecipients';
+import {
+  THANKS_IO_API_BASE,
+  THANKS_IO_LISTS,
+  extractThanksIoErrorMessage,
+} from '@/amplify/functions/shared/thanksIoRecipients';
 
 export const dynamic = 'force-dynamic';
 
@@ -44,14 +48,22 @@ export async function GET() {
     });
 
     if (!res.ok) {
+      const message = await extractThanksIoErrorMessage(res);
       if (res.status === 401 || res.status === 403) {
         return NextResponse.json({
           connected: false,
-          error: 'Invalid Thanks.io API Key. Please update your key in Settings.',
+          error: message,
           lists: [],
         });
       }
-      throw new Error(`Thanks.io returned status ${res.status}`);
+      return NextResponse.json(
+        {
+          connected: false,
+          error: message,
+          lists: [],
+        },
+        { status: res.status >= 500 ? 502 : 400 },
+      );
     }
 
     const json = await res.json();

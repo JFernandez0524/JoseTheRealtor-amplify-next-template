@@ -5,6 +5,8 @@ import {
   getThanksIoList,
   parseSaleDate,
   thanksIoListTag,
+  normalizeThanksIoToken,
+  extractThanksIoErrorMessage,
 } from '../../amplify/functions/shared/thanksIoRecipients';
 
 const NOW = new Date(2026, 9, 22); // Oct 22, 2026
@@ -294,5 +296,41 @@ describe('buildThanksIoRecipient', () => {
       expect(absenteeRes.payload.province).toBe('FL');
       expect(absenteeRes.payload.custom3).toBe('12 Rental Way');
     }
+  });
+});
+
+describe('Thanks.io token & error helpers', () => {
+  it('strips whitespace and accidental Bearer prefix from pasted tokens', () => {
+    expect(normalizeThanksIoToken('  abc123  ')).toBe('abc123');
+    expect(normalizeThanksIoToken('Bearer   abc123 ')).toBe('abc123');
+    expect(normalizeThanksIoToken('bearer\tabc123')).toBe('abc123');
+  });
+
+  it('maps 401/403 to invalid API key message', async () => {
+    const msg = await extractThanksIoErrorMessage({
+      status: 401,
+      text: async () => JSON.stringify({ message: 'Unauthenticated.' }),
+    });
+    expect(msg).toContain('Invalid Thanks.io API key');
+  });
+
+  it('surfaces Thanks.io account suspension message on 400', async () => {
+    const msg = await extractThanksIoErrorMessage({
+      status: 400,
+      text: async () =>
+        JSON.stringify({
+          error: 'Your Account is suspended, please contact support@thanks.io',
+          message: 'Your Account is suspended, please contact support@thanks.io',
+        }),
+    });
+    expect(msg).toBe('Thanks.io: Your Account is suspended, please contact support@thanks.io');
+  });
+
+  it('falls back to status code when error body is not JSON', async () => {
+    const msg = await extractThanksIoErrorMessage({
+      status: 502,
+      text: async () => 'Bad Gateway',
+    });
+    expect(msg).toBe('Thanks.io returned status 502.');
   });
 });
