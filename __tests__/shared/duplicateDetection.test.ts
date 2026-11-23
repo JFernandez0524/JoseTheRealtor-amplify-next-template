@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { makeAddressKey } from '@/app/utils/leadValidation';
+import { makeAddressKey, getAddressDuplicateKeys } from '@/app/utils/leadValidation';
 
 describe('Duplicate Detection Logic', () => {
   it('correctly identifies genuine duplicate property addresses even with formatting differences', () => {
@@ -77,5 +77,21 @@ describe('Duplicate Detection Logic', () => {
     // Ruth Kaplan and James Conover MUST NOT be caught as duplicates
     expect(existingAddressKeys.has(rowRuthKaplan)).toBe(false);
     expect(existingAddressKeys.has(rowJamesConover)).toBe(false);
+  });
+
+  it('matches A/K/A alias addresses against an existing DB lead without mutating non-AKA strings', () => {
+    const existingDbKey = makeAddressKey('123 Kimball Street', '07095')!;
+    expect(existingDbKey).toBe('123 kimball st|07095');
+
+    const incomingKeys = getAddressDuplicateKeys(
+      '123 Kimball St. Woodbridge Nj 07095 A/K/A 123 Kimball Street',
+      '07095'
+    );
+    expect(incomingKeys).toContain(existingDbKey);
+
+    // Non-AKA messy strings are not split or rewritten
+    const nonAka = '23 Briarwood Drive Mailing Address 23 Briarwood Drive Matawan, Nj 07747 Old';
+    const nonAkaKeys = getAddressDuplicateKeys(nonAka, '07747');
+    expect(nonAkaKeys).toEqual([makeAddressKey(nonAka, '07747')]);
   });
 });

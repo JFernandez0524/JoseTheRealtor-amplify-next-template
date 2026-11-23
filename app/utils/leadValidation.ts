@@ -248,3 +248,29 @@ export function makeAddressKey(
   return `${cleanAddr}|${cleanZip}`;
 }
 
+const ADDRESS_ALIAS_SPLIT_RE = /\b(?:a\/k\/a|f\/k\/a|n\/k\/a|aka|also\s+known\s+as)\b/i;
+
+/**
+ * Generates canonical duplicate-lookup keys for an address without mutating the stored string.
+ * Always includes `makeAddressKey(addr, zip)`, and if the address contains an `A/K/A` (or `AKA`)
+ * alias, also includes keys for each alias segment so e.g.
+ * `"123 Kimball St. Woodbridge Nj 07095 A/K/A 123 Kimball Street"` matches `"123 Kimball Street"`.
+ */
+export function getAddressDuplicateKeys(
+  addr: string | null | undefined,
+  zip: string | null | undefined
+): string[] {
+  const keys = new Set<string>();
+  const primary = makeAddressKey(addr, zip);
+  if (primary) keys.add(primary);
+
+  if (addr && typeof addr === 'string' && ADDRESS_ALIAS_SPLIT_RE.test(addr)) {
+    for (const part of addr.split(ADDRESS_ALIAS_SPLIT_RE)) {
+      const partKey = makeAddressKey(part, zip);
+      if (partKey) keys.add(partKey);
+    }
+  }
+
+  return Array.from(keys);
+}
+

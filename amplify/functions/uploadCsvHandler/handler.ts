@@ -17,6 +17,7 @@ import {
   isTaxForeclosureCase,
   normalizeAddress,
   makeAddressKey,
+  getAddressDuplicateKeys,
   formatPhoneE164,
   formatZip,
 } from '../../../app/utils/leadValidation';
@@ -168,15 +169,23 @@ async function preloadExistingLeadKeys(
         '#afn': 'adminFirstName',
         '#aln': 'adminLastName',
         '#ze': 'zestimate',
+        '#sa': 'standardizedAddress',
       },
       ExpressionAttributeValues: { ':ownerId': ownerId },
-      ProjectionExpression: 'id, #oa, #oz, #oc, #ofn, #oln, #afn, #aln, #ze',
+      ProjectionExpression: 'id, #oa, #oz, #oc, #ofn, #oln, #afn, #aln, #ze, #sa',
       ExclusiveStartKey: lastKey,
     }));
     for (const lead of Items || []) {
       const summary = summarizeExistingLead(lead);
-      const propKey = makeAddressKey(lead.ownerAddress, lead.ownerZip);
-      if (propKey) {
+      const leadKeys = new Set<string>(getAddressDuplicateKeys(lead.ownerAddress, lead.ownerZip));
+      if (lead.standardizedAddress?.street) {
+        const stdKey = makeAddressKey(
+          lead.standardizedAddress.street,
+          lead.standardizedAddress.zip || lead.ownerZip
+        );
+        if (stdKey) leadKeys.add(stdKey);
+      }
+      for (const propKey of leadKeys) {
         keys.add(propKey);
         keyToId.set(propKey, lead.id);
         keyToData.set(propKey, summary);
@@ -446,6 +455,7 @@ export const handler: S3Handler = async (event, context: Context) => {
 
       // Helper to process a single CSV row
       const processRow = async (row: Record<string, any>, rowNum: number): Promise<'SUCCESS' | 'DUPLICATE' | 'ERROR'> => {
+        const ownEarlyKeys = new Set<string>();
         try {
           // Resolve a canonical field's value from this row: prefer the user's column mapping, then
           // fall back to the given legacy header aliases (so pre-mapping uploads still work).
@@ -483,11 +493,12 @@ export const handler: S3Handler = async (event, context: Context) => {
           const rawAdminState = leadType === 'PROBATE' ? sanitize(cell('adminState', 'adminState')) : '';
 
           // --- 💾 EARLY DUPLICATE CHECK BEFORE EXTERNAL API CALLS ---
-          // Check raw property address against preloaded existing addresses. This skips Google Address Validation,
-          // Bridge Zestimate lookups, and Serper API calls for all duplicate rows.
-          const earlyDupKey = makeAddressKey(rawPropAddr, rawPropZip);
+          // Check raw property address (including A/K/A alias segments) against preloaded existing addresses.
+          // This skips Google Address Validation, Bridge Zestimate lookups, and Serper API calls for all duplicate rows.
+          const earlyDupKeys = getAddressDuplicateKeys(rawPropAddr, rawPropZip);
+          const matchedEarlyKey = earlyDupKeys.find((k) => existingAddressKeys.has(k));
 
-          if (earlyDupKey && existingAddressKeys.has(earlyDupKey)) {
+          if (matchedEarlyKey) {
             const dupAddressDisplay = `${rawPropAddr}, ${rawPropCity} ${rawPropZip}`.trim();
             console.log(`⏭️ Skipping duplicate lead (early check) for user ${ownerId}: ${dupAddressDisplay}`);
 
@@ -525,17 +536,19 @@ export const handler: S3Handler = async (event, context: Context) => {
                   state: rawPropState,
                   zip: rawPropZip,
                 },
-                existingLeadId: existingKeyToId.get(earlyDupKey) || null,
-                existingLeadData: existingKeyToData.get(earlyDupKey) || null,
+                existingLeadId: existingKeyToId.get(matchedEarlyKey) || null,
+                existingLeadData: existingKeyToData.get(matchedEarlyKey) || null,
               });
             }
 
             return 'DUPLICATE';
           }
 
-          // Register key immediately (before any await) so intra-chunk duplicates are caught synchronously
-          if (earlyDupKey) {
-            existingAddressKeys.add(earlyDupKey);
+          // Register keys immediately (before any await) so intra-chunk duplicates are caught synchronously.
+          // Track them in ownEarlyKeys so the secondary check does not collide with this same row's keys.
+          for (const k of earlyDupKeys) {
+            existingAddressKeys.add(k);
+            ownEarlyKeys.add(k);
           }
 
           const cleanCity = cleanCityForGeocoding(rawPropCity);
@@ -733,10 +746,18 @@ export const handler: S3Handler = async (event, context: Context) => {
 
           // --- 💾 SECONDARY DUPLICATE CHECK BEFORE SAVING ---
           // O(1) lookup against the pre-loaded Set — catches any duplicates resolved after Google standardization
-          const dupKey = makeAddressKey(finalPropAddr, finalPropZip);
+          // or via A/K/A alias segments, while ignoring keys this row itself pre-registered above.
+          const secondaryDupKeys = new Set<string>(getAddressDuplicateKeys(finalPropAddr, finalPropZip));
+          if (standardizedAddress?.street) {
+            const stdDupKey = makeAddressKey(standardizedAddress.street, finalPropZip);
+            if (stdDupKey) secondaryDupKeys.add(stdDupKey);
+          }
+          const matchedSecondaryKey = Array.from(secondaryDupKeys).find(
+            (k) => existingAddressKeys.has(k) && !ownEarlyKeys.has(k)
+          );
           const duplicateCheckAddress = `${finalPropAddr} ${finalPropCity} ${finalPropZip}`.trim();
 
-          if (dupKey && existingAddressKeys.has(dupKey)) {
+          if (matchedSecondaryKey) {
             console.log(`⏭️ Skipping duplicate lead for user ${ownerId}: ${duplicateCheckAddress}`);
 
             if (duplicateLeads.length < MAX_DUPLICATE_STORE) {
@@ -763,8 +784,8 @@ export const handler: S3Handler = async (event, context: Context) => {
                   state: finalPropState,
                   zip: finalPropZip,
                 },
-                existingLeadId: existingKeyToId.get(dupKey) || null,
-                existingLeadData: existingKeyToData.get(dupKey) || null,
+                existingLeadId: existingKeyToId.get(matchedSecondaryKey) || null,
+                existingLeadData: existingKeyToData.get(matchedSecondaryKey) || null,
               });
             }
 
@@ -1018,20 +1039,23 @@ export const handler: S3Handler = async (event, context: Context) => {
           // Register new lead in the duplicate set so intra-file duplicates are caught. Record the
           // id/summary too, not just the key — otherwise a row duplicated *within* this same file
           // reports existingLeadId: null and the report can't link back to the row that won.
-          if (dupKey) {
-            existingAddressKeys.add(dupKey);
-            existingKeyToId.set(dupKey, leadItem.id);
-            existingKeyToData.set(dupKey, summarizeExistingLead(leadItem));
-          }
-          if (earlyDupKey) {
-            existingKeyToId.set(earlyDupKey, leadItem.id);
-            existingKeyToData.set(earlyDupKey, summarizeExistingLead(leadItem));
+          const leadSummary = summarizeExistingLead(leadItem);
+          const allSavedKeys = new Set<string>([...earlyDupKeys, ...secondaryDupKeys]);
+          for (const k of allSavedKeys) {
+            existingAddressKeys.add(k);
+            existingKeyToId.set(k, leadItem.id);
+            existingKeyToData.set(k, leadSummary);
           }
 
           return 'SUCCESS';
 
 
         } catch (rowError: any) {
+          for (const k of ownEarlyKeys) {
+            if (!existingKeyToId.has(k)) {
+              existingAddressKeys.delete(k);
+            }
+          }
           console.error(`❌ Row ${rowNum} failed:`, rowError?.message || rowError);
           return 'ERROR';
         }
